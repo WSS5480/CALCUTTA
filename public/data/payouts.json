@@ -1,0 +1,29 @@
+{
+ "nalgas": {
+  "label": "Nalgas (worst record in the NFL)",
+  "pct": 5
+ },
+ "wildCard": {
+  "label": "Wild Card win",
+  "pct": 10,
+  "games": 6
+ },
+ "divisional": {
+  "label": "Divisional win",
+  "pct": 20,
+  "games": 4
+ },
+ "conference": {
+  "label": "Conference win",
+  "pct": 20,
+  "games": 2
+ },
+ "sbLoser": {
+  "label": "Super Bowl loser",
+  "pct": 15
+ },
+ "champion": {
+  "label": "Super Bowl champion",
+  "pct": 30
+ }
+}

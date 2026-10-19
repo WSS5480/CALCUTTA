@@ -1,0 +1,194 @@
+[
+ {
+  "lot": 1,
+  "teams": [
+   "GB",
+   "MIA"
+  ],
+  "buyer": "Falleck",
+  "paid": 2000,
+  "note": ""
+ },
+ {
+  "lot": 2,
+  "teams": [
+   "HOU",
+   "ARI"
+  ],
+  "buyer": "Omar",
+  "paid": 6000,
+  "note": ""
+ },
+ {
+  "lot": 3,
+  "teams": [
+   "SF",
+   "CLE"
+  ],
+  "buyer": "Falleck",
+  "paid": 3100,
+  "note": ""
+ },
+ {
+  "lot": 4,
+  "teams": [
+   "DET",
+   "NYJ"
+  ],
+  "buyer": "Buki",
+  "paid": 6800,
+  "note": ""
+ },
+ {
+  "lot": 5,
+  "teams": [
+   "DEN",
+   "ATL"
+  ],
+  "buyer": "Buki",
+  "paid": 8400,
+  "note": ""
+ },
+ {
+  "lot": 6,
+  "teams": [
+   "CIN",
+   "LV"
+  ],
+  "buyer": "Omar",
+  "paid": 8500,
+  "note": ""
+ },
+ {
+  "lot": 7,
+  "teams": [
+   "CHI",
+   "TEN"
+  ],
+  "buyer": "Cuate",
+  "paid": 7000,
+  "note": ""
+ },
+ {
+  "lot": 8,
+  "teams": [
+   "DAL",
+   "PIT"
+  ],
+  "buyer": "Navas",
+  "paid": 14000,
+  "note": ""
+ },
+ {
+  "lot": 9,
+  "teams": [
+   "JAX",
+   "CAR"
+  ],
+  "buyer": "Beto",
+  "paid": 8700,
+  "note": ""
+ },
+ {
+  "lot": 10,
+  "teams": [
+   "TB",
+   "NYG"
+  ],
+  "buyer": "Navas",
+  "paid": 7500,
+  "note": ""
+ },
+ {
+  "lot": 11,
+  "teams": [
+   "MIN",
+   "NO"
+  ],
+  "buyer": "Tre",
+  "paid": 6600,
+  "note": ""
+ },
+ {
+  "lot": 12,
+  "teams": [
+   "IND",
+   "WAS"
+  ],
+  "buyer": "Beto",
+  "paid": 8600,
+  "note": ""
+ },
+ {
+  "lot": 13,
+  "teams": [
+   "LAC"
+  ],
+  "buyer": "Navas",
+  "paid": 8100,
+  "note": ""
+ },
+ {
+  "lot": 14,
+  "teams": [
+   "KC"
+  ],
+  "buyer": "Tre",
+  "paid": 10000,
+  "note": "Handwritten amount hard to read; $10,000 makes the sheet total $205,400"
+ },
+ {
+  "lot": 15,
+  "teams": [
+   "NE"
+  ],
+  "buyer": "Falleck",
+  "paid": 8100,
+  "note": ""
+ },
+ {
+  "lot": 16,
+  "teams": [
+   "PHI"
+  ],
+  "buyer": "Buki",
+  "paid": 7500,
+  "note": ""
+ },
+ {
+  "lot": 17,
+  "teams": [
+   "BAL"
+  ],
+  "buyer": "Leo",
+  "paid": 9500,
+  "note": ""
+ },
+ {
+  "lot": 18,
+  "teams": [
+   "BUF"
+  ],
+  "buyer": "Shavi",
+  "paid": 30000,
+  "note": ""
+ },
+ {
+  "lot": 19,
+  "teams": [
+   "SEA"
+  ],
+  "buyer": "Navas",
+  "paid": 15000,
+  "note": ""
+ },
+ {
+  "lot": 20,
+  "teams": [
+   "LAR"
+  ],
+  "buyer": "Shavi",
+  "paid": 30000,
+  "note": ""
+ }
+]

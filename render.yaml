@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: calcutta-2026
+    runtime: static
+    staticPublishPath: ./public
+    pullRequestPreviewsEnabled: false

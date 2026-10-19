@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Calcutta 2026</title>
+<meta name="theme-color" content="#0d1a12">
+<link rel="icon" href="dive-logo.png">
+<style>
+:root{
+  --bg:#0d1a12; --panel:#14261b; --panel2:#1a3123; --line:#25402f;
+  --ink:#eef5ef; --muted:#9db3a3; --green:#4cc36a; --red:#ff6b5e; --gold:#f2c14e;
+  --radius:14px;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:40px}
+.wrap{max-width:900px;margin:0 auto;padding:0 16px}
+header{padding:20px 0 8px}
+h1{margin:0;font-size:24px;letter-spacing:.2px}
+.sub{color:var(--muted);font-size:13px;margin-top:2px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.stat b{display:block;font-size:18px}
+.stat span{color:var(--muted);font-size:12px}
+nav{display:flex;gap:6px;position:sticky;top:0;background:var(--bg);padding:8px 0;z-index:5;overflow-x:auto}
+nav button{flex:1;min-width:84px;background:var(--panel);color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:9px 12px;font:inherit;font-weight:600;cursor:pointer}
+nav button.on{background:var(--green);color:#06210f;border-color:var(--green)}
+.sortbar{display:flex;gap:6px;align-items:center;margin:8px 0;flex-wrap:wrap;color:var(--muted);font-size:13px}
+.sortbar button{background:transparent;color:var(--muted);border:1px solid var(--line);border-radius:8px;padding:5px 9px;font:inherit;cursor:pointer}
+.sortbar button.on{color:var(--ink);border-color:var(--green)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin:10px 0}
+.top{display:flex;gap:12px;align-items:center}
+.av{width:44px;height:44px;border-radius:50%;flex:none;display:grid;place-items:center;font-weight:700;background:var(--panel2);border:1px solid var(--line);overflow:hidden}
+.av img{width:100%;height:100%;object-fit:cover;display:block}
+.who{flex:1;min-width:0}
+.who .lot{color:var(--muted);font-size:12px}
+.who .name{font-weight:700;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.paid{text-align:right}
+.paid b{display:block}
+.paid span{color:var(--muted);font-size:12px}
+.team{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:10px 0;border-top:1px solid var(--line);margin-top:10px}
+.team:first-of-type{margin-top:12px}
+.tn{font-weight:600}
+.tn small{color:var(--muted);font-weight:400;margin-left:6px}
+.rec{color:var(--muted);font-size:13px;text-align:right}
+.bar{grid-column:1/-1;height:8px;background:var(--panel2);border-radius:8px;overflow:hidden;margin-top:4px}
+.bar i{display:block;height:100%;background:var(--green);border-radius:8px}
+.row3{grid-column:1/-1;display:flex;justify-content:space-between;color:var(--muted);font-size:12.5px}
+.row3 b{color:var(--ink)}
+.foot{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;border-top:1px solid var(--line);padding-top:12px}
+.foot div{font-size:12px;color:var(--muted)}
+.foot b{display:block;color:var(--ink);font-size:16px}
+.pos{color:var(--green)!important}.neg{color:var(--red)!important}
+.pill{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;background:var(--panel2);color:var(--muted);margin-top:8px}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{padding:8px 6px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--muted);font-weight:600;font-size:12px;cursor:pointer}
+.scroll{overflow-x:auto;margin:0 -16px;padding:0 16px}
+.note{color:var(--muted);font-size:12.5px;margin:14px 0}
+.note a{color:var(--green)}
+.hidden{display:none}
+.mini{display:flex;align-items:center;gap:8px}
+.mini .av{width:26px;height:26px;font-size:11px}
+@media (min-width:700px){.stats{grid-template-columns:repeat(6,1fr)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Calcutta 2026</h1>
+    <div class="sub" id="asof">Loading…</div>
+  </header>
+  <div class="stats" id="stats"></div>
+  <nav id="tabs">
+    <button data-t="groups" class="on">Groups</button>
+    <button data-t="buyers">Buyers</button>
+    <button data-t="teams">Teams</button>
+    <button data-t="payouts">Payouts</button>
+  </nav>
+
+  <section id="groups">
+    <div class="sortbar">Sort:
+      <button data-s="lot" class="on">Lot #</button>
+      <button data-s="pPlayoffs">Playoff %</button>
+      <button data-s="pTitle">Title %</button>
+      <button data-s="ev">Expected $</button>
+      <button data-s="edge">Value</button>
+    </div>
+    <div id="groupList"></div>
+  </section>
+  <section id="buyers" class="hidden"><div id="buyerList"></div></section>
+  <section id="teams" class="hidden"><div class="scroll"><table id="teamTable"></table></div></section>
+  <section id="payouts" class="hidden"><div id="payoutBody"></div></section>
+
+  <div class="note" id="foot"></div>
+</div>
+
+<script src="model.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const money = (n) => (n < 0 ? '-$' : '$') + Math.abs(Math.round(n)).toLocaleString();
+const pct = (x, d = 0) => (x * 100).toFixed(d) + '%';
+const pctSmart = (x) => (x < 0.01 ? (x * 100).toFixed(1) : (x * 100).toFixed(0)) + '%';
+const signed = (n) => (n >= 0 ? '+' : '-') + '$' + Math.abs(Math.round(n)).toLocaleString();
+const odds = (o) => (o > 0 ? '+' : '') + o.toLocaleString();
+const rec = (t) => t.w + '-' + t.l + (t.t ? '-' + t.t : '');
+const LOGOS = { Navas: 'dive-logo.png' }; // Navas's groups use The Dive logo
+
+function avatar(name) {
+  if (LOGOS[name]) return `<div class="av"><img src="${LOGOS[name]}" alt="${name}"></div>`;
+  return `<div class="av">${name.slice(0, 2).toUpperCase()}</div>`;
+}
+
+let M, SORT = 'lot', PAY, TD;
+
+function renderStats() {
+  const top = [...M.teams].sort((a, b) => b.c - a.c)[0];
+  const mostLikelyPlayoffs = M.groups.reduce((a, g) => (g.pPlayoffs > a.pPlayoffs ? g : a));
+  $('#stats').innerHTML = `
+    <div class="stat"><b>${money(M.pool)}</b><span>Pool</span></div>
+    <div class="stat"><b>${M.groups.length}</b><span>Groups</span></div>
+    <div class="stat"><b>${money(M.pool * PAY.champion.pct / 100)}</b><span>Champion payout</span></div>
+    <div class="stat"><b>${top.abbr} ${pctSmart(top.c)}</b><span>Title favorite</span></div>
+    <div class="stat"><b>Lot ${mostLikelyPlayoffs.lot}</b><span>Best playoff odds</span></div>
+    <div class="stat"><b>${money(M.pool * PAY.nalgas.pct / 100)}</b><span>Nalgas payout</span></div>`;
+  $('#asof').textContent = `Updated ${new Date(TD.updated + 'T12:00:00').toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })} · ${TD.asOf}`;
+}
+
+function teamBlock(t) {
+  return `<div class="team">
+    <div class="tn">${t.name}<small>${t.conf}</small></div>
+    <div class="rec">${rec(t)} · ${t.pf - t.pa >= 0 ? '+' : ''}${t.pf - t.pa}</div>
+    <div class="bar"><i style="width:${Math.max(2, t.m * 100)}%"></i></div>
+    <div class="row3"><span>Playoffs <b>${pctSmart(t.m)}</b></span><span>Title <b>${pctSmart(t.c)}</b> (${odds(t.sbOdds)})</span><span>Worst record <b>${pctSmart(t.worst)}</b></span></div>
+  </div>`;
+}
+
+function renderGroups() {
+  const arr = [...M.groups];
+  if (SORT === 'lot') arr.sort((a, b) => a.lot - b.lot);
+  else arr.sort((a, b) => b[SORT] - a[SORT]);
+  $('#groupList').innerHTML = arr.map((g) => `
+    <div class="card">
+      <div class="top">${avatar(g.buyer)}
+        <div class="who"><div class="lot">Lot ${g.lot}</div><div class="name">${g.buyer}</div></div>
+        <div class="paid"><b>${money(g.paid)}</b><span>${pct(g.paidShare, 1)} of pool</span></div>
+      </div>
+      ${g.ts.map(teamBlock).join('')}
+      ${g.ts.length > 1 ? `<span class="pill">At least one team makes playoffs: ${pctSmart(g.pPlayoffs)}</span>` : ''}
+      <div class="foot">
+        <div>Expected payout<b>${money(g.ev)}</b></div>
+        <div>Value vs paid<b class="${g.edge >= 0 ? 'pos' : 'neg'}">${signed(g.edge)}</b></div>
+        <div>Win title<b>${pctSmart(g.pTitle)}</b></div>
+      </div>
+    </div>`).join('');
+}
+
+function renderBuyers() {
+  const arr = [...M.buyers].sort((a, b) => b.paid - a.paid);
+  $('#buyerList').innerHTML = arr.map((b) => `
+    <div class="card">
+      <div class="top">${avatar(b.name)}
+        <div class="who"><div class="name">${b.name}</div><div class="lot">${b.groups.length} group${b.groups.length > 1 ? 's' : ''}: lots ${b.groups.map((g) => g.lot).join(', ')}</div></div>
+        <div class="paid"><b>${money(b.paid)}</b><span>${pct(b.paid / M.pool, 1)} of pool</span></div>
+      </div>
+      <div class="foot">
+        <div>Expected payout<b>${money(b.ev)}</b></div>
+        <div>Value vs paid<b class="${b.edge >= 0 ? 'pos' : 'neg'}">${signed(b.edge)}</b></div>
+        <div>Win title<b>${pctSmart(b.pTitle)}</b></div>
+      </div>
+      <span class="pill">Chance at least one of your teams makes playoffs: ${pctSmart(b.pPlayoffs)}</span>
+    </div>`).join('');
+}
+
+let TSORT = 'm';
+function renderTeams() {
+  const owner = {};
+  M.groups.forEach((g) => g.teams.forEach((a) => (owner[a] = g)));
+  const arr = [...M.teams].sort((a, b) => (TSORT === 'name' ? a.name.localeCompare(b.name) : b[TSORT] - a[TSORT]));
+  const th = (k, l) => `<th data-k="${k}">${l}${TSORT === k ? ' ▾' : ''}</th>`;
+  $('#teamTable').innerHTML = `<tr>${th('name', 'Team')}<th>Owner</th>${th('w', 'Rec')}${th('m', 'Playoffs')}${th('c', 'Title')}${th('a3', 'Reach SB')}${th('worst', 'Worst')}${th('ev', 'Exp $')}</tr>` +
+    arr.map((t) => `<tr><td>${t.name}</td><td><span class="mini">${avatar(owner[t.abbr].buyer)}${owner[t.abbr].buyer}</span></td><td>${rec(t)}</td><td>${pctSmart(t.m)}</td><td>${pctSmart(t.c)}</td><td>${pctSmart(t.a3)}</td><td>${pctSmart(t.worst)}</td><td>${money(t.ev)}</td></tr>`).join('');
+  document.querySelectorAll('#teamTable th[data-k]').forEach((h) => (h.onclick = () => { TSORT = h.dataset.k; renderTeams(); }));
+}
+
+function renderPayouts() {
+  const rows = [
+    ['nalgas', 'Nalgas (worst record in NFL)', 1],
+    ['wildCard', 'Wild Card win', PAY.wildCard.games],
+    ['divisional', 'Divisional win', PAY.divisional.games],
+    ['conference', 'Conference win', PAY.conference.games],
+    ['sbLoser', 'Super Bowl loser', 1],
+    ['champion', 'Super Bowl champion', 1],
+  ];
+  $('#payoutBody').innerHTML = `<div class="card"><table>
+    <tr><th>Prize</th><th>Share</th><th>Each</th><th>Total</th></tr>
+    ${rows.map(([k, l, n]) => {
+      const total = M.pool * PAY[k].pct / 100;
+      return `<tr><td>${l}${n > 1 ? ` <span class="sub">×${n}</span>` : ''}</td><td>${(PAY[k].pct / n).toFixed(2)}%</td><td>${money(total / n)}</td><td>${money(total)}</td></tr>`;
+    }).join('')}
+    <tr><td><b>Total</b></td><td></td><td></td><td><b>${money(M.pool)}</b></td></tr></table></div>
+    <div class="note">Each group's expected payout adds up what its teams are likely to win under this structure. The wild-card prize is 10% split across 6 games (1.67% each, shown as 1.66% on the sheet).</div>`;
+}
+
+function renderFoot() {
+  $('#foot').innerHTML = `<b>How the numbers work.</b> Playoff % comes from prediction-market prices (${TD.sources.playoffPct}). Title % is the Super Bowl odds with the sportsbook margin removed (${TD.sources.sbOdds}). Records: ${TD.sources.records}.
+    Chances to win each playoff round and the "worst record" odds are estimates built from those numbers, so treat them as a guide, not a guarantee. Lot 14 (Chiefs) is entered as $10,000.`;
+}
+
+document.querySelectorAll('#tabs button').forEach((b) => (b.onclick = () => {
+  document.querySelectorAll('#tabs button').forEach((x) => x.classList.toggle('on', x === b));
+  ['groups', 'buyers', 'teams', 'payouts'].forEach((id) => $('#' + id).classList.toggle('hidden', id !== b.dataset.t));
+  window.scrollTo({ top: 0 });
+}));
+document.querySelectorAll('.sortbar button').forEach((b) => (b.onclick = () => {
+  SORT = b.dataset.s;
+  document.querySelectorAll('.sortbar button').forEach((x) => x.classList.toggle('on', x === b));
+  renderGroups();
+}));
+
+Promise.all(['teams', 'lots', 'payouts'].map((n) => fetch('data/' + n + '.json?v=' + Date.now()).then((r) => r.json())))
+  .then(([t, l, p]) => {
+    TD = t; PAY = p;
+    M = Calcutta.compute(t, l, p);
+    renderStats(); renderGroups(); renderBuyers(); renderTeams(); renderPayouts(); renderFoot();
+  })
+  .catch((e) => { $('#asof').textContent = 'Could not load data: ' + e.message; });
+</script>
+</body>
+</html>

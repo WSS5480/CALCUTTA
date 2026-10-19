@@ -118,6 +118,7 @@ table.ls td:first-child,table.ls th:first-child{text-align:left;font-weight:700}
   <nav id="tabs">
     <button data-t="games" class="on">Games</button>
     <button data-t="groups">Groups</button>
+    <button data-t="combined">Combined</button>
     <button data-t="buyers">Buyers</button>
     <button data-t="teams">Teams</button>
     <button data-t="payouts">Payouts</button>
@@ -138,6 +139,7 @@ table.ls td:first-child,table.ls th:first-child{text-align:left;font-weight:700}
     </div>
     <div id="groupList"></div>
   </section>
+  <section id="combined" class="hidden"><div class="sub" style="margin:0 0 8px">Every group with all its teams combined. Tap a column to sort.</div><div class="scroll"><table id="combTable"></table></div></section>
   <section id="buyers" class="hidden"><div id="buyerList"></div></section>
   <section id="teams" class="hidden"><div class="scroll"><table id="teamTable"></table></div></section>
   <section id="payouts" class="hidden"><div id="payoutBody"></div></section>
@@ -233,6 +235,23 @@ function renderBuyers() {
       </div>
       ${combinedBlock(b.groups.flatMap((g) => g.ts), 'Combined teams', b.pPlayoffs, b.pTitle)}
     </div>`).join('');
+}
+
+
+let CSORT = 'ev';
+function renderCombined() {
+  const arr = M.groups.map((g) => ({ g, lot: g.lot, paid: g.paid, ev: g.ev, edge: g.edge, pPlayoffs: g.pPlayoffs, pTitle: g.pTitle, pSB: g.pSB, pWorst: g.pWorst }))
+    .sort((a, b) => b[CSORT] - a[CSORT] || a.lot - b.lot);
+  if (CSORT === 'lot') arr.sort((a, b) => a.lot - b.lot);
+  const th = (k, l) => `<th data-k="${k}">${l}${CSORT === k ? ' ▾' : ''}</th>`;
+  const tot = (k) => arr.reduce((a, r) => a + r[k], 0);
+  $('#combTable').innerHTML = `<tr>${th('lot', 'Lot')}<th>Owner</th><th>Teams</th><th>Rec</th>${th('paid', 'Paid')}${th('ev', 'Exp $')}${th('edge', 'Value')}${th('pPlayoffs', 'Playoffs')}${th('pTitle', 'Title')}${th('pSB', 'Reach SB')}${th('pWorst', 'Worst')}</tr>` +
+    arr.map(({ g }) => {
+      const w = g.ts.reduce((a, t) => a + t.w, 0), l = g.ts.reduce((a, t) => a + t.l, 0), tt = g.ts.reduce((a, t) => a + (t.t || 0), 0);
+      return `<tr><td>${g.lot}</td><td><span class="mini">${avatar(g.buyer)}${g.buyer}</span></td><td>${g.teams.join(' + ')}</td><td>${w}-${l}${tt ? '-' + tt : ''}</td><td>${money(g.paid)}</td><td>${money(g.ev)}</td><td class="${g.edge >= 0 ? 'pos' : 'neg'}">${signed(g.edge)}</td><td>${pctSmart(g.pPlayoffs)}</td><td>${pctSmart(g.pTitle)}</td><td>${pctSmart(g.pSB)}</td><td>${pctSmart(g.pWorst)}</td></tr>`;
+    }).join('') +
+    `<tr><td colspan="4"><b>Total</b></td><td><b>${money(tot('paid'))}</b></td><td><b>${money(tot('ev'))}</b></td><td></td><td></td><td><b>${pctSmart(tot('pTitle'))}</b></td><td></td><td><b>${pctSmart(tot('pWorst'))}</b></td></tr>`;
+  document.querySelectorAll('#combTable th[data-k]').forEach((h) => (h.onclick = () => { CSORT = h.dataset.k; renderCombined(); }));
 }
 
 let TSORT = 'm';
@@ -380,7 +399,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && M)
 
 document.querySelectorAll('#tabs button').forEach((b) => (b.onclick = () => {
   document.querySelectorAll('#tabs button').forEach((x) => x.classList.toggle('on', x === b));
-  ['games', 'groups', 'buyers', 'teams', 'payouts'].forEach((id) => $('#' + id).classList.toggle('hidden', id !== b.dataset.t));
+  ['games', 'groups', 'combined', 'buyers', 'teams', 'payouts'].forEach((id) => $('#' + id).classList.toggle('hidden', id !== b.dataset.t));
   window.scrollTo({ top: 0 });
 }));
 document.querySelectorAll('.sortbar button').forEach((b) => (b.onclick = () => {
@@ -393,7 +412,7 @@ Promise.all(['teams', 'lots', 'payouts'].map((n) => fetch('data/' + n + '.json?v
   .then(([t, l, p]) => {
     TD = t; PAY = p;
     M = Calcutta.compute(t, l, p);
-    renderStats(); renderGroups(); renderBuyers(); renderTeams(); renderPayouts(); renderFoot(); tickGames();
+    renderStats(); renderGroups(); renderCombined(); renderBuyers(); renderTeams(); renderPayouts(); renderFoot(); tickGames();
   })
   .catch((e) => { $('#asof').textContent = 'Could not load data: ' + e.message; });
 

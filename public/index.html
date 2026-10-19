@@ -190,13 +190,16 @@ function teamBlock(t) {
 }
 
 
+const winPct = (ts) => { const w = ts.reduce((a, t) => a + t.w, 0), l = ts.reduce((a, t) => a + t.l, 0), x = ts.reduce((a, t) => a + (t.t || 0), 0); const n = w + l + x; return n ? (w + x / 2) / n : 0; };
+const fmtPct = (x) => (x * 100).toFixed(1) + '%';
+
 function combinedBlock(ts, label, pPlay, pTitle) {
   const w = ts.reduce((a, t) => a + t.w, 0), l = ts.reduce((a, t) => a + t.l, 0), tie = ts.reduce((a, t) => a + (t.t || 0), 0);
   const diff = ts.reduce((a, t) => a + t.pf - t.pa, 0);
   const sum = (k) => ts.reduce((a, t) => a + t[k], 0);
   return `<div class="team comb">
     <div class="tn">${label}<small>${ts.length} team${ts.length > 1 ? 's' : ''}: ${ts.map((t) => t.abbr).join(' + ')}</small></div>
-    <div class="rec">${w}-${l}${tie ? '-' + tie : ''} · ${diff >= 0 ? '+' : ''}${diff}</div>
+    <div class="rec">${w}-${l}${tie ? '-' + tie : ''} · <b>${fmtPct(winPct(ts))}</b> win · ${diff >= 0 ? '+' : ''}${diff}</div>
     <div class="row3"><span>Playoffs (any) <b>${pctSmart(pPlay)}</b></span><span>Avg teams in <b>${sum('m').toFixed(2)}</b></span><span>Title <b>${pctSmart(pTitle)}</b></span><span>Reach SB <b>${pctSmart(sum('a3'))}</b></span><span>Worst record <b>${pctSmart(sum('worst'))}</b></span></div>
   </div>`;
 }
@@ -241,17 +244,17 @@ function renderBuyers() {
 
 let CSORT = 'ev';
 function renderCombined() {
-  const arr = M.groups.map((g) => ({ g, lot: g.lot, paid: g.paid, ev: g.ev, edge: g.edge, pPlayoffs: g.pPlayoffs, pTitle: g.pTitle, pSB: g.pSB, pWorst: g.pWorst }))
+  const arr = M.groups.map((g) => ({ g, win: winPct(g.ts), lot: g.lot, paid: g.paid, ev: g.ev, edge: g.edge, pPlayoffs: g.pPlayoffs, pTitle: g.pTitle, pSB: g.pSB, pWorst: g.pWorst }))
     .sort((a, b) => b[CSORT] - a[CSORT] || a.lot - b.lot);
   if (CSORT === 'lot') arr.sort((a, b) => a.lot - b.lot);
   const th = (k, l) => `<th data-k="${k}">${l}${CSORT === k ? ' ▾' : ''}</th>`;
   const tot = (k) => arr.reduce((a, r) => a + r[k], 0);
-  $('#combTable').innerHTML = `<tr>${th('lot', 'Lot')}<th>Owner</th><th>Teams</th><th>Rec</th>${th('paid', 'Paid')}${th('ev', 'Exp $')}${th('edge', 'Value')}${th('pPlayoffs', 'Playoffs')}${th('pTitle', 'Title')}${th('pSB', 'Reach SB')}${th('pWorst', 'Worst')}</tr>` +
+  $('#combTable').innerHTML = `<tr>${th('lot', 'Lot')}<th>Owner</th><th>Teams</th><th>Rec</th>${th('win', 'Win %')}${th('paid', 'Paid')}${th('ev', 'Exp $')}${th('edge', 'Value')}${th('pPlayoffs', 'Playoffs')}${th('pTitle', 'Title')}${th('pSB', 'Reach SB')}${th('pWorst', 'Worst')}</tr>` +
     arr.map(({ g }) => {
       const w = g.ts.reduce((a, t) => a + t.w, 0), l = g.ts.reduce((a, t) => a + t.l, 0), tt = g.ts.reduce((a, t) => a + (t.t || 0), 0);
-      return `<tr><td>${g.lot}</td><td><span class="mini">${avatar(g.buyer)}${g.buyer}</span></td><td>${g.teams.join(' + ')}</td><td>${w}-${l}${tt ? '-' + tt : ''}</td><td>${money(g.paid)}</td><td>${money(g.ev)}</td><td class="${g.edge >= 0 ? 'pos' : 'neg'}">${signed(g.edge)}</td><td>${pctSmart(g.pPlayoffs)}</td><td>${pctSmart(g.pTitle)}</td><td>${pctSmart(g.pSB)}</td><td>${pctSmart(g.pWorst)}</td></tr>`;
+      return `<tr><td>${g.lot}</td><td><span class="mini">${avatar(g.buyer)}${g.buyer}</span></td><td>${g.teams.join(' + ')}</td><td>${w}-${l}${tt ? '-' + tt : ''}</td><td>${fmtPct(winPct(g.ts))}</td><td>${money(g.paid)}</td><td>${money(g.ev)}</td><td class="${g.edge >= 0 ? 'pos' : 'neg'}">${signed(g.edge)}</td><td>${pctSmart(g.pPlayoffs)}</td><td>${pctSmart(g.pTitle)}</td><td>${pctSmart(g.pSB)}</td><td>${pctSmart(g.pWorst)}</td></tr>`;
     }).join('') +
-    `<tr><td colspan="4"><b>Total</b></td><td><b>${money(tot('paid'))}</b></td><td><b>${money(tot('ev'))}</b></td><td></td><td></td><td><b>${pctSmart(tot('pTitle'))}</b></td><td></td><td><b>${pctSmart(tot('pWorst'))}</b></td></tr>`;
+    `<tr><td colspan="4"><b>Total</b></td><td></td><td><b>${money(tot('paid'))}</b></td><td><b>${money(tot('ev'))}</b></td><td></td><td></td><td><b>${pctSmart(tot('pTitle'))}</b></td><td></td><td><b>${pctSmart(tot('pWorst'))}</b></td></tr>`;
   document.querySelectorAll('#combTable th[data-k]').forEach((h) => (h.onclick = () => { CSORT = h.dataset.k; renderCombined(); }));
 }
 
@@ -449,8 +452,8 @@ loadAll();
 
 function csvCell(v){ v = String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
 function downloadCsv(){
-  const rows = [['Lot','Buyer','Teams','Paid','Expected payout','Edge $','Edge %','Playoffs %','Title %','Super Bowl %','Worst record %']];
-  M.groups.forEach((g) => rows.push([g.lot, g.buyer, g.teams.join('/'), g.paid, Math.round(g.ev), Math.round(g.edge), (g.edgePct*100).toFixed(1), (g.pPlayoffs*100).toFixed(1), (g.pTitle*100).toFixed(1), (g.pSB*100).toFixed(1), (g.pWorst*100).toFixed(1)]));
+  const rows = [['Lot','Buyer','Teams','Combined win %','Paid','Expected payout','Edge $','Edge %','Playoffs %','Title %','Super Bowl %','Worst record %']];
+  M.groups.forEach((g) => rows.push([g.lot, g.buyer, g.teams.join('/'), (winPct(g.ts)*100).toFixed(1), g.paid, Math.round(g.ev), Math.round(g.edge), (g.edgePct*100).toFixed(1), (g.pPlayoffs*100).toFixed(1), (g.pTitle*100).toFixed(1), (g.pSB*100).toFixed(1), (g.pWorst*100).toFixed(1)]));
   rows.push([]);
   rows.push(['Team','Record','Playoffs %','Title %','Super Bowl %','Expected payout','Owner','Lot']);
   M.teams.slice().sort((x, y) => y.ev - x.ev).forEach((t) => { const o = ownerOf(t.abbr) || {}; rows.push([t.name, t.w + '-' + t.l + (t.t ? '-' + t.t : ''), (t.m*100).toFixed(1), (t.c*100).toFixed(1), (t.a3*100).toFixed(1), Math.round(t.ev), o.buyer || '', o.lot || '']); });

@@ -339,7 +339,7 @@ function renderGames() {
       : g.state === 'post' ? `<b>${g.detail || 'Final'}</b><span>${g.odds}</span>`
       : `<b>${g.start.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</b><span>${g.odds}</span>`;
     const sit = g.state === 'in' && g.sit
-      ? `<div class="sit">${g.sit.downDistanceText || g.sit.shortDownDistanceText || ''}${g.sit.isRedZone ? ' · <span class="liveTag">Red zone</span>' : ''}${g.sit.lastPlay && g.sit.lastPlay.text ? `<div class="lp">${g.sit.lastPlay.text}</div>` : ''}</div>` : '';
+      ? `<div class="sit">${g.sit.downDistanceText || g.sit.shortDownDistanceText || (g.sit.down > 0 ? ['', '1st', '2nd', '3rd', '4th'][g.sit.down] + ' & ' + g.sit.distance : '')}${g.sit.isRedZone ? ' · <span class="liveTag">Red zone</span>' : ''}${g.sit.lastPlay && g.sit.lastPlay.text ? `<div class="lp">${g.sit.lastPlay.text}</div>` : ''}</div>` : '';
     return `<div class="card game ${g.state}"><div class="gstat">${status}</div>${row(a)}${row(h)}${sit}${lineScore(g)}</div>`;
   };
   const sect = (title, arr) => (arr.length ? `<div class="gh">${title}</div>${arr.map(card).join('')}` : '');

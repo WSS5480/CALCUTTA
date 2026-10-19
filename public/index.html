@@ -112,6 +112,7 @@ table.ls td:first-child,table.ls th:first-child{text-align:left;font-weight:700}
   <header>
     <h1>Calcutta 2026</h1>
     <div class="sub" id="asof">Loading…</div>
+    <div class="sub" id="upd">Live scores: waiting…</div>
     <button id="inst" class="dl">📲 Download App</button> <button id="dl" class="dl">⬇ Download CSV</button>
     <div id="instHelp" class="sub" hidden></div>
   </header>
@@ -389,9 +390,11 @@ async function tickGames() {
     GAME_BY = {};
     GAMES.forEach((g) => g.comp.forEach((c) => (GAME_BY[c.abbr] = g)));
     LAST_OK = new Date();
+    $('#upd').textContent = '● Live scores updated ' + LAST_OK.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
     renderGames();
     renderGroups();
   } catch (e) {
+    $('#upd').textContent = LAST_OK ? 'Live scores last updated ' + LAST_OK.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }) + ' (retrying)' : 'Live scores unavailable (retrying)';
     $('#liveText').textContent = 'Live scores unavailable (' + e.message + ') · retrying every minute';
   }
   TICK = setTimeout(tickGames, GAMES.length ? nextDelay() : 60 * 1000);

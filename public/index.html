@@ -95,6 +95,8 @@ table.ls td:first-child,table.ls th:first-child{text-align:left;font-weight:700}
 @media (min-width:700px){.stats{grid-template-columns:repeat(6,1fr)}}
 .dl{margin-top:10px;background:var(--panel2);color:#fff;border:1px solid #2d4a37;border-radius:999px;padding:8px 14px;font:600 14px inherit;cursor:pointer}
 [hidden]{display:none!important}
+.ibar{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:50;background:#173a24;border:1px solid #3fc46b;border-radius:14px;padding:12px 14px;display:flex;gap:10px;align-items:center;box-shadow:0 6px 24px #0008}
+.ibar span{flex:1;font-size:14px}.ibar button{background:#3fc46b;color:#0b1a10;border:0;border-radius:999px;padding:8px 14px;font:700 14px inherit;cursor:pointer}.ibar button.x{background:none;color:#fff;padding:8px}
 </style>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -406,6 +408,24 @@ $('#inst').addEventListener('click', async () => {
   h.textContent = ios ? 'On iPhone: tap the Share button in Safari, then "Add to Home Screen".' : 'Open your browser menu (⋮) and tap "Install app" or "Add to Home screen".';
   h.hidden=false;
 });
+
+(function(){
+  let seen=false; try{seen=localStorage.getItem('instDismissed')==='1';}catch(e){}
+  const standalone=window.matchMedia('(display-mode: standalone)').matches||navigator.standalone;
+  if(seen||standalone) return;
+  const ios=/iphone|ipad|ipod/i.test(navigator.userAgent);
+  function show(){
+    if(document.getElementById('ibar')) return;
+    const d=document.createElement('div'); d.className='ibar'; d.id='ibar';
+    d.innerHTML='<span>'+(ios?'Install Calcutta: tap <b>Share</b> then <b>Add to Home Screen</b>':'Install Calcutta as an app')+'</span>'+(ios?'':'<button id="ibGo">Install</button>')+'<button class="x" id="ibX">✕</button>';
+    document.body.appendChild(d);
+    const close=()=>{d.remove();try{localStorage.setItem('instDismissed','1');}catch(e){}};
+    document.getElementById('ibX').onclick=close;
+    const go=document.getElementById('ibGo'); if(go) go.onclick=async()=>{ if(DEFER){DEFER.prompt();await DEFER.userChoice;DEFER=null;} close(); };
+  }
+  window.addEventListener('beforeinstallprompt',()=>setTimeout(show,1500));
+  if(ios) setTimeout(show,3000);
+})();
 </script>
 </body>
 </html>

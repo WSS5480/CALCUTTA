@@ -99,6 +99,7 @@ table.ls td:first-child,table.ls th:first-child{text-align:left;font-weight:700}
 .ibar span{flex:1;font-size:14px}.ibar button{background:#f26b21;color:#1a0b02;border:0;border-radius:999px;padding:8px 14px;font:700 14px inherit;cursor:pointer}.ibar button.x{background:none;color:#fff;padding:8px}
 .comb .row3{display:flex;flex-wrap:wrap;gap:4px 14px}.comb .row3 b{margin-left:4px}
 .team.comb{background:#33200f;border:1px solid #f26b2166}
+#ptr{height:0;overflow:hidden;text-align:center;color:var(--muted);font-size:13px;line-height:44px;background:var(--bg);position:fixed;top:0;left:0;right:0;z-index:40;transition:height .15s}
 </style>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -408,13 +409,41 @@ document.querySelectorAll('.sortbar button').forEach((b) => (b.onclick = () => {
   renderGroups();
 }));
 
-Promise.all(['teams', 'lots', 'payouts'].map((n) => fetch('data/' + n + '.json?v=' + Date.now()).then((r) => r.json())))
-  .then(([t, l, p]) => {
-    TD = t; PAY = p;
-    M = Calcutta.compute(t, l, p);
-    renderStats(); renderGroups(); renderCombined(); renderBuyers(); renderTeams(); renderPayouts(); renderFoot(); tickGames();
-  })
-  .catch((e) => { $('#asof').textContent = 'Could not load data: ' + e.message; });
+function loadAll() {
+  return Promise.all(['teams', 'lots', 'payouts'].map((n) => fetch('data/' + n + '.json?v=' + Date.now(), { cache: 'no-store' }).then((r) => r.json())))
+    .then(([t, l, p]) => {
+      TD = t; PAY = p;
+      M = Calcutta.compute(t, l, p);
+      renderStats(); renderGroups(); renderCombined(); renderBuyers(); renderTeams(); renderPayouts(); renderFoot(); return tickGames();
+    })
+    .catch((e) => { $('#asof').textContent = 'Could not load data: ' + e.message; });
+}
+loadAll();
+
+// Pull down to refresh
+(function () {
+  const bar = document.createElement('div');
+  bar.id = 'ptr';
+  document.body.appendChild(bar);
+  let y0 = null, d = 0, busy = false;
+  const set = (h, txt) => { bar.style.height = h + 'px'; bar.textContent = txt || ''; };
+  window.addEventListener('touchstart', (e) => { y0 = window.scrollY <= 0 && !busy ? e.touches[0].clientY : null; d = 0; }, { passive: true });
+  window.addEventListener('touchmove', (e) => {
+    if (y0 === null) return;
+    d = e.touches[0].clientY - y0;
+    if (d > 0 && window.scrollY <= 0) set(Math.min(d * 0.5, 70), d > 110 ? 'Release to refresh' : '↓ Pull to refresh');
+    else set(0);
+  }, { passive: true });
+  window.addEventListener('touchend', async () => {
+    if (y0 === null) return;
+    const go = d > 110; y0 = null;
+    if (!go) return set(0);
+    busy = true; set(44, 'Refreshing…');
+    await loadAll();
+    try { const r = await fetch('sw.js', { cache: 'no-store' }); } catch (e) {}
+    busy = false; set(0);
+  });
+})();
 
 function csvCell(v){ v = String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
 function downloadCsv(){

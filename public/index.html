@@ -99,6 +99,11 @@ table.ls td:first-child,table.ls th:first-child{text-align:left;font-weight:700}
 .comb .row3{display:flex;flex-wrap:wrap;gap:4px 14px}.comb .row3 b{margin-left:4px}
 .team.comb{background:#e8f0fb;border:1px solid #1f6fe066}
 #ptr{height:0;overflow:hidden;text-align:center;color:var(--muted);font-size:13px;line-height:44px;background:var(--bg);position:fixed;top:0;left:0;right:0;z-index:40;transition:height .15s}
+details.tms{margin:6px 0}
+details.tms>summary{cursor:pointer;list-style:none;padding:10px 12px;background:var(--panel2);border-radius:10px;font-weight:600;font-size:14px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+details.tms>summary::-webkit-details-marker{display:none}
+details.tms>summary::after{content:'▾';color:var(--green);transition:transform .15s}
+details.tms[open]>summary::after{transform:rotate(180deg)}
 </style>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -204,6 +209,7 @@ function combinedBlock(ts, label, pPlay, pTitle) {
   </div>`;
 }
 
+const OPEN = new Set();
 function renderGroups() {
   const arr = [...M.groups];
   if (SORT === 'lot') arr.sort((a, b) => a.lot - b.lot);
@@ -214,7 +220,7 @@ function renderGroups() {
         <div class="who"><div class="lot">Lot ${g.lot}</div><div class="name">${g.buyer}</div></div>
         <div class="paid"><b>${money(g.paid)}</b><span>${pct(g.paidShare, 1)} of pool</span></div>
       </div>
-      ${g.ts.map(teamBlock).join('')}
+      <details class="tms" data-lot="${g.lot}" ${OPEN.has(g.lot) ? 'open' : ''}><summary>Teams: ${g.ts.map((t) => t.name).join(' + ')}</summary>${g.ts.map(teamBlock).join('')}</details>
       ${combinedBlock(g.ts, 'Combined group', g.pPlayoffs, g.pTitle)}
       <div class="foot">
         <div>Expected payout<b>${money(g.ev)}</b></div>
@@ -500,6 +506,7 @@ $('#inst').addEventListener('click', async () => {
   window.addEventListener('beforeinstallprompt',()=>setTimeout(show,1500));
   if(ios) setTimeout(show,3000);
 })();
+document.addEventListener('toggle', (e) => { const d = e.target; if (d.classList && d.classList.contains('tms')) { const n = +d.dataset.lot; if (d.open) OPEN.add(n); else OPEN.delete(n); } }, true);
 </script>
 </body>
 </html>

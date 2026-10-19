@@ -13,3 +13,6 @@ Everything else is calculated in `public/model.js` in the browser. Push to the m
 
 `public/data/lots.json` holds groups, buyers and prices. `public/data/payouts.json` holds the payout sheet.
 Buyers listed in `LOGOS` in `public/index.html` get a custom avatar (Navas = The Dive logo).
+
+## Live games
+The Games tab polls ESPN's public scoreboard every minute while a game is live (or starts within 20 min), otherwise every 5 minutes. Each card shows score, clock, spread/over-under, current drive, quarter line score, and Calcutta stats (owner, lot, playoff %, title %, EV) for both teams.

@@ -97,6 +97,8 @@ table.ls td:first-child,table.ls th:first-child{text-align:left;font-weight:700}
 [hidden]{display:none!important}
 .ibar{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:50;background:#173a24;border:1px solid #3fc46b;border-radius:14px;padding:12px 14px;display:flex;gap:10px;align-items:center;box-shadow:0 6px 24px #0008}
 .ibar span{flex:1;font-size:14px}.ibar button{background:#3fc46b;color:#0b1a10;border:0;border-radius:999px;padding:8px 14px;font:700 14px inherit;cursor:pointer}.ibar button.x{background:none;color:#fff;padding:8px}
+.comb .row3{display:flex;flex-wrap:wrap;gap:4px 14px}.comb .row3 b{margin-left:4px}
+.team.comb{background:#173a24;border:1px solid #3fc46b55}
 </style>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -184,6 +186,18 @@ function teamBlock(t) {
   </div>`;
 }
 
+
+function combinedBlock(ts, label, pPlay, pTitle) {
+  const w = ts.reduce((a, t) => a + t.w, 0), l = ts.reduce((a, t) => a + t.l, 0), tie = ts.reduce((a, t) => a + (t.t || 0), 0);
+  const diff = ts.reduce((a, t) => a + t.pf - t.pa, 0);
+  const sum = (k) => ts.reduce((a, t) => a + t[k], 0);
+  return `<div class="team comb">
+    <div class="tn">${label}<small>${ts.length} team${ts.length > 1 ? 's' : ''}: ${ts.map((t) => t.abbr).join(' + ')}</small></div>
+    <div class="rec">${w}-${l}${tie ? '-' + tie : ''} · ${diff >= 0 ? '+' : ''}${diff}</div>
+    <div class="row3"><span>Playoffs (any) <b>${pctSmart(pPlay)}</b></span><span>Avg teams in <b>${sum('m').toFixed(2)}</b></span><span>Title <b>${pctSmart(pTitle)}</b></span><span>Reach SB <b>${pctSmart(sum('a3'))}</b></span><span>Worst record <b>${pctSmart(sum('worst'))}</b></span></div>
+  </div>`;
+}
+
 function renderGroups() {
   const arr = [...M.groups];
   if (SORT === 'lot') arr.sort((a, b) => a.lot - b.lot);
@@ -195,7 +209,7 @@ function renderGroups() {
         <div class="paid"><b>${money(g.paid)}</b><span>${pct(g.paidShare, 1)} of pool</span></div>
       </div>
       ${g.ts.map(teamBlock).join('')}
-      ${g.ts.length > 1 ? `<span class="pill">At least one team makes playoffs: ${pctSmart(g.pPlayoffs)}</span>` : ''}
+      ${g.ts.length > 1 ? combinedBlock(g.ts, 'Combined group', g.pPlayoffs, g.pTitle) : ''}
       <div class="foot">
         <div>Expected payout<b>${money(g.ev)}</b></div>
         <div>Value vs paid<b class="${g.edge >= 0 ? 'pos' : 'neg'}">${signed(g.edge)}</b></div>
@@ -217,7 +231,7 @@ function renderBuyers() {
         <div>Value vs paid<b class="${b.edge >= 0 ? 'pos' : 'neg'}">${signed(b.edge)}</b></div>
         <div>Win title<b>${pctSmart(b.pTitle)}</b></div>
       </div>
-      <span class="pill">Chance at least one of your teams makes playoffs: ${pctSmart(b.pPlayoffs)}</span>
+      ${combinedBlock(b.groups.flatMap((g) => g.ts), 'Combined teams', b.pPlayoffs, b.pTitle)}
     </div>`).join('');
 }
 

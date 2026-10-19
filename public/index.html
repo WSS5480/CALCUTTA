@@ -465,7 +465,14 @@ let DEFER=null;
 window.addEventListener('beforeinstallprompt',(e)=>{e.preventDefault();DEFER=e;});
 window.addEventListener('appinstalled',()=>{$('#inst').hidden=true;});
 if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) $('#inst').hidden=true;
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+if ('serviceWorker' in navigator) {
+  const had = !!navigator.serviceWorker.controller; let reloaded = false;
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+    reg.update().catch(() => {});
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
+  }).catch(() => {});
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (had && !reloaded) { reloaded = true; location.reload(); } });
+}
 $('#inst').addEventListener('click', async () => {
   const h=$('#instHelp');
   if (DEFER) { DEFER.prompt(); await DEFER.userChoice; DEFER=null; return; }

@@ -93,6 +93,7 @@ table.ls td:first-child,table.ls th:first-child{text-align:left;font-weight:700}
 .gl.in{color:var(--ink)}
 .gl .liveTag{color:var(--red);font-weight:700;margin-right:6px}
 @media (min-width:700px){.stats{grid-template-columns:repeat(6,1fr)}}
+.dl{margin-top:10px;background:var(--panel2);color:#fff;border:1px solid #2d4a37;border-radius:999px;padding:8px 14px;font:600 14px inherit;cursor:pointer}
 </style>
 </head>
 <body>
@@ -100,6 +101,7 @@ table.ls td:first-child,table.ls th:first-child{text-align:left;font-weight:700}
   <header>
     <h1>Calcutta 2026</h1>
     <div class="sub" id="asof">Loading…</div>
+    <button id="dl" class="dl">⬇ Download CSV</button>
   </header>
   <div class="stats" id="stats"></div>
   <nav id="tabs">
@@ -371,6 +373,19 @@ Promise.all(['teams', 'lots', 'payouts'].map((n) => fetch('data/' + n + '.json?v
     renderStats(); renderGroups(); renderBuyers(); renderTeams(); renderPayouts(); renderFoot(); tickGames();
   })
   .catch((e) => { $('#asof').textContent = 'Could not load data: ' + e.message; });
+
+function csvCell(v){ v = String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+function downloadCsv(){
+  const rows = [['Lot','Buyer','Teams','Paid','Expected payout','Edge $','Edge %','Playoffs %','Title %','Super Bowl %','Worst record %']];
+  M.groups.forEach((g) => rows.push([g.lot, g.buyer, g.teams.join('/'), g.paid, Math.round(g.ev), Math.round(g.edge), (g.edgePct*100).toFixed(1), (g.pPlayoffs*100).toFixed(1), (g.pTitle*100).toFixed(1), (g.pSB*100).toFixed(1), (g.pWorst*100).toFixed(1)]));
+  rows.push([]);
+  rows.push(['Team','Record','Playoffs %','Title %','Super Bowl %','Expected payout','Owner','Lot']);
+  M.teams.slice().sort((x, y) => y.ev - x.ev).forEach((t) => { const o = ownerOf(t.abbr) || {}; rows.push([t.name, t.w + '-' + t.l + (t.t ? '-' + t.t : ''), (t.m*100).toFixed(1), (t.c*100).toFixed(1), (t.a3*100).toFixed(1), Math.round(t.ev), o.buyer || '', o.lot || '']); });
+  const blob = new Blob([rows.map((r) => r.map(csvCell).join(',')).join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'calcutta-2026.csv';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+document.getElementById('dl').addEventListener('click', downloadCsv);
 </script>
 </body>
 </html>

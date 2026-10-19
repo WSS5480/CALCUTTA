@@ -209,7 +209,7 @@ function renderGroups() {
         <div class="paid"><b>${money(g.paid)}</b><span>${pct(g.paidShare, 1)} of pool</span></div>
       </div>
       ${g.ts.map(teamBlock).join('')}
-      ${g.ts.length > 1 ? combinedBlock(g.ts, 'Combined group', g.pPlayoffs, g.pTitle) : ''}
+      ${combinedBlock(g.ts, 'Combined group', g.pPlayoffs, g.pTitle)}
       <div class="foot">
         <div>Expected payout<b>${money(g.ev)}</b></div>
         <div>Value vs paid<b class="${g.edge >= 0 ? 'pos' : 'neg'}">${signed(g.edge)}</b></div>

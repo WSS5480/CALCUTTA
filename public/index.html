@@ -117,6 +117,7 @@ details.tms[open]>summary::after{transform:rotate(180deg)}
     <h1>Calcutta 2026</h1>
     <div class="sub" id="asof">Loading…</div>
     <div class="sub" id="upd">Live scores: waiting…</div>
+    <div class="sub" style="font-size:11px;opacity:.7">App version 10 (groups dropdown) · pull down to force refresh</div>
     <button id="inst" class="dl">📲 Download App</button> <button id="dl" class="dl">⬇ Download CSV</button>
     <div id="instHelp" class="sub" hidden></div>
   </header>
@@ -450,9 +451,12 @@ loadAll();
     const go = d > 110; y0 = null;
     if (!go) return set(0);
     busy = true; set(44, 'Refreshing…');
-    await loadAll();
-    try { const r = await fetch('sw.js', { cache: 'no-store' }); } catch (e) {}
-    busy = false; set(0);
+    try {
+      if ('serviceWorker' in navigator) (await navigator.serviceWorker.getRegistrations()).forEach((r) => r.unregister());
+      if (window.caches) (await caches.keys()).forEach((k) => caches.delete(k));
+    } catch (e) {}
+    const u = new URL(location.href); u.searchParams.set('r', Date.now());
+    location.replace(u.toString());
   });
 })();
 

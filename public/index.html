@@ -8,8 +8,8 @@
 <link rel="icon" href="dive-logo.png">
 <style>
 :root{
-  --bg:#0d1a12; --panel:#14261b; --panel2:#1a3123; --line:#25402f;
-  --ink:#eef5ef; --muted:#9db3a3; --green:#4cc36a; --red:#ff6b5e; --gold:#f2c14e;
+  --bg:#141414; --panel:#1f1f1f; --panel2:#2a2a2a; --line:#383838;
+  --ink:#f4f1ed; --muted:#a8a29a; --green:#f26b21; --red:#ff6b5e; --gold:#f2c14e;
   --radius:14px;
 }
 *{box-sizing:border-box}
@@ -25,7 +25,7 @@ h1{margin:0;font-size:24px;letter-spacing:.2px}
 .stat span{color:var(--muted);font-size:12px}
 nav{display:flex;gap:6px;position:sticky;top:0;background:var(--bg);padding:8px 0;z-index:5;overflow-x:auto}
 nav button{flex:1;min-width:84px;background:var(--panel);color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:9px 12px;font:inherit;font-weight:600;cursor:pointer}
-nav button.on{background:var(--green);color:#06210f;border-color:var(--green)}
+nav button.on{background:var(--green);color:#1a0b02;border-color:var(--green)}
 .sortbar{display:flex;gap:6px;align-items:center;margin:8px 0;flex-wrap:wrap;color:var(--muted);font-size:13px}
 .sortbar button{background:transparent;color:var(--muted);border:1px solid var(--line);border-radius:8px;padding:5px 9px;font:inherit;cursor:pointer}
 .sortbar button.on{color:var(--ink);border-color:var(--green)}
@@ -51,7 +51,7 @@ nav button.on{background:var(--green);color:#06210f;border-color:var(--green)}
 .foot{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;border-top:1px solid var(--line);padding-top:12px}
 .foot div{font-size:12px;color:var(--muted)}
 .foot b{display:block;color:var(--ink);font-size:16px}
-.pos{color:var(--green)!important}.neg{color:var(--red)!important}
+.pos{color:#4cc36a!important}.neg{color:var(--red)!important}
 .pill{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;background:var(--panel2);color:var(--muted);margin-top:8px}
 table{width:100%;border-collapse:collapse;font-size:13.5px}
 th,td{padding:8px 6px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
@@ -93,16 +93,16 @@ table.ls td:first-child,table.ls th:first-child{text-align:left;font-weight:700}
 .gl.in{color:var(--ink)}
 .gl .liveTag{color:var(--red);font-weight:700;margin-right:6px}
 @media (min-width:700px){.stats{grid-template-columns:repeat(6,1fr)}}
-.dl{margin-top:10px;background:var(--panel2);color:#fff;border:1px solid #2d4a37;border-radius:999px;padding:8px 14px;font:600 14px inherit;cursor:pointer}
+.dl{margin-top:10px;background:var(--panel2);color:#fff;border:1px solid #4a4a4a;border-radius:999px;padding:8px 14px;font:600 14px inherit;cursor:pointer}
 [hidden]{display:none!important}
-.ibar{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:50;background:#173a24;border:1px solid #3fc46b;border-radius:14px;padding:12px 14px;display:flex;gap:10px;align-items:center;box-shadow:0 6px 24px #0008}
-.ibar span{flex:1;font-size:14px}.ibar button{background:#3fc46b;color:#0b1a10;border:0;border-radius:999px;padding:8px 14px;font:700 14px inherit;cursor:pointer}.ibar button.x{background:none;color:#fff;padding:8px}
+.ibar{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:50;background:#33200f;border:1px solid #f26b21;border-radius:14px;padding:12px 14px;display:flex;gap:10px;align-items:center;box-shadow:0 6px 24px #0008}
+.ibar span{flex:1;font-size:14px}.ibar button{background:#f26b21;color:#1a0b02;border:0;border-radius:999px;padding:8px 14px;font:700 14px inherit;cursor:pointer}.ibar button.x{background:none;color:#fff;padding:8px}
 .comb .row3{display:flex;flex-wrap:wrap;gap:4px 14px}.comb .row3 b{margin-left:4px}
-.team.comb{background:#173a24;border:1px solid #3fc46b55}
+.team.comb{background:#33200f;border:1px solid #f26b2166}
 </style>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
-<meta name="theme-color" content="#0b1a10">
+<meta name="theme-color" content="#141414">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-title" content="Calcutta">
 </head>

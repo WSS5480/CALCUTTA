@@ -94,14 +94,21 @@ table.ls td:first-child,table.ls th:first-child{text-align:left;font-weight:700}
 .gl .liveTag{color:var(--red);font-weight:700;margin-right:6px}
 @media (min-width:700px){.stats{grid-template-columns:repeat(6,1fr)}}
 .dl{margin-top:10px;background:var(--panel2);color:#fff;border:1px solid #2d4a37;border-radius:999px;padding:8px 14px;font:600 14px inherit;cursor:pointer}
+[hidden]{display:none!important}
 </style>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#0b1a10">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-title" content="Calcutta">
 </head>
 <body>
 <div class="wrap">
   <header>
     <h1>Calcutta 2026</h1>
     <div class="sub" id="asof">Loading…</div>
-    <button id="dl" class="dl">⬇ Download CSV</button>
+    <button id="inst" class="dl">📲 Download App</button> <button id="dl" class="dl">⬇ Download CSV</button>
+    <div id="instHelp" class="sub" hidden></div>
   </header>
   <div class="stats" id="stats"></div>
   <nav id="tabs">
@@ -386,6 +393,19 @@ function downloadCsv(){
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 document.getElementById('dl').addEventListener('click', downloadCsv);
+
+let DEFER=null;
+window.addEventListener('beforeinstallprompt',(e)=>{e.preventDefault();DEFER=e;});
+window.addEventListener('appinstalled',()=>{$('#inst').hidden=true;});
+if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) $('#inst').hidden=true;
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+$('#inst').addEventListener('click', async () => {
+  const h=$('#instHelp');
+  if (DEFER) { DEFER.prompt(); await DEFER.userChoice; DEFER=null; return; }
+  const ios=/iphone|ipad|ipod/i.test(navigator.userAgent);
+  h.textContent = ios ? 'On iPhone: tap the Share button in Safari, then "Add to Home Screen".' : 'Open your browser menu (⋮) and tap "Install app" or "Add to Home screen".';
+  h.hidden=false;
+});
 </script>
 </body>
 </html>

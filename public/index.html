@@ -108,6 +108,11 @@ details.tms[open]>summary::after{transform:rotate(180deg)}
 .pbar{height:10px;border-radius:8px;background:var(--panel2);overflow:hidden;margin:4px 0}.pbar i{display:block;height:100%;background:var(--green)}
 .pkpick{margin-top:8px;padding:8px 10px;background:var(--panel2);border-radius:10px;font-size:14px}
 .pk .gstat{margin-bottom:6px}
+.res{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 12px;margin:6px 0;border-radius:10px;border:1px solid}
+.res small{display:block;color:var(--muted);font-weight:400;font-size:12px}.res span{font-weight:700;white-space:nowrap}
+.res.hit{background:#16915a1f;border-color:#16915a;color:#0d5c3a}.res.miss{background:#d93a2e1f;border-color:#d93a2e;color:#a02820}
+.res.hit b,.res.miss b{color:var(--ink)}
+.pksum{margin:6px 0}.pksum small{color:var(--muted)}
 </style>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -121,7 +126,7 @@ details.tms[open]>summary::after{transform:rotate(180deg)}
     <h1>Calcutta 2026</h1>
     <div class="sub" id="asof">Loading…</div>
     <div class="sub" id="upd">Live scores: waiting…</div>
-    <div class="sub" style="font-size:11px;opacity:.7">App version 11 (picks) · pull down to force refresh</div>
+    <div class="sub" style="font-size:11px;opacity:.7">App version 12 (picks + results) · pull down to force refresh</div>
     <button id="inst" class="dl">📲 Download App</button> <button id="dl" class="dl">⬇ Download CSV</button>
     <div id="instHelp" class="sub" hidden></div>
   </header>
@@ -309,7 +314,7 @@ function renderFoot() {
 /* ---------- Live games (ESPN scoreboard, refreshed every minute during games) ---------- */
 const SCORES_URL = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard';
 const ABBR_FIX = { WSH: 'WAS', JAC: 'JAX', LA: 'LAR' };
-let GAMES = [], GAME_BY = {}, LAST_OK = null, TICK = null;
+let GAMES = [], GAME_BY = {}, LAST_OK = null, TICK = null, CUR_WEEK = 0, HIST = {}, HIST_BUSY = false;
 
 function parseGames(j) {
   const evs = j.events || (j.leagues && j.leagues[0] && j.leagues[0].events) || [];
@@ -396,12 +401,42 @@ function pred(g) {
   return { a, h, pa, ph: 1 - pa, pick: pa >= 0.5 ? a : h, conf: Math.max(pa, 1 - pa) };
 }
 
+async function loadHistory() {
+  if (HIST_BUSY || !CUR_WEEK) return;
+  HIST_BUSY = true;
+  for (let n = 1; n < CUR_WEEK; n++) {
+    if (HIST[n]) continue;
+    let g = null;
+    try { g = JSON.parse(localStorage.getItem('wk26-' + n)); } catch (e) {}
+    if (!g) {
+      try {
+        const r = await fetch(SCORES_URL + '?week=' + n + '&seasontype=2', { cache: 'no-store' });
+        if (!r.ok) throw new Error();
+        g = parseGames(await r.json()).filter((x) => x.state === 'post').map((x) => ({ id: x.id, start: +x.start, comp: x.comp.map((c) => ({ abbr: c.abbr, score: c.score, home: c.home })) }));
+        try { localStorage.setItem('wk26-' + n, JSON.stringify(g)); } catch (e) {}
+      } catch (e) { continue; }
+    }
+    HIST[n] = g;
+    renderPicks();
+  }
+  HIST_BUSY = false;
+  renderPicks();
+}
+
+function grade(comp) {
+  const [a, h] = comp;
+  if (a.score === h.score) return null;
+  const pa = Calcutta.winProb(M.by, a.abbr, h.abbr, h.abbr);
+  const pick = pa >= 0.5 ? a : h, other = pick === a ? h : a;
+  return { a, h, pick, conf: Math.max(pa, 1 - pa), hit: pick.score > other.score };
+}
+
 function renderPicks() {
   if (!M) return;
+  const nm = (x) => (M.by[x.abbr] || { name: x.abbr }).name;
   const arr = GAMES.filter((g) => g.state !== 'post').sort((x, y) => (x.state === 'in' ? -1 : 0) - (y.state === 'in' ? -1 : 0) || x.start - y.start);
   const card = (g) => {
     const r = pred(g);
-    const nm = (x) => (M.by[x.abbr] || { name: x.abbr }).name;
     const o = ownerOf(r.pick.abbr);
     const when = g.state === 'in' ? `<span style="color:var(--red);font-weight:700">LIVE</span> ${g.detail} · ${r.a.abbr} ${r.a.score} – ${r.h.abbr} ${r.h.score}` : `<b>${g.start.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</b>`;
     return `<div class="card pk">
@@ -412,7 +447,26 @@ function renderPicks() {
       <div class="pkpick">Pick: <b>${nm(r.pick)}</b> ${pct(r.conf)}${o ? ` · ${o.buyer}, Lot ${o.lot}` : ''}</div>
     </div>`;
   };
-  $('#pickList').innerHTML = arr.length ? arr.map(card).join('') : '<div class="note">No upcoming games on the scoreboard right now. Check back when the next week posts.</div>';
+  // Season results by week (this week's finished games come from the live scoreboard)
+  const weeks = { ...HIST };
+  const curFinal = GAMES.filter((g) => g.state === 'post').map((g) => ({ id: g.id, start: +g.start, comp: g.comp }));
+  if (CUR_WEEK && curFinal.length) weeks[CUR_WEEK] = curFinal;
+  const nums = Object.keys(weeks).map(Number).sort((a, b) => b - a);
+  let H = 0, T = 0, HH = 0, HT = 0;
+  const wk = nums.map((n) => {
+    const gs = weeks[n].slice().sort((a, b) => a.start - b.start).map((g) => grade(g.comp)).filter(Boolean);
+    const hits = gs.filter((x) => x.hit).length;
+    H += hits; T += gs.length;
+    gs.forEach((x) => { if (x.conf >= 0.65) { HT++; if (x.hit) HH++; } });
+    const rows = gs.map((x) => `<div class="res ${x.hit ? 'hit' : 'miss'}"><div><b>${x.a.abbr} ${x.a.score} – ${x.h.abbr} ${x.h.score}</b><small>Pick ${x.pick.abbr} ${pct(x.conf)}</small></div><span>${x.hit ? '✓ Hit' : '✗ Miss'}</span></div>`).join('');
+    return { n, hits, total: gs.length, html: rows };
+  });
+  const sum = T ? `<div class="card pksum"><b>Season: ${H}-${T - H}</b> (${pct(H / T)})${HT ? `<br><small>Picks 65%+ confident: ${HH}-${HT - HH}</small>` : ''}<br><small>Graded with today's ratings, so it flatters the model. It is not what it would have said before each game.</small></div>` : '';
+  const loading = CUR_WEEK > 1 && HIST_BUSY ? '<div class="note">Loading past weeks…</div>' : '';
+  $('#pickList').innerHTML =
+    (arr.length ? '<div class="gh">Upcoming</div>' + arr.map(card).join('') : '<div class="note">No upcoming games on the scoreboard right now.</div>') +
+    (T ? '<div class="gh">Results</div>' + sum : '') + loading +
+    wk.map((w) => `<details class="tms" ${w.n === CUR_WEEK ? 'open' : ''}><summary>Week ${w.n}: ${w.hits}-${w.total - w.hits}</summary>${w.html}</details>`).join('');
 }
 
 function nextDelay() {
@@ -440,7 +494,9 @@ async function tickGames() {
   try {
     const r = await fetch(SCORES_URL, { cache: 'no-store' });
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    GAMES = parseGames(await r.json());
+    const jj = await r.json();
+    CUR_WEEK = (jj.week && jj.week.number) || CUR_WEEK;
+    GAMES = parseGames(jj);
     GAME_BY = {};
     GAMES.forEach((g) => g.comp.forEach((c) => (GAME_BY[c.abbr] = g)));
     LAST_OK = new Date();
@@ -449,6 +505,7 @@ async function tickGames() {
     renderGames();
     renderPicks();
     renderGroups();
+    loadHistory();
   } catch (e) {
     $('#upd').textContent = LAST_OK ? 'Live scores last updated ' + LAST_OK.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }) + ' (retrying)' : 'Live scores unavailable (retrying)';
     $('#liveText').textContent = 'Live scores unavailable (' + e.message + ') · retrying every minute';

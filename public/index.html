@@ -170,7 +170,7 @@ function avatar(name) {
   return `<div class="av">${name.slice(0, 2).toUpperCase()}</div>`;
 }
 
-let M, SORT = 'lot', PAY, TD;
+let M, SORT = 'lot', PAY, TD, LOTS;
 
 function renderStats() {
   const top = [...M.teams].sort((a, b) => b.c - a.c)[0];
@@ -390,6 +390,20 @@ function nextDelay() {
   return live || soon ? 60 * 1000 : 5 * 60 * 1000;
 }
 
+// Keep records current from ESPN for every team playing this week
+function applyRecords() {
+  let changed = false;
+  GAMES.forEach((g) => g.comp.forEach((c) => {
+    const t = TD.teams.find((x) => x.abbr === c.abbr);
+    const m = /^(\d+)-(\d+)(?:-(\d+))?$/.exec(c.record || '');
+    if (!t || !m) return;
+    const w = +m[1], l = +m[2], tie = +(m[3] || 0);
+    if (t.w !== w || t.l !== l || (t.t || 0) !== tie) { t.w = w; t.l = l; t.t = tie; changed = true; }
+  }));
+  if (changed) M = Calcutta.compute(TD, LOTS, PAY);
+  return changed;
+}
+
 async function tickGames() {
   clearTimeout(TICK);
   try {
@@ -399,6 +413,7 @@ async function tickGames() {
     GAME_BY = {};
     GAMES.forEach((g) => g.comp.forEach((c) => (GAME_BY[c.abbr] = g)));
     LAST_OK = new Date();
+    if (applyRecords()) { renderStats(); renderGroups(); renderCombined(); renderBuyers(); renderTeams(); }
     $('#upd').textContent = '● Live scores updated ' + LAST_OK.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
     renderGames();
     renderGroups();
@@ -424,7 +439,7 @@ document.querySelectorAll('.sortbar button').forEach((b) => (b.onclick = () => {
 function loadAll() {
   return Promise.all(['teams', 'lots', 'payouts'].map((n) => fetch('data/' + n + '.json?v=' + Date.now(), { cache: 'no-store' }).then((r) => r.json())))
     .then(([t, l, p]) => {
-      TD = t; PAY = p;
+      TD = t; PAY = p; LOTS = l;
       M = Calcutta.compute(t, l, p);
       renderStats(); renderGroups(); renderCombined(); renderBuyers(); renderTeams(); renderPayouts(); renderFoot(); return tickGames();
     })

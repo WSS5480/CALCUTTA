@@ -126,7 +126,7 @@ details.tms[open]>summary::after{transform:rotate(180deg)}
     <h1>Calcutta 2026</h1>
     <div class="sub" id="asof">Loading…</div>
     <div class="sub" id="upd">Live scores: waiting…</div>
-    <div class="sub" style="font-size:11px;opacity:.7">App version 13 (new pick model) · pull down to force refresh</div>
+    <div class="sub" style="font-size:11px;opacity:.7">App version 14 (auto odds) · pull down to force refresh</div>
     <button id="inst" class="dl">📲 Download App</button> <button id="dl" class="dl">⬇ Download CSV</button>
     <div id="instHelp" class="sub" hidden></div>
   </header>
@@ -475,6 +475,27 @@ function nextDelay() {
   return live || soon ? 60 * 1000 : 5 * 60 * 1000;
 }
 
+// Super Bowl odds from the odds proxy (falls back silently to teams.json if it is down or has no key yet)
+const ODDS_URL = 'https://calcutta-odds.onrender.com/odds';
+let ODDS_AT = 0;
+async function loadOdds() {
+  if (!M || Date.now() - ODDS_AT < 10 * 60 * 1000) return;
+  ODDS_AT = Date.now();
+  try {
+    const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 70000); // free host may need a minute to wake
+    const r = await fetch(ODDS_URL, { signal: ctl.signal }); clearTimeout(to);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    if (!j.odds) throw new Error('no odds');
+    let changed = false;
+    TD.teams.forEach((t) => { const o = j.odds[t.abbr]; if (Number.isFinite(o) && o !== t.sbOdds) { t.sbOdds = o; changed = true; } });
+    TD.sources.sbOdds = (j.book === 'draftkings' ? 'DraftKings' : j.book) + ' Super Bowl odds via The Odds API, ' + new Date(j.updated).toLocaleString();
+    if (changed) M = Calcutta.compute(TD, LOTS, PAY);
+    renderStats(); renderGroups(); renderPicks(); renderCombined(); renderBuyers(); renderTeams(); renderFoot();
+  } catch (e) { ODDS_AT = Date.now() - 8 * 60 * 1000; /* retry in ~2 min */ }
+}
+setInterval(loadOdds, 30 * 60 * 1000);
+
 // Keep records current from ESPN for every team playing this week
 function applyRecords() {
   let changed = false;
@@ -506,6 +527,7 @@ async function tickGames() {
     renderPicks();
     renderGroups();
     loadHistory();
+    loadOdds();
   } catch (e) {
     $('#upd').textContent = LAST_OK ? 'Live scores last updated ' + LAST_OK.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }) + ' (retrying)' : 'Live scores unavailable (retrying)';
     $('#liveText').textContent = 'Live scores unavailable (' + e.message + ') · retrying every minute';

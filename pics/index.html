@@ -51,6 +51,7 @@ details>summary::after{content:'▾';color:var(--blue)}details[open]>summary::af
 
 .lg{display:flex;gap:8px;margin:6px 0}.lg button{border:1px solid var(--blue);background:#fff;color:var(--blue);border-radius:999px;padding:6px 16px;font:700 14px inherit;cursor:pointer}.lg button.on{background:var(--blue);color:#fff}
 select#team{width:100%;max-width:320px;margin:2px 0 6px;padding:9px 12px;border:1px solid var(--blue);border-radius:12px;background:#fff;color:var(--ink);font:600 15px inherit}
+.sum.lock{border-color:#bf5700;background:#fdf1e6}
 body{border-top:6px solid #bf5700}h1{color:#bf5700}
 </style>
 </head>
@@ -60,7 +61,7 @@ body{border-top:6px solid #bf5700}h1{color:#bf5700}
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">College</button></div>
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Pics v15 (soft refresh)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Pics v16 (locked picks)</div>
 </header>
 <main>
   <div class="sums" id="sums"></div>
@@ -325,6 +326,16 @@ const sp = (n) => (n > 0 ? '+' : '') + (Math.abs(n) % 1 ? n.toFixed(1) : n.toFix
 const byText = (g, m) => (Math.abs(m) < 0.05 ? 'even' : m > 0 ? g.home.abbr + ' by ' + m.toFixed(1) : g.away.abbr + ' by ' + (-m).toFixed(1));
 const lineText = (g) => (g.line === null ? '' : g.line === 0 ? 'Pick ’em' : `${(g.line > 0 ? g.home : g.away).abbr} -${Math.abs(g.line)}`);
 
+// ---- Locked picks: the pick as it stood just before kickoff, saved on this device, so the record can't use hindsight ----
+const lkKey = (id) => 'lk26-' + LG + '-' + id;
+const lkLoad = (id) => { try { return JSON.parse(localStorage.getItem(lkKey(id))); } catch (e) { return null; } };
+function lockSnap(g) {
+  if (g.state !== 'pre' || g.start <= Date.now() || g.start - Date.now() > 8 * 864e5) return;
+  const p = pred(g);
+  const snap = { su: p.su.abbr, conf: +p.conf.toFixed(4), L: g.line, ats: p.ats ? { side: p.ats.side.abbr, cover: +p.ats.cover.toFixed(4) } : null };
+  const str = JSON.stringify(snap);
+  try { if (localStorage.getItem(lkKey(g.id) + '-s') !== str) { localStorage.setItem(lkKey(g.id), JSON.stringify({ ...snap, t: Date.now() })); localStorage.setItem(lkKey(g.id) + '-s', str); } } catch (e) {}
+}
 function grade(g) {
   if (g.home.score === g.away.score) return null;
   const p = pred(g);
@@ -335,7 +346,13 @@ function grade(g) {
     if (am === g.line) atsRes = 'push';
     else atsRes = ((am > g.line) === (p.ats.side === g.home)) ? 'hit' : 'miss';
   }
-  return { p, suHit, atsRes };
+  const lk = lkLoad(g.id);
+  let lsu = null, lats = null;
+  if (lk) {
+    lsu = (lk.su === g.home.abbr) === (g.home.score > g.away.score);
+    if (lk.ats && lk.L !== null) { const am = g.home.score - g.away.score; lats = am === lk.L ? 'push' : (am > lk.L) === (lk.ats.side === g.home.abbr) ? 'hit' : 'miss'; }
+  }
+  return { p, suHit, atsRes, lk, lsu, lats };
 }
 
 function card(g) {
@@ -395,6 +412,7 @@ function teamBox(games) {
 function render() {
   if (!M) return;
   if (CFB) buildRatings();
+  Object.values(ALL).forEach(lockSnap);
   const games = TEAM ? Object.values(ALL).filter((g) => g.home.abbr === TEAM || g.away.abbr === TEAM) : Object.values(ALL);
   teamSelect();
   const live = games.filter((g) => g.state === 'in');
@@ -405,7 +423,7 @@ function render() {
   pre.filter((g) => g.week > CUR).forEach((g) => (future[g.week] = future[g.week] || []).push(g));
 
   // Results
-  let SH = 0, ST = 0, AH = 0, AM = 0, AP = 0, HH = 0, HT = 0;
+  let SH = 0, ST = 0, AH = 0, AM = 0, AP = 0, HH = 0, HT = 0, LSH = 0, LST = 0, LAH = 0, LAM = 0;
   const byWeek = {};
   post.forEach((g) => (byWeek[g.week] = byWeek[g.week] || []).push(g));
   const weeks = Object.keys(byWeek).map(Number).sort((a, b) => b - a).map((n) => {
@@ -414,19 +432,23 @@ function render() {
       const r = grade(g); if (!r) return '';
       t++; ST++; if (r.suHit) { h++; SH++; }
       if (r.p.conf >= 0.65) { HT++; if (r.suHit) HH++; }
+      if (r.lk) { LST++; if (r.lsu) LSH++; if (r.lats === 'hit') LAH++; else if (r.lats === 'miss') LAM++; }
       if (r.atsRes === 'hit') { ah++; AH++; } else if (r.atsRes === 'miss') { am++; AM++; } else if (r.atsRes === 'push') { ap++; AP++; }
       const bad = (cls, txt) => `<span class="b ${cls}">${txt}</span>`;
       const b1 = bad(r.suHit ? 'hit' : 'miss', r.suHit ? '✓ Win pick' : '✗ Win pick');
       const b2 = r.atsRes ? bad(r.atsRes, (r.atsRes === 'hit' ? '✓' : r.atsRes === 'miss' ? '✗' : '–') + ' Spread') : '';
-      return `<div class="res ${r.suHit ? 'hit' : 'miss'}"><div class="rtop"><div><b>${g.away.abbr} ${g.away.score} – ${g.home.abbr} ${g.home.score}</b><small>Pick ${r.p.su.abbr} ${pct(r.p.conf)}${r.p.ats ? ` · lean ${r.p.ats.side.abbr} ${sp(r.p.ats.line)}` : ''}</small></div><div class="badges">${b1}${b2}</div></div>${lmBlock(g)}</div>`;
+      return `<div class="res ${r.suHit ? 'hit' : 'miss'}"><div class="rtop"><div><b>${g.away.abbr} ${g.away.score} – ${g.home.abbr} ${g.home.score}</b><small>Pick ${r.p.su.abbr} ${pct(r.p.conf)}${r.p.ats ? ` · lean ${r.p.ats.side.abbr} ${sp(r.p.ats.line)}` : ''}</small></div><div class="badges">${b1}${b2}${r.lk ? `<span class="b ${r.lsu ? 'hit' : 'miss'}">🔒 ${r.lsu ? '✓' : '✗'}${r.lats ? ' / ' + (r.lats === 'hit' ? '✓' : r.lats === 'miss' ? '✗' : '–') : ''} Locked</span>` : ''}</div></div>${lmBlock(g)}</div>`;
     }).join('');
     return { n, h, t, ah, am, ap, rows };
   });
   const atsN = AH + AM;
   $('#sums').innerHTML = `
-    <div class="sum"><b>${ST ? pct(SH / ST, 1) : '–'}</b><span>Win picks</span><small>${SH}-${ST - SH}${HT ? ` · 65%+ picks ${HH}-${HT - HH}` : ''}</small></div>
-    <div class="sum"><b>${atsN ? pct(AH / atsN, 1) : '–'}</b><span>Against the spread</span><small>${AH}-${AM}${AP ? '-' + AP : ''}${atsN ? '' : ' (loading lines…)'}</small></div>`;
+    <div class="sum"><b>${ST ? pct(SH / ST, 1) : '–'}</b><span>Win picks (backtest)</span><small>${SH}-${ST - SH}${HT ? ` · 65%+ picks ${HH}-${HT - HH}` : ''}</small></div>
+    <div class="sum"><b>${atsN ? pct(AH / atsN, 1) : '–'}</b><span>Spread (backtest)</span><small>${AH}-${AM}${AP ? '-' + AP : ''}${atsN ? '' : ' (loading lines…)'}</small></div>`;
 
+  $('#sums').innerHTML += `
+    <div class="sum lock"><b>${LST ? pct(LSH / LST, 1) : '–'}</b><span>🔒 Locked win picks</span><small>${LST ? LSH + '-' + (LST - LSH) : 'counts games picked before kickoff'}</small></div>
+    <div class="sum lock"><b>${LAH + LAM ? pct(LAH / (LAH + LAM), 1) : '–'}</b><span>🔒 Locked spread</span><small>${LAH + LAM ? LAH + '-' + LAM : 'starts with the next finished game'}</small></div>`;
   $('#list').innerHTML = teamBox(games) + movesBoard(games) +
     (thisWeek.length ? '<div class="gh">This week</div>' + proj(thisWeek) + thisWeek.map(card).join('') : (TEAM ? '' : '<div class="note">No more games left this week.</div>')) +
     (Object.keys(future).length ? '<div class="gh">Rest of season</div>' + Object.keys(future).map(Number).sort((a, b) => a - b).map((n) => `<details data-k="f${n}" ${isOpen('f' + n, n === CUR + 1) ? 'open' : ''}><summary>Week ${n}: ${future[n].length} games · exp ${projText(future[n])}</summary>${future[n].map(card).join('')}</details>`).join('') : '') +

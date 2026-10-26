@@ -2,9 +2,11 @@
 // Usage: node scripts/log-lines.js path/to/lines.json   (file is { "<eventId>": [[unixMs, homeFavoredPoints], ...] })
 // Positive number = home team favored by that many points.
 const fs = require('fs');
-const BASE = process.env.ESPN_BASE || 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/';
+const ROOT = process.env.ESPN_ROOT || 'https://site.api.espn.com/apis/site/v2/sports/football/';
+const LEAGUES = process.env.ESPN_BASE ? [{ base: process.env.ESPN_BASE, last: 18, x: '' }] : [{ base: ROOT + 'nfl/', last: 18, x: '' }, { base: ROOT + 'college-football/', last: 15, x: '&groups=80&limit=400', cfb: true }];
 const FIX = { WSH: 'WAS', JAC: 'JAX', LA: 'LAR' };
-const fix = (a) => FIX[a] || a;
+let CFBMODE = false;
+const fix = (a) => (CFBMODE ? a : FIX[a] || a);
 
 function parseLine(text, home, away) {
   if (!text) return null;
@@ -16,15 +18,21 @@ function parseLine(text, home, away) {
 }
 const get = async (u) => { const r = await fetch(u); if (!r.ok) throw new Error(u + ' -> ' + r.status); return r.json(); };
 
-// Reads this week + next two weeks from ESPN and appends changed (or hourly) readings to db. Returns the count added.
+// Reads every remaining week (NFL + college) from ESPN and appends changed (or hourly) readings to db. Returns the count added.
 async function logLines(db) {
-  const first = await get(BASE + 'scoreboard');
+  let n = 0;
+  for (const L of LEAGUES) { CFBMODE = !!L.cfb; try { n += await logLeague(db, L); } catch (e) { console.error(e.message); } }
+  return n;
+}
+async function logLeague(db, L) {
+  const BASE = L.base;
+  const first = await get(BASE + 'scoreboard' + (L.x ? '?' + L.x.slice(1) : ''));
   const cur = (first.week && first.week.number) || 1;
   const now = Date.now();
   let added = 0;
-  for (let w = cur; w <= Math.min(18, cur + 2); w++) {
+  for (let w = cur; w <= L.last; w++) {
     let j;
-    try { j = w === cur ? first : await get(BASE + 'scoreboard?week=' + w + '&seasontype=2'); } catch (e) { console.error(e.message); continue; }
+    try { j = w === cur ? first : await get(BASE + 'scoreboard?week=' + w + '&seasontype=2' + L.x); } catch (e) { console.error(e.message); continue; }
     for (const e of j.events || []) {
       if (e.status.type.state === 'post') continue;
       const c = e.competitions[0];

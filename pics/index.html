@@ -53,7 +53,7 @@ details>summary::after{content:'▾';color:var(--blue)}details[open]>summary::af
 <header>
   <h1>Steve's Pics</h1>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Pics v4 (history line moves)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Pics v5 (default by day)</div>
 </header>
 <main>
   <div class="sums" id="sums"></div>
@@ -70,7 +70,9 @@ const FIX = { WSH: 'WAS', JAC: 'JAX', LA: 'LAR' };
 const PTS = 0.14;
 const SD = 13.5; // typical NFL scoring-margin spread around a game's expected margin
 const cdf = (z) => { const t = 1 / (1 + 0.2316419 * Math.abs(z)), d = 0.3989423 * Math.exp(-z * z / 2); const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274)))); return z > 0 ? 1 - p : p; }; // logit points per point of margin (about 1 pt = 3.5% win prob near a pick'em)
-let LMOPEN = new Set(), LMMODE = 'hour', LMBUSY = {};
+const DET = {}; // remembers which week sections you opened or closed
+const isOpen = (k, dflt) => (k in DET ? DET[k] : dflt);
+let LMOPEN = new Set(), LMMODE = 'day', LMBUSY = {};
 let TD, LOTS, PAY, M, CUR = 0, ALL = {}, LAST = null, SPREAD = {}, BUSY = false, ODDS_AT = 0, ODDS_NOTE = '';
 
 const ab = (x) => FIX[x] || x;
@@ -149,8 +151,9 @@ function lmChart(g) {
   const dots = pts.map((p, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(hs[i]).toFixed(1)}" r="3" fill="#1f6fe0"/><text x="${x(i).toFixed(1)}" y="${(y(hs[i]) - 6).toFixed(1)}" font-size="9" text-anchor="middle" fill="#0f2747">${sp(hs[i])}</text>`).join('');
   const xl = [0, pts.length - 1].filter((v, i, a) => a.indexOf(v) === i).map((i) => `<text x="${x(i).toFixed(1)}" y="${H - 2}" font-size="8" text-anchor="${i ? 'end' : 'start'}" fill="#5b7090">${pts[i].label}</text>`).join('');
   const moved = hs[hs.length - 1] - hs[0];
+  const readings = raw.length;
   const note = o === null ? 'Opening line not available' : moved === 0 ? 'Line has not moved since the open' : `Moved ${Math.abs(moved)} pts toward ${moved < 0 ? g.home.abbr : g.away.abbr} ${g.state === 'post' ? 'from open to close' : 'since the open'}`;
-  return `<svg viewBox="0 0 ${W} ${H}"><path d="${path}" fill="none" stroke="#1f6fe0" stroke-width="2"/>${dots}${xl}</svg><div class="cap">${g.home.abbr} spread · ${note}. ${g.state === 'post' ? `Final: ${g.away.abbr} ${g.away.score}, ${g.home.abbr} ${g.home.score}.` : 'Tracking starts when this device first sees the game.'}</div>`;
+  return `<svg viewBox="0 0 ${W} ${H}"><path d="${path}" fill="none" stroke="#1f6fe0" stroke-width="2"/>${dots}${xl}</svg><div class="cap">${g.home.abbr} spread · ${note}. ${g.state === 'post' ? `Final: ${g.away.abbr} ${g.away.score}, ${g.home.abbr} ${g.home.score}.` : `Tracking starts when this device first sees the game. ${readings} reading${readings === 1 ? '' : 's'} so far${readings < 3 ? ' — by hour and by day look the same until the line moves or more time passes' : ''}.`}</div>`;
 }
 function lmBlock(g) {
   if (g.line === null) return '';
@@ -294,8 +297,8 @@ function render() {
 
   $('#list').innerHTML =
     (thisWeek.length ? '<div class="gh">This week</div>' + proj(thisWeek) + thisWeek.map(card).join('') : '<div class="note">No more games left this week.</div>') +
-    (Object.keys(future).length ? '<div class="gh">Rest of season</div>' + Object.keys(future).map(Number).sort((a, b) => a - b).map((n) => `<details ${n === CUR + 1 ? 'open' : ''}><summary>Week ${n}: ${future[n].length} games · exp ${projText(future[n])}</summary>${future[n].sort((a, b) => a.start - b.start).map(card).join('')}</details>`).join('') : '') +
-    (weeks.length ? '<div class="gh">Results</div>' + weeks.map((w) => `<details ${w.n === CUR ? 'open' : ''}><summary>Week ${w.n}: ${w.h}-${w.t - w.h} picks · spread ${w.ah}-${w.am}${w.ap ? '-' + w.ap : ''}</summary>${w.rows}</details>`).join('') : '');
+    (Object.keys(future).length ? '<div class="gh">Rest of season</div>' + Object.keys(future).map(Number).sort((a, b) => a - b).map((n) => `<details data-k="f${n}" ${isOpen('f' + n, n === CUR + 1) ? 'open' : ''}><summary>Week ${n}: ${future[n].length} games · exp ${projText(future[n])}</summary>${future[n].sort((a, b) => a.start - b.start).map(card).join('')}</details>`).join('') : '') +
+    (weeks.length ? '<div class="gh">Results</div>' + weeks.map((w) => `<details data-k="r${w.n}" ${isOpen('r' + w.n, w.n === CUR) ? 'open' : ''}><summary>Week ${w.n}: ${w.h}-${w.t - w.h} picks · spread ${w.ah}-${w.am}${w.ap ? '-' + w.ap : ''}</summary>${w.rows}</details>`).join('') : '');
   const liveN = live.length;
   $('#upd').innerHTML = `<span class="dot ${liveN ? 'on' : ''}"></span>${liveN ? liveN + ' live · ' : ''}updated ${LAST ? LAST.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }) : '…'}`;
   $('#foot').innerHTML = `Win chance blends the model (strength from playoff and Super Bowl odds, plus home field) with the current spread, so it shifts when the line moves. Spread lean compares the model's expected margin with the DraftKings line (closing line for past games). Past games are graded with today's ratings, so records flatter the model and are not what it would have said before kickoff. ${ODDS_NOTE}`;
@@ -345,6 +348,7 @@ async function loadAll() {
   } catch (e) { $('#upd').textContent = 'Could not load: ' + e.message; }
   BUSY = false;
 }
+document.addEventListener('toggle', (e) => { const d = e.target; if (d.tagName === 'DETAILS' && d.dataset.k) DET[d.dataset.k] = d.open; }, true);
 document.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-lm],[data-lmmode]');
   if (!b) return;

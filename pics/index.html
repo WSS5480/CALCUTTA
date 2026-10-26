@@ -276,13 +276,13 @@ function buildPlayers() {
   Object.keys(PL).forEach((k) => delete PL[k]);
   Object.values(ALL).forEach((g) => { if (g.state === 'post' && g.bx) Object.keys(g.bx).forEach((t) => { const o = (PL[t] = PL[t] || { qb: {}, rb: {}, rec: {}, def: {} }); ['qb', 'rb', 'rec', 'def'].forEach((c) => Object.keys(g.bx[t][c]).forEach((id) => (o[c][id] = (o[c][id] || 0) + g.bx[t][c][id]))); }); });
 }
-const top = (m, n) => Object.keys(m || {}).sort((a, b) => m[b] - m[a]).slice(0, n);
+const topN = (m, n) => Object.keys(m || {}).sort((a, b) => m[b] - m[a]).slice(0, n);
 const STW = { Out: 1, 'Injured Reserve': 1, Suspension: 1, Doubtful: 1, Questionable: 0.35 };
 // Points a team loses when its current-season starters are hurt (QB biggest). Starters are whoever has the most usage this season.
 function injPen(t) {
   const o = PL[t], list = []; let pts = 0;
   if (!o) return { pts: 0, list };
-  const qb = top(o.qb, 1)[0], rb = top(o.rb, 1)[0], rec = top(o.rec, 3), df = top(o.def, 4);
+  const qb = topN(o.qb, 1)[0], rb = topN(o.rb, 1)[0], rec = topN(o.rec, 3), df = topN(o.def, 4);
   (INJ[t] || []).forEach((x) => {
     const w = STW[x.st]; if (!w) return;
     let v = 0;

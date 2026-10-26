@@ -25,6 +25,18 @@
       by[t.abbr] = t;
     });
 
+    // Game-prediction strength: z-scored blend of season strength (playoff odds) and title odds.
+    // (t.p above only describes playoff games and barely separates good from bad teams.)
+    const zs = (arr) => {
+      const mu = arr.reduce((a, b) => a + b, 0) / arr.length;
+      const sd = Math.sqrt(arr.reduce((a, b) => a + (b - mu) ** 2, 0) / arr.length) || 1;
+      return arr.map((v) => (v - mu) / sd);
+    };
+    const lg = (x) => Math.log(x / (1 - x));
+    const zm = zs(teams.map((t) => lg(Math.min(0.985, Math.max(0.01, t.playoffPct / 100)))));
+    const zc = zs(teams.map((t) => Math.log(t.c)));
+    teams.forEach((t, i) => (t.rating = 0.5 * zm[i] + 0.5 * zc[i]));
+
     // 2) Make each round add up to the real number of winners (6 / 4 / 2 / 1)
     const rescale = (key, target) => {
       for (let n = 0; n < 40; n++) {
@@ -96,14 +108,15 @@
     return { pool, teams, by, groups, buyers: buyerList };
   }
 
-  // Head-to-head win chance for team A vs team B (Bradley-Terry on the per-game strength t.p, plus home field).
-  const HOME = 0.22; // logit points, about a 55% home-field edge between equals
-  const logit = (x) => Math.log(x / (1 - x));
+  // Head-to-head win chance for team A vs team B: logistic on the rating gap plus home field.
+  // Backtested on Weeks 1-7 of 2026 (see README); K and HOME are deliberately a bit conservative.
+  const K = 0.4;
+  const HOME = 0.15; // logit points, roughly a 54% home edge between equals
   function winProb(by, a, b, homeAbbr) {
     const A = by[a], B = by[b];
     if (!A || !B) return 0.5;
     const home = homeAbbr === a ? HOME : homeAbbr === b ? -HOME : 0;
-    return 1 / (1 + Math.exp(-(logit(A.p) - logit(B.p) + home)));
+    return 1 / (1 + Math.exp(-(K * (A.rating - B.rating) + home)));
   }
 
   const api = { compute, american, winProb };

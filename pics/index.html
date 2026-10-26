@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Steve's Pics</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1f6fe0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<style>
+:root{--bg:#f3f7fd;--panel:#fff;--panel2:#e8f0fb;--line:#d3e0f2;--ink:#0f2747;--muted:#5b7090;--blue:#1f6fe0;--green:#16915a;--red:#d93a2e}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:40px}
+header,main{max-width:720px;margin:0 auto;padding:0 16px}
+header{padding-top:max(16px,env(safe-area-inset-top))}
+h1{margin:8px 0 2px;font-size:28px}
+.sub{color:var(--muted);font-size:13px}
+.sums{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
+.sum{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.sum b{display:block;font-size:26px}.sum span{color:var(--muted);font-size:13px}.sum small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.gh{margin:20px 0 8px;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:8px 0}
+.live{border-color:var(--blue)}
+.gstat{display:flex;justify-content:space-between;gap:8px;font-size:13px;color:var(--muted);margin-bottom:6px}
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin:4px 0}.row small{color:var(--muted);font-weight:400}
+.bar{height:10px;border-radius:8px;background:var(--panel2);overflow:hidden;margin:4px 0}.bar i{display:block;height:100%;background:var(--blue)}
+.pick{margin-top:8px;padding:8px 10px;background:var(--panel2);border-radius:10px;font-size:14px}
+.pick div+div{margin-top:3px}
+.tag{font-weight:700;white-space:nowrap}.hit{color:var(--green)}.miss{color:var(--red)}.push{color:var(--muted)}
+.res{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 12px;margin:6px 0;border-radius:10px;border:1px solid;background:var(--panel)}
+.res small{display:block;color:var(--muted);font-weight:400;font-size:12px}
+.res .badges{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.b{font-size:12px;font-weight:700;padding:3px 8px;border-radius:999px;border:1px solid;white-space:nowrap}
+.b.hit{background:#16915a1f;border-color:var(--green)}.b.miss{background:#d93a2e1f;border-color:var(--red)}.b.push{background:#5b709022;border-color:var(--muted)}
+.res.hit{border-color:var(--green);background:#16915a14}.res.miss{border-color:var(--red);background:#d93a2e14}
+details>summary{cursor:pointer;list-style:none;padding:10px 12px;background:var(--panel2);border-radius:10px;font-weight:600;font-size:14px;display:flex;justify-content:space-between;align-items:center;margin:6px 0}
+details>summary::-webkit-details-marker{display:none}
+details>summary::after{content:'▾';color:var(--blue)}details[open]>summary::after{transform:rotate(180deg)}
+.note{color:var(--muted);font-size:13px;margin:8px 0}
+.foot{color:var(--muted);font-size:12px;margin-top:20px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-right:6px}.dot.on{background:var(--red)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Steve's Pics</h1>
+  <div class="sub" id="upd">Loading…</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Pics v1</div>
+</header>
+<main>
+  <div class="sums" id="sums"></div>
+  <div id="list"></div>
+  <div class="foot" id="foot"></div>
+</main>
+<script src="model.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const pct = (x, d = 0) => (x * 100).toFixed(d) + '%';
+const SB = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/';
+const ODDS_URL = 'https://calcutta-odds.onrender.com/odds';
+const FIX = { WSH: 'WAS', JAC: 'JAX', LA: 'LAR' };
+const PTS = 0.14; // logit points per point of margin (about 1 pt = 3.5% win prob near a pick'em)
+let TD, LOTS, PAY, M, CUR = 0, ALL = {}, LAST = null, SPREAD = {}, BUSY = false, ODDS_AT = 0, ODDS_NOTE = '';
+
+const ab = (x) => FIX[x] || x;
+const logit = (x) => Math.log(x / (1 - x));
+const spCache = (id) => { try { return JSON.parse(localStorage.getItem('sp26-' + id)); } catch (e) { return null; } };
+const spSave = (id, v) => { try { localStorage.setItem('sp26-' + id, JSON.stringify(v)); } catch (e) {} };
+
+// "SEA -3" / "EVEN" -> home-favored points (positive = home favored), or null
+function parseLine(text, home, away) {
+  if (!text) return null;
+  if (/^(EVEN|PK|PICK)/i.test(text)) return 0;
+  const m = /^([A-Z]{2,3})\s+(-?\d+(?:\.\d+)?)$/.exec(text.trim());
+  if (!m) return null;
+  const fav = ab(m[1]), v = Math.abs(+m[2]);
+  return fav === home ? v : fav === away ? -v : null;
+}
+
+function parseEvents(j, week) {
+  return (j.events || []).map((e) => {
+    const c = e.competitions[0], t = e.status.type;
+    const cs = c.competitors.map((x) => ({ abbr: ab(x.team.abbreviation), score: parseInt(x.score, 10) || 0, home: x.homeAway === 'home', record: (x.records && x.records[0] && x.records[0].summary) || '' }));
+    cs.sort((a, b) => a.home - b.home);
+    const o = c.odds && c.odds[0];
+    return { id: e.id, week: week || (j.week && j.week.number) || 0, start: +new Date(e.date), state: t.state, detail: t.shortDetail || '', away: cs[0], home: cs[1], neutral: !!c.neutralSite, line: o ? parseLine(o.details, cs[1].abbr, cs[0].abbr) : null };
+  });
+}
+
+function merge(list) { list.forEach((g) => { const old = ALL[g.id]; if (old && g.line === null && old.line !== null) g.line = old.line; ALL[g.id] = g; }); }
+
+async function getJson(u) { const r = await fetch(u, { cache: 'no-store' }); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }
+
+async function loadWeek(n) {
+  let list = null;
+  try { list = JSON.parse(localStorage.getItem('pw26-' + n)); } catch (e) {}
+  if (!list) {
+    list = parseEvents(await getJson(SB + 'scoreboard?week=' + n + '&seasontype=2'), n);
+    if (list.length && list.every((g) => g.state === 'post')) { try { localStorage.setItem('pw26-' + n, JSON.stringify(list)); } catch (e) {} }
+  }
+  merge(list.map((g) => ({ ...g, line: g.line === undefined ? null : g.line })));
+}
+
+// Closing line for finished games (ESPN game summary, DraftKings)
+async function fillSpreads() {
+  const todo = Object.values(ALL).filter((g) => g.state === 'post' && g.line === null && !SPREAD[g.id]);
+  let i = 0;
+  const worker = async () => {
+    while (i < todo.length) {
+      const g = todo[i++];
+      let v = spCache(g.id);
+      if (v === null || v === undefined) {
+        try {
+          const s = await getJson(SB + 'summary?event=' + g.id);
+          const pc = (s.pickcenter || [])[0];
+          v = pc ? { d: pc.details || '' } : { d: '' };
+          spSave(g.id, v);
+        } catch (e) { continue; }
+      }
+      const L = parseLine(v.d, g.home.abbr, g.away.abbr);
+      SPREAD[g.id] = true;
+      if (L !== null) g.line = L;
+    }
+  };
+  await Promise.all([worker(), worker(), worker(), worker(), worker(), worker()]);
+}
+
+function pred(g) {
+  const pa = Calcutta.winProb(M.by, g.away.abbr, g.home.abbr, g.neutral ? null : g.home.abbr);
+  const ph = 1 - pa;
+  const mh = logit(ph) / PTS; // model's expected home margin in points
+  const su = pa >= 0.5 ? g.away : g.home;
+  const out = { pa, ph, su, conf: Math.max(pa, ph), mh, ats: null };
+  if (g.line !== null) {
+    const homeCover = mh > g.line;
+    out.ats = { side: homeCover ? g.home : g.away, line: homeCover ? -g.line : g.line, edge: Math.abs(mh - g.line) };
+  }
+  return out;
+}
+
+const nm = (a) => (M.by[a] ? M.by[a].name : a);
+const sp = (n) => (n > 0 ? '+' : '') + (Math.abs(n) % 1 ? n.toFixed(1) : n.toFixed(0)); // "+3" or "-2.5"
+const byText = (g, m) => (Math.abs(m) < 0.05 ? 'even' : m > 0 ? g.home.abbr + ' by ' + m.toFixed(1) : g.away.abbr + ' by ' + (-m).toFixed(1));
+const lineText = (g) => (g.line === null ? '' : g.line === 0 ? 'Pick ’em' : `${(g.line > 0 ? g.home : g.away).abbr} -${Math.abs(g.line)}`);
+
+function grade(g) {
+  if (g.home.score === g.away.score) return null;
+  const p = pred(g);
+  const suHit = (p.su === g.home) === (g.home.score > g.away.score);
+  let atsRes = null;
+  if (p.ats) {
+    const am = g.home.score - g.away.score;
+    if (am === g.line) atsRes = 'push';
+    else atsRes = ((am > g.line) === (p.ats.side === g.home)) ? 'hit' : 'miss';
+  }
+  return { p, suHit, atsRes };
+}
+
+function card(g) {
+  const p = pred(g);
+  const when = g.state === 'in' ? `<span class="miss tag">LIVE</span> ${g.detail} · ${g.away.abbr} ${g.away.score} – ${g.home.abbr} ${g.home.score}`
+    : `<b>${new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</b>`;
+  const ats = p.ats ? `<div>Spread lean: <b>${p.ats.side.abbr} ${sp(p.ats.line)}</b> <span class="sub">(model: ${byText(g, p.mh)} · line: ${byText(g, g.line)})</span></div>` : '<div class="sub">No spread posted yet</div>';
+  return `<div class="card ${g.state === 'in' ? 'live' : ''}">
+    <div class="gstat"><span>${when}</span><span>${lineText(g)}</span></div>
+    <div class="row"><b>${nm(g.away.abbr)} <small>${g.away.record}</small></b><b>${pct(p.pa)}</b></div>
+    <div class="bar"><i style="width:${p.pa * 100}%"></i></div>
+    <div class="row"><b>${nm(g.home.abbr)} <small>${g.home.record} · home</small></b><b>${pct(p.ph)}</b></div>
+    <div class="pick"><div>Pick: <b>${nm(p.su.abbr)}</b> ${pct(p.conf)}</div>${ats}</div>
+  </div>`;
+}
+
+function render() {
+  if (!M) return;
+  const games = Object.values(ALL);
+  const live = games.filter((g) => g.state === 'in').sort((a, b) => a.start - b.start);
+  const pre = games.filter((g) => g.state === 'pre');
+  const post = games.filter((g) => g.state === 'post');
+  const thisWeek = [...live, ...pre.filter((g) => g.week === CUR).sort((a, b) => a.start - b.start)];
+  const future = {};
+  pre.filter((g) => g.week > CUR).forEach((g) => (future[g.week] = future[g.week] || []).push(g));
+
+  // Results
+  let SH = 0, ST = 0, AH = 0, AM = 0, AP = 0, HH = 0, HT = 0;
+  const byWeek = {};
+  post.forEach((g) => (byWeek[g.week] = byWeek[g.week] || []).push(g));
+  const weeks = Object.keys(byWeek).map(Number).sort((a, b) => b - a).map((n) => {
+    let h = 0, t = 0, ah = 0, am = 0, ap = 0;
+    const rows = byWeek[n].sort((a, b) => a.start - b.start).map((g) => {
+      const r = grade(g); if (!r) return '';
+      t++; ST++; if (r.suHit) { h++; SH++; }
+      if (r.p.conf >= 0.65) { HT++; if (r.suHit) HH++; }
+      if (r.atsRes === 'hit') { ah++; AH++; } else if (r.atsRes === 'miss') { am++; AM++; } else if (r.atsRes === 'push') { ap++; AP++; }
+      const bad = (cls, txt) => `<span class="b ${cls}">${txt}</span>`;
+      const b1 = bad(r.suHit ? 'hit' : 'miss', r.suHit ? '✓ Win pick' : '✗ Win pick');
+      const b2 = r.atsRes ? bad(r.atsRes, (r.atsRes === 'hit' ? '✓' : r.atsRes === 'miss' ? '✗' : '–') + ' Spread') : '';
+      return `<div class="res ${r.suHit ? 'hit' : 'miss'}"><div><b>${g.away.abbr} ${g.away.score} – ${g.home.abbr} ${g.home.score}</b><small>Pick ${r.p.su.abbr} ${pct(r.p.conf)}${r.p.ats ? ` · lean ${r.p.ats.side.abbr} ${sp(r.p.ats.line)}` : ''}</small></div><div class="badges">${b1}${b2}</div></div>`;
+    }).join('');
+    return { n, h, t, ah, am, ap, rows };
+  });
+  const atsN = AH + AM;
+  $('#sums').innerHTML = `
+    <div class="sum"><b>${ST ? pct(SH / ST, 1) : '–'}</b><span>Win picks</span><small>${SH}-${ST - SH}${HT ? ` · 65%+ picks ${HH}-${HT - HH}` : ''}</small></div>
+    <div class="sum"><b>${atsN ? pct(AH / atsN, 1) : '–'}</b><span>Against the spread</span><small>${AH}-${AM}${AP ? '-' + AP : ''}${atsN ? '' : ' (loading lines…)'}</small></div>`;
+
+  $('#list').innerHTML =
+    (thisWeek.length ? '<div class="gh">This week</div>' + thisWeek.map(card).join('') : '<div class="note">No more games left this week.</div>') +
+    (Object.keys(future).length ? '<div class="gh">Rest of season</div>' + Object.keys(future).map(Number).sort((a, b) => a - b).map((n) => `<details ${n === CUR + 1 ? 'open' : ''}><summary>Week ${n}: ${future[n].length} games</summary>${future[n].sort((a, b) => a.start - b.start).map(card).join('')}</details>`).join('') : '') +
+    (weeks.length ? '<div class="gh">Results</div>' + weeks.map((w) => `<details ${w.n === CUR ? 'open' : ''}><summary>Week ${w.n}: ${w.h}-${w.t - w.h} picks · spread ${w.ah}-${w.am}${w.ap ? '-' + w.ap : ''}</summary>${w.rows}</details>`).join('') : '');
+  const liveN = live.length;
+  $('#upd').innerHTML = `<span class="dot ${liveN ? 'on' : ''}"></span>${liveN ? liveN + ' live · ' : ''}updated ${LAST ? LAST.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }) : '…'}`;
+  $('#foot').innerHTML = `Win chance = strength from playoff and Super Bowl odds plus home field. Spread lean compares the model's expected margin with the DraftKings line (closing line for past games). Past games are graded with today's ratings, so records flatter the model and are not what it would have said before kickoff. ${ODDS_NOTE}`;
+}
+
+async function loadOdds() {
+  if (!M || Date.now() - ODDS_AT < 10 * 60 * 1000) return;
+  ODDS_AT = Date.now();
+  try {
+    const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 70000);
+    const j = await (await fetch(ODDS_URL, { signal: ctl.signal })).json(); clearTimeout(to);
+    if (!j.odds) throw new Error();
+    TD.teams.forEach((t) => { if (Number.isFinite(j.odds[t.abbr])) t.sbOdds = j.odds[t.abbr]; });
+    M = Calcutta.compute(TD, LOTS, PAY);
+    ODDS_NOTE = 'Super Bowl odds: ' + (j.book || '') + ' via The Odds API, ' + new Date(j.updated).toLocaleString() + '.';
+    render();
+  } catch (e) { ODDS_AT = Date.now() - 8 * 60 * 1000; }
+}
+
+async function tick() {
+  clearTimeout(window.__t);
+  try {
+    const j = await getJson(SB + 'scoreboard');
+    CUR = (j.week && j.week.number) || CUR;
+    merge(parseEvents(j, CUR));
+    LAST = new Date();
+    render();
+  } catch (e) { $('#upd').textContent = 'Live scores unavailable · retrying'; }
+  const g = Object.values(ALL);
+  const hot = g.some((x) => x.state === 'in') || g.some((x) => x.state === 'pre' && x.start - Date.now() < 20 * 60 * 1000 && x.start - Date.now() > -3600e3);
+  window.__t = setTimeout(tick, hot ? 60000 : 300000);
+}
+
+async function loadAll() {
+  if (BUSY) return; BUSY = true;
+  try {
+    const [t, l, p] = await Promise.all(['teams', 'lots', 'payouts'].map((n) => getJson('data/' + n + '.json?v=' + Date.now())));
+    TD = t; LOTS = l; PAY = p; M = Calcutta.compute(t, l, p);
+    await tick();
+    const wk = []; for (let n = 1; n <= 18; n++) wk.push(n);
+    let i = 0;
+    const w = async () => { while (i < wk.length) { const n = wk[i++]; try { await loadWeek(n); } catch (e) {} render(); } };
+    await Promise.all([w(), w(), w()]);
+    render();
+    loadOdds();
+    await fillSpreads(); render();
+  } catch (e) { $('#upd').textContent = 'Could not load: ' + e.message; }
+  BUSY = false;
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && M) { tick(); loadOdds(); } });
+setInterval(() => { if (M) { loadWeek(CUR + 1).then(render).catch(() => {}); fillSpreads().then(render); } }, 30 * 60 * 1000);
+loadAll();
+
+if ('serviceWorker' in navigator) {
+  const had = !!navigator.serviceWorker.controller; let rl = false;
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((r) => r.update().catch(() => {})).catch(() => {});
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (had && !rl) { rl = true; location.reload(); } });
+}
+</script>
+</body>
+</html>

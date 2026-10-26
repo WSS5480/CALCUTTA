@@ -30,7 +30,8 @@ h1{margin:8px 0 2px;font-size:28px}
 .pick{margin-top:8px;padding:8px 10px;background:var(--panel2);border-radius:10px;font-size:14px}
 .pick div+div{margin-top:3px}
 .tag{font-weight:700;white-space:nowrap}.hit{color:var(--green)}.miss{color:var(--red)}.push{color:var(--muted)}
-.res{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 12px;margin:6px 0;border-radius:10px;border:1px solid;background:var(--panel)}
+.rtop{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.res{padding:9px 12px;margin:6px 0;border-radius:10px;border:1px solid;background:var(--panel)}
 .res small{display:block;color:var(--muted);font-weight:400;font-size:12px}
 .res .badges{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .b{font-size:12px;font-weight:700;padding:3px 8px;border-radius:999px;border:1px solid;white-space:nowrap}
@@ -52,7 +53,7 @@ details>summary::after{content:'▾';color:var(--blue)}details[open]>summary::af
 <header>
   <h1>Steve's Pics</h1>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Pics v3 (line movement)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Pics v4 (history line moves)</div>
 </header>
 <main>
   <div class="sums" id="sums"></div>
@@ -134,6 +135,11 @@ function lmChart(g) {
     buckets[k] = { t, L, label: LMMODE === 'hour' ? d.toLocaleTimeString([], { weekday: 'short', hour: 'numeric' }) : d.toLocaleDateString([], { weekday: 'short', month: 'numeric', day: 'numeric' }) };
   });
   Object.values(buckets).sort((a, b) => a.t - b.t).forEach((b) => pts.push(b));
+  if (g.state === 'post' && g.line !== null) {
+    const last = pts[pts.length - 1];
+    if (last && last.L === g.line && pts.length > 1) last.label = 'Close';
+    else pts.push({ t: Infinity, L: g.line, label: 'Close' });
+  }
   if (!pts.length) return '<div class="cap">No line yet.</div>';
   const hs = pts.map((p) => -p.L); // home-team spread (e.g. PHI -3)
   const lo = Math.min(...hs) - 0.5, hi = Math.max(...hs) + 0.5, W = 300, H = 90, pad = 18;
@@ -143,8 +149,8 @@ function lmChart(g) {
   const dots = pts.map((p, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(hs[i]).toFixed(1)}" r="3" fill="#1f6fe0"/><text x="${x(i).toFixed(1)}" y="${(y(hs[i]) - 6).toFixed(1)}" font-size="9" text-anchor="middle" fill="#0f2747">${sp(hs[i])}</text>`).join('');
   const xl = [0, pts.length - 1].filter((v, i, a) => a.indexOf(v) === i).map((i) => `<text x="${x(i).toFixed(1)}" y="${H - 2}" font-size="8" text-anchor="${i ? 'end' : 'start'}" fill="#5b7090">${pts[i].label}</text>`).join('');
   const moved = hs[hs.length - 1] - hs[0];
-  const note = o === null ? 'Opening line not available' : moved === 0 ? 'Line has not moved since the open' : `Moved ${Math.abs(moved)} pts toward ${moved < 0 ? g.home.abbr : g.away.abbr} since the open`;
-  return `<svg viewBox="0 0 ${W} ${H}"><path d="${path}" fill="none" stroke="#1f6fe0" stroke-width="2"/>${dots}${xl}</svg><div class="cap">${g.home.abbr} spread · ${note}. Tracking starts when this device first sees the game.</div>`;
+  const note = o === null ? 'Opening line not available' : moved === 0 ? 'Line has not moved since the open' : `Moved ${Math.abs(moved)} pts toward ${moved < 0 ? g.home.abbr : g.away.abbr} ${g.state === 'post' ? 'from open to close' : 'since the open'}`;
+  return `<svg viewBox="0 0 ${W} ${H}"><path d="${path}" fill="none" stroke="#1f6fe0" stroke-width="2"/>${dots}${xl}</svg><div class="cap">${g.home.abbr} spread · ${note}. ${g.state === 'post' ? `Final: ${g.away.abbr} ${g.away.score}, ${g.home.abbr} ${g.home.score}.` : 'Tracking starts when this device first sees the game.'}</div>`;
 }
 function lmBlock(g) {
   if (g.line === null) return '';
@@ -277,7 +283,7 @@ function render() {
       const bad = (cls, txt) => `<span class="b ${cls}">${txt}</span>`;
       const b1 = bad(r.suHit ? 'hit' : 'miss', r.suHit ? '✓ Win pick' : '✗ Win pick');
       const b2 = r.atsRes ? bad(r.atsRes, (r.atsRes === 'hit' ? '✓' : r.atsRes === 'miss' ? '✗' : '–') + ' Spread') : '';
-      return `<div class="res ${r.suHit ? 'hit' : 'miss'}"><div><b>${g.away.abbr} ${g.away.score} – ${g.home.abbr} ${g.home.score}</b><small>Pick ${r.p.su.abbr} ${pct(r.p.conf)}${r.p.ats ? ` · lean ${r.p.ats.side.abbr} ${sp(r.p.ats.line)}` : ''}</small></div><div class="badges">${b1}${b2}</div></div>`;
+      return `<div class="res ${r.suHit ? 'hit' : 'miss'}"><div class="rtop"><div><b>${g.away.abbr} ${g.away.score} – ${g.home.abbr} ${g.home.score}</b><small>Pick ${r.p.su.abbr} ${pct(r.p.conf)}${r.p.ats ? ` · lean ${r.p.ats.side.abbr} ${sp(r.p.ats.line)}` : ''}</small></div><div class="badges">${b1}${b2}</div></div>${lmBlock(g)}</div>`;
     }).join('');
     return { n, h, t, ah, am, ap, rows };
   });

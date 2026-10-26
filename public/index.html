@@ -126,7 +126,7 @@ details.tms[open]>summary::after{transform:rotate(180deg)}
     <h1>Calcutta 2026</h1>
     <div class="sub" id="asof">Loading…</div>
     <div class="sub" id="upd">Live scores: waiting…</div>
-    <div class="sub" style="font-size:11px;opacity:.7">App version 14 (auto odds) · pull down to force refresh</div>
+    <div class="sub" style="font-size:11px;opacity:.7">App version 15 (next week picks) · pull down to force refresh</div>
     <button id="inst" class="dl">📲 Download App</button> <button id="dl" class="dl">⬇ Download CSV</button>
     <div id="instHelp" class="sub" hidden></div>
   </header>
@@ -146,7 +146,7 @@ details.tms[open]>summary::after{transform:rotate(180deg)}
     <div id="gameList"></div>
   </section>
 
-  <section id="picks" class="hidden"><div class="sub" style="margin:0 0 8px">Win predictions for upcoming and live games, from the same strength ratings behind the playoff and title odds, plus home field.</div><div id="pickList"></div></section>
+  <section id="picks" class="hidden"><div class="sub" style="margin:0 0 8px">Win predictions for this week's remaining games and next week's slate, from the same strength ratings behind the playoff and title odds, plus home field.</div><div id="pickList"></div></section>
   <section id="groups" class="hidden">
     <div class="sortbar">Sort:
       <button data-s="lot" class="on">Lot #</button>
@@ -314,7 +314,7 @@ function renderFoot() {
 /* ---------- Live games (ESPN scoreboard, refreshed every minute during games) ---------- */
 const SCORES_URL = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard';
 const ABBR_FIX = { WSH: 'WAS', JAC: 'JAX', LA: 'LAR' };
-let GAMES = [], GAME_BY = {}, LAST_OK = null, TICK = null, CUR_WEEK = 0, HIST = {}, HIST_BUSY = false;
+let GAMES = [], GAME_BY = {}, LAST_OK = null, TICK = null, CUR_WEEK = 0, HIST = {}, HIST_BUSY = false, NEXT = [], NEXT_AT = 0;
 
 function parseGames(j) {
   const evs = j.events || (j.leagues && j.leagues[0] && j.leagues[0].events) || [];
@@ -401,6 +401,17 @@ function pred(g) {
   return { a, h, pa, ph: 1 - pa, pick: pa >= 0.5 ? a : h, conf: Math.max(pa, 1 - pa) };
 }
 
+async function loadNext() {
+  if (!CUR_WEEK || Date.now() - NEXT_AT < 20 * 60 * 1000) return;
+  NEXT_AT = Date.now();
+  try {
+    const r = await fetch(SCORES_URL + '?week=' + (CUR_WEEK + 1) + '&seasontype=2', { cache: 'no-store' });
+    if (!r.ok) throw new Error();
+    NEXT = parseGames(await r.json()).filter((g) => g.state === 'pre').sort((a, b) => a.start - b.start);
+    renderPicks();
+  } catch (e) { NEXT_AT = 0; }
+}
+
 async function loadHistory() {
   if (HIST_BUSY || !CUR_WEEK) return;
   HIST_BUSY = true;
@@ -464,7 +475,8 @@ function renderPicks() {
   const sum = T ? `<div class="card pksum"><b>Season: ${H}-${T - H}</b> (${pct(H / T)})${HT ? `<br><small>Picks 65%+ confident: ${HH}-${HT - HH}</small>` : ''}<br><small>Graded with today's ratings, so it flatters the model. It is not what it would have said before each game.</small></div>` : '';
   const loading = CUR_WEEK > 1 && HIST_BUSY ? '<div class="note">Loading past weeks…</div>' : '';
   $('#pickList').innerHTML =
-    (arr.length ? '<div class="gh">Upcoming</div>' + arr.map(card).join('') : '<div class="note">No upcoming games on the scoreboard right now.</div>') +
+    (arr.length ? '<div class="gh">This week</div>' + arr.map(card).join('') : '<div class="note">No more games left this week.</div>') +
+    (NEXT.length ? `<div class="gh">Next week (Week ${CUR_WEEK + 1}) · ${NEXT.length} games</div>` + NEXT.map(card).join('') : '') +
     (T ? '<div class="gh">Results</div>' + sum : '') + loading +
     wk.map((w) => `<details class="tms" ${w.n === CUR_WEEK ? 'open' : ''}><summary>Week ${w.n}: ${w.hits}-${w.total - w.hits}</summary>${w.html}</details>`).join('');
 }
@@ -527,6 +539,7 @@ async function tickGames() {
     renderPicks();
     renderGroups();
     loadHistory();
+    loadNext();
     loadOdds();
   } catch (e) {
     $('#upd').textContent = LAST_OK ? 'Live scores last updated ' + LAST_OK.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }) + ' (retrying)' : 'Live scores unavailable (retrying)';

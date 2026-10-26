@@ -104,6 +104,10 @@ details.tms>summary{cursor:pointer;list-style:none;padding:10px 12px;background:
 details.tms>summary::-webkit-details-marker{display:none}
 details.tms>summary::after{content:'▾';color:var(--green);transition:transform .15s}
 details.tms[open]>summary::after{transform:rotate(180deg)}
+.pkrow{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin:4px 0}.pkrow small{color:var(--muted);font-weight:400}
+.pbar{height:10px;border-radius:8px;background:var(--panel2);overflow:hidden;margin:4px 0}.pbar i{display:block;height:100%;background:var(--green)}
+.pkpick{margin-top:8px;padding:8px 10px;background:var(--panel2);border-radius:10px;font-size:14px}
+.pk .gstat{margin-bottom:6px}
 </style>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -117,13 +121,14 @@ details.tms[open]>summary::after{transform:rotate(180deg)}
     <h1>Calcutta 2026</h1>
     <div class="sub" id="asof">Loading…</div>
     <div class="sub" id="upd">Live scores: waiting…</div>
-    <div class="sub" style="font-size:11px;opacity:.7">App version 10 (groups dropdown) · pull down to force refresh</div>
+    <div class="sub" style="font-size:11px;opacity:.7">App version 11 (picks) · pull down to force refresh</div>
     <button id="inst" class="dl">📲 Download App</button> <button id="dl" class="dl">⬇ Download CSV</button>
     <div id="instHelp" class="sub" hidden></div>
   </header>
   <div class="stats" id="stats"></div>
   <nav id="tabs">
     <button data-t="games" class="on">Games</button>
+    <button data-t="picks">Picks</button>
     <button data-t="groups">Groups</button>
     <button data-t="combined">Combined</button>
     <button data-t="buyers">Buyers</button>
@@ -136,6 +141,7 @@ details.tms[open]>summary::after{transform:rotate(180deg)}
     <div id="gameList"></div>
   </section>
 
+  <section id="picks" class="hidden"><div class="sub" style="margin:0 0 8px">Win predictions for upcoming and live games, from the same strength ratings behind the playoff and title odds, plus home field.</div><div id="pickList"></div></section>
   <section id="groups" class="hidden">
     <div class="sortbar">Sort:
       <button data-s="lot" class="on">Lot #</button>
@@ -384,6 +390,31 @@ function renderGames() {
     : `No games live · checking every 5 min · ${when}`;
 }
 
+function pred(g) {
+  const [a, h] = g.comp;
+  const pa = Calcutta.winProb(M.by, a.abbr, h.abbr, h.abbr);
+  return { a, h, pa, ph: 1 - pa, pick: pa >= 0.5 ? a : h, conf: Math.max(pa, 1 - pa) };
+}
+
+function renderPicks() {
+  if (!M) return;
+  const arr = GAMES.filter((g) => g.state !== 'post').sort((x, y) => (x.state === 'in' ? -1 : 0) - (y.state === 'in' ? -1 : 0) || x.start - y.start);
+  const card = (g) => {
+    const r = pred(g);
+    const nm = (x) => (M.by[x.abbr] || { name: x.abbr }).name;
+    const o = ownerOf(r.pick.abbr);
+    const when = g.state === 'in' ? `<span style="color:var(--red);font-weight:700">LIVE</span> ${g.detail} · ${r.a.abbr} ${r.a.score} – ${r.h.abbr} ${r.h.score}` : `<b>${g.start.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</b>`;
+    return `<div class="card pk">
+      <div class="gstat"><span>${when}</span><span>${g.odds || ''}</span></div>
+      <div class="pkrow"><b>${nm(r.a)} <small>${r.a.record}</small></b><b>${pct(r.pa)}</b></div>
+      <div class="pbar"><i style="width:${r.pa * 100}%"></i></div>
+      <div class="pkrow"><b>${nm(r.h)} <small>${r.h.record} · home</small></b><b>${pct(r.ph)}</b></div>
+      <div class="pkpick">Pick: <b>${nm(r.pick)}</b> ${pct(r.conf)}${o ? ` · ${o.buyer}, Lot ${o.lot}` : ''}</div>
+    </div>`;
+  };
+  $('#pickList').innerHTML = arr.length ? arr.map(card).join('') : '<div class="note">No upcoming games on the scoreboard right now. Check back when the next week posts.</div>';
+}
+
 function nextDelay() {
   const live = GAMES.some((g) => g.state === 'in');
   const soon = GAMES.some((g) => g.state === 'pre' && g.start - Date.now() < 20 * 60 * 1000);
@@ -416,6 +447,7 @@ async function tickGames() {
     if (applyRecords()) { renderStats(); renderGroups(); renderCombined(); renderBuyers(); renderTeams(); }
     $('#upd').textContent = '● Live scores updated ' + LAST_OK.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
     renderGames();
+    renderPicks();
     renderGroups();
   } catch (e) {
     $('#upd').textContent = LAST_OK ? 'Live scores last updated ' + LAST_OK.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }) + ' (retrying)' : 'Live scores unavailable (retrying)';
@@ -427,7 +459,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && M)
 
 document.querySelectorAll('#tabs button').forEach((b) => (b.onclick = () => {
   document.querySelectorAll('#tabs button').forEach((x) => x.classList.toggle('on', x === b));
-  ['games', 'groups', 'combined', 'buyers', 'teams', 'payouts'].forEach((id) => $('#' + id).classList.toggle('hidden', id !== b.dataset.t));
+  ['games', 'picks', 'groups', 'combined', 'buyers', 'teams', 'payouts'].forEach((id) => $('#' + id).classList.toggle('hidden', id !== b.dataset.t));
   window.scrollTo({ top: 0 });
 }));
 document.querySelectorAll('.sortbar button').forEach((b) => (b.onclick = () => {
@@ -441,7 +473,7 @@ function loadAll() {
     .then(([t, l, p]) => {
       TD = t; PAY = p; LOTS = l;
       M = Calcutta.compute(t, l, p);
-      renderStats(); renderGroups(); renderCombined(); renderBuyers(); renderTeams(); renderPayouts(); renderFoot(); return tickGames();
+      renderStats(); renderGroups(); renderPicks(); renderCombined(); renderBuyers(); renderTeams(); renderPayouts(); renderFoot(); return tickGames();
     })
     .catch((e) => { $('#asof').textContent = 'Could not load data: ' + e.message; });
 }

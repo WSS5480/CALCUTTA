@@ -96,7 +96,17 @@
     return { pool, teams, by, groups, buyers: buyerList };
   }
 
-  const api = { compute, american };
+  // Head-to-head win chance for team A vs team B (Bradley-Terry on the per-game strength t.p, plus home field).
+  const HOME = 0.22; // logit points, about a 55% home-field edge between equals
+  const logit = (x) => Math.log(x / (1 - x));
+  function winProb(by, a, b, homeAbbr) {
+    const A = by[a], B = by[b];
+    if (!A || !B) return 0.5;
+    const home = homeAbbr === a ? HOME : homeAbbr === b ? -HOME : 0;
+    return 1 / (1 + Math.exp(-(logit(A.p) - logit(B.p) + home)));
+  }
+
+  const api = { compute, american, winProb };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Calcutta = api;
 })(typeof window !== 'undefined' ? window : globalThis);

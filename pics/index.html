@@ -48,7 +48,7 @@ details>summary::after{content:'▾';color:var(--blue)}details[open]>summary::af
 <header>
   <h1>Steve's Pics</h1>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Pics v1</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Pics v2 (spread predictions)</div>
 </header>
 <main>
   <div class="sums" id="sums"></div>
@@ -62,7 +62,9 @@ const pct = (x, d = 0) => (x * 100).toFixed(d) + '%';
 const SB = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/';
 const ODDS_URL = 'https://calcutta-odds.onrender.com/odds';
 const FIX = { WSH: 'WAS', JAC: 'JAX', LA: 'LAR' };
-const PTS = 0.14; // logit points per point of margin (about 1 pt = 3.5% win prob near a pick'em)
+const PTS = 0.14;
+const SD = 13.5; // typical NFL scoring-margin spread around a game's expected margin
+const cdf = (z) => { const t = 1 / (1 + 0.2316419 * Math.abs(z)), d = 0.3989423 * Math.exp(-z * z / 2); const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274)))); return z > 0 ? 1 - p : p; }; // logit points per point of margin (about 1 pt = 3.5% win prob near a pick'em)
 let TD, LOTS, PAY, M, CUR = 0, ALL = {}, LAST = null, SPREAD = {}, BUSY = false, ODDS_AT = 0, ODDS_NOTE = '';
 
 const ab = (x) => FIX[x] || x;
@@ -136,7 +138,9 @@ function pred(g) {
   const out = { pa, ph, su, conf: Math.max(pa, ph), mh, ats: null };
   if (g.line !== null) {
     const homeCover = mh > g.line;
-    out.ats = { side: homeCover ? g.home : g.away, line: homeCover ? -g.line : g.line, edge: Math.abs(mh - g.line) };
+    // Betting lines are sharp, so shrink hard toward 50%: our model rarely knows more than the market
+    const pHome = 0.5 + 0.3 * (cdf((mh - g.line) / SD) - 0.5); // chance the home side covers
+    out.ats = { side: homeCover ? g.home : g.away, line: homeCover ? -g.line : g.line, edge: Math.abs(mh - g.line), cover: homeCover ? pHome : 1 - pHome };
   }
   return out;
 }
@@ -163,7 +167,7 @@ function card(g) {
   const p = pred(g);
   const when = g.state === 'in' ? `<span class="miss tag">LIVE</span> ${g.detail} · ${g.away.abbr} ${g.away.score} – ${g.home.abbr} ${g.home.score}`
     : `<b>${new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</b>`;
-  const ats = p.ats ? `<div>Spread lean: <b>${p.ats.side.abbr} ${sp(p.ats.line)}</b> <span class="sub">(model: ${byText(g, p.mh)} · line: ${byText(g, g.line)})</span></div>` : '<div class="sub">No spread posted yet</div>';
+  const ats = p.ats ? `<div>Spread pick: <b>${p.ats.side.abbr} ${sp(p.ats.line)}</b> · covers <b>${pct(p.ats.cover)}</b> <span class="sub">(model: ${byText(g, p.mh)} · line: ${byText(g, g.line)})</span></div>` : '<div class="sub">No spread posted yet</div>';
   return `<div class="card ${g.state === 'in' ? 'live' : ''}">
     <div class="gstat"><span>${when}</span><span>${lineText(g)}</span></div>
     <div class="row"><b>${nm(g.away.abbr)} <small>${g.away.record}</small></b><b>${pct(p.pa)}</b></div>
@@ -172,6 +176,15 @@ function card(g) {
     <div class="pick"><div>Pick: <b>${nm(p.su.abbr)}</b> ${pct(p.conf)}</div>${ats}</div>
   </div>`;
 }
+
+// Expected record for a slate: sum of win chances (straight up) and cover chances (spread)
+function projText(gs) {
+  let su = 0, ats = 0, an = 0;
+  gs.forEach((g) => { const p = pred(g); su += p.conf; if (p.ats) { ats += p.ats.cover; an++; } });
+  const f = (w, n) => w.toFixed(1) + '-' + (n - w).toFixed(1);
+  return `${f(su, gs.length)}${an ? ' · spread ' + f(ats, an) : ''}`;
+}
+function proj(gs) { return `<div class="note">Predicted record: <b>${projText(gs)}</b> (win picks · against the spread)</div>`; }
 
 function render() {
   if (!M) return;
@@ -207,8 +220,8 @@ function render() {
     <div class="sum"><b>${atsN ? pct(AH / atsN, 1) : '–'}</b><span>Against the spread</span><small>${AH}-${AM}${AP ? '-' + AP : ''}${atsN ? '' : ' (loading lines…)'}</small></div>`;
 
   $('#list').innerHTML =
-    (thisWeek.length ? '<div class="gh">This week</div>' + thisWeek.map(card).join('') : '<div class="note">No more games left this week.</div>') +
-    (Object.keys(future).length ? '<div class="gh">Rest of season</div>' + Object.keys(future).map(Number).sort((a, b) => a - b).map((n) => `<details ${n === CUR + 1 ? 'open' : ''}><summary>Week ${n}: ${future[n].length} games</summary>${future[n].sort((a, b) => a.start - b.start).map(card).join('')}</details>`).join('') : '') +
+    (thisWeek.length ? '<div class="gh">This week</div>' + proj(thisWeek) + thisWeek.map(card).join('') : '<div class="note">No more games left this week.</div>') +
+    (Object.keys(future).length ? '<div class="gh">Rest of season</div>' + Object.keys(future).map(Number).sort((a, b) => a - b).map((n) => `<details ${n === CUR + 1 ? 'open' : ''}><summary>Week ${n}: ${future[n].length} games · exp ${projText(future[n])}</summary>${future[n].sort((a, b) => a.start - b.start).map(card).join('')}</details>`).join('') : '') +
     (weeks.length ? '<div class="gh">Results</div>' + weeks.map((w) => `<details ${w.n === CUR ? 'open' : ''}><summary>Week ${w.n}: ${w.h}-${w.t - w.h} picks · spread ${w.ah}-${w.am}${w.ap ? '-' + w.ap : ''}</summary>${w.rows}</details>`).join('') : '');
   const liveN = live.length;
   $('#upd').innerHTML = `<span class="dot ${liveN ? 'on' : ''}"></span>${liveN ? liveN + ' live · ' : ''}updated ${LAST ? LAST.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }) : '…'}`;

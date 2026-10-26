@@ -61,7 +61,7 @@ body{border-top:6px solid #bf5700}h1{color:#bf5700}
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">College</button></div>
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Pics v19 (team model)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Pics v20 (player stats)</div>
 </header>
 <main>
   <div class="sums" id="sums"></div>
@@ -93,8 +93,8 @@ let TD, LOTS, PAY, M, CUR = 0, ALL = {}, LAST = null, SPREAD = {}, BUSY = false,
 
 const ab = (x) => (CFB ? x : FIX[x] || x);
 const logit = (x) => Math.log(x / (1 - x));
-const spCache = (id) => { try { return JSON.parse(localStorage.getItem('sr26-' + id)); } catch (e) { return null; } };
-const spSave = (id, v) => { try { localStorage.setItem('sr26-' + id, JSON.stringify(v)); } catch (e) {} };
+const spCache = (id) => { try { return JSON.parse(localStorage.getItem('ss26-' + id)); } catch (e) { return null; } };
+const spSave = (id, v) => { try { localStorage.setItem('ss26-' + id, JSON.stringify(v)); } catch (e) {} };
 
 // "SEA -3" / "EVEN" -> home-favored points (positive = home favored), or null
 function parseLine(text, home, away) {
@@ -265,19 +265,48 @@ function parseBox(s) {
     const m = {}; (t.statistics || []).forEach((q) => (m[q.name] = q.displayValue));
     out[ab(t.team.abbreviation)] = { y: parseFloat(m.yardsPerPlay) || 0, to: parseInt(m.turnovers, 10) || 0 };
   });
-  if (CFB) return out;
   ((s.boxscore && s.boxscore.players) || []).forEach((p) => {
     const o = (out[ab(p.team.abbreviation)] = out[ab(p.team.abbreviation)] || { y: 0, to: 0 });
+    const P = [], R = [], C = [], D = [];
     o.qb = {}; o.rb = {}; o.rec = {}; o.def = {};
-    p.statistics.forEach((c) => c.athletes.forEach((a) => {
-      const id = a.athlete.id, st = a.stats || [];
-      if (c.name === 'passing') o.qb[id] = parseInt((st[0] || '').split('/')[1], 10) || 0;
-      else if (c.name === 'rushing') o.rb[id] = +st[0] || 0;
-      else if (c.name === 'receiving') o.rec[id] = +st[1] || 0;
-      else if (c.name === 'defensive') o.def[id] = +st[0] || 0;
-    }));
+    p.statistics.forEach((c) => {
+      const L = c.labels || [], ix = (n) => L.indexOf(n);
+      c.athletes.forEach((a) => {
+        const st = a.stats || [], id = a.athlete.id, nmv = a.athlete.displayName || '', v = (n) => parseFloat(st[ix(n)]) || 0;
+        if (c.name === 'passing') { const ca = (st[ix('C/ATT')] || '').split('/'); const att = parseInt(ca[1], 10) || 0; P.push([id, nmv, att, parseInt(ca[0], 10) || 0, v('YDS'), v('TD'), v('INT')]); o.qb[id] = att; }
+        else if (c.name === 'rushing') { R.push([id, nmv, v('CAR'), v('YDS'), v('TD')]); o.rb[id] = v('CAR'); }
+        else if (c.name === 'receiving') { C.push([id, nmv, v('REC'), v('YDS'), v('TD')]); o.rec[id] = v('YDS'); }
+        else if (c.name === 'defensive') { D.push([id, nmv, v('TOT'), v('SACKS')]); o.def[id] = v('TOT'); }
+      });
+    });
+    const tp = (arr, k, n) => arr.sort((x, y) => y[k] - x[k]).slice(0, n);
+    o.P = tp(P, 2, 2); o.R = tp(R, 2, 3); o.C = tp(C, 3, 4); o.D = tp(D, 2, 5);
+    if (CFB) { delete o.qb; delete o.rb; delete o.rec; delete o.def; }
   });
   return out;
+}
+// Season totals for a team's individual leaders, summed over every finished game
+function leaders(t) {
+  const A = { P: {}, R: {}, C: {}, D: {} };
+  let gp = 0;
+  Object.values(ALL).forEach((g) => {
+    const b = g.state === 'post' && g.bx && g.bx[t.abbr || t]; if (!b || !b.P) return; gp++;
+    ['P', 'R', 'C', 'D'].forEach((k) => (b[k] || []).forEach((r) => { const e = (A[k][r[0]] = A[k][r[0]] || { n: r[1], v: r.slice(2).map(() => 0), g: 0 }); r.slice(2).forEach((x, i) => (e.v[i] += x)); e.g++; }));
+  });
+  const top = (k, i, n) => Object.values(A[k]).sort((a, b) => b.v[i] - a.v[i]).slice(0, n);
+  return { gp, P: top('P', 0, 1), R: top('R', 0, 2), C: top('C', 1, 4), D: top('D', 0, 4) };
+}
+function leadersHtml(t) {
+  const L = leaders(t); if (!L.gp) return '';
+  const nf = (x) => Math.round(x).toLocaleString();
+  const row = (e, txt) => `<div style="padding:6px 0;border-bottom:1px solid var(--line)"><b>${e.n}</b> <small>${e.g} gm</small><div class="sub">${txt}</div></div>`;
+  const body = [
+    ...L.P.map((e) => row(e, `QB · ${nf(e.v[1])}/${nf(e.v[0])} · ${nf(e.v[2])} yds · ${nf(e.v[3])} TD · ${nf(e.v[4])} INT`)),
+    ...L.R.map((e) => row(e, `RB · ${nf(e.v[0])} car · ${nf(e.v[1])} yds · ${nf(e.v[2])} TD`)),
+    ...L.C.map((e) => row(e, `REC · ${nf(e.v[0])} rec · ${nf(e.v[1])} yds · ${nf(e.v[2])} TD`)),
+    ...L.D.map((e) => row(e, `DEF · ${nf(e.v[0])} tkl · ${e.v[1] % 1 ? e.v[1].toFixed(1) : nf(e.v[1])} sk`))
+  ].join('');
+  return `<div class="gh">Player leaders · season</div><div class="card">${body}</div>`;
 }
 // Efficiency rating (points): yards-per-play edge and turnover margin over the season, shrunk toward zero
 function buildEff() {
@@ -473,14 +502,14 @@ function teamBox(games) {
   const n = fin.length, avg = n ? ((pf - pa) / n).toFixed(1) : '–';
   const nxt = games.filter((g) => g.state !== 'post').sort((a, b) => a.start - b.start)[0];
   const rec = Object.values(ALL).map((g) => (g.home.abbr === TEAM ? g.home : g.away.abbr === TEAM ? g.away : null)).filter(Boolean).find((t) => t.record);
-  const rating = CFB && RAT[TEAM] !== undefined ? ` · power rating ${sp(+RAT[TEAM].toFixed(1))}` : '';
+  const rating = RAT[TEAM] !== undefined ? ` · power rating ${sp(+RAT[TEAM].toFixed(1))}${EFF[TEAM] !== undefined ? ` · efficiency ${sp(+EFF[TEAM].toFixed(1))}` : ''}` : '';
   const tile = (b, lab, sm) => `<div class="sum"><b>${b}</b><span>${lab}</span><small>${sm}</small></div>`;
   return `<div class="gh">${nm(TEAM)}${rec ? ' · ' + rec.record : ''}</div><div class="sums">
     ${tile(`${w}-${l}`, 'Record (finals)', `Home ${hw}-${hl} · Away ${aw}-${al}`)}
     ${tile(cw + cl ? pct(cw / (cw + cl), 0) : '–', 'Covers the spread', `${cw}-${cl}${cp ? '-' + cp : ''} ATS`)}
     ${tile(avg, 'Avg margin', `${n ? (pf / n).toFixed(1) : '–'} for · ${n ? (pa / n).toFixed(1) : '–'} against`)}
     ${tile(pkN ? pct(pkH / pkN, 0) : '–', 'Our win picks', `${pkH}-${pkN - pkH}${atN ? ` · spread picks ${atH}-${atN - atH}` : ''}`)}
-  </div>${nxt ? `<div class="note">Next: <b>${nxt.away.abbr} @ ${nxt.home.abbr}</b> · ${new Date(nxt.start).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}${nxt.line !== null ? ' · ' + lineText(nxt) : ''}${rating}</div>` : rating ? `<div class="note">${rating.slice(3)}</div>` : ''}`;
+  </div>${leadersHtml(TEAM)}${nxt ? `<div class="note">Next: <b>${nxt.away.abbr} @ ${nxt.home.abbr}</b> · ${new Date(nxt.start).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}${nxt.line !== null ? ' · ' + lineText(nxt) : ''}${rating}</div>` : rating ? `<div class="note">${rating.slice(3)}</div>` : ''}`;
 }
 
 function render() {

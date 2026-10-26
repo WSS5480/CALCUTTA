@@ -60,7 +60,7 @@ body{border-top:6px solid #bf5700}h1{color:#bf5700}
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">College</button></div>
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Pics v13 (all weeks)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Pics v14 (weekday graph)</div>
 </header>
 <main>
   <div class="sums" id="sums"></div>
@@ -169,7 +169,43 @@ function movesBoard(games) {
     <div class="sub">Moved toward ${d > 0 ? nm(g.home.abbr) : nm(g.away.abbr)}</div></div>`).join('');
 }
 
+// By-day view: one slot per weekday leading up to kickoff; each slot shows the line as of the end of that day (carried forward when it didn't move)
+function lmDayChart(g) {
+  const DAY = 864e5, sod = (t) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d; };
+  const gd = sod(g.start), today = sod(Date.now()), done = g.state === 'post';
+  const startD = done || (gd - today) <= 6 * DAY ? new Date(gd) : new Date(today);
+  if (done || (gd - today) <= 6 * DAY) startD.setDate(startD.getDate() - 6);
+  const slots = [];
+  for (let i = 0; i < 7; i++) { const d = new Date(startD); d.setDate(d.getDate() + i); slots.push(d); }
+  const raw = lmLoad(g.id), o = lmOpen(g.id);
+  const vals = slots.map((d) => {
+    if (!done && d > today) return null;
+    const end = new Date(d); end.setDate(end.getDate() + 1);
+    let L = null;
+    raw.forEach(([t, v]) => { if (t < +end) L = v; });
+    if (L === null) L = o !== null ? o : null;
+    if (done && +d === +gd && g.line !== null) L = g.line;
+    if (L === null && +d === +today && g.line !== null) L = g.line;
+    return L === null ? null : -L; // home-team spread
+  });
+  const have = vals.filter((v) => v !== null);
+  if (!have.length) return '<div class="cap">No line yet.</div>';
+  const lo = Math.min(...have) - 0.5, hi = Math.max(...have) + 0.5, W = 300, H = 100, pad = 20;
+  const x = (i) => pad + (i * (W - 2 * pad)) / 6;
+  const y = (v) => 14 + (hi - v) * (H - 38) / (hi - lo || 1);
+  let path = '', dots = '';
+  vals.forEach((v, i) => {
+    if (v === null) return;
+    path += `${path ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)} `;
+    dots += `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3" fill="#bf5700"/><text x="${x(i).toFixed(1)}" y="${(y(v) - 6).toFixed(1)}" font-size="9" text-anchor="middle" fill="#2b2b2b">${sp(v)}</text>`;
+  });
+  const xl = slots.map((d, i) => `<text x="${x(i).toFixed(1)}" y="${H - 2}" font-size="8" text-anchor="middle" fill="${+d === +gd ? '#bf5700' : '#6e6259'}" ${+d === +gd ? 'font-weight="700"' : ''}>${d.toLocaleDateString([], { weekday: 'short' })}${+d === +gd ? ' ⚑' : ''}</text>`).join('');
+  const first = have[0], last = have[have.length - 1], moved = last - first;
+  const note = moved === 0 ? 'No move across these days' : `Moved ${Math.abs(moved)} pts toward ${moved < 0 ? g.home.abbr : g.away.abbr} (${sp(first)} → ${sp(last)})`;
+  return `<svg viewBox="0 0 ${W} ${H}"><path d="${path}" fill="none" stroke="#bf5700" stroke-width="2"/>${dots}${xl}</svg><div class="cap">${g.home.abbr} spread by day · ${note}.${done ? ` Final: ${g.away.abbr} ${g.away.score}, ${g.home.abbr} ${g.home.score}.` : ' ⚑ = game day. Days before we started tracking show the opening line.'}</div>`;
+}
 function lmChart(g) {
+  if (LMMODE === 'day') return lmDayChart(g);
   const pts = [];
   const o = lmOpen(g.id);
   if (o !== null) pts.push({ t: 0, L: o, label: 'Open' });

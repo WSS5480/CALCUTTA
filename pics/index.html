@@ -61,7 +61,7 @@ body{border-top:6px solid #bf5700}h1{color:#bf5700}
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">College</button></div>
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Pics v22 (tuned model)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Pics v23 (college model v2)</div>
 </header>
 <main>
   <div class="sums" id="sums"></div>
@@ -78,7 +78,9 @@ const SB = 'https://site.api.espn.com/apis/site/v2/sports/football/' + (CFB ? 'c
 const SCX = CFB ? '&groups=80&limit=400' : ''; // FBS games only
 const NWEEKS = CFB ? 15 : 18;
 const NAMES = {}, RAT = {}, EFF = {}, TEAMID = {}, PL = {}, INJ = {};
-const HFA = CFB ? 2.5 : 2.0, CAP = 14, DECAY = 0.85, RIDGE = 6; // tuned by walk-forward backtests (college), then checked on NFL
+// Settings from walk-forward backtests: college tuned on 2023-24 and confirmed on 2025 (1,884 games); NFL settings unchanged (no tuned set beat them on the 2025 hold-out)
+const HFA = CFB ? 3.5 : 2.0, CAP = CFB ? 100 : 14, DECAY = CFB ? 0.95 : 0.85, RIDGE = CFB ? 1 : 6, MIXM = CFB ? 0.7 : 0.5, CARRY = CFB ? 1 : 0, RKW = CFB ? 1.3 : 0;
+const PREV = {}; // last season's final power ratings (college), used as the starting point
 const wgt = (g) => Math.pow(DECAY, Math.max(0, (CUR || g.week) - g.week)); // recent games count more
 let INJ_AT = 0;
 const ODDS_URL = 'https://calcutta-odds.onrender.com/odds';
@@ -386,7 +388,7 @@ function pred(g) {
   const hfa = g.neutral ? 0 : HFA;
   const mM = (RAT[g.home.abbr] || 0) - (RAT[g.away.abbr] || 0) + hfa;
   const mE = EFF[g.home.abbr] !== undefined && EFF[g.away.abbr] !== undefined ? EFF[g.home.abbr] - EFF[g.away.abbr] + hfa : null;
-  let mh = mE === null ? mM : 0.5 * mM + 0.5 * mE;
+  let mh = mE === null ? mM : MIXM * mM + (1 - MIXM) * mE;
   let phModel = Math.min(0.99, Math.max(0.01, Phi(mh / SD)));
   let inj = null;
   if (!CFB && g.state !== 'post') { const a = injPen(g.away.abbr), h = injPen(g.home.abbr); if (a.pts || h.pts) inj = { a, h }; /* info only: not in the pick (backtest showed no gain over the line) */ }
@@ -410,11 +412,14 @@ const rk = (t) => (t.rank ? `<small>#${t.rank}</small> ` : '');
 // College strength: margin-based power ratings (capped blowouts, home edge removed), pulled toward an AP-rank prior, rebuilt from every final
 function buildRatings() {
   const fin = Object.values(ALL).filter((g) => g.state === 'post' && (g.home.score || g.away.score));
-  const prior = {}, n = {};
-  Object.values(ALL).forEach((g) => [g.home, g.away].forEach((t) => { if (t.rank) prior[t.abbr] = (26 - t.rank) * 0.6; }));
-  fin.forEach((g) => { const k = wgt(g); n[g.home.abbr] = (n[g.home.abbr] || 0) + k; n[g.away.abbr] = (n[g.away.abbr] || 0) + k; });
+  const prior = {}, n = {}, last = {};
+  if (RKW) fin.slice().sort((x, y) => x.week - y.week).forEach((g) => { if (g.home.rank) last[g.home.abbr] = g.home.rank; if (g.away.rank) last[g.away.abbr] = g.away.rank; });
+  if (RKW) Object.values(ALL).forEach((g) => [g.home, g.away].forEach((t) => { if (t.rank && !last[t.abbr]) last[t.abbr] = t.rank; }));
+  const keys = new Set([...Object.keys(PREV), ...Object.keys(last)]);
+  fin.forEach((g) => { const k = wgt(g); n[g.home.abbr] = (n[g.home.abbr] || 0) + k; n[g.away.abbr] = (n[g.away.abbr] || 0) + k; keys.add(g.home.abbr); keys.add(g.away.abbr); });
+  keys.forEach((t) => (prior[t] = CARRY * (PREV[t] || 0) + (last[t] ? RKW * (26 - last[t]) : 0)));
   Object.keys(RAT).forEach((k) => delete RAT[k]);
-  Object.keys(n).forEach((k) => (RAT[k] = prior[k] || 0));
+  keys.forEach((k) => (RAT[k] = prior[k] || 0));
   for (let it = 0; it < 25; it++) {
     const sum = {};
     fin.forEach((g) => {
@@ -423,8 +428,31 @@ function buildRatings() {
       sum[g.home.abbr] = (sum[g.home.abbr] || 0) + k * (d + RAT[g.away.abbr]);
       sum[g.away.abbr] = (sum[g.away.abbr] || 0) + k * (-d + RAT[g.home.abbr]);
     });
-    Object.keys(n).forEach((k) => (RAT[k] = ((sum[k] || 0) + RIDGE * (prior[k] || 0)) / (n[k] + RIDGE)));
+    keys.forEach((k) => (RAT[k] = ((sum[k] || 0) + RIDGE * (prior[k] || 0)) / ((n[k] || 0) + RIDGE)));
   }
+}
+// College: last season's final ratings from every FBS score (scoreboard only, cached on the device)
+async function loadPrior() {
+  if (!CFB) return;
+  const yr = new Date().getFullYear() - (new Date().getMonth() < 6 ? 1 : 0) - 1;
+  let gs = null;
+  try { gs = JSON.parse(localStorage.getItem('cprev-' + yr)); } catch (e) {}
+  if (!gs) {
+    gs = [];
+    await Promise.all(Array.from({ length: 15 }, (_, i) => i + 1).map(async (w) => {
+      try { const j = await getJson(SB + 'scoreboard?dates=' + yr + '&seasontype=2&week=' + w + SCX); (j.events || []).forEach((e) => { if (e.status.type.state !== 'post') return; const c = e.competitions[0], h = c.competitors.find((x) => x.homeAway === 'home'), a = c.competitors.find((x) => x.homeAway === 'away'); gs.push([h.team.abbreviation, +h.score, a.team.abbreviation, +a.score, c.neutralSite ? 1 : 0]); }); } catch (e) {}
+    }));
+    if (gs.length > 400) { try { localStorage.setItem('cprev-' + yr, JSON.stringify(gs)); } catch (e) {} }
+  }
+  const R = {}, n = {};
+  gs.forEach((g) => { n[g[0]] = (n[g[0]] || 0) + 1; n[g[2]] = (n[g[2]] || 0) + 1; R[g[0]] = 0; R[g[2]] = 0; });
+  for (let it = 0; it < 25; it++) {
+    const sm = {};
+    gs.forEach((g) => { const d = Math.max(-CAP, Math.min(CAP, g[1] - g[3])) - (g[4] ? 0 : HFA); sm[g[0]] = (sm[g[0]] || 0) + d + R[g[2]]; sm[g[2]] = (sm[g[2]] || 0) - d + R[g[0]]; });
+    Object.keys(n).forEach((k) => (R[k] = (sm[k] || 0) / (n[k] + RIDGE)));
+  }
+  Object.keys(PREV).forEach((k) => delete PREV[k]);
+  Object.assign(PREV, R);
 }
 const sp = (n) => (n > 0 ? '+' : '') + (Math.abs(n) % 1 ? n.toFixed(1) : n.toFixed(0)); // "+3" or "-2.5"
 const byText = (g, m) => (Math.abs(m) < 0.05 ? 'even' : m > 0 ? g.home.abbr + ' by ' + m.toFixed(1) : g.away.abbr + ' by ' + (-m).toFixed(1));
@@ -596,6 +624,7 @@ async function loadAll() {
   try {
     if (CFB) M = { by: {} };
     else { const [t, l, p] = await Promise.all(['teams', 'lots', 'payouts'].map((n) => getJson('data/' + n + '.json?v=' + Date.now()))); TD = t; LOTS = l; PAY = p; M = Calcutta.compute(t, l, p); }
+    await loadPrior();
     await tick();
     const wk = []; for (let n = CFB ? 0 : 1; n <= NWEEKS; n++) wk.push(n);
     let i = 0;

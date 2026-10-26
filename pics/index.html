@@ -60,7 +60,7 @@ body{border-top:6px solid #bf5700}h1{color:#bf5700}
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">College</button></div>
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Pics v14 (weekday graph)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Pics v15 (soft refresh)</div>
 </header>
 <main>
   <div class="sums" id="sums"></div>
@@ -397,10 +397,10 @@ function render() {
   if (CFB) buildRatings();
   const games = TEAM ? Object.values(ALL).filter((g) => g.home.abbr === TEAM || g.away.abbr === TEAM) : Object.values(ALL);
   teamSelect();
-  const live = games.filter((g) => g.state === 'in').sort((a, b) => a.start - b.start);
+  const live = games.filter((g) => g.state === 'in');
   const pre = games.filter((g) => g.state === 'pre');
   const post = games.filter((g) => g.state === 'post');
-  const thisWeek = [...live, ...pre.filter((g) => g.week === CUR).sort((a, b) => a.start - b.start)];
+  const thisWeek = [...live, ...pre.filter((g) => g.week === CUR)];
   const future = {};
   pre.filter((g) => g.week > CUR).forEach((g) => (future[g.week] = future[g.week] || []).push(g));
 
@@ -410,7 +410,7 @@ function render() {
   post.forEach((g) => (byWeek[g.week] = byWeek[g.week] || []).push(g));
   const weeks = Object.keys(byWeek).map(Number).sort((a, b) => b - a).map((n) => {
     let h = 0, t = 0, ah = 0, am = 0, ap = 0;
-    const rows = byWeek[n].sort((a, b) => a.start - b.start).map((g) => {
+    const rows = byWeek[n].map((g) => {
       const r = grade(g); if (!r) return '';
       t++; ST++; if (r.suHit) { h++; SH++; }
       if (r.p.conf >= 0.65) { HT++; if (r.suHit) HH++; }
@@ -429,7 +429,7 @@ function render() {
 
   $('#list').innerHTML = teamBox(games) + movesBoard(games) +
     (thisWeek.length ? '<div class="gh">This week</div>' + proj(thisWeek) + thisWeek.map(card).join('') : (TEAM ? '' : '<div class="note">No more games left this week.</div>')) +
-    (Object.keys(future).length ? '<div class="gh">Rest of season</div>' + Object.keys(future).map(Number).sort((a, b) => a - b).map((n) => `<details data-k="f${n}" ${isOpen('f' + n, n === CUR + 1) ? 'open' : ''}><summary>Week ${n}: ${future[n].length} games · exp ${projText(future[n])}</summary>${future[n].sort((a, b) => a.start - b.start).map(card).join('')}</details>`).join('') : '') +
+    (Object.keys(future).length ? '<div class="gh">Rest of season</div>' + Object.keys(future).map(Number).sort((a, b) => a - b).map((n) => `<details data-k="f${n}" ${isOpen('f' + n, n === CUR + 1) ? 'open' : ''}><summary>Week ${n}: ${future[n].length} games · exp ${projText(future[n])}</summary>${future[n].map(card).join('')}</details>`).join('') : '') +
     (weeks.length ? '<div class="gh">Results</div>' + weeks.map((w) => `<details data-k="r${w.n}" ${isOpen('r' + w.n, w.n === CUR) ? 'open' : ''}><summary>Week ${w.n}: ${w.h}-${w.t - w.h} picks · spread ${w.ah}-${w.am}${w.ap ? '-' + w.ap : ''}</summary>${w.rows}</details>`).join('') : '');
   const liveN = live.length;
   $('#upd').innerHTML = `<span class="dot ${liveN ? 'on' : ''}"></span>${liveN ? liveN + ' live · ' : ''}updated ${LAST ? LAST.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }) : '…'}`;
@@ -521,11 +521,20 @@ if ('serviceWorker' in navigator) {
     if (!go) return set(0);
     busy = true; set(44, 'Refreshing…');
     try {
-      if ('serviceWorker' in navigator) (await navigator.serviceWorker.getRegistrations()).forEach((r) => r.unregister());
-      if (window.caches) (await caches.keys()).forEach((k) => caches.delete(k));
+      // Refresh data in place (keeps scroll, open weeks, league and team); only reload if a newer app version is out
+      const t = await (await fetch('index.html', { cache: 'no-store' })).text();
+      const ver = (x) => (/Pics v\d+/.exec(x) || [''])[0];
+      if (ver(t) && ver(t) !== ver(document.querySelector('header').innerText)) {
+        if ('serviceWorker' in navigator) (await navigator.serviceWorker.getRegistrations()).forEach((r) => r.unregister());
+        if (window.caches) (await caches.keys()).forEach((k) => caches.delete(k));
+        const u = new URL(location.href); u.searchParams.set('r', Date.now()); return location.replace(u.toString());
+      }
+      await tick();
+      for (let n = CUR; n <= NWEEKS; n++) { try { await loadWeek(n); } catch (e) {} }
+      render();
+      await fillSpreads(); render(); loadServerLines(); loadOdds();
     } catch (e) {}
-    const u = new URL(location.href); u.searchParams.set('r', Date.now());
-    location.replace(u.toString());
+    busy = false; set(0);
   });
 })();
 </script>

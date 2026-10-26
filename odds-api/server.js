@@ -36,15 +36,18 @@ function parse(json) {
 }
 
 let cache = null;
+const LOW = +process.env.LOW_CREDITS || 40; // below this many credits left, refresh only once a day
 async function getOdds() {
-  if (cache && Date.now() - cache.at < TTL) return cache;
+  const ttl = cache && cache.remaining !== null && cache.remaining < LOW ? 24 * 60 * 60 * 1000 : TTL;
+  if (cache && Date.now() - cache.at < ttl) return cache;
   if (!KEY && !process.env.ODDS_UPSTREAM) throw new Error('ODDS_API_KEY is not set');
   const url = UPSTREAM + '?regions=us&oddsFormat=american' + (KEY ? '&apiKey=' + KEY : '');
   const r = await fetch(url);
-  if (!r.ok) throw new Error('upstream HTTP ' + r.status);
+  if (!r.ok) { if (cache) cache.at = Date.now() - ttl + 15 * 60 * 1000; throw new Error('upstream HTTP ' + r.status); }
+  const remaining = r.headers.get('x-requests-remaining');
   const p = parse(await r.json());
   if (!p) throw new Error('no bookmaker listed all 32 teams');
-  cache = { at: Date.now(), updated: new Date().toISOString(), ...p };
+  cache = { at: Date.now(), updated: new Date().toISOString(), remaining: remaining === null ? null : +remaining, ...p };
   return cache;
 }
 
@@ -56,7 +59,7 @@ http.createServer(async (req, res) => {
   try {
     const c = await getOdds();
     res.setHeader('Cache-Control', 'public, max-age=300');
-    res.end(JSON.stringify({ updated: c.updated, book: c.book, odds: c.odds }));
+    res.end(JSON.stringify({ updated: c.updated, book: c.book, creditsLeft: c.remaining, odds: c.odds }));
   } catch (e) {
     res.statusCode = cache ? 200 : 503;
     if (cache) return res.end(JSON.stringify({ updated: cache.updated, book: cache.book, odds: cache.odds, stale: true }));

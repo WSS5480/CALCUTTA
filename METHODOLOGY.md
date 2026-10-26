@@ -1,4 +1,4 @@
-# Steve's Pics — Prediction Methodology (v22)
+# Steve's Pics — Prediction Methodology (v23)
 
 Applies to NFL and college football (FBS). Everything runs in the browser from ESPN's public data; nothing is hand-entered.
 
@@ -57,7 +57,7 @@ Shown on upcoming games as "starters hurt (info only)". A starter = the team's s
 
 Takeaways: the model roughly matches the line, not beats it. Differences of 1–3 points are noise at this sample size (±6 pts). The earlier model (playoff % and Super Bowl odds) scored 64.8% / 67.3% only because those odds already contained the results (hindsight).
 
-## 7b. Tuning results (v22)
+## 7b. Tuning results (v23)
 College (tuned on weeks 3–6, tested on weeks 7–8, 68 games): the old settings scored 56.5% straight-up / 47.1% against the spread; the tuned settings 62–65% / 54–57%. Line alone: 62.3%.
 NFL (not used for tuning, weeks 3–7, 71 games): old settings 57.5% / 53.5% ATS; tuned settings 53% / 59–62% ATS (straight-up model-only is lower, but blended with the line it is 61.6% at an 80% line weight vs 60.3% at 60%).
 Caveats: a search over ~470 settings on small samples overfits; the college test set is only 68 games and the NFL ATS gain (about +1.7 standard errors) could be luck. The locked-picks record is the real test.
@@ -67,3 +67,13 @@ Caveats: a search over ~470 settings on small samples overfits; the college test
 - Past injury reports aren't available, so non-QB injury weights are unbacktested.
 - Line history only exists from the time logging started (Render logger); By-day/By-hour charts fill in over time.
 - No weather, travel/rest, coaching changes, or player-level projections.
+
+## 9. College model v2 (v23) — settings and evidence
+College uses different settings from the NFL, found by walk-forward tests on 3 full seasons (2,628 FBS games; tuned on 2023–24, confirmed on 2025):
+- No blowout cap (margins used as-is), ridge 1, recency weight 0.95/week, home edge 3.5 pts.
+- Each season starts from last season's final ratings (carried 100%), plus an AP-rank prior of 1.3 pts per rank step below #25 (latest rank seen).
+- Model margin = 70% score-margin rating + 30% efficiency (yards per play from total yards ÷ plays, turnovers).
+- Blend with the line 80/20.
+Hold-out 2025: avg miss 12.2 pts, 73–74% straight-up (line alone: 11.8 pts, 73.4% across all three seasons). Spread picks: 51.3% over 1,818 games — no edge.
+Further ideas tested with no real gain (all within 0.03 pts of the live settings): shrinking big margins, a last-3-weeks trend term, different efficiency weights.
+NFL settings are unchanged (cap 14, recency 0.85, ridge 6): nothing tested on 4 seasons beat them on the 2025 hold-out.

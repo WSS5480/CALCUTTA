@@ -1,4 +1,4 @@
-const C='pics-v1';
+const C='pics-v2';
 self.addEventListener('install',e=>{self.skipWaiting();});
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==C).map(x=>caches.delete(x)))).then(()=>self.clients.claim())));
 // Always go to the network first (bypassing the HTTP cache); cache is only an offline fallback.

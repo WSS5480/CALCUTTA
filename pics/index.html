@@ -7,10 +7,10 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="icon-192.png">
-<meta name="theme-color" content="#1f6fe0">
+<meta name="theme-color" content="#bf5700">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <style>
-:root{--bg:#f3f7fd;--panel:#fff;--panel2:#e8f0fb;--line:#d3e0f2;--ink:#0f2747;--muted:#5b7090;--blue:#1f6fe0;--green:#16915a;--red:#d93a2e}
+:root{--bg:#faf5ef;--panel:#fff;--panel2:#f6e8da;--line:#e6d3bf;--ink:#2b2b2b;--muted:#6e6259;--blue:#bf5700;--green:#16915a;--red:#d93a2e}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:40px}
@@ -35,7 +35,7 @@ h1{margin:8px 0 2px;font-size:28px}
 .res small{display:block;color:var(--muted);font-weight:400;font-size:12px}
 .res .badges{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .b{font-size:12px;font-weight:700;padding:3px 8px;border-radius:999px;border:1px solid;white-space:nowrap}
-.b.hit{background:#16915a1f;border-color:var(--green)}.b.miss{background:#d93a2e1f;border-color:var(--red)}.b.push{background:#5b709022;border-color:var(--muted)}
+.b.hit{background:#16915a1f;border-color:var(--green)}.b.miss{background:#d93a2e1f;border-color:var(--red)}.b.push{background:#6e625922;border-color:var(--muted)}
 .res.hit{border-color:var(--green);background:#16915a14}.res.miss{border-color:var(--red);background:#d93a2e14}
 details>summary{cursor:pointer;list-style:none;padding:10px 12px;background:var(--panel2);border-radius:10px;font-weight:600;font-size:14px;display:flex;justify-content:space-between;align-items:center;margin:6px 0}
 details>summary::-webkit-details-marker{display:none}
@@ -48,13 +48,14 @@ details>summary::after{content:'▾';color:var(--blue)}details[open]>summary::af
 .lm .tg{display:flex;gap:6px;margin-bottom:6px}.lm .tg button{border:1px solid var(--blue);background:#fff;color:var(--blue);border-radius:999px;padding:3px 10px;font:600 12px inherit;cursor:pointer}.lm .tg button.on{background:var(--blue);color:#fff}
 .lm svg{width:100%;height:auto;display:block}.lm .cap{font-size:12px;color:var(--muted);margin-top:4px}
 #ptr{height:0;overflow:hidden;text-align:center;color:var(--muted);font-size:13px;line-height:44px;background:var(--bg);position:fixed;top:0;left:0;right:0;z-index:40;transition:height .15s}
+body{border-top:6px solid #bf5700}h1{color:#bf5700}
 </style>
 </head>
 <body>
 <header>
   <h1>Steve's Pics</h1>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Pics v9 (render tick)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Pics v10 (Longhorn orange)</div>
 </header>
 <main>
   <div class="sums" id="sums"></div>
@@ -178,12 +179,12 @@ function lmChart(g) {
   const x = (i) => (pts.length === 1 ? W / 2 : pad + (i * (W - 2 * pad)) / (pts.length - 1));
   const y = (v) => 14 + (hi - v) * (H - 34) / (hi - lo || 1);
   const path = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(hs[i]).toFixed(1)}`).join(' ');
-  const dots = pts.map((p, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(hs[i]).toFixed(1)}" r="3" fill="#1f6fe0"/><text x="${x(i).toFixed(1)}" y="${(y(hs[i]) - 6).toFixed(1)}" font-size="9" text-anchor="middle" fill="#0f2747">${sp(hs[i])}</text>`).join('');
-  const xl = [0, pts.length - 1].filter((v, i, a) => a.indexOf(v) === i).map((i) => `<text x="${x(i).toFixed(1)}" y="${H - 2}" font-size="8" text-anchor="${i ? 'end' : 'start'}" fill="#5b7090">${pts[i].label}</text>`).join('');
+  const dots = pts.map((p, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(hs[i]).toFixed(1)}" r="3" fill="#bf5700"/><text x="${x(i).toFixed(1)}" y="${(y(hs[i]) - 6).toFixed(1)}" font-size="9" text-anchor="middle" fill="#2b2b2b">${sp(hs[i])}</text>`).join('');
+  const xl = [0, pts.length - 1].filter((v, i, a) => a.indexOf(v) === i).map((i) => `<text x="${x(i).toFixed(1)}" y="${H - 2}" font-size="8" text-anchor="${i ? 'end' : 'start'}" fill="#6e6259">${pts[i].label}</text>`).join('');
   const moved = hs[hs.length - 1] - hs[0];
   const readings = raw.length;
   const note = o === null ? 'Opening line not available' : moved === 0 ? 'Line has not moved since the open' : `Moved ${Math.abs(moved)} pts toward ${moved < 0 ? g.home.abbr : g.away.abbr} ${g.state === 'post' ? 'from open to close' : 'since the open'}`;
-  return `<svg viewBox="0 0 ${W} ${H}"><path d="${path}" fill="none" stroke="#1f6fe0" stroke-width="2"/>${dots}${xl}</svg><div class="cap">${g.home.abbr} spread · ${note}. ${g.state === 'post' ? `Final: ${g.away.abbr} ${g.away.score}, ${g.home.abbr} ${g.home.score}.` : `Tracking starts when this device first sees the game. ${readings} reading${readings === 1 ? '' : 's'} so far${readings < 3 ? ' — by hour and by day look the same until the line moves or more time passes' : ''}.`}</div>`;
+  return `<svg viewBox="0 0 ${W} ${H}"><path d="${path}" fill="none" stroke="#bf5700" stroke-width="2"/>${dots}${xl}</svg><div class="cap">${g.home.abbr} spread · ${note}. ${g.state === 'post' ? `Final: ${g.away.abbr} ${g.away.score}, ${g.home.abbr} ${g.home.score}.` : `Tracking starts when this device first sees the game. ${readings} reading${readings === 1 ? '' : 's'} so far${readings < 3 ? ' — by hour and by day look the same until the line moves or more time passes' : ''}.`}</div>`;
 }
 function lmBlock(g) {
   if (g.line === null) return '';

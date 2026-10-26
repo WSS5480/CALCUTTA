@@ -7,8 +7,8 @@
 <link rel="icon" href="dive-logo.png">
 <style>
 :root{
-  --bg:#f3f7fd; --panel:#ffffff; --panel2:#e8f0fb; --line:#d3e0f2;
-  --ink:#0f2747; --muted:#5b7090; --green:#1f6fe0; --red:#d93a2e; --gold:#b7791f;
+  --bg:#faf5ef; --panel:#ffffff; --panel2:#f6e8da; --line:#e6d3bf;
+  --ink:#2b2b2b; --muted:#6e6259; --green:#bf5700; --red:#d93a2e; --gold:#b7791f;
   --radius:14px;
 }
 *{box-sizing:border-box}
@@ -92,12 +92,12 @@ table.ls td:first-child,table.ls th:first-child{text-align:left;font-weight:700}
 .gl.in{color:var(--ink)}
 .gl .liveTag{color:var(--red);font-weight:700;margin-right:6px}
 @media (min-width:700px){.stats{grid-template-columns:repeat(6,1fr)}}
-.dl{margin-top:10px;background:#fff;color:#1f6fe0;border:1px solid #1f6fe0;border-radius:999px;padding:8px 14px;font:600 14px inherit;cursor:pointer}
+.dl{margin-top:10px;background:#fff;color:#bf5700;border:1px solid #bf5700;border-radius:999px;padding:8px 14px;font:600 14px inherit;cursor:pointer}
 [hidden]{display:none!important}
-.ibar{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:50;background:#e8f0fb;border:1px solid #1f6fe0;border-radius:14px;padding:12px 14px;display:flex;gap:10px;align-items:center;box-shadow:0 6px 24px #0003}
-.ibar span{flex:1;font-size:14px}.ibar button{background:#1f6fe0;color:#fff;border:0;border-radius:999px;padding:8px 14px;font:700 14px inherit;cursor:pointer}.ibar button.x{background:none;color:#fff;padding:8px}
+.ibar{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:50;background:#f6e8da;border:1px solid #bf5700;border-radius:14px;padding:12px 14px;display:flex;gap:10px;align-items:center;box-shadow:0 6px 24px #0003}
+.ibar span{flex:1;font-size:14px}.ibar button{background:#bf5700;color:#fff;border:0;border-radius:999px;padding:8px 14px;font:700 14px inherit;cursor:pointer}.ibar button.x{background:none;color:#fff;padding:8px}
 .comb .row3{display:flex;flex-wrap:wrap;gap:4px 14px}.comb .row3 b{margin-left:4px}
-.team.comb{background:#e8f0fb;border:1px solid #1f6fe066}
+.team.comb{background:#f6e8da;border:1px solid #bf570066}
 #ptr{height:0;overflow:hidden;text-align:center;color:var(--muted);font-size:13px;line-height:44px;background:var(--bg);position:fixed;top:0;left:0;right:0;z-index:40;transition:height .15s}
 details.tms{margin:6px 0}
 details.tms>summary{cursor:pointer;list-style:none;padding:10px 12px;background:var(--panel2);border-radius:10px;font-weight:600;font-size:14px;display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -113,10 +113,11 @@ details.tms[open]>summary::after{transform:rotate(180deg)}
 .res.hit{background:#16915a1f;border-color:#16915a;color:#0d5c3a}.res.miss{background:#d93a2e1f;border-color:#d93a2e;color:#a02820}
 .res.hit b,.res.miss b{color:var(--ink)}
 .pksum{margin:6px 0}.pksum small{color:var(--muted)}
+body{border-top:6px solid #bf5700}h1{color:#bf5700}
 </style>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
-<meta name="theme-color" content="#1f6fe0">
+<meta name="theme-color" content="#bf5700">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-title" content="Calcutta">
 </head>
@@ -126,7 +127,7 @@ details.tms[open]>summary::after{transform:rotate(180deg)}
     <h1>Calcutta 2026</h1>
     <div class="sub" id="asof">Loading…</div>
     <div class="sub" id="upd">Live scores: waiting…</div>
-    <div class="sub" style="font-size:11px;opacity:.7">App version 16 (all weeks) · pull down to force refresh</div>
+    <div class="sub" style="font-size:11px;opacity:.7">App version 17 (Longhorn orange) · pull down to force refresh</div>
     <button id="inst" class="dl">📲 Download App</button> <button id="dl" class="dl">⬇ Download CSV</button>
     <div id="instHelp" class="sub" hidden></div>
   </header>

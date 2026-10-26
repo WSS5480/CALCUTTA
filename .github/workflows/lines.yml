@@ -1,0 +1,32 @@
+name: Log NFL spreads
+on:
+  schedule:
+    - cron: '*/20 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: lines
+  cancel-in-progress: false
+jobs:
+  log:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare data branch
+        run: |
+          URL="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          if git ls-remote --exit-code --heads "$URL" lines-data >/dev/null 2>&1; then
+            git clone --quiet --branch lines-data --depth 1 "$URL" data-branch
+          else
+            mkdir data-branch && cd data-branch && git init -q -b lines-data && git remote add origin "$URL"
+          fi
+      - name: Log lines
+        run: node scripts/log-lines.js data-branch/lines.json
+      - name: Commit
+        working-directory: data-branch
+        run: |
+          git config user.name "lines-bot"
+          git config user.email "lines-bot@users.noreply.github.com"
+          git add lines.json
+          if git diff --cached --quiet; then echo "no changes"; else git commit -q -m "lines $(date -u +%FT%TZ)" && git push -q origin lines-data; fi

@@ -54,7 +54,7 @@ details>summary::after{content:'▾';color:var(--blue)}details[open]>summary::af
 <header>
   <h1>Steve's Pics</h1>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Pics v7 (pull down to refresh)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Pics v8 (line history)</div>
 </header>
 <main>
   <div class="sums" id="sums"></div>
@@ -103,10 +103,16 @@ function parseEvents(j, week) {
 
 // ---- Line movement: ESPN gives the opening and current line; we log every change we see on this device ----
 const lmKey = (id) => 'lm26-' + id;
-function lmLoad(id) { try { return JSON.parse(localStorage.getItem(lmKey(id))) || []; } catch (e) { return []; } }
+const LINES_URL = 'https://raw.githubusercontent.com/WSS5480/CALCUTTA/lines-data/lines.json'; // logged around the clock by a GitHub Action
+let SERVER_LM = {};
+function lmLocal(id) { try { return JSON.parse(localStorage.getItem(lmKey(id))) || []; } catch (e) { return []; } }
+function lmLoad(id) { return [...(SERVER_LM[id] || []), ...lmLocal(id)].sort((a, b) => a[0] - b[0]); }
+async function loadServerLines() {
+  try { const r = await fetch(LINES_URL, { cache: 'no-store' }); if (r.ok) { SERVER_LM = await r.json(); render(); } } catch (e) {}
+}
 function lmRecord(g) {
   if (g.line === null || g.state === 'post') return;
-  const a = lmLoad(g.id), last = a[a.length - 1], now = Date.now();
+  const a = lmLocal(g.id), last = a[a.length - 1], now = Date.now();
   if (!last || last[1] !== g.line || now - last[0] > 60 * 60 * 1000) {
     a.push([now, g.line]);
     try { localStorage.setItem(lmKey(g.id), JSON.stringify(a.slice(-400))); } catch (e) {}
@@ -365,6 +371,7 @@ async function loadAll() {
     loadOdds();
     await fillSpreads(); render();
     await fillOpens(); render();
+    loadServerLines();
   } catch (e) { $('#upd').textContent = 'Could not load: ' + e.message; }
   BUSY = false;
 }
@@ -378,7 +385,7 @@ document.addEventListener('click', async (e) => {
   render();
 });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && M) { tick(); loadOdds(); } });
-setInterval(() => { if (M) { loadWeek(CUR + 1).then(render).catch(() => {}); fillSpreads().then(render); fillOpens().then(render); } }, 30 * 60 * 1000);
+setInterval(() => { if (M) { loadWeek(CUR + 1).then(render).catch(() => {}); fillSpreads().then(render); fillOpens().then(render); loadServerLines(); } }, 30 * 60 * 1000);
 loadAll();
 
 if ('serviceWorker' in navigator) {

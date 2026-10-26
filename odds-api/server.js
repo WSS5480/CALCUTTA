@@ -2,7 +2,9 @@
 // Cached in memory so the free plan's monthly credits last (default 6 hours).
 const http = require('http');
 
-const KEY = process.env.ODDS_API_KEY || '';
+// Accept the key under any spelling of ODDS_API / ODDS_API_KEY (env names are case-sensitive on Linux)
+const KEYNAME = Object.keys(process.env).find((k) => /^odds_?api(_?key)?$/i.test(k));
+const KEY = KEYNAME ? process.env[KEYNAME].trim() : '';
 const TTL = (+process.env.CACHE_MINUTES || 360) * 60 * 1000;
 const UPSTREAM = process.env.ODDS_UPSTREAM ||
   'https://api.the-odds-api.com/v4/sports/americanfootball_nfl_super_bowl_winner/odds/';

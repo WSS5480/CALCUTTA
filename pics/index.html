@@ -54,7 +54,7 @@ details>summary::after{content:'▾';color:var(--blue)}details[open]>summary::af
 <header>
   <h1>Steve's Pics</h1>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Pics v8 (line history)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Pics v9 (render tick)</div>
 </header>
 <main>
   <div class="sums" id="sums"></div>
@@ -108,7 +108,12 @@ let SERVER_LM = {};
 function lmLocal(id) { try { return JSON.parse(localStorage.getItem(lmKey(id))) || []; } catch (e) { return []; } }
 function lmLoad(id) { return [...(SERVER_LM[id] || []), ...lmLocal(id)].sort((a, b) => a[0] - b[0]); }
 async function loadServerLines() {
-  try { const r = await fetch(LINES_URL, { cache: 'no-store' }); if (r.ok) { SERVER_LM = await r.json(); render(); } } catch (e) {}
+  const merged = {};
+  const add = (db) => Object.keys(db || {}).forEach((id) => { merged[id] = [...(merged[id] || []), ...db[id]]; });
+  try { const r = await fetch(LINES_URL, { cache: 'no-store' }); if (r.ok) add(await r.json()); } catch (e) {}
+  try { const r = await fetch('https://calcutta-odds.onrender.com/lines', { cache: 'no-store' }); if (r.ok) add(await r.json()); } catch (e) {}
+  Object.keys(merged).forEach((id) => merged[id].sort((a, b) => a[0] - b[0]));
+  SERVER_LM = merged; render();
 }
 function lmRecord(g) {
   if (g.line === null || g.state === 'post') return;

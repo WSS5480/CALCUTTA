@@ -3,7 +3,6 @@
 // Positive number = home team favored by that many points.
 const fs = require('fs');
 const BASE = process.env.ESPN_BASE || 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/';
-const file = process.argv[2];
 const FIX = { WSH: 'WAS', JAC: 'JAX', LA: 'LAR' };
 const fix = (a) => FIX[a] || a;
 
@@ -17,9 +16,8 @@ function parseLine(text, home, away) {
 }
 const get = async (u) => { const r = await fetch(u); if (!r.ok) throw new Error(u + ' -> ' + r.status); return r.json(); };
 
-(async () => {
-  let db = {};
-  try { db = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) {}
+// Reads this week + next two weeks from ESPN and appends changed (or hourly) readings to db. Returns the count added.
+async function logLines(db) {
   const first = await get(BASE + 'scoreboard');
   const cur = (first.week && first.week.number) || 1;
   const now = Date.now();
@@ -40,6 +38,18 @@ const get = async (u) => { const r = await fetch(u); if (!r.ok) throw new Error(
       if (!last || last[1] !== L || now - last[0] > 60 * 60 * 1000) { a.push([now, L]); added++; }
     }
   }
-  fs.writeFileSync(file, JSON.stringify(db));
-  console.log('week', cur, 'readings added:', added, 'games tracked:', Object.keys(db).length);
-})().catch((e) => { console.error(e); process.exit(1); });
+  return added;
+}
+
+module.exports = { logLines };
+
+if (require.main === module) {
+  const file = process.argv[2];
+  (async () => {
+    let db = {};
+    try { db = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) {}
+    const added = await logLines(db);
+    fs.writeFileSync(file, JSON.stringify(db));
+    console.log('readings added:', added, 'games tracked:', Object.keys(db).length);
+  })().catch((e) => { console.error(e); process.exit(1); });
+}

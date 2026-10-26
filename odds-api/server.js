@@ -51,10 +51,22 @@ async function getOdds() {
   return cache;
 }
 
+// ---- Spread tick: log every game's line each 20 minutes while this service is awake ----
+const { logLines } = require('../scripts/log-lines.js');
+const LINES = {};
+async function tickLines() { try { const n = await logLines(LINES); if (n) console.log('lines: +' + n); } catch (e) { console.error('lines tick failed:', e.message); } }
+setInterval(tickLines, 20 * 60 * 1000);
+tickLines();
+// Free Render services sleep when idle; ping our own public URL so the tick keeps running (set KEEP_AWAKE=0 to turn off)
+if (process.env.RENDER_EXTERNAL_URL && process.env.KEEP_AWAKE !== '0') {
+  setInterval(() => fetch(process.env.RENDER_EXTERNAL_URL + '/health').catch(() => {}), 10 * 60 * 1000);
+}
+
 http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Content-Type', 'application/json');
   if (req.url.startsWith('/health')) return res.end('{"ok":true}');
+  if (req.url.startsWith('/lines')) { res.setHeader('Cache-Control', 'public, max-age=60'); return res.end(JSON.stringify(LINES)); }
   if (!req.url.startsWith('/odds')) { res.statusCode = 404; return res.end('{"error":"not found"}'); }
   try {
     const c = await getOdds();

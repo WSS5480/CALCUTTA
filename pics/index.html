@@ -53,7 +53,7 @@ details>summary::after{content:'▾';color:var(--blue)}details[open]>summary::af
 <header>
   <h1>Steve's Pics</h1>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Pics v5 (default by day)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Pics v6 (line moves board)</div>
 </header>
 <main>
   <div class="sums" id="sums"></div>
@@ -125,6 +125,24 @@ async function lmFetchOpen(g) {
   } catch (e) {}
   LMBUSY[g.id] = false;
 }
+// Open lines for the next few weeks so the "Line moves" board can rank movers
+async function fillOpens() {
+  const todo = Object.values(ALL).filter((g) => g.state !== 'post' && g.line !== null && g.week <= CUR + 2 && lmOpen(g.id) === null);
+  let i = 0;
+  const worker = async () => { while (i < todo.length) { await lmFetchOpen(todo[i++]); } };
+  await Promise.all([worker(), worker(), worker(), worker()]);
+}
+function movesBoard(games) {
+  const mv = games.filter((g) => g.state !== 'post' && g.line !== null && lmOpen(g.id) !== null)
+    .map((g) => ({ g, d: g.line - lmOpen(g.id) })) // + = moved toward home
+    .filter((x) => Math.abs(x.d) >= 1).sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, 8);
+  if (!mv.length) return '';
+  const fmt = (g, L) => (L === 0 ? 'Pick ’em' : `${(L > 0 ? g.home : g.away).abbr} -${Math.abs(L)}`);
+  return '<div class="gh">Biggest line moves</div>' + mv.map(({ g, d }) => `<div class="card"><div class="gstat"><span>Week ${g.week} · ${new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</span><span>${Math.abs(d)} pts</span></div>
+    <div class="row"><b>${g.away.abbr} @ ${g.home.abbr}</b><b>${fmt(g, lmOpen(g.id))} → ${fmt(g, g.line)}</b></div>
+    <div class="sub">Moved toward ${d > 0 ? nm(g.home.abbr) : nm(g.away.abbr)}</div></div>`).join('');
+}
+
 function lmChart(g) {
   const pts = [];
   const o = lmOpen(g.id);
@@ -295,7 +313,7 @@ function render() {
     <div class="sum"><b>${ST ? pct(SH / ST, 1) : '–'}</b><span>Win picks</span><small>${SH}-${ST - SH}${HT ? ` · 65%+ picks ${HH}-${HT - HH}` : ''}</small></div>
     <div class="sum"><b>${atsN ? pct(AH / atsN, 1) : '–'}</b><span>Against the spread</span><small>${AH}-${AM}${AP ? '-' + AP : ''}${atsN ? '' : ' (loading lines…)'}</small></div>`;
 
-  $('#list').innerHTML =
+  $('#list').innerHTML = movesBoard(games) +
     (thisWeek.length ? '<div class="gh">This week</div>' + proj(thisWeek) + thisWeek.map(card).join('') : '<div class="note">No more games left this week.</div>') +
     (Object.keys(future).length ? '<div class="gh">Rest of season</div>' + Object.keys(future).map(Number).sort((a, b) => a - b).map((n) => `<details data-k="f${n}" ${isOpen('f' + n, n === CUR + 1) ? 'open' : ''}><summary>Week ${n}: ${future[n].length} games · exp ${projText(future[n])}</summary>${future[n].sort((a, b) => a.start - b.start).map(card).join('')}</details>`).join('') : '') +
     (weeks.length ? '<div class="gh">Results</div>' + weeks.map((w) => `<details data-k="r${w.n}" ${isOpen('r' + w.n, w.n === CUR) ? 'open' : ''}><summary>Week ${w.n}: ${w.h}-${w.t - w.h} picks · spread ${w.ah}-${w.am}${w.ap ? '-' + w.ap : ''}</summary>${w.rows}</details>`).join('') : '');
@@ -345,6 +363,7 @@ async function loadAll() {
     render();
     loadOdds();
     await fillSpreads(); render();
+    await fillOpens(); render();
   } catch (e) { $('#upd').textContent = 'Could not load: ' + e.message; }
   BUSY = false;
 }
@@ -358,7 +377,7 @@ document.addEventListener('click', async (e) => {
   render();
 });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && M) { tick(); loadOdds(); } });
-setInterval(() => { if (M) { loadWeek(CUR + 1).then(render).catch(() => {}); fillSpreads().then(render); } }, 30 * 60 * 1000);
+setInterval(() => { if (M) { loadWeek(CUR + 1).then(render).catch(() => {}); fillSpreads().then(render); fillOpens().then(render); } }, 30 * 60 * 1000);
 loadAll();
 
 if ('serviceWorker' in navigator) {

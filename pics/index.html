@@ -47,13 +47,14 @@ details>summary::after{content:'▾';color:var(--blue)}details[open]>summary::af
 .lm{margin-top:8px;padding:10px;background:var(--panel2);border-radius:10px}
 .lm .tg{display:flex;gap:6px;margin-bottom:6px}.lm .tg button{border:1px solid var(--blue);background:#fff;color:var(--blue);border-radius:999px;padding:3px 10px;font:600 12px inherit;cursor:pointer}.lm .tg button.on{background:var(--blue);color:#fff}
 .lm svg{width:100%;height:auto;display:block}.lm .cap{font-size:12px;color:var(--muted);margin-top:4px}
+#ptr{height:0;overflow:hidden;text-align:center;color:var(--muted);font-size:13px;line-height:44px;background:var(--bg);position:fixed;top:0;left:0;right:0;z-index:40;transition:height .15s}
 </style>
 </head>
 <body>
 <header>
   <h1>Steve's Pics</h1>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Pics v6 (line moves board)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Pics v7 (pull down to refresh)</div>
 </header>
 <main>
   <div class="sums" id="sums"></div>
@@ -385,6 +386,31 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((r) => r.update().catch(() => {})).catch(() => {});
   navigator.serviceWorker.addEventListener('controllerchange', () => { if (had && !rl) { rl = true; location.reload(); } });
 }
+
+// Pull down to refresh: wipes the saved app copy and reloads fresh code and data
+(function () {
+  const bar = document.createElement('div'); bar.id = 'ptr'; document.body.appendChild(bar);
+  let y0 = null, d = 0, busy = false;
+  const set = (h, t) => { bar.style.height = h + 'px'; bar.textContent = t || ''; };
+  window.addEventListener('touchstart', (e) => { y0 = window.scrollY <= 0 && !busy ? e.touches[0].clientY : null; d = 0; }, { passive: true });
+  window.addEventListener('touchmove', (e) => {
+    if (y0 === null) return;
+    d = e.touches[0].clientY - y0;
+    if (d > 0 && window.scrollY <= 0) set(Math.min(d * 0.5, 70), d > 110 ? 'Release to refresh' : '↓ Pull to refresh'); else set(0);
+  }, { passive: true });
+  window.addEventListener('touchend', async () => {
+    if (y0 === null) return;
+    const go = d > 110; y0 = null;
+    if (!go) return set(0);
+    busy = true; set(44, 'Refreshing…');
+    try {
+      if ('serviceWorker' in navigator) (await navigator.serviceWorker.getRegistrations()).forEach((r) => r.unregister());
+      if (window.caches) (await caches.keys()).forEach((k) => caches.delete(k));
+    } catch (e) {}
+    const u = new URL(location.href); u.searchParams.set('r', Date.now());
+    location.replace(u.toString());
+  });
+})();
 </script>
 </body>
 </html>

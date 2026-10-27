@@ -546,7 +546,7 @@ function render() {
   if (!M) return;
   buildRatings(); buildEff(); if (!CFB) buildPlayers();
   // ESPN drops the pregame line once a game starts; keep the last line we logged so live games stay in the line-move board and picks
-  Object.values(ALL).forEach((g) => { if (g.line === null && g.state === 'in') { const r = lmLoad(g.id); if (r.length) g.line = r[r.length - 1][1]; } });
+  Object.values(ALL).forEach((g) => { if (g.line === null && g.state === 'in') { const r = lmLoad(g.id); if (r.length) g.line = r[r.length - 1][1]; else { const k = lkLoad(g.id); if (k && k.L !== null && k.L !== undefined) g.line = k.L; } } });
   Object.values(ALL).forEach(lockSnap);
   const games = TEAM ? Object.values(ALL).filter((g) => g.home.abbr === TEAM || g.away.abbr === TEAM) : Object.values(ALL);
   teamSelect();

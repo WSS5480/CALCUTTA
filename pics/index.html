@@ -93,6 +93,11 @@ body{padding-bottom:84px}
 .gc .fld{margin:6px 8px}.gpl{color:var(--muted);font-size:13px;text-align:center;margin:8px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gbt{display:flex;gap:10px;margin:8px 0}.gbt div{flex:1;text-align:center;border-radius:999px;padding:13px 6px;font-weight:700;font-size:16px;color:#fff}.gbt div.lo{opacity:.35}
 .gft{display:flex;justify-content:space-between;color:var(--muted);font-size:12px;margin-top:6px}.gcx{margin-top:8px;border-top:1px solid var(--line);padding-top:8px}
+.addb{width:100%;border:1px dashed var(--blue);background:none;color:var(--blue);border-radius:14px;padding:12px;font:700 15px inherit;cursor:pointer;margin:6px 0 10px}
+.bet.bw{border-color:var(--green)}.bet.bl{border-color:var(--red)}.bwhat{font-size:20px;font-weight:800;margin:4px 0}.bbtn{display:flex;gap:8px;margin-top:8px}.bbtn button,#bform .card>button{border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:10px;padding:8px 14px;font:600 14px inherit;cursor:pointer}.bbtn button.pri{background:var(--blue);color:#fff;border-color:var(--blue)}
+.pickrow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 4px;border-bottom:1px solid var(--line);cursor:pointer}.pickrow small{color:var(--muted)}
+.bsd{display:flex;gap:8px;margin:8px 0}.bsd button{flex:1;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:12px;padding:12px;font:800 16px inherit;cursor:pointer}.bsd button.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+#bform label{display:block;margin:8px 0;font-size:13px;color:var(--muted)}#bform input,#bform select{display:block;width:100%;margin-top:4px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);font:600 16px inherit}
 </style>
 </head>
 <body>
@@ -102,10 +107,11 @@ body{padding-bottom:84px}
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">College</button></div>
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v38 (violet)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v39 (my bets)</div>
 </header>
 <main>
   <div id="livepage" hidden></div>
+  <div id="betspage" hidden></div>
   <div class="rail" id="rail"></div><div class="dots" id="dots"></div>
   <div class="sums" id="sums"></div>
   <div id="list"></div>
@@ -255,12 +261,13 @@ function openGame(id) {
 }
 function navRender() {
   const anyLive = Object.values(ALL).some((g) => g.state === 'in');
-  const it = [['all', '🏠', 'Games'], ['livepg', '📡', 'Live'], ['win', '✅', 'Winning'], ['lose', '🔻', 'Losing'], ['won', '🏁', 'Final']];
-  $('#bn').innerHTML = it.map(([k, i, l]) => `<button class="${(k === 'livepg' ? VIEW === 'live' : VIEW !== 'live' && FILT === k) ? 'on' : ''}" onclick="navGo('${k}')"><span>${i}</span>${l}${k === 'livepg' && anyLive ? '<i class="dot"></i>' : ''}</button>`).join('');
+  const it = [['all', '🏠', 'Games'], ['livepg', '📡', 'Live'], ['bets', '🧾', 'My Bets'], ['win', '✅', 'Winning'], ['lose', '🔻', 'Losing']];
+  $('#bn').innerHTML = it.map(([k, i, l]) => `<button class="${(k === 'livepg' ? VIEW === 'live' : k === 'bets' ? VIEW === 'bets' : VIEW === 'main' && FILT === k) ? 'on' : ''}" onclick="navGo('${k}')"><span>${i}</span>${l}${k === 'livepg' && anyLive ? '<i class="dot"></i>' : ''}</button>`).join('');
 }
 function navGo(k) {
   if (k === 'livepg') { setView('live'); return; }
-  if (VIEW === 'live') { VIEW = 'main'; try { localStorage.setItem('pics-view', 'main'); } catch (e) {} }
+  if (k === 'bets') { setView('bets'); return; }
+  if (VIEW !== 'main') { VIEW = 'main'; try { localStorage.setItem('pics-view', 'main'); } catch (e) {} }
   FILT = k === 'won' ? 'won' : k; try { localStorage.setItem('pics-filt', FILT); } catch (e) {} DET.wkrank = true; render();
   const el = document.querySelector('[data-k="wkrank"]'); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); else window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -268,7 +275,7 @@ document.addEventListener('DOMContentLoaded', () => { applyTheme(); $('#thm').on
 if (document.readyState !== 'loading') { applyTheme(); }
 
 // ---- Live page: big game cards (logos, score, down & distance, field bar, last play, win % buttons), tap for the chart ----
-let VIEW = (() => { try { return localStorage.getItem('pics-view') === 'live' ? 'live' : 'main'; } catch (e) { return 'main'; } })();
+let VIEW = (() => { try { const v = localStorage.getItem('pics-view'); return v === 'live' || v === 'bets' ? v : 'main'; } catch (e) { return 'main'; } })();
 let LF = 'all';
 function setView(v) { VIEW = v; try { localStorage.setItem('pics-view', v); } catch (e) {} render(); window.scrollTo(0, 0); }
 function setLF(f) { LF = f; render(); }
@@ -276,7 +283,8 @@ function gcToggle(id) { DET['lp' + id] = !DET['lp' + id]; render(); liveFetch();
 function livePageRender(games) {
   const el = $('#livepage'); if (!el) return;
   const on = VIEW === 'live';
-  el.hidden = !on; ['#sums', '#list', '#rail', '#dots'].forEach((s) => { const n = $(s); if (n) n.hidden = on; });
+  el.hidden = !on; ['#sums', '#list', '#rail', '#dots'].forEach((s) => { const n = $(s); if (n) n.hidden = VIEW !== 'main'; });
+  const bp = $('#betspage'); if (bp) { bp.hidden = VIEW !== 'bets'; if (VIEW === 'bets') betsRender(); }
   if (!on) return;
   const wk = games.filter((g) => g.week === CUR || g.state === 'in');
   const grp = { live: wk.filter((g) => g.state === 'in'), pre: wk.filter((g) => g.state === 'pre').sort((a, b) => a.start - b.start), post: wk.filter((g) => g.state === 'post').sort((a, b) => b.start - a.start) };
@@ -303,6 +311,77 @@ function livePageRender(games) {
   };
   el.innerHTML = `<div class="lpg"><h2>Live</h2><div class="lchips">${chip('all', 'All', wk.length)}${chip('live', 'Live', grp.live.length)}${chip('pre', 'Upcoming', grp.pre.length)}${chip('post', 'Final', grp.post.length)}</div>${list.map(card).join('') || '<div class="note">No games here.</div>'}</div>`;
 }
+
+// ---- My Bets: personal tracker. Pick a game, set YOUR side and YOUR line (books differ), and it keeps win/loss plus how you did against the app ----
+let BETS = (() => { try { return JSON.parse(localStorage.getItem('bets26')) || []; } catch (e) { return []; } })();
+const betsSave = () => { try { localStorage.setItem('bets26', JSON.stringify(BETS)); } catch (e) {} };
+let BF = null; // form state (not rebuilt by the minute refresh, so typing is never wiped)
+const sgn = (n) => (n > 0 ? '+' : '') + n;
+function betGrade(b) {
+  const g = ALL[b.gid]; if (!g || g.state === 'pre') return { st: 'pending', g };
+  const margin = (b.side === g.home.abbr ? 1 : -1) * (g.home.score - g.away.score);
+  const m = b.type === 'sp' ? margin + b.line : margin;
+  const r = m > 0 ? 'won' : m < 0 ? 'lost' : 'push';
+  return g.state === 'in' ? { st: 'live', cur: r, g } : { st: r, g };
+}
+const betAgainst = (b) => b.side !== (b.type === 'sp' ? (b.appAts || b.appSu) : b.appSu);
+const rec3 = (a) => { const w = a.filter((x) => x === 'won').length, l = a.filter((x) => x === 'lost').length, p = a.filter((x) => x === 'push').length; return { w, l, p, t: w + l, s: w + '-' + l + (p ? '-' + p : ''), pc: w + l ? Math.round(100 * w / (w + l)) + '%' : '–' }; };
+function betsRender() {
+  const el = $('#betspage'); if (!el) return;
+  const done = BETS.map((b) => ({ b, r: betGrade(b) })), fin = done.filter((x) => ['won', 'lost', 'push'].includes(x.r.st));
+  const all = rec3(fin.map((x) => x.r.st)), withA = rec3(fin.filter((x) => !betAgainst(x.b)).map((x) => x.r.st)), agA = rec3(fin.filter((x) => betAgainst(x.b)).map((x) => x.r.st));
+  const stat = (t, r, s) => `<div class="sum"><b>${r.s}</b><span>${t}</span><small>${r.pc}${s || ''}</small></div>`;
+  const stake = fin.reduce((a, x) => a + (x.b.stake || 0), 0);
+  const list = [...done].sort((a, z) => (z.b.t || 0) - (a.b.t || 0)).map(({ b, r }) => {
+    const g = r.g, ag = betAgainst(b);
+    const what = b.type === 'sp' ? `${b.side} ${sgn(b.line)}` : `${b.side} to win`;
+    const sc = g && g.state !== 'pre' ? `${g.away.abbr} ${g.away.score} – ${g.home.abbr} ${g.home.score}${g.state === 'in' ? ' · ' + g.detail : ' · Final'}` : (g ? new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : 'game not loaded');
+    const badge = r.st === 'live' ? `<span class="b ${r.cur === 'won' ? 'hit' : r.cur === 'lost' ? 'miss' : 'push'}">● LIVE ${r.cur === 'won' ? 'covering' : r.cur === 'lost' ? 'losing' : 'even'}</span>` : r.st === 'pending' ? '<span class="b push">Pending</span>' : `<span class="b ${r.st === 'won' ? 'hit' : r.st === 'lost' ? 'miss' : 'push'}">${r.st === 'won' ? '✓ WON' : r.st === 'lost' ? '✗ LOST' : 'PUSH'}</span>`;
+    return `<div class="card bet ${['won', 'lost'].includes(r.st) ? (r.st === 'won' ? 'bw' : 'bl') : ''}"><div class="gstat"><span><b>${b.away} @ ${b.home}</b> · wk ${b.week}</span>${badge}</div>
+      <div class="bwhat">${what}${b.stake ? ` <small>· $${b.stake}</small>` : ''}</div><div class="sub">${sc}</div>
+      <div class="sub">${ag ? '<b style="color:var(--red)">Against the app</b>' : '<b style="color:var(--green)">With the app</b>'} · app had ${b.appSu}${b.appConf ? ' ' + pct(b.appConf) : ''}${b.type === 'sp' && b.appAts ? ' · spread ' + b.appAts : ''}${b.type === 'sp' && b.appLine !== null && b.appLine !== undefined ? ' · app line ' + sgn(b.side === b.home ? -b.appLine : b.appLine) : ''}</div>
+      <div class="bbtn"><button onclick="betEdit('${b.id}')">Edit</button><button onclick="betDel('${b.id}')">Delete</button></div></div>`;
+  }).join('');
+  el.innerHTML = `<div class="lpg"><h2>My Bets</h2>
+    <div class="sums">${stat('Overall', all, stake ? ' · $' + stake + ' staked' : '')}${stat('Against the app', agA)}${stat('With the app', withA)}<div class="sum"><b>${BETS.length - fin.length}</b><span>Open bets</span><small>${BETS.length} total</small></div></div>
+    <button class="addb" onclick="betNew()">＋ Add a bet</button><div id="bform">${BF ? betFormHtml() : ''}</div>${list || '<div class="note">No bets yet. Tap “Add a bet”, pick a game, then set your side and the line you got.</div>'}</div>`;
+}
+function betNew() { BF = { step: 'pick' }; betsRender(); }
+function betPick(gid) {
+  const g = ALL[gid]; if (!g) return; const p = pred(g);
+  const side = p.ats ? p.ats.side.abbr : p.su.abbr;
+  BF = { step: 'form', gid, side, type: 'sp', line: g.line === null ? 0 : (side === g.home.abbr ? -g.line : g.line), stake: '' };
+  betsRender();
+}
+function betSync() { if (!BF || BF.step !== 'form') return; const l = $('#bfl'), s = $('#bfs'), t = $('#bft'); if (t) BF.type = t.value; if (l) BF.line = parseFloat(l.value) || 0; if (s) BF.stake = s.value; }
+function betSide(a) { betSync(); const g = ALL[BF.gid]; if (BF.side !== a) { BF.line = -BF.line; BF.side = a; } betsRender(); }
+function betType() { betSync(); betsRender(); }
+function betFormHtml() {
+  if (BF.step === 'pick') {
+    const gs = Object.values(ALL).filter((g) => g.state !== 'post' && (g.state === 'in' || g.week <= CUR + 1)).sort((a, b) => (b.state === 'in') - (a.state === 'in') || a.start - b.start);
+    return `<div class="card"><div class="gh" style="margin-top:0">Pick the game</div>${gs.map((g) => `<div class="pickrow" onclick="betPick('${g.id}')"><b>${g.away.abbr} @ ${g.home.abbr}</b><small>${g.state === 'in' ? '● LIVE ' + g.away.score + '-' + g.home.score : new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })} · ${lineText(g)}</small></div>`).join('') || '<div class="note">No upcoming games loaded.</div>'}<button onclick="BF=null;betsRender()">Cancel</button></div>`;
+  }
+  const g = ALL[BF.gid], p = pred(g), appSide = BF.type === 'sp' ? (p.ats ? p.ats.side.abbr : p.su.abbr) : p.su.abbr, ag = BF.side !== appSide;
+  const edit = BF.id ? true : false;
+  return `<div class="card"><div class="gh" style="margin-top:0">${edit ? 'Edit bet' : 'New bet'} · ${g.away.abbr} @ ${g.home.abbr}</div>
+    <div class="sub">App picks <b>${p.su.abbr}</b> ${pct(p.conf)}${p.ats ? ` · spread lean <b>${p.ats.side.abbr} ${sp(p.ats.line)}</b>` : ''} · app line ${lineText(g)}</div>
+    <div class="bsd"><button class="${BF.side === g.away.abbr ? 'on' : ''}" onclick="betSide('${g.away.abbr}')">${g.away.abbr}</button><button class="${BF.side === g.home.abbr ? 'on' : ''}" onclick="betSide('${g.home.abbr}')">${g.home.abbr}</button></div>
+    <label>Bet type <select id="bft" onchange="betType()"><option value="sp" ${BF.type === 'sp' ? 'selected' : ''}>Spread</option><option value="ml" ${BF.type === 'ml' ? 'selected' : ''}>Win (moneyline)</option></select></label>
+    ${BF.type === 'sp' ? `<label>Your line for ${BF.side} <input id="bfl" type="number" step="0.5" value="${BF.line}"></label><div class="sub">Use your book's number: −3.5 = laying 3.5, +3.5 = getting 3.5. It can differ from the app.</div>` : ''}
+    <label>Stake $ (optional) <input id="bfs" type="number" step="1" value="${BF.stake}"></label>
+    <div class="sub" style="margin:6px 0">${ag ? '<b style="color:var(--red)">This bet is against the app</b>' : '<b style="color:var(--green)">This bet is with the app</b>'}</div>
+    <div class="bbtn"><button class="pri" onclick="betSave()">Save bet</button><button onclick="BF=null;betsRender()">Cancel</button></div></div>`;
+}
+function betSave() {
+  betSync(); const g = ALL[BF.gid]; if (!g) return; const p = pred(g);
+  const old = BF.id ? BETS.find((x) => x.id === BF.id) : null;
+  const b = old || { id: 'b' + Date.now(), gid: g.id, week: g.week, away: g.away.abbr, home: g.home.abbr, t: Date.now(), appSu: p.su.abbr, appConf: +p.conf.toFixed(3), appAts: p.ats ? p.ats.side.abbr : null, appLine: g.line };
+  b.side = BF.side; b.type = BF.type; b.line = BF.type === 'sp' ? BF.line : 0; b.stake = parseFloat(BF.stake) || null;
+  if (!old) BETS.push(b);
+  betsSave(); BF = null; betsRender();
+}
+function betEdit(id) { const b = BETS.find((x) => x.id === id); if (!b || !ALL[b.gid]) return; BF = { step: 'form', id, gid: b.gid, side: b.side, type: b.type, line: b.line, stake: b.stake || '' }; betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+function betDel(id) { if (!confirm('Delete this bet?')) return; BETS = BETS.filter((x) => x.id !== id); betsSave(); betsRender(); }
 function liveSt(g) {
   if (g.state !== 'in') return '';
   const su = pred(g).su, d = (su === g.home ? 1 : -1) * (g.home.score - g.away.score);

@@ -77,3 +77,16 @@ College uses different settings from the NFL, found by walk-forward tests on 3 f
 Hold-out 2025: avg miss 12.2 pts, 73–74% straight-up (line alone: 11.8 pts, 73.4% across all three seasons). Spread picks: 51.3% over 1,818 games — no edge.
 Further ideas tested with no real gain (all within 0.03 pts of the live settings): shrinking big margins, a last-3-weeks trend term, different efficiency weights.
 NFL settings are unchanged (cap 14, recency 0.85, ridge 6): nothing tested on 4 seasons beat them on the 2025 hold-out.
+
+## 10. NFL retest, Nov 2026 (success rate, explosive plays, calibration)
+
+Walk-forward test on 538 games with a posted closing line (2023 to 2026 week 9), ratings built only from earlier weeks, regression coefficients fit only on earlier seasons.
+
+| Predictor | RMSE | Brier | Log-loss | Win pick |
+|---|---|---|---|---|
+| Line alone | 12.26 | 0.2057 | 0.6003 | 68.3% |
+| Current model, blended 20% | 12.33 | 0.2067 | 0.6031 | 68.3% |
+| Added success rate and explosive plays, blended 20% | 12.32 | 0.2065 | 0.6025 | 68.3% |
+| Model alone (current / with new inputs) | 13.03 / 12.98 | 0.2199 / 0.2189 | 0.6322 / 0.6289 | 64.2% / 64.4% |
+
+Findings: the new inputs add almost nothing, and any model blend is slightly worse than the line alone, so the line stays the anchor. The line's win chance is best calibrated with a spread of about 12.5, not 13.5. Applied: NFL market weight 0.9 (was 0.8) and NFL spread 12.5 (was 13.5). College is unchanged and was not retested.

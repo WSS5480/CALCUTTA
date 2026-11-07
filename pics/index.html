@@ -7,10 +7,10 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="icon-192.png">
-<meta name="theme-color" content="#bf5700">
+<meta name="theme-color" content="#7c3aed">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <style>
-:root{--bg:#faf5ef;--panel:#fff;--panel2:#f6e8da;--line:#e6d3bf;--ink:#2b2b2b;--muted:#6e6259;--blue:#bf5700;--green:#16915a;--red:#d93a2e}
+:root{--bg:#f6f4fb;--panel:#fff;--panel2:#ece6fb;--line:#d9d0ee;--ink:#2b2b2b;--muted:#5d5873;--blue:#7c3aed;--green:#16915a;--red:#d93a2e}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:40px}
@@ -36,7 +36,7 @@ h1{margin:8px 0 2px;font-size:28px}
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.chips button{border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:999px;padding:5px 10px;font:inherit;font-size:12px;cursor:pointer}.chips button.on{color:var(--ink);font-weight:700;border-color:var(--blue);background:var(--panel2)}.chips .win{color:var(--green)}.chips .lose,.chips .lost{color:var(--red)}.chips .won{color:var(--green)}.chips .win.on{border-color:var(--green)}.chips .lose.on{border-color:var(--red)}.res small{display:block;color:var(--muted);font-weight:400;font-size:12px}
 .res .badges{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .b{font-size:12px;font-weight:700;padding:3px 8px;border-radius:999px;border:1px solid;white-space:nowrap}
-.b.hit{background:#16915a1f;border-color:var(--green)}.b.miss{background:#d93a2e1f;border-color:var(--red)}.b.push{background:#6e625922;border-color:var(--muted)}
+.b.hit{background:#16915a1f;border-color:var(--green)}.b.miss{background:#d93a2e1f;border-color:var(--red)}.b.push{background:#5d587322;border-color:var(--muted)}
 .res.hit{border-color:var(--green);background:#16915a14}.res.miss{border-color:var(--red);background:#d93a2e14}
 details>summary{cursor:pointer;list-style:none;padding:10px 12px;background:var(--panel2);border-radius:10px;font-weight:600;font-size:14px;display:flex;justify-content:space-between;align-items:center;margin:6px 0}
 details>summary::-webkit-details-marker{display:none}
@@ -52,21 +52,21 @@ details>summary::after{content:'▾';color:var(--blue)}details[open]>summary::af
 
 .lg{display:flex;gap:8px;margin:6px 0}.lg button{border:1px solid var(--blue);background:#fff;color:var(--blue);border-radius:999px;padding:6px 16px;font:700 14px inherit;cursor:pointer}.lg button.on{background:var(--blue);color:#fff}
 select#team{width:100%;max-width:320px;margin:2px 0 6px;padding:9px 12px;border:1px solid var(--blue);border-radius:12px;background:#fff;color:var(--ink);font:600 15px inherit}
-.sum.lock{border-color:#bf5700;background:#fdf1e6}
-body{border-top:6px solid #bf5700}h1{color:#bf5700}
+.sum.lock{border-color:#7c3aed;background:#f1ebff}
+body{border-top:6px solid #7c3aed}h1{color:#7c3aed}
 
 [hidden]{display:none!important}
 body,body.dark{border-top:0}
-header{max-width:none;margin:0 0 6px;padding:max(16px,env(safe-area-inset-top)) max(16px,calc((100% - 688px)/2)) 14px;background:linear-gradient(135deg,#bf5700 0%,#7a3500 55%,#1b1f29 100%);border-radius:0 0 26px 26px;color:#fff}
-body header h1,body.dark header h1{color:#fff}header .sub,header #upd{color:#ffe6d0}
+header{max-width:none;margin:0 0 6px;padding:max(16px,env(safe-area-inset-top)) max(16px,calc((100% - 688px)/2)) 14px;background:linear-gradient(135deg,#7c3aed 0%,#4c1d95 55%,#1b1f29 100%);border-radius:0 0 26px 26px;color:#fff}
+body header h1,body.dark header h1{color:#fff}header .sub,header #upd{color:#ede4ff}
 header .lg button,body.dark header .lg button{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.45)}
-header .lg button.on,body.dark header .lg button.on{background:#fff;color:#7a3500}
+header .lg button.on,body.dark header .lg button.on{background:#fff;color:#4c1d95}
 header select#team,body.dark header select#team{background:rgba(0,0,0,.28);color:#fff;border-color:rgba(255,255,255,.4)}
 header .thm{background:rgba(0,0,0,.28);color:#fff;border-color:rgba(255,255,255,.4)}
 /* dark live-board look */
-body.dark{--bg:#0a0c10;--panel:#13161d;--panel2:#1b1f29;--line:#272c38;--ink:#eef0f4;--muted:#8b93a3;--blue:#f08a3c;--green:#4fd18b;--red:#ff5a4d;border-top-color:#f08a3c}
-body.dark h1{color:#f08a3c}body.dark .lg button{background:var(--panel);color:var(--blue)}body.dark .lg button.on{background:var(--blue);color:#0a0c10}
-body.dark select#team{background:var(--panel);color:var(--ink)}body.dark .sum.lock{background:#1d1610;border-color:#6b3a14}
+body.dark{--bg:#0a0c10;--panel:#13161d;--panel2:#1b1f29;--line:#272c38;--ink:#eef0f4;--muted:#8b93a3;--blue:#a78bfa;--green:#4fd18b;--red:#ff5a4d;border-top-color:#a78bfa}
+body.dark h1{color:#a78bfa}body.dark .lg button{background:var(--panel);color:var(--blue)}body.dark .lg button.on{background:var(--blue);color:#0a0c10}
+body.dark select#team{background:var(--panel);color:var(--ink)}body.dark .sum.lock{background:#171226;border-color:#4c2a8a}
 body.dark .chips button.on{background:var(--panel2)}body.dark .yd i{border-color:var(--panel)}
 .thm{position:absolute;right:16px;top:max(16px,env(safe-area-inset-top));border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:6px 12px;font:600 13px inherit;cursor:pointer}
 header{position:relative}
@@ -102,7 +102,7 @@ body{padding-bottom:84px}
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">College</button></div>
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Pics v37 (matching header)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v38 (violet)</div>
 </header>
 <main>
   <div id="livepage" hidden></div>
@@ -224,7 +224,7 @@ function finalSt(g) { if (g.state !== 'post' || g.home.score === g.away.score) r
 
 // ---- Dark theme + swipeable game rail + bottom bar ----
 let DARK = (() => { try { return localStorage.getItem('pics-dark') !== '0'; } catch (e) { return true; } })();
-function applyTheme() { document.body.classList.toggle('dark', DARK); const b = $('#thm'); if (b) b.textContent = DARK ? '☀ Light' : '🌙 Dark'; const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = DARK ? '#0a0c10' : '#bf5700'; }
+function applyTheme() { document.body.classList.toggle('dark', DARK); const b = $('#thm'); if (b) b.textContent = DARK ? '☀ Light' : '🌙 Dark'; const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = DARK ? '#0a0c10' : '#7c3aed'; }
 function railRender(games, thisWeek) {
   const rail = $('#rail'); if (!rail) return;
   const x = rail.scrollLeft;
@@ -236,7 +236,7 @@ function railRender(games, thisWeek) {
     const status = g.state === 'in' ? `<span><b class="${st === 'hit' ? 'hit' : ''}">● ${g.detail}</b> · ${CFB ? 'NCAA Football' : 'NFL'}</span>` : g.state === 'post' ? `<span>Final · ${CFB ? 'NCAA Football' : 'NFL'}</span>` : `<span>${new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })} · ${CFB ? 'NCAA Football' : 'NFL'}</span>`;
     const row = (t, v, d) => `<div class="rrow"><div class="nm"><b>${t.rank ? '<sup>' + t.rank + '</sup>' : ''}${nm(t.abbr)}</b><div class="ln" style="width:${Math.max(6, v * 100)}%;background:${cc(t, d)}"></div></div>${g.state === 'pre' ? '' : `<div class="sc">${t.score}</div>`}<div class="rpill ${v < 0.5 ? 'lo' : ''}">${pct(v)}</div></div>`;
     return `<div class="rc ${st ? 'lv-' + st : ''}" onclick="openGame('${g.id}')"><div class="rtp"><div class="rico">🏈</div><div><small>Football</small>${status}</div></div>
-      <div class="rtt">${nm(g.away.abbr)} vs ${nm(g.home.abbr)}</div>${row(g.away, pa, '#2563eb')}${row(g.home, ph, '#f08a3c')}
+      <div class="rtt">${nm(g.away.abbr)} vs ${nm(g.home.abbr)}</div>${row(g.away, pa, '#2563eb')}${row(g.home, ph, '#a78bfa')}
       <div class="rft"><span>${lineText(g)}</span><span>Pick ${p.su.abbr} ${pct(lv === null ? p.conf : (p.su === g.home ? ph : pa))}${lv !== null ? ' · live' : ''}</span></div></div>`;
   }).join('');
   rail.scrollLeft = x;
@@ -292,12 +292,12 @@ function livePageRender(games) {
       : `<div class="gscore"><em>${g.away.score}</em><em>${g.home.score}</em></div>` + (g.state === 'in' ? `<div class="gst ${st === 'hit' ? 'hit' : ''}">● LIVE</div><div class="gclk">${g.detail}</div>` : '<div class="gst fin">Final</div>');
     const dd = s && s.down ? `${ord(s.down)} & ${s.dist}` : '';
     const x = s && s.yl !== undefined ? Math.max(1, Math.min(99, 100 - s.yl)) : null;
-    const field = x === null ? '' : `<div class="fld"><span class="ez" style="background:${cc(g.away, '#1d4ed8')}">${g.away.abbr}</span><div class="yd"><i style="left:${x}%"></i></div><span class="ez" style="background:${cc(g.home, '#bf5700')}">${g.home.abbr}</span></div>`;
+    const field = x === null ? '' : `<div class="fld"><span class="ez" style="background:${cc(g.away, '#1d4ed8')}">${g.away.abbr}</span><div class="yd"><i style="left:${x}%"></i></div><span class="ez" style="background:${cc(g.home, '#7c3aed')}">${g.home.abbr}</span></div>`;
     const btn = (t, v, d) => `<div class="${v < 0.5 ? 'lo' : ''}" style="background:${cc(t, d)}">${t.abbr} · ${pct(v)}</div>`;
     const open = DET['lp' + g.id];
-    return `<div class="gc ${st ? 'lv-' + st : ''}" onclick="gcToggle('${g.id}')"><div class="gtop"><div class="gtm">${logo(g.away, '#1d4ed8')}<span>${g.away.rank ? '<sup>' + g.away.rank + '</sup>' : ''}${g.away.abbr}${ball(g.away)}</span></div><div class="gmid">${mid}</div><div class="gtm">${logo(g.home, '#bf5700')}<span>${g.home.rank ? '<sup>' + g.home.rank + '</sup>' : ''}${g.home.abbr}${ball(g.home)}</span></div></div>
+    return `<div class="gc ${st ? 'lv-' + st : ''}" onclick="gcToggle('${g.id}')"><div class="gtop"><div class="gtm">${logo(g.away, '#1d4ed8')}<span>${g.away.rank ? '<sup>' + g.away.rank + '</sup>' : ''}${g.away.abbr}${ball(g.away)}</span></div><div class="gmid">${mid}</div><div class="gtm">${logo(g.home, '#7c3aed')}<span>${g.home.rank ? '<sup>' + g.home.rank + '</sup>' : ''}${g.home.abbr}${ball(g.home)}</span></div></div>
       ${dd ? `<div class="gdd">${dd}${s.rz ? ' · red zone' : ''}</div>` : ''}${field}${s && s.text ? `<div class="gpl">${s.text}</div>` : ''}
-      <div class="gbt">${btn(g.away, pa, '#1d4ed8')}${btn(g.home, ph, '#bf5700')}</div>
+      <div class="gbt">${btn(g.away, pa, '#1d4ed8')}${btn(g.home, ph, '#7c3aed')}</div>
       <div class="gft"><span>${lineText(g)}</span><span>Pick ${p.su.abbr} ${pct(lv === null ? p.conf : (p.su === g.home ? ph : pa))}${lv !== null ? ' · live' : ''} · tap for chart</span></div>
       ${open && g.state !== 'pre' ? `<div class="gcx" data-lvc="${g.id}">${WPH[g.id] ? wpChart(g, WPH[g.id]) : '<div class="sub">Loading win probability…</div>'}</div>` : ''}</div>`;
   };
@@ -362,12 +362,12 @@ function lmDayChart(g) {
   vals.forEach((v, i) => {
     if (v === null) return;
     path += `${path ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)} `;
-    dots += `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3" fill="#bf5700"/><text x="${x(i).toFixed(1)}" y="${(y(v) - 6).toFixed(1)}" font-size="9" text-anchor="middle" fill="#2b2b2b">${sp(v)}</text>`;
+    dots += `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3" fill="#7c3aed"/><text x="${x(i).toFixed(1)}" y="${(y(v) - 6).toFixed(1)}" font-size="9" text-anchor="middle" fill="#2b2b2b">${sp(v)}</text>`;
   });
-  const xl = slots.map((d, i) => `<text x="${x(i).toFixed(1)}" y="${H - 2}" font-size="8" text-anchor="middle" fill="${+d === +gd ? '#bf5700' : '#6e6259'}" ${+d === +gd ? 'font-weight="700"' : ''}>${d.toLocaleDateString([], { weekday: 'short' })}${+d === +gd ? ' ⚑' : ''}</text>`).join('');
+  const xl = slots.map((d, i) => `<text x="${x(i).toFixed(1)}" y="${H - 2}" font-size="8" text-anchor="middle" fill="${+d === +gd ? '#7c3aed' : '#5d5873'}" ${+d === +gd ? 'font-weight="700"' : ''}>${d.toLocaleDateString([], { weekday: 'short' })}${+d === +gd ? ' ⚑' : ''}</text>`).join('');
   const first = have[0], last = have[have.length - 1], moved = last - first;
   const note = moved === 0 ? 'No move across these days' : `Moved ${Math.abs(moved)} pts toward ${moved < 0 ? g.home.abbr : g.away.abbr} (${sp(first)} → ${sp(last)})`;
-  return `<svg viewBox="0 0 ${W} ${H}"><path d="${path}" fill="none" stroke="#bf5700" stroke-width="2"/>${dots}${xl}</svg><div class="cap">${g.home.abbr} spread by day · ${note}.${done ? ` Final: ${g.away.abbr} ${g.away.score}, ${g.home.abbr} ${g.home.score}.` : ' ⚑ = game day. Days before we started tracking show the opening line.'}</div>`;
+  return `<svg viewBox="0 0 ${W} ${H}"><path d="${path}" fill="none" stroke="#7c3aed" stroke-width="2"/>${dots}${xl}</svg><div class="cap">${g.home.abbr} spread by day · ${note}.${done ? ` Final: ${g.away.abbr} ${g.away.score}, ${g.home.abbr} ${g.home.score}.` : ' ⚑ = game day. Days before we started tracking show the opening line.'}</div>`;
 }
 function lmChart(g) {
   if (LMMODE === 'day') return lmDayChart(g);
@@ -393,12 +393,12 @@ function lmChart(g) {
   const x = (i) => (pts.length === 1 ? W / 2 : pad + (i * (W - 2 * pad)) / (pts.length - 1));
   const y = (v) => 14 + (hi - v) * (H - 34) / (hi - lo || 1);
   const path = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(hs[i]).toFixed(1)}`).join(' ');
-  const dots = pts.map((p, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(hs[i]).toFixed(1)}" r="3" fill="#bf5700"/><text x="${x(i).toFixed(1)}" y="${(y(hs[i]) - 6).toFixed(1)}" font-size="9" text-anchor="middle" fill="#2b2b2b">${sp(hs[i])}</text>`).join('');
-  const xl = [0, pts.length - 1].filter((v, i, a) => a.indexOf(v) === i).map((i) => `<text x="${x(i).toFixed(1)}" y="${H - 2}" font-size="8" text-anchor="${i ? 'end' : 'start'}" fill="#6e6259">${pts[i].label}</text>`).join('');
+  const dots = pts.map((p, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(hs[i]).toFixed(1)}" r="3" fill="#7c3aed"/><text x="${x(i).toFixed(1)}" y="${(y(hs[i]) - 6).toFixed(1)}" font-size="9" text-anchor="middle" fill="#2b2b2b">${sp(hs[i])}</text>`).join('');
+  const xl = [0, pts.length - 1].filter((v, i, a) => a.indexOf(v) === i).map((i) => `<text x="${x(i).toFixed(1)}" y="${H - 2}" font-size="8" text-anchor="${i ? 'end' : 'start'}" fill="#5d5873">${pts[i].label}</text>`).join('');
   const moved = hs[hs.length - 1] - hs[0];
   const readings = raw.length;
   const note = o === null ? 'Opening line not available' : moved === 0 ? 'Line has not moved since the open' : `Moved ${Math.abs(moved)} pts toward ${moved < 0 ? g.home.abbr : g.away.abbr} ${g.state === 'post' ? 'from open to close' : 'since the open'}`;
-  return `<svg viewBox="0 0 ${W} ${H}"><path d="${path}" fill="none" stroke="#bf5700" stroke-width="2"/>${dots}${xl}</svg><div class="cap">${g.home.abbr} spread · ${note}. ${g.state === 'post' ? `Final: ${g.away.abbr} ${g.away.score}, ${g.home.abbr} ${g.home.score}.` : `Tracking starts when this device first sees the game. ${readings} reading${readings === 1 ? '' : 's'} so far${readings < 3 ? ' — by hour and by day look the same until the line moves or more time passes' : ''}.`}</div>`;
+  return `<svg viewBox="0 0 ${W} ${H}"><path d="${path}" fill="none" stroke="#7c3aed" stroke-width="2"/>${dots}${xl}</svg><div class="cap">${g.home.abbr} spread · ${note}. ${g.state === 'post' ? `Final: ${g.away.abbr} ${g.away.score}, ${g.home.abbr} ${g.home.score}.` : `Tracking starts when this device first sees the game. ${readings} reading${readings === 1 ? '' : 's'} so far${readings < 3 ? ' — by hour and by day look the same until the line moves or more time passes' : ''}.`}</div>`;
 }
 function lmBlock(g) {
   if (g.line === null) return '';
@@ -673,7 +673,7 @@ function wpChart(g, arr) {
   if (n < 2) return '<div class="sub">Win-probability chart appears after a few plays.</div>';
   const px = (i) => L + (i / (n - 1)) * (W - L - R), py = (v) => T + (1 - v) * (H - T - B);
   const path = (f) => arr.map((v, i) => (i ? 'L' : 'M') + px(i).toFixed(1) + ' ' + py(f(v)).toFixed(1)).join('');
-  const hc = g.home.color || '#bf5700', ac = g.away.color || '#1d4ed8';
+  const hc = g.home.color || '#7c3aed', ac = g.away.color || '#1d4ed8';
   const same = hc.toLowerCase() === ac.toLowerCase();
   const dist = (a, b) => { const f = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16) || 0); const x = f(a), y = f(b); return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]); };
   const C2 = same || (hc.length === 7 && ac.length === 7 && dist(hc, ac) < 90) ? '#2563eb' : ac;
@@ -681,7 +681,7 @@ function wpChart(g, arr) {
   const lab = (t, v, col, y) => `<text x="${W - R + 6}" y="${y}" font-size="11" font-weight="700" fill="${col}">${t}</text><text x="${W - R + 6}" y="${y + 16}" font-size="16" font-weight="800" fill="${col}">${(v * 100 < 1 && v > 0 ? '<1' : v * 100 > 99 && v < 1 ? '>99' : Math.round(v * 100))}%</text>`;
   const upper = aw >= ha;
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Win probability">
-    <line x1="${L}" x2="${W - R}" y1="${py(0.5)}" y2="${py(0.5)}" stroke="#e6d3bf" stroke-dasharray="3 3"/>
+    <line x1="${L}" x2="${W - R}" y1="${py(0.5)}" y2="${py(0.5)}" stroke="#d9d0ee" stroke-dasharray="3 3"/>
     <path d="${path((v) => 1 - v)}" fill="none" stroke="${C2}" stroke-width="2" stroke-linejoin="round"/>
     <path d="${path((v) => v)}" fill="none" stroke="${hc}" stroke-width="2" stroke-linejoin="round"/>
     <circle cx="${px(n - 1)}" cy="${py(1 - last)}" r="4" fill="${C2}"/><circle cx="${px(n - 1)}" cy="${py(last)}" r="4" fill="${hc}"/>
@@ -693,7 +693,7 @@ function liveView(g) {
   const arr = pre ? [p.ph, p.ph] : WPH[g.id];
   const dd = s && s.down ? `${ord(s.down)} & ${s.dist}` : '';
   const x = s && s.yl !== undefined ? Math.max(1, Math.min(99, 100 - s.yl)) : null; // yardLine counts from the home goal line; away team on the left
-  const field = x === null ? '' : `<div class="fld"><span class="ez" style="background:${g.away.color || '#1d4ed8'}">${g.away.abbr}</span><div class="yd"><i style="left:${x}%"></i></div><span class="ez" style="background:${g.home.color || '#bf5700'}">${g.home.abbr}</span></div>`;
+  const field = x === null ? '' : `<div class="fld"><span class="ez" style="background:${g.away.color || '#1d4ed8'}">${g.away.abbr}</span><div class="yd"><i style="left:${x}%"></i></div><span class="ez" style="background:${g.home.color || '#7c3aed'}">${g.home.abbr}</span></div>`;
   return `<div class="lv" data-lv="${g.id}">
     <div class="lvh"><div class="lvt"><b>${rk(g.away)}${g.away.abbr}</b>${pre ? '' : `<em>${g.away.score}</em>`}</div><div class="lvm">${pre ? `<b>${new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</b><small>Kickoff</small>` : post ? '<b>FINAL</b>' : `${liveTag(g)}<small>${g.detail}</small>`}</div><div class="lvt">${pre ? '' : `<em>${g.home.score}</em>`}<b>${rk(g.home)}${g.home.abbr}</b></div></div>
     ${dd ? `<div class="lvd">${dd}${s.poss ? ' · ' + s.poss + ' ball' : ''}${s.rz ? ' · red zone' : ''}</div>` : ''}${field}

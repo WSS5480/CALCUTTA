@@ -108,17 +108,19 @@ html,body{min-height:100dvh}body{padding-bottom:calc(92px + env(safe-area-inset-
 .gsp{text-align:center;font-size:14px;margin:2px 0 6px}.gsp b{color:var(--ink)}
 .gbet{display:block;width:100%;margin-top:8px;border:1px dashed var(--blue);background:none;color:var(--blue);border-radius:12px;padding:9px;font:700 14px inherit;cursor:pointer}
 .pp{margin:8px 4px 4px;border:1px solid var(--line);border-radius:14px;padding:8px 12px;background:var(--panel)}.ppr{display:flex;align-items:baseline;gap:10px;padding:3px 0}.ppr+.ppr{border-top:1px solid var(--line)}.ppl{width:52px;flex:none;font-size:11px;font-weight:800;letter-spacing:.1em;color:var(--muted)}.ppv{flex:1;font-size:16px;white-space:nowrap}.ppp{font-weight:800;font-size:16px}.ppp small{font-weight:600;color:var(--muted);font-size:11px}.pm{font-weight:800;font-size:17px}.pm.push{font-size:12px}.ppr small.hit{color:var(--green)}.ppr small.miss{color:var(--red)}.ppr small.push{color:var(--muted)}
+.kinds{display:grid;gap:8px;margin:8px 0}.kinds button{text-align:left;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:12px;padding:12px 14px;font:inherit;cursor:pointer}.kinds button b{display:block;font-size:16px}.kinds button small{color:var(--muted)}
+.legs{margin:8px 0}.leg{display:flex;gap:10px;align-items:flex-start;padding:7px 4px;border-top:1px solid var(--line)}.leg b{font-weight:600}.leg small{color:var(--muted)}.leg .pm{min-width:26px;text-align:center}.leg .x{margin-left:auto;border:0;background:none;color:var(--red);font-size:18px;cursor:pointer}.legbtn{display:flex;gap:6px;margin-top:4px}.legbtn button{border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:8px;padding:3px 10px;font:600 12px inherit;cursor:pointer}
 </style>
 </head>
 <body>
-<!-- Pics v51 -->
+<!-- Pics v52 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
   <h1>Oddable</h1>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">College</button></div>
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v51 (auto-update)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v52 (parlays and props)</div>
 </header>
 <main>
   <div id="livepage" hidden></div>
@@ -354,7 +356,28 @@ let BETS = (() => { try { return JSON.parse(localStorage.getItem('bets26')) || [
 const betsSave = () => { try { localStorage.setItem('bets26', JSON.stringify(BETS)); } catch (e) {} };
 let BF = null; // form state (not rebuilt by the minute refresh, so typing is never wiped)
 const sgn = (n) => (n > 0 ? '+' : '') + n;
+function legGrade(l) {
+  if (l.gid) {
+    const g = ALL[l.gid]; if (!g || g.state === 'pre') return { st: 'pending', g };
+    const margin = (l.side === g.home.abbr ? 1 : -1) * (g.home.score - g.away.score), m = l.type === 'sp' ? margin + l.line : margin;
+    const r = m > 0 ? 'won' : m < 0 ? 'lost' : 'push';
+    return g.state === 'in' ? { st: 'live', cur: r, g } : { st: r, g };
+  }
+  return { st: l.res || 'pending' };
+}
 function betGrade(b) {
+  if (b.kind === 'prop') return { st: b.res || 'pending' };
+  if (b.kind === 'parlay') {
+    const L = b.legs.map(legGrade);
+    if (L.some((x) => x.st === 'lost')) return { st: 'lost', legs: L };
+    if (L.some((x) => x.st === 'live' && x.cur === 'lost')) return { st: 'live', cur: 'lost', legs: L };
+    if (L.every((x) => x.st === 'won' || x.st === 'push')) return { st: L.every((x) => x.st === 'push') ? 'push' : 'won', legs: L };
+    if (L.some((x) => x.st === 'live')) return { st: 'live', cur: 'won', legs: L };
+    return { st: 'pending', legs: L };
+  }
+  return betGradeOne(b);
+}
+function betGradeOne(b) {
   const g = ALL[b.gid]; if (!g || g.state === 'pre') return { st: 'pending', g };
   const margin = (b.side === g.home.abbr ? 1 : -1) * (g.home.score - g.away.score);
   const m = b.type === 'sp' ? margin + b.line : margin;
@@ -374,7 +397,7 @@ const rec3 = (a) => { const w = a.filter((x) => x === 'won').length, l = a.filte
 function betsRender() {
   const el = $('#betspage'); if (!el) return;
   const done = BETS.map((b) => ({ b, r: betGrade(b) })), fin = done.filter((x) => ['won', 'lost', 'push'].includes(x.r.st));
-  const all = rec3(fin.map((x) => x.r.st)), withA = rec3(fin.filter((x) => !betAgainst(x.b)).map((x) => x.r.st)), agA = rec3(fin.filter((x) => betAgainst(x.b)).map((x) => x.r.st));
+  const all = rec3(fin.map((x) => x.r.st)), withA = rec3(fin.filter((x) => !x.b.kind && !betAgainst(x.b)).map((x) => x.r.st)), agA = rec3(fin.filter((x) => !x.b.kind && betAgainst(x.b)).map((x) => x.r.st));
   const money = (n) => (BETS.some((x) => x.stake) ? (n < 0 ? '−$' : '+$') + Math.abs(n).toFixed(2) : (n < 0 ? '−' : '+') + Math.abs(n).toFixed(2) + 'u');
   // Daily tally: every bet is tied to the day its game is played (local time). The banner shows TODAY only and starts over at midnight; past days stay in the log.
   const unitsMode = !BETS.some((x) => x.stake), u0 = (b) => b.stake || (unitsMode ? 1 : 0);
@@ -402,7 +425,9 @@ function betsRender() {
   const stat = (t, r, s) => `<div class="sum"><b>${r.s}</b><span>${t}</span><small>${r.pc}${s || ''}</small></div>`;
   const stake = fin.reduce((a, x) => a + (x.b.stake || 0), 0);
   const ordr = { live: 0, pending: 1, won: 2, lost: 2, push: 2 };
-  const list = [...done].sort((a, z) => ordr[a.r.st] - ordr[z.r.st] || (a.r.st === 'pending' && a.r.g && z.r.g ? a.r.g.start - z.r.g.start : (z.b.t || 0) - (a.b.t || 0))).map(({ b, r }) => {
+  const list = [...done].sort((a, z) => ordr[a.r.st] - ordr[z.r.st] || (z.b.t || 0) - (a.b.t || 0)).map(({ b, r }) => {
+    if (b.kind === 'parlay') return parlayCard(b, r, money);
+    if (b.kind === 'prop') return propCard(b, r, money);
     const g = r.g, ag = betAgainst(b);
     const what = b.type === 'sp' ? `${b.side} ${sgn(b.line)}` : `${b.side} to win`;
     const sc = g && g.state !== 'pre' ? `${g.away.abbr} ${g.away.score} – ${g.home.abbr} ${g.home.score}${g.state === 'in' ? ' · ' + g.detail : ' · Final'}` : (g ? new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : 'game not loaded');
@@ -458,17 +483,79 @@ async function betImport(file) {
 }
 function betFromGame(gid) { setView('bets'); betPick(gid); window.scrollTo(0, 0); }
 (function midnight() { const n = new Date(); const ms = new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1, 0, 0, 2) - n; setTimeout(() => { if (typeof render === 'function' && VIEW === 'bets') render(); midnight(); }, ms); })();
-function betNew() { BF = { step: 'pick' }; betsRender(); }
+
+const badgeOf = (r, money, b) => r.st === 'live' ? `<span class="b ${r.cur === 'won' ? 'hit' : r.cur === 'lost' ? 'miss' : 'push'}">● LIVE ${r.cur === 'won' ? 'hitting' : r.cur === 'lost' ? 'missing' : 'even'}</span>` : r.st === 'pending' ? '<span class="b push">Pending</span>' : `<span class="b ${r.st === 'won' ? 'hit' : r.st === 'lost' ? 'miss' : 'push'}">${r.st === 'won' ? '✓ WON' : r.st === 'lost' ? '✗ LOST' : 'PUSH'} ${money(betPL(b, r.st))}</span>`;
+const payTxt = (b) => (b.stake ? ` <small>· $${b.stake}</small>` : '') + (b.mult ? ` <small>· pays ${b.mult}x</small>` : (b.odds && b.odds !== -110 ? ` <small>· ${sgn(b.odds)}</small>` : ''));
+const legMark = (st, cur) => (st === 'won' ? '<span class="pm hit">✓</span>' : st === 'lost' ? '<span class="pm miss">✗</span>' : st === 'push' ? '<span class="pm push">push</span>' : st === 'live' ? `<span class="pm ${cur === 'won' ? 'hit' : cur === 'lost' ? 'miss' : 'push'}">●</span>` : '<span class="pm push">·</span>');
+function legText(l) { if (!l.gid) return l.text; const g = ALL[l.gid]; const a = g ? g.away.abbr : '?', h = g ? g.home.abbr : '?'; return `${l.side} ${l.type === 'sp' ? sgn(l.line) : 'to win'} <small>${a} @ ${h}</small>`; }
+function parlayCard(b, r, money) {
+  const hit = r.legs.filter((x) => x.st === 'won' || (x.st === 'live' && x.cur === 'won')).length;
+  const rows = b.legs.map((l, i) => { const x = r.legs[i], g = x.g; const sc = g && g.state !== 'pre' ? `${g.away.abbr} ${g.away.score}–${g.home.abbr} ${g.home.score}${g.state === 'in' ? ' · ' + g.detail : ' · Final'}` : g ? new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '';
+    const man = !l.gid ? `<span class="legbtn"><button onclick="legSet('${b.id}',${i},'won')">✓</button><button onclick="legSet('${b.id}',${i},'lost')">✗</button><button onclick="legSet('${b.id}',${i},'push')">push</button>${l.res ? `<button onclick="legSet('${b.id}',${i},'')">reset</button>` : ''}</span>` : '';
+    return `<div class="leg">${legMark(x.st, x.cur)}<div><b>${legText(l)}</b>${sc ? `<small class="sub" style="display:block">${sc}</small>` : ''}${man}</div></div>`; }).join('');
+  return `<div class="bcard ${r.st === 'won' ? 'bw' : r.st === 'lost' ? 'bl' : r.st === 'live' ? (r.cur === 'lost' ? 'bl' : 'bw') : ''}"><div class="bhd"><div><div class="bwhat">${b.legs.length}-leg parlay${payTxt(b)}</div><div class="sub">${hit} of ${b.legs.length} hitting</div></div>${badgeOf(r, money, b)}</div><div class="legs">${rows}</div>
+    <div class="bbtn"><button onclick="betEdit('${b.id}')">Edit</button><button onclick="betDel('${b.id}')">Delete</button></div></div>`;
+}
+function propCard(b, r, money) {
+  return `<div class="bcard ${r.st === 'won' ? 'bw' : r.st === 'lost' ? 'bl' : ''}"><div class="bhd"><div><div class="bwhat">${b.text.replace(/</g, '&lt;')}${payTxt(b)}</div><div class="sub">Prop bet · ${b.day}</div></div>${badgeOf(r, money, b)}</div>
+    <div class="bbtn"><button onclick="propSet('${b.id}','won')">✓ Won</button><button onclick="propSet('${b.id}','lost')">✗ Lost</button><button onclick="propSet('${b.id}','push')">Push</button>${b.res ? `<button onclick="propSet('${b.id}','')">Reset</button>` : ''}<button onclick="betEdit('${b.id}')">Edit</button><button onclick="betDel('${b.id}')">Delete</button></div></div>`;
+}
+function legSet(id, i, res) { const b = BETS.find((x) => x.id === id); if (!b) return; b.legs[i].res = res || null; betsSave(); betsRender(); }
+function propSet(id, res) { const b = BETS.find((x) => x.id === id); if (!b) return; b.res = res || null; betsSave(); betsRender(); }
+const payFields = () => `<label>Stake $ (optional) <input id="bfs" type="number" step="1" value="${BF.stake || ''}"></label>
+    <label>Payout type <select id="bfp" onchange="betType()"><option value="am" ${BF.pt !== 'x' ? 'selected' : ''}>American odds (−110, +350)</option><option value="x" ${BF.pt === 'x' ? 'selected' : ''}>Multiplier (Kalshi, Underdog: 3.5x)</option></select></label>
+    <label>${BF.pt === 'x' ? 'Payout multiplier (total back per $1, e.g. 3.5)' : 'Your odds (blank = −110)'} <input id="bfo" type="number" step="${BF.pt === 'x' ? '0.01' : '1'}" placeholder="${BF.pt === 'x' ? '3.5' : '-110'}" value="${BF.odds || ''}"></label>`;
+function applyPay(b) { if (BF.pt === 'x' && parseFloat(BF.odds) > 1) { b.mult = parseFloat(BF.odds); b.odds = -110; } else { b.mult = null; b.odds = Math.abs(parseFloat(BF.odds)) >= 100 ? parseFloat(BF.odds) : -110; } b.stake = parseFloat(BF.stake) || null; }
+const gameRowsHtml = (fn) => { const gs = Object.values(ALL).filter((g) => g.state !== 'post' && (g.state === 'in' || g.week <= CUR + 1)).sort((a, b) => (b.state === 'in') - (a.state === 'in') || a.start - b.start); return gs.map((g) => `<div class="pickrow" onclick="${fn}('${g.id}')"><b>${g.away.abbr} @ ${g.home.abbr}</b><small>${g.state === 'in' ? '● LIVE ' + g.away.score + '-' + g.home.score : new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })} · ${lineText(g)}</small></div>`).join('') || '<div class="note">No upcoming games loaded.</div>'; };
+function parlayNew() { BF = { step: 'parlay', legs: [], stake: '', odds: '', pt: 'x' }; betsRender(); }
+function propNew() { BF = { step: 'prop', text: '', stake: '', odds: '', pt: 'x', day: dayKey(Date.now()) }; betsRender(); }
+function legPickGame(gid) { const g = ALL[gid]; const p = pred(g); const side = p.ats ? p.ats.side.abbr : p.su.abbr; BF.leg = { gid, side, type: 'sp', line: g.line === null ? 0 : (side === g.home.abbr ? -g.line : g.line) }; BF.step = 'legform'; betsRender(); }
+function legSide(a) { betSync(); if (BF.leg.side !== a) { BF.leg.line = -BF.leg.line; BF.leg.side = a; } betsRender(); }
+function legAdd() { betSync(); const l = BF.leg; if (l.type !== 'sp') l.line = 0; BF.legs.push(l); BF.leg = null; BF.step = 'parlay'; betsRender(); }
+function legManual() { betSync(); const e = $('#bfm'); const t = e ? e.value.trim() : ''; if (!t) return; BF.legs.push({ text: t }); betsRender(); }
+function legDrop(i) { betSync(); BF.legs.splice(i, 1); betsRender(); }
+function parlaySave() {
+  betSync(); if (BF.legs.length < 2) { BF.note = 'A parlay needs at least 2 legs.'; betsRender(); return; }
+  const old = BF.id ? BETS.find((x) => x.id === BF.id) : null; const first = BF.legs.find((l) => l.gid && ALL[l.gid]);
+  const b = old || { id: 'b' + Date.now(), kind: 'parlay', t: Date.now(), week: first ? ALL[first.gid].week : CUR, day: first ? dayKey(Math.min(...BF.legs.filter((l) => l.gid && ALL[l.gid]).map((l) => ALL[l.gid].start))) : dayKey(Date.now()) };
+  b.legs = BF.legs; applyPay(b); if (!old) BETS.push(b); betsSave(); BF = null; betsRender();
+}
+function propSave() {
+  betSync(); if (!BF.text.trim()) { BF.note = 'Describe the bet first.'; betsRender(); return; }
+  const old = BF.id ? BETS.find((x) => x.id === BF.id) : null;
+  const b = old || { id: 'b' + Date.now(), kind: 'prop', t: Date.now(), week: CUR };
+  b.text = BF.text.trim(); b.day = BF.day || dayKey(Date.now()); applyPay(b); if (!old) BETS.push(b); betsSave(); BF = null; betsRender();
+}
+function betNew() { BF = { step: 'kind' }; betsRender(); }
 function betPick(gid) {
   const g = ALL[gid]; if (!g) return; const p = pred(g);
   const side = p.ats ? p.ats.side.abbr : p.su.abbr;
   BF = { step: 'form', gid, side, type: 'sp', line: g.line === null ? 0 : (side === g.home.abbr ? -g.line : g.line), stake: '', odds: '', pt: 'am' };
   betsRender();
 }
-function betSync() { if (!BF || BF.step !== 'form') return; const l = $('#bfl'), s = $('#bfs'), t = $('#bft'); const o = $('#bfo'); if (o) BF.odds = o.value; const pt = $('#bfp'); if (pt) BF.pt = pt.value; if (t) BF.type = t.value; if (l) BF.line = parseFloat(l.value) || 0; if (s) BF.stake = s.value; }
+function betSync() {
+  if (!BF) return; const v = (id) => { const e = $('#' + id); return e ? e.value : undefined; };
+  const so = v('bfo'), ss = v('bfs'), pp = v('bfp'), tt = v('bft'), sl = v('bfl'), sx = v('bfx'), sd = v('bfd');
+  if (so !== undefined) BF.odds = so; if (ss !== undefined) BF.stake = ss; if (pp !== undefined) BF.pt = pp;
+  if (BF.step === 'legform') { if (tt !== undefined) BF.leg.type = tt; if (sl !== undefined) BF.leg.line = parseFloat(sl) || 0; }
+  else { if (tt !== undefined) BF.type = tt; if (sl !== undefined) BF.line = parseFloat(sl) || 0; }
+  if (sx !== undefined) BF.text = sx; if (sd !== undefined) BF.day = sd;
+}
 function betSide(a) { betSync(); const g = ALL[BF.gid]; if (BF.side !== a) { BF.line = -BF.line; BF.side = a; } betsRender(); }
 function betType() { betSync(); betsRender(); }
 function betFormHtml() {
+  const note = BF.note ? `<div class="note" style="margin:6px 0">${BF.note}</div>` : '';
+  if (BF.step === 'kind') return `<div class="card"><div class="gh" style="margin-top:0">What kind of bet?</div><div class="kinds"><button onclick="BF={step:'pick'};betsRender()"><b>Single</b><small>spread or win on one game</small></button><button onclick="parlayNew()"><b>Parlay</b><small>2+ legs, one payout</small></button><button onclick="propNew()"><b>Prop</b><small>player or custom bet</small></button></div><button onclick="BF=null;betsRender()">Cancel</button></div>`;
+  if (BF.step === 'prop') return `<div class="card"><div class="gh" style="margin-top:0">${BF.id ? 'Edit prop bet' : 'New prop bet'}</div>${note}<label>What is the bet? <input id="bfx" type="text" placeholder="Mahomes over 275.5 pass yds" value="${(BF.text || '').replace(/"/g, '&quot;')}"></label><label>Date of the game <input id="bfd" type="date" value="${BF.day}"></label>${payFields()}<div class="sub">Props can't be graded automatically. Tap Won, Lost or Push on the card when it's decided.</div><div class="bbtn"><button class="pri" onclick="propSave()">Save prop</button><button onclick="BF=null;betsRender()">Cancel</button></div></div>`;
+  if (BF.step === 'legpick') return `<div class="card"><div class="gh" style="margin-top:0">Pick the game for this leg</div>${gameRowsHtml('legPickGame')}<button onclick="BF.step='parlay';betsRender()">Back</button></div>`;
+  if (BF.step === 'legform') { const g = ALL[BF.leg.gid]; return `<div class="card"><div class="gh" style="margin-top:0">Leg · ${g.away.abbr} @ ${g.home.abbr}</div><div class="bsd"><button class="${BF.leg.side === g.away.abbr ? 'on' : ''}" onclick="legSide('${g.away.abbr}')">${g.away.abbr}</button><button class="${BF.leg.side === g.home.abbr ? 'on' : ''}" onclick="legSide('${g.home.abbr}')">${g.home.abbr}</button></div>
+    <label>Leg type <select id="bft" onchange="betSync();betsRender()"><option value="sp" ${BF.leg.type === 'sp' ? 'selected' : ''}>Spread</option><option value="ml" ${BF.leg.type === 'ml' ? 'selected' : ''}>Win (moneyline)</option></select></label>
+    ${BF.leg.type === 'sp' ? `<label>Your line for ${BF.leg.side} <input id="bfl" type="number" step="0.5" value="${BF.leg.line}"></label>` : ''}<div class="bbtn"><button class="pri" onclick="legAdd()">Add leg</button><button onclick="BF.step='legpick';betsRender()">Back</button></div></div>`; }
+  if (BF.step === 'parlay') return `<div class="card"><div class="gh" style="margin-top:0">${BF.id ? 'Edit parlay' : 'New parlay'} · ${BF.legs.length} leg${BF.legs.length === 1 ? '' : 's'}</div>${note}
+    ${BF.legs.map((l, i) => `<div class="leg"><span class="pm push">${i + 1}</span><div><b>${legText(l)}</b></div><button class="x" onclick="legDrop(${i})">✕</button></div>`).join('') || '<div class="sub">No legs yet.</div>'}
+    <div class="bbtn"><button onclick="betSync();BF.step='legpick';betsRender()">＋ Game leg</button></div>
+    <label>Or a prop leg (player or custom) <input id="bfm" type="text" placeholder="Mahomes 2+ TD passes"></label><div class="bbtn"><button onclick="legManual()">＋ Prop leg</button></div>
+    ${payFields()}<div class="sub">Enter the total payout your app shows for the whole parlay (like 3.5x). Game legs grade themselves; prop legs have ✓ ✗ buttons on the card. All legs must hit to win.</div><div class="bbtn"><button class="pri" onclick="parlaySave()">Save parlay</button><button onclick="BF=null;betsRender()">Cancel</button></div></div>`;
   if (BF.step === 'pick') {
     const gs = Object.values(ALL).filter((g) => g.state !== 'post' && (g.state === 'in' || g.week <= CUR + 1)).sort((a, b) => (b.state === 'in') - (a.state === 'in') || a.start - b.start);
     return `<div class="card"><div class="gh" style="margin-top:0">Pick the game</div>${gs.map((g) => `<div class="pickrow" onclick="betPick('${g.id}')"><b>${g.away.abbr} @ ${g.home.abbr}</b><small>${g.state === 'in' ? '● LIVE ' + g.away.score + '-' + g.home.score : new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })} · ${lineText(g)}</small></div>`).join('') || '<div class="note">No upcoming games loaded.</div>'}<button onclick="BF=null;betsRender()">Cancel</button></div>`;
@@ -494,7 +581,11 @@ function betSave() {
   if (!old) BETS.push(b);
   betsSave(); BF = null; betsRender();
 }
-function betEdit(id) { const b = BETS.find((x) => x.id === id); if (!b || !ALL[b.gid]) return; BF = { step: 'form', id, gid: b.gid, side: b.side, type: b.type, line: b.line, stake: b.stake || '', odds: b.mult ? b.mult : (b.odds && b.odds !== -110 ? b.odds : ''), pt: b.mult ? 'x' : 'am' }; betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+function betEdit(id) { const b = BETS.find((x) => x.id === id); if (!b) return;
+  const pay = { stake: b.stake || '', odds: b.mult ? b.mult : (b.odds && b.odds !== -110 ? b.odds : ''), pt: b.mult ? 'x' : 'am' };
+  if (b.kind === 'parlay') { BF = { step: 'parlay', id, legs: JSON.parse(JSON.stringify(b.legs)), ...pay }; betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+  if (b.kind === 'prop') { BF = { step: 'prop', id, text: b.text, day: b.day, ...pay }; betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+  if (!ALL[b.gid]) return; BF = { step: 'form', id, gid: b.gid, side: b.side, type: b.type, line: b.line, stake: b.stake || '', odds: b.mult ? b.mult : (b.odds && b.odds !== -110 ? b.odds : ''), pt: b.mult ? 'x' : 'am' }; betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
 function betDel(id) { if (!confirm('Delete this bet?')) return; BETS = BETS.filter((x) => x.id !== id); betsSave(); betsRender(); }
 function liveSt(g) {
   if (g.state !== 'in') return '';

@@ -99,7 +99,7 @@ body{padding-bottom:84px}
 .bsd{display:flex;gap:8px;margin:8px 0}.bsd button{flex:1;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:12px;padding:12px;font:800 16px inherit;cursor:pointer}.bsd button.on{background:var(--blue);color:#fff;border-color:var(--blue)}
 #bform label{display:block;margin:8px 0;font-size:13px;color:var(--muted)}#bform input,#bform select{display:block;width:100%;margin-top:4px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);font:600 16px inherit}
 .bcard{border:1px solid var(--line);border-radius:28px;padding:12px 10px 10px;margin:14px 0;background:var(--panel)}.bcard.bw{border-color:var(--green)}.bcard.bl{border-color:var(--red)}.bcard .gc{margin:8px 0 0}.bhd{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:0 6px}.bcard .bbtn{padding:0 6px}
-#plb{position:fixed;top:max(10px,env(safe-area-inset-top));right:12px;z-index:40;padding:8px 16px;border-radius:999px;font:800 17px/1.1 system-ui;text-align:center;border:1.5px solid;backdrop-filter:blur(8px);box-shadow:0 4px 18px #0008}#plb small{display:block;font-size:10px;font-weight:700;opacity:.85;margin-top:1px}
+#plb{position:fixed;top:max(10px,env(safe-area-inset-top));right:12px;z-index:40;padding:8px 16px;border-radius:999px;font:800 17px/1.1 system-ui;text-align:center;border:1.5px solid;backdrop-filter:blur(8px);box-shadow:0 4px 18px #0008}#plb small.lbl{font-size:9px;letter-spacing:.14em;opacity:.7;margin:0 0 2px}#plb small{display:block;font-size:10px;font-weight:700;opacity:.85;margin-top:1px}
 #plb.pos{color:#4fd18b;background:#0e2a1fe6;border-color:#4fd18b}#plb.neg{color:#ff5a4d;background:#2e1210e6;border-color:#ff5a4d}body.bets .thm{display:none}
 html,body{min-height:100dvh}body{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
 .bn{transform:translate3d(0,0,0);-webkit-transform:translate3d(0,0,0);will-change:transform}
@@ -116,7 +116,7 @@ html,body{min-height:100dvh}body{padding-bottom:calc(92px + env(safe-area-inset-
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">College</button></div>
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v47 (banner shows net, settled, live, in play)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v48 (daily bet tally)</div>
 </header>
 <main>
   <div id="livepage" hidden></div>
@@ -343,6 +343,8 @@ function betGrade(b) {
   const r = m > 0 ? 'won' : m < 0 ? 'lost' : 'push';
   return g.state === 'in' ? { st: 'live', cur: r, g } : { st: r, g };
 }
+const dayKey = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const betDay = (b) => b.day || dayKey((ALL[b.gid] && ALL[b.gid].start) || b.t || Date.now());
 const betProfit = (b) => (b.mult && b.mult > 1 ? b.mult - 1 : betMult(b.odds));
 const betMult = (o) => { o = Number(o) || -110; if (Math.abs(o) < 100) o = -110; return o > 0 ? o / 100 : 100 / -o; };
 function betPL(b, st) { // profit/loss for a result 'won'|'lost'|'push'; blank stake counts as 1 unit only if no bet has a $ stake
@@ -356,9 +358,29 @@ function betsRender() {
   const done = BETS.map((b) => ({ b, r: betGrade(b) })), fin = done.filter((x) => ['won', 'lost', 'push'].includes(x.r.st));
   const all = rec3(fin.map((x) => x.r.st)), withA = rec3(fin.filter((x) => !betAgainst(x.b)).map((x) => x.r.st)), agA = rec3(fin.filter((x) => betAgainst(x.b)).map((x) => x.r.st));
   const money = (n) => (BETS.some((x) => x.stake) ? (n < 0 ? '−$' : '+$') + Math.abs(n).toFixed(2) : (n < 0 ? '−' : '+') + Math.abs(n).toFixed(2) + 'u');
-  const settledPL = fin.reduce((a, x) => a + betPL(x.b, x.r.st), 0), livePL = done.filter((x) => x.r.st === 'live').reduce((a, x) => a + betPL(x.b, x.r.cur), 0), nLive = done.filter((x) => x.r.st === 'live').length;
-  const pb = $('#plb'); if (pb) { pb.className = settledPL + livePL >= 0 ? 'pos' : 'neg'; const openStake = done.filter((x) => x.r.st === 'live' || x.r.st === 'pending').reduce((s, x) => s + (x.b.stake || 0), 0); const net = settledPL + livePL;
-    pb.innerHTML = `${money(net)}<small>settled ${money(settledPL)} · live ${money(livePL)}</small>${openStake ? `<small>$${openStake} in play · ${done.filter((x) => x.r.st === 'live' || x.r.st === 'pending').length} open</small>` : ''}`; }
+  // Daily tally: every bet is tied to the day its game is played (local time). The banner shows TODAY only and starts over at midnight; past days stay in the log.
+  const unitsMode = !BETS.some((x) => x.stake), u0 = (b) => b.stake || (unitsMode ? 1 : 0);
+  const riskTxt = (n) => (unitsMode ? n + 'u' : '$' + (Math.round(n * 100) / 100));
+  const days = {};
+  done.forEach(({ b, r }) => {
+    const k = betDay(b), d = days[k] = days[k] || { n: 0, risk: 0, w: 0, l: 0, p: 0, settled: 0, live: 0 };
+    d.n++; d.risk += u0(b);
+    if (r.st === 'won') { d.w++; d.settled += betPL(b, 'won'); } else if (r.st === 'lost') { d.l++; d.settled += betPL(b, 'lost'); } else if (r.st === 'push') d.p++;
+    else if (r.st === 'live') d.live += betPL(b, r.cur);
+  });
+  const today = dayKey(Date.now()), td = days[today] || { n: 0, risk: 0, w: 0, l: 0, p: 0, settled: 0, live: 0 };
+  // freeze finished days so the log survives even if bets are later deleted
+  let snap = {}; try { snap = JSON.parse(localStorage.getItem('betlog26')) || {}; } catch (e) {}
+  Object.keys(days).filter((k) => k < today).forEach((k) => { snap[k] = { ...days[k] }; });
+  try { localStorage.setItem('betlog26', JSON.stringify(snap)); } catch (e) {}
+  const settledPL = td.settled, livePL = td.live, net = td.settled + td.live;
+  const pb = $('#plb'); if (pb) {
+    pb.className = net >= 0 ? 'pos' : 'neg';
+    pb.innerHTML = `<small class="lbl">TODAY</small>${money(net)}<small>risked ${riskTxt(td.risk)} · ${td.w}-${td.l}${td.p ? '-' + td.p : ''}</small>${td.live || td.settled ? `<small>settled ${money(td.settled)} · live ${money(td.live)}</small>` : ''}`;
+  }
+  const allDays = { ...snap, ...days }, dkeys = Object.keys(allDays).sort().reverse();
+  const nice = (k) => new Date(k + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  const logHtml = dkeys.length ? `<details data-k="betlog" ${isOpen('betlog', false) ? 'open' : ''}><summary>Daily log (${dkeys.length} day${dkeys.length > 1 ? 's' : ''})</summary>${dkeys.map((k) => { const d = allDays[k], n = d.settled + d.live; return `<div class="card" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;margin:4px 0"><span><b>${nice(k)}${k === today ? ' · today' : ''}</b><small style="display:block;color:var(--muted)">${d.n} bet${d.n > 1 ? 's' : ''} · risked ${riskTxt(d.risk)} · ${d.w}-${d.l}${d.p ? '-' + d.p : ''}</small></span><b class="${n >= 0 ? 'hit' : 'miss'}">${money(n)}</b></div>`; }).join('')}</details>` : '';
   const stat = (t, r, s) => `<div class="sum"><b>${r.s}</b><span>${t}</span><small>${r.pc}${s || ''}</small></div>`;
   const stake = fin.reduce((a, x) => a + (x.b.stake || 0), 0);
   const ordr = { live: 0, pending: 1, won: 2, lost: 2, push: 2 };
@@ -373,9 +395,10 @@ function betsRender() {
   }).join('');
   el.innerHTML = `<div class="lpg"><h2>My Bets</h2>
     <div class="sums">${stat('Overall', all, stake ? ' · $' + stake + ' staked' : '')}${stat('Against the app', agA)}${stat('With the app', withA)}<div class="sum"><b>${BETS.length - fin.length}</b><span>Open bets</span><small>${BETS.length} total</small></div></div>
-    <button class="addb" onclick="betNew()">＋ Add a bet</button><div id="bform">${BF ? betFormHtml() : ''}</div>${list || '<div class="note">No bets yet. Tap “Add a bet”, pick a game, then set your side and the line you got.</div>'}</div>`;
+    <button class="addb" onclick="betNew()">＋ Add a bet</button><div id="bform">${BF ? betFormHtml() : ''}</div>${logHtml}${list || '<div class="note">No bets yet. Tap “Add a bet”, pick a game, then set your side and the line you got.</div>'}</div>`;
 }
 function betFromGame(gid) { setView('bets'); betPick(gid); window.scrollTo(0, 0); }
+(function midnight() { const n = new Date(); const ms = new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1, 0, 0, 2) - n; setTimeout(() => { if (typeof render === 'function' && VIEW === 'bets') render(); midnight(); }, ms); })();
 function betNew() { BF = { step: 'pick' }; betsRender(); }
 function betPick(gid) {
   const g = ALL[gid]; if (!g) return; const p = pred(g);
@@ -407,7 +430,7 @@ function betFormHtml() {
 function betSave() {
   betSync(); const g = ALL[BF.gid]; if (!g) return; const p = pred(g);
   const old = BF.id ? BETS.find((x) => x.id === BF.id) : null;
-  const b = old || { id: 'b' + Date.now(), gid: g.id, week: g.week, away: g.away.abbr, home: g.home.abbr, t: Date.now(), appSu: p.su.abbr, appConf: +p.conf.toFixed(3), appAts: p.ats ? p.ats.side.abbr : null, appLine: g.line };
+  const b = old || { id: 'b' + Date.now(), gid: g.id, week: g.week, away: g.away.abbr, home: g.home.abbr, day: dayKey(g.start), t: Date.now(), appSu: p.su.abbr, appConf: +p.conf.toFixed(3), appAts: p.ats ? p.ats.side.abbr : null, appLine: g.line };
   b.side = BF.side; b.type = BF.type; b.line = BF.type === 'sp' ? BF.line : 0; b.stake = parseFloat(BF.stake) || null; if (BF.pt === 'x' && parseFloat(BF.odds) > 1) { b.mult = parseFloat(BF.odds); b.odds = -110; } else { b.mult = null; b.odds = Math.abs(parseFloat(BF.odds)) >= 100 ? parseFloat(BF.odds) : -110; }
   if (!old) BETS.push(b);
   betsSave(); BF = null; betsRender();

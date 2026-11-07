@@ -101,6 +101,9 @@ body{padding-bottom:84px}
 .bcard{border:1px solid var(--line);border-radius:28px;padding:12px 10px 10px;margin:14px 0;background:var(--panel)}.bcard.bw{border-color:var(--green)}.bcard.bl{border-color:var(--red)}.bcard .gc{margin:8px 0 0}.bhd{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:0 6px}.bcard .bbtn{padding:0 6px}
 #plb{position:fixed;top:max(10px,env(safe-area-inset-top));right:12px;z-index:40;padding:8px 16px;border-radius:999px;font:800 17px/1.1 system-ui;text-align:center;border:1.5px solid;backdrop-filter:blur(8px);box-shadow:0 4px 18px #0008}#plb small{display:block;font-size:10px;font-weight:700;opacity:.85;margin-top:1px}
 #plb.pos{color:#4fd18b;background:#0e2a1fe6;border-color:#4fd18b}#plb.neg{color:#ff5a4d;background:#2e1210e6;border-color:#ff5a4d}body.bets .thm{display:none}
+html,body{min-height:100dvh}body{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
+.bn{transform:translate3d(0,0,0);-webkit-transform:translate3d(0,0,0);will-change:transform}
+.chips{position:sticky;top:0;z-index:15;background:var(--bg);padding:8px 0;margin:0}
 </style>
 </head>
 <body>
@@ -110,7 +113,7 @@ body{padding-bottom:84px}
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">College</button></div>
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v41 (+/- banner)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v42 (steady bottom bar)</div>
 </header>
 <main>
   <div id="livepage" hidden></div>
@@ -403,7 +406,7 @@ function liveSt(g) {
 }
 const liveTag = (g) => `<span class="${liveSt(g) || 'miss'} tag">● LIVE</span>`;
 let FILT = (() => { try { return localStorage.getItem('pics-filt') || 'all'; } catch (e) { return 'all'; } })();
-function setFilt(f) { FILT = f; try { localStorage.setItem('pics-filt', f); } catch (e) {} render(); }
+function setFilt(f) { FILT = f; try { localStorage.setItem('pics-filt', f); } catch (e) {} render(); const el = document.querySelector('[data-k="wkrank"]'); if (el) el.scrollIntoView({ block: 'start' }); }
 function weekBoard(gs) {
   const all = gs.map((g) => { const p = pred(g), lv = pickLive(g); return { g, p, v: lv === null ? p.conf : lv, lv }; }).sort((a, b) => b.v - a.v);
   if (!all.length) return '';
@@ -854,7 +857,8 @@ function teamBox(games) {
 function render() {
   const y = window.scrollY;
   renderInner();
-  if (Math.abs(window.scrollY - y) > 2) window.scrollTo(0, y);
+  const mx = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+  if (Math.abs(window.scrollY - y) > 2) window.scrollTo(0, Math.min(y, mx));
 }
 function renderInner() {
   if (!M) return;

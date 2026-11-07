@@ -54,21 +54,45 @@ details>summary::after{content:'▾';color:var(--blue)}details[open]>summary::af
 select#team{width:100%;max-width:320px;margin:2px 0 6px;padding:9px 12px;border:1px solid var(--blue);border-radius:12px;background:#fff;color:var(--ink);font:600 15px inherit}
 .sum.lock{border-color:#bf5700;background:#fdf1e6}
 body{border-top:6px solid #bf5700}h1{color:#bf5700}
+
+/* dark live-board look */
+body.dark{--bg:#0a0c10;--panel:#13161d;--panel2:#1b1f29;--line:#272c38;--ink:#eef0f4;--muted:#8b93a3;--blue:#f08a3c;--green:#4fd18b;--red:#ff5a4d;border-top-color:#f08a3c}
+body.dark h1{color:#f08a3c}body.dark .lg button{background:var(--panel);color:var(--blue)}body.dark .lg button.on{background:var(--blue);color:#0a0c10}
+body.dark select#team{background:var(--panel);color:var(--ink)}body.dark .sum.lock{background:#1d1610;border-color:#6b3a14}
+body.dark .chips button.on{background:var(--panel2)}body.dark .yd i{border-color:var(--panel)}
+.thm{position:absolute;right:16px;top:max(16px,env(safe-area-inset-top));border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:6px 12px;font:600 13px inherit;cursor:pointer}
+header{position:relative}
+.rail{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;margin:10px -16px 0;padding:0 16px 4px;-webkit-overflow-scrolling:touch;scrollbar-width:none}.rail::-webkit-scrollbar{display:none}
+.rc{flex:0 0 86%;max-width:330px;scroll-snap-align:start;background:linear-gradient(160deg,var(--panel2),var(--panel) 60%);border:1px solid var(--line);border-radius:22px;padding:14px 16px 12px;cursor:pointer}
+.rc.lv-hit{border-color:var(--green)}.rc.lv-miss{border-color:var(--red)}
+.rtp{display:flex;gap:10px;align-items:center}.rico{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#3b5bdb,#7048e8);display:grid;place-items:center;font-size:20px}
+.rtp small{display:block;color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}.rtp span{font-size:13px;color:var(--muted)}.rtp span b{color:var(--red)}.rtp span b.hit{color:var(--green)}
+.rtt{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:12px 0 10px}
+.rrow{display:flex;align-items:center;gap:10px;margin:8px 0}.rrow .nm{flex:1;min-width:0}.rrow .nm b{font-weight:600;font-size:15px}.rrow .nm sup{color:var(--muted);font-size:11px;margin-right:4px}.rrow .ln{height:3px;border-radius:3px;margin-top:4px}
+.rrow .sc{font-weight:800;font-size:17px;min-width:22px;text-align:right}.rpill{min-width:64px;text-align:center;border:1px solid var(--line);border-radius:999px;padding:7px 10px;font-weight:700;color:var(--green);background:#4fd18b14}.rpill.lo{color:var(--muted);background:none}
+.rft{display:flex;justify-content:space-between;color:var(--muted);font-size:12px;margin-top:8px}
+.dots{display:flex;gap:6px;justify-content:center;margin:8px 0 2px}.dots i{width:6px;height:6px;border-radius:6px;background:var(--line);transition:all .2s}.dots i.on{width:22px;background:var(--muted)}
+.bn{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:space-around;background:var(--panel);border-top:1px solid var(--line);padding:6px 4px max(8px,env(safe-area-inset-bottom));z-index:20}
+.bn button{background:none;border:0;color:var(--muted);font:600 11px inherit;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 10px;cursor:pointer;position:relative}.bn button span{font-size:19px}.bn button.on{color:var(--ink)}.bn .dot{position:absolute;top:2px;right:10px;width:8px;height:8px;border-radius:50%;background:var(--red)}
+body{padding-bottom:84px}
 </style>
 </head>
 <body>
 <header>
+  <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
   <h1>Steve's Pics</h1>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">College</button></div>
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Pics v34 (won/lost, live % every minute)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Pics v35 (dark live board)</div>
 </header>
 <main>
+  <div class="rail" id="rail"></div><div class="dots" id="dots"></div>
   <div class="sums" id="sums"></div>
   <div id="list"></div>
   <div class="foot" id="foot"></div>
 </main>
+<nav class="bn" id="bn"></nav>
 <script src="model.js"></script>
 <script>
 const $ = (s) => document.querySelector(s);
@@ -178,6 +202,49 @@ function pickLive(g) { // ESPN live win chance of OUR pick (null if not live or 
   return pred(g).su === g.home ? g.sit.wp : 1 - g.sit.wp;
 }
 function finalSt(g) { if (g.state !== 'post' || g.home.score === g.away.score) return ''; return (pred(g).su === g.home) === (g.home.score > g.away.score) ? 'hit' : 'miss'; }
+
+// ---- Dark theme + swipeable game rail + bottom bar ----
+let DARK = (() => { try { return localStorage.getItem('pics-dark') !== '0'; } catch (e) { return true; } })();
+function applyTheme() { document.body.classList.toggle('dark', DARK); const b = $('#thm'); if (b) b.textContent = DARK ? '☀ Light' : '🌙 Dark'; const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = DARK ? '#0a0c10' : '#bf5700'; }
+function railRender(games, thisWeek) {
+  const rail = $('#rail'); if (!rail) return;
+  const x = rail.scrollLeft;
+  const order = [...games.filter((g) => g.state === 'in'), ...games.filter((g) => g.state === 'pre').sort((a, b) => a.start - b.start), ...games.filter((g) => g.state === 'post' && g.week === CUR).sort((a, b) => b.start - a.start)].slice(0, 14);
+  const cc = (t, d) => (t.color && t.color.length === 7 ? t.color : d);
+  rail.innerHTML = order.map((g) => {
+    const p = pred(g), lv = g.state === 'in' && g.sit && g.sit.wp !== null && g.sit.wp !== undefined ? g.sit.wp : null;
+    const ph = lv === null ? p.ph : lv, pa = 1 - ph, st = liveSt(g);
+    const status = g.state === 'in' ? `<span><b class="${st === 'hit' ? 'hit' : ''}">● ${g.detail}</b> · ${CFB ? 'NCAA Football' : 'NFL'}</span>` : g.state === 'post' ? `<span>Final · ${CFB ? 'NCAA Football' : 'NFL'}</span>` : `<span>${new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })} · ${CFB ? 'NCAA Football' : 'NFL'}</span>`;
+    const row = (t, v, d) => `<div class="rrow"><div class="nm"><b>${t.rank ? '<sup>' + t.rank + '</sup>' : ''}${nm(t.abbr)}</b><div class="ln" style="width:${Math.max(6, v * 100)}%;background:${cc(t, d)}"></div></div>${g.state === 'pre' ? '' : `<div class="sc">${t.score}</div>`}<div class="rpill ${v < 0.5 ? 'lo' : ''}">${pct(v)}</div></div>`;
+    return `<div class="rc ${st ? 'lv-' + st : ''}" onclick="openGame('${g.id}')"><div class="rtp"><div class="rico">🏈</div><div><small>Football</small>${status}</div></div>
+      <div class="rtt">${nm(g.away.abbr)} vs ${nm(g.home.abbr)}</div>${row(g.away, pa, '#2563eb')}${row(g.home, ph, '#f08a3c')}
+      <div class="rft"><span>${lineText(g)}</span><span>Pick ${p.su.abbr} ${pct(lv === null ? p.conf : (p.su === g.home ? ph : pa))}${lv !== null ? ' · live' : ''}</span></div></div>`;
+  }).join('');
+  rail.scrollLeft = x;
+  $('#dots').innerHTML = order.map((_, i) => `<i class="${i === 0 ? 'on' : ''}"></i>`).join('');
+  railDots();
+}
+function railDots() {
+  const r = $('#rail'), c = r.children; if (!c.length) return;
+  const w = c[0].offsetWidth + 12; const i = Math.min(c.length - 1, Math.round(r.scrollLeft / w));
+  [...$('#dots').children].forEach((d, k) => d.classList.toggle('on', k === i));
+}
+function openGame(id) {
+  const g = ALL[id]; if (!g) return;
+  FILT = 'all'; DET.wkrank = true; DET['wk' + id] = true; render(); liveFetch();
+  const el = document.querySelector('[data-k="wk' + id + '"]'); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
+function navRender() {
+  const anyLive = Object.values(ALL).some((g) => g.state === 'in');
+  const it = [['all', '🏠', 'Games'], ['live', '📡', 'Live'], ['win', '✅', 'Winning'], ['lose', '🔻', 'Losing'], ['won', '🏁', 'Final']];
+  $('#bn').innerHTML = it.map(([k, i, l]) => `<button class="${FILT === k ? 'on' : ''}" onclick="navGo('${k}')"><span>${i}</span>${l}${k === 'live' && anyLive ? '<i class="dot"></i>' : ''}</button>`).join('');
+}
+function navGo(k) {
+  FILT = k === 'won' ? 'won' : k; try { localStorage.setItem('pics-filt', FILT); } catch (e) {} DET.wkrank = true; render();
+  const el = document.querySelector('[data-k="wkrank"]'); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); else window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+document.addEventListener('DOMContentLoaded', () => { applyTheme(); $('#thm').onclick = () => { DARK = !DARK; try { localStorage.setItem('pics-dark', DARK ? '1' : '0'); } catch (e) {} applyTheme(); }; $('#rail').addEventListener('scroll', railDots, { passive: true }); });
+if (document.readyState !== 'loading') { applyTheme(); }
 function liveSt(g) {
   if (g.state !== 'in') return '';
   const su = pred(g).su, d = (su === g.home ? 1 : -1) * (g.home.score - g.away.score);
@@ -679,6 +746,7 @@ function renderInner() {
   $('#sums').innerHTML += `
     <div class="sum lock"><b>${LST ? pct(LSH / LST, 1) : '–'}</b><span>🔒 Locked win picks</span><small>${LST ? LSH + '-' + (LST - LSH) : 'counts games picked before kickoff'}</small></div>
     <div class="sum lock"><b>${LAH + LAM ? pct(LAH / (LAH + LAM), 1) : '–'}</b><span>🔒 Locked spread</span><small>${LAH + LAM ? LAH + '-' + LAM : 'starts with the next finished game'}</small></div>`;
+  railRender(games, thisWeek); navRender();
   $('#list').innerHTML = teamBox(games) + (TEAM ? '' : weekBoard([...thisWeek, ...post.filter((g) => g.week === CUR)]) + titleBoard()) + movesBoard(games) +
     (thisWeek.length ? '<div class="gh">This week</div>' + proj(thisWeek) + (TEAM ? thisWeek.map(card).join('') : '') : (TEAM ? '' : '<div class="note">No more games left this week.</div>')) +
     (Object.keys(future).length ? '<div class="gh">Rest of season</div>' + Object.keys(future).map(Number).sort((a, b) => a - b).map((n) => `<details data-k="f${n}" ${isOpen('f' + n, n === CUR + 1) ? 'open' : ''}><summary>Week ${n}: ${future[n].length} games · exp ${projText(future[n])}</summary>${future[n].map(card).join('')}</details>`).join('') : '') +

@@ -127,7 +127,7 @@ body{border-top:6px solid #bf5700}h1{color:#bf5700}
     <h1>Calcutta 2026</h1>
     <div class="sub" id="asof">Loading…</div>
     <div class="sub" id="upd">Live scores: waiting…</div>
-    <div class="sub" style="font-size:11px;opacity:.7">App version 17 (Longhorn orange) · pull down to force refresh</div>
+    <div class="sub" style="font-size:11px;opacity:.7">App version 18 (teams ranked by title odds) · pull down to force refresh</div>
     <button id="inst" class="dl">📲 Download App</button> <button id="dl" class="dl">⬇ Download CSV</button>
     <div id="instHelp" class="sub" hidden></div>
   </header>
@@ -277,14 +277,14 @@ function renderCombined() {
   document.querySelectorAll('#combTable th[data-k]').forEach((h) => (h.onclick = () => { CSORT = h.dataset.k; renderCombined(); }));
 }
 
-let TSORT = 'm';
+let TSORT = 'c';
 function renderTeams() {
   const owner = {};
   M.groups.forEach((g) => g.teams.forEach((a) => (owner[a] = g)));
   const arr = [...M.teams].sort((a, b) => (TSORT === 'name' ? a.name.localeCompare(b.name) : b[TSORT] - a[TSORT]));
   const th = (k, l) => `<th data-k="${k}">${l}${TSORT === k ? ' ▾' : ''}</th>`;
-  $('#teamTable').innerHTML = `<tr>${th('name', 'Team')}<th>Owner</th>${th('w', 'Rec')}${th('m', 'Playoffs')}${th('c', 'Title')}${th('a3', 'Reach SB')}${th('worst', 'Worst')}${th('ev', 'Exp $')}</tr>` +
-    arr.map((t) => `<tr><td>${t.name}</td><td><span class="mini">${avatar(owner[t.abbr].buyer)}${owner[t.abbr].buyer}</span></td><td>${rec(t)}</td><td>${pctSmart(t.m)}</td><td>${pctSmart(t.c)}</td><td>${pctSmart(t.a3)}</td><td>${pctSmart(t.worst)}</td><td>${money(t.ev)}</td></tr>`).join('');
+  $('#teamTable').innerHTML = `<tr><th>#</th>${th('name', 'Team')}<th>Owner</th>${th('w', 'Rec')}${th('m', 'Playoffs')}${th('c', 'Title')}${th('a3', 'Reach SB')}${th('worst', 'Worst')}${th('ev', 'Exp $')}</tr>` +
+    arr.map((t, i) => `<tr><td>${TSORT === 'name' ? '' : i + 1}</td><td>${t.name}</td><td><span class="mini">${avatar(owner[t.abbr].buyer)}${owner[t.abbr].buyer}</span></td><td>${rec(t)}</td><td>${pctSmart(t.m)}</td><td>${pctSmart(t.c)}</td><td>${pctSmart(t.a3)}</td><td>${pctSmart(t.worst)}</td><td>${money(t.ev)}</td></tr>`).join('');
   document.querySelectorAll('#teamTable th[data-k]').forEach((h) => (h.onclick = () => { TSORT = h.dataset.k; renderTeams(); }));
 }
 

@@ -107,6 +107,7 @@ html,body{min-height:100dvh}body{padding-bottom:calc(92px + env(safe-area-inset-
 .pgin{animation:pgin .16s ease-out}@keyframes pgin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .gsp{text-align:center;font-size:14px;margin:2px 0 6px}.gsp b{color:var(--ink)}
 .gbet{display:block;width:100%;margin-top:8px;border:1px dashed var(--blue);background:none;color:var(--blue);border-radius:12px;padding:9px;font:700 14px inherit;cursor:pointer}
+.pp{margin:8px 4px 4px;border:1px solid var(--line);border-radius:14px;padding:8px 12px;background:var(--panel)}.ppr{display:flex;align-items:baseline;gap:10px;padding:3px 0}.ppr+.ppr{border-top:1px solid var(--line)}.ppl{width:52px;flex:none;font-size:11px;font-weight:800;letter-spacing:.1em;color:var(--muted)}.ppv{flex:1;font-size:16px;white-space:nowrap}.ppp{font-weight:800;font-size:16px}.ppp small{font-weight:600;color:var(--muted);font-size:11px}.pm{font-weight:800;font-size:17px}.pm.push{font-size:12px}.ppr small.hit{color:var(--green)}.ppr small.miss{color:var(--red)}.ppr small.push{color:var(--muted)}
 </style>
 </head>
 <body>
@@ -116,7 +117,7 @@ html,body{min-height:100dvh}body{padding-bottom:calc(92px + env(safe-area-inset-
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">College</button></div>
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v49 (screenshot import)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v50 (clean predictor panel, live spread)</div>
 </header>
 <main>
   <div id="livepage" hidden></div>
@@ -293,7 +294,30 @@ function gcToggle(id) {
   if (typeof betSync === 'function') betSync(); DET['lp' + id] = !DET['lp' + id]; render(); liveFetch(); }
   const cc = (t, d) => (t.color && t.color.length === 7 ? t.color : d);
   const logo = (t, d) => t.logo ? `<img src="${t.logo}" alt="">` : `<div class="lgo" style="background:${cc(t, d)}">${t.abbr}</div>`;
-  const gameCard = (g, noBet) => {
+  
+// Tidy predictor panel: WIN pick with %, SPREAD pick with cover %, and the result / live status of each
+function predPanel(g) {
+  const p = pred(g), lk = g.state !== 'pre' ? lkLoad(g.id) : null;
+  const win = lk ? { abbr: lk.su, conf: lk.conf } : { abbr: p.su.abbr, conf: p.conf };
+  let sp2 = null;
+  if (lk && lk.ats && lk.L !== null && lk.L !== undefined) sp2 = { abbr: lk.ats.side, line: lk.ats.side === g.home.abbr ? -lk.L : lk.L, cover: lk.ats.cover };
+  else if (p.ats) sp2 = { abbr: p.ats.side.abbr, line: p.ats.line, cover: p.ats.cover };
+  const margin = g.home.score - g.away.score;
+  const mark = (r) => (r === 'hit' ? '<span class="pm hit">✓</span>' : r === 'miss' ? '<span class="pm miss">✗</span>' : r === 'push' ? '<span class="pm push">push</span>' : '');
+  let wr = '', sr = '', wnote = '', snote = '';
+  if (g.state !== 'pre' && margin !== 0) {
+    const w = (margin > 0 ? g.home.abbr : g.away.abbr) === win.abbr ? 'hit' : 'miss';
+    if (g.state === 'post') wr = mark(w); else { wr = ''; const lv = g.sit && g.sit.wp !== null && g.sit.wp !== undefined ? (win.abbr === g.home.abbr ? g.sit.wp : 1 - g.sit.wp) : null; wnote = lv !== null ? `<small class="${w}">live ${pct(lv)}</small>` : `<small class="${w}">${w === 'hit' ? 'leading' : 'trailing'}</small>`; }
+  }
+  if (sp2 && g.state !== 'pre') {
+    const cm = (sp2.abbr === g.home.abbr ? margin : -margin) + sp2.line; const r = cm > 0 ? 'hit' : cm < 0 ? 'miss' : 'push';
+    if (g.state === 'post') sr = mark(r); else snote = `<small class="${r}">${r === 'hit' ? 'covering' : r === 'miss' ? 'not covering' : 'even'}</small>`;
+  }
+  const lock = lk ? '🔒 ' : '';
+  return `<div class="pp"><div class="ppr"><span class="ppl">WIN</span><span class="ppv"><b>${win.abbr}</b></span><span class="ppp">${pct(win.conf)}</span>${wr}${wnote}</div>
+    <div class="ppr"><span class="ppl">SPREAD</span>${sp2 ? `<span class="ppv"><b>${sp2.abbr} ${sp(sp2.line)}</b></span><span class="ppp">${pct(sp2.cover)}<small> cover</small></span>${sr}${snote}` : `<span class="ppv sub">${g.state === 'pre' ? 'no line posted yet' : 'no line saved for this game'}</span>`}</div>${lock ? '<div class="sub" style="margin-top:2px">🔒 pregame picks, locked before kickoff</div>' : ''}</div>`;
+}
+const gameCard = (g, noBet) => {
     const p = pred(g), lv = g.state === 'in' && g.sit && g.sit.wp !== null && g.sit.wp !== undefined ? g.sit.wp : null, st = liveSt(g), s = g.state === 'in' ? g.sit : null;
     const ph = lv === null ? p.ph : lv, pa = 1 - ph, pre = g.state === 'pre';
     const ball = (t) => (s && s.poss === t.abbr ? ' 🏈' : '');
@@ -304,17 +328,10 @@ function gcToggle(id) {
     const field = x === null ? '' : `<div class="fld"><span class="ez" style="background:${cc(g.away, '#1d4ed8')}">${g.away.abbr}</span><div class="yd"><i style="left:${x}%"></i></div><span class="ez" style="background:${cc(g.home, '#7c3aed')}">${g.home.abbr}</span></div>`;
     const btn = (t, v, d) => `<div class="${v < 0.5 ? 'lo' : ''}" style="background:${cc(t, d)}">${t.abbr} · ${pct(v)}</div>`;
     const open = DET['lp' + g.id];
-    // Spread pick: once a game starts ESPN drops the line, so show the pregame pick we locked (or the last line we logged)
-    const lk = g.state !== 'pre' ? lkLoad(g.id) : null;
-    let spTxt = '';
-    if (lk && lk.ats && lk.L !== null && lk.L !== undefined) spTxt = `🔒 Spread pick: <b>${lk.ats.side} ${sp(lk.ats.side === g.home.abbr ? -lk.L : lk.L)}</b> · covers ${pct(lk.ats.cover)}`;
-    else if (p.ats) spTxt = `Spread pick: <b>${p.ats.side.abbr} ${sp(p.ats.line)}</b> · covers ${pct(p.ats.cover)}`;
-    else if (g.state === 'in') spTxt = 'Spread pick unavailable: the line came off the board at kickoff';
-    const spRow = spTxt ? `<div class="gsp">${spTxt}</div>` : '';
     return `<div class="gc ${st ? 'lv-' + st : ''}" onclick="gcToggle('${g.id}')"><div class="gtop"><div class="gtm">${logo(g.away, '#1d4ed8')}<span>${g.away.rank ? '<sup>' + g.away.rank + '</sup>' : ''}${g.away.abbr}${ball(g.away)}</span></div><div class="gmid">${mid}</div><div class="gtm">${logo(g.home, '#7c3aed')}<span>${g.home.rank ? '<sup>' + g.home.rank + '</sup>' : ''}${g.home.abbr}${ball(g.home)}</span></div></div>
       ${dd ? `<div class="gdd">${dd}${s.rz ? ' · red zone' : ''}</div>` : ''}${field}${s && s.text ? `<div class="gpl">${s.text}</div>` : ''}
-      <div class="gbt">${btn(g.away, pa, '#1d4ed8')}${btn(g.home, ph, '#7c3aed')}</div>${spRow}
-      <div class="gft"><span>${lineText(g)}</span><span>Pick ${p.su.abbr} ${pct(lv === null ? p.conf : (p.su === g.home ? ph : pa))}${lv !== null ? ' · live' : ''} · tap for chart</span></div>
+      <div class="gbt">${btn(g.away, pa, '#1d4ed8')}${btn(g.home, ph, '#7c3aed')}</div>${predPanel(g)}
+      <div class="gft"><span>${lineText(g)}</span><span>tap card for chart</span></div>
       ${noBet || g.state === 'post' ? '' : `<button class="gbet" onclick="event.stopPropagation();betFromGame('${g.id}')">＋ Add bet</button>`}
       ${open && g.state !== 'pre' ? `<div class="gcx" data-lvc="${g.id}">${WPH[g.id] ? wpChart(g, WPH[g.id]) : '<div class="sub">Loading win probability…</div>'}</div>` : ''}</div>`;
   };
@@ -690,6 +707,23 @@ async function loadInjuries() {
   } catch (e) { INJ_AT = 0; }
 }
 
+// Live games: ESPN drops the line from the scoreboard at kickoff but the game summary keeps it; fetch it once and cache
+const PC = {};
+async function fillLive() {
+  const todo = Object.values(ALL).filter((g) => g.state === 'in' && g.line === null && !PC[g.id]);
+  let i = 0;
+  const worker = async () => {
+    while (i < todo.length) {
+      const g = todo[i++]; let d = null;
+      try { d = localStorage.getItem('pc26-' + g.id); } catch (e) {}
+      if (d === null) { try { const s = await getJson(SB + 'summary?event=' + g.id); const pc = (s.pickcenter || [])[0]; d = pc ? pc.details || '' : ''; try { localStorage.setItem('pc26-' + g.id, d); } catch (e) {} } catch (e) { continue; } }
+      PC[g.id] = true;
+      const L = parseLine(d, g.home.abbr, g.away.abbr); if (L !== null) g.line = L;
+    }
+  };
+  await Promise.all([worker(), worker(), worker(), worker()]);
+  if (todo.length) render();
+}
 // Closing line for finished games (ESPN game summary, DraftKings)
 async function fillSpreads() {
   const todo = Object.values(ALL).filter((g) => g.state === 'post' && g.line === null && !SPREAD[g.id]);
@@ -888,7 +922,7 @@ function card(g) {
     <div class="row"><b>${rk(g.away)}${nm(g.away.abbr)} <small>${g.away.record}</small></b><b>${pct(p.pa)}</b></div>
     <div class="bar"><i style="width:${p.pa * 100}%"></i></div>
     <div class="row"><b>${rk(g.home)}${nm(g.home.abbr)} <small>${g.home.record} · home</small></b><b>${pct(p.ph)}</b></div>
-    <div class="pick"><div>Pick: <b>${nm(p.su.abbr)}</b> ${pct(p.conf)}${p.mkt ? ' <span class="sub">(model + line)</span>' : ''}</div>${ats}</div>
+    <div class="pick">${predPanel(g)}<div class="sub" style="margin-top:4px">${p.mkt ? 'Win % blends our model with the line' : 'Win % is our model only (no line yet)'} · model ${byText(g, p.mh)}${g.line !== null ? ' · line ' + byText(g, g.line) : ''}</div></div>
     ${p.inj ? `<div class="sub">🩹 Starters hurt (info only): ${[['a', g.away], ['h', g.home]].filter(([k]) => p.inj[k].pts).map(([k, t]) => `${t.abbr} −${p.inj[k].pts.toFixed(1)} (${p.inj[k].list.join(', ')})`).join(' · ')}</div>` : ''}
     ${lmBlock(g)}
   </div>`;
@@ -1015,6 +1049,7 @@ async function tick() {
     LAST = new Date();
     render();
     liveFetch();
+    fillLive();
   } catch (e) { $('#upd').textContent = 'Live scores unavailable · retrying'; }
   const g = Object.values(ALL);
   const hot = g.some((x) => x.state === 'in') || g.some((x) => x.state === 'pre' && x.start - Date.now() < 20 * 60 * 1000 && x.start - Date.now() > -3600e3);

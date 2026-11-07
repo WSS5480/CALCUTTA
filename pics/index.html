@@ -55,6 +55,7 @@ select#team{width:100%;max-width:320px;margin:2px 0 6px;padding:9px 12px;border:
 .sum.lock{border-color:#bf5700;background:#fdf1e6}
 body{border-top:6px solid #bf5700}h1{color:#bf5700}
 
+[hidden]{display:none!important}
 /* dark live-board look */
 body.dark{--bg:#0a0c10;--panel:#13161d;--panel2:#1b1f29;--line:#272c38;--ink:#eef0f4;--muted:#8b93a3;--blue:#f08a3c;--green:#4fd18b;--red:#ff5a4d;border-top-color:#f08a3c}
 body.dark h1{color:#f08a3c}body.dark .lg button{background:var(--panel);color:var(--blue)}body.dark .lg button.on{background:var(--blue);color:#0a0c10}
@@ -75,6 +76,16 @@ header{position:relative}
 .bn{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:space-around;background:var(--panel);border-top:1px solid var(--line);padding:6px 4px max(8px,env(safe-area-inset-bottom));z-index:20}
 .bn button{background:none;border:0;color:var(--muted);font:600 11px inherit;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 10px;cursor:pointer;position:relative}.bn button span{font-size:19px}.bn button.on{color:var(--ink)}.bn .dot{position:absolute;top:2px;right:10px;width:8px;height:8px;border-radius:50%;background:var(--red)}
 body{padding-bottom:84px}
+
+.lpg h2{margin:6px 0 2px;font-size:30px;letter-spacing:-.02em}.lchips{display:flex;gap:8px;overflow-x:auto;margin:8px -16px 10px;padding:0 16px;scrollbar-width:none}.lchips::-webkit-scrollbar{display:none}
+.lchips button{flex:0 0 auto;border:0;background:none;color:var(--muted);font:600 14px inherit;padding:10px 14px;border-radius:14px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}.lchips button b{font-size:20px;color:var(--ink)}.lchips button.on{background:var(--panel2);color:var(--ink)}
+.gc{background:linear-gradient(170deg,var(--panel2),var(--panel) 55%);border:1px solid var(--line);border-radius:26px;padding:16px 14px 12px;margin:12px 0;cursor:pointer}.gc.lv-hit{border-color:#2f7a52}.gc.lv-miss{border-color:#8a2f28}
+.gtop{display:grid;grid-template-columns:1fr auto 1fr;align-items:start;gap:4px;text-align:center}.gtm{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:14px;color:var(--ink)}.gtm img,.gtm .lgo{width:64px;height:64px;object-fit:contain}.gtm .lgo{border-radius:50%;display:grid;place-items:center;font-weight:800;color:#fff}
+.gtm sup{color:var(--muted);font-size:12px;margin-right:3px}.gmid{padding-top:4px}.gscore{display:flex;align-items:center;gap:22px;font-size:46px;font-weight:800;line-height:1}.gscore em{font-style:normal}
+.gst{font-size:12px;font-weight:800;letter-spacing:.1em;color:var(--red);margin-top:6px}.gst.hit{color:var(--green)}.gst.fin{color:var(--muted);letter-spacing:0;font-size:15px}.gclk{color:var(--muted);font-size:13px}.gdd{color:var(--muted);font-size:15px;margin:10px 0 2px;text-align:center}
+.gc .fld{margin:6px 8px}.gpl{color:var(--muted);font-size:13px;text-align:center;margin:8px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gbt{display:flex;gap:10px;margin:8px 0}.gbt div{flex:1;text-align:center;border-radius:999px;padding:13px 6px;font-weight:700;font-size:16px;color:#fff}.gbt div.lo{opacity:.35}
+.gft{display:flex;justify-content:space-between;color:var(--muted);font-size:12px;margin-top:6px}.gcx{margin-top:8px;border-top:1px solid var(--line);padding-top:8px}
 </style>
 </head>
 <body>
@@ -84,9 +95,10 @@ body{padding-bottom:84px}
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">College</button></div>
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Pics v35 (dark live board)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Pics v36 (live page)</div>
 </header>
 <main>
+  <div id="livepage" hidden></div>
   <div class="rail" id="rail"></div><div class="dots" id="dots"></div>
   <div class="sums" id="sums"></div>
   <div id="list"></div>
@@ -137,7 +149,7 @@ function parseLine(text, home, away) {
 function parseEvents(j, week) {
   return (j.events || []).map((e) => {
     const c = e.competitions[0], t = e.status.type;
-    const cs = c.competitors.map((x) => ({ abbr: ab(x.team.abbreviation), score: parseInt(x.score, 10) || 0, home: x.homeAway === 'home', record: (x.records && x.records[0] && x.records[0].summary) || '', color: x.team.color ? '#' + x.team.color : '', rank: x.curatedRank && x.curatedRank.current > 0 && x.curatedRank.current <= 25 ? x.curatedRank.current : 0 }));
+    const cs = c.competitors.map((x) => ({ abbr: ab(x.team.abbreviation), score: parseInt(x.score, 10) || 0, home: x.homeAway === 'home', record: (x.records && x.records[0] && x.records[0].summary) || '', color: x.team.color ? '#' + x.team.color : '', logo: x.team.logo || '', rank: x.curatedRank && x.curatedRank.current > 0 && x.curatedRank.current <= 25 ? x.curatedRank.current : 0 }));
     c.competitors.forEach((x) => { TEAMID[x.team.id] = ab(x.team.abbreviation); NAMES[ab(x.team.abbreviation)] = x.team.shortDisplayName || x.team.displayName || x.team.abbreviation; });
     cs.sort((a, b) => a.home - b.home);
     const o = c.odds && c.odds[0];
@@ -236,15 +248,54 @@ function openGame(id) {
 }
 function navRender() {
   const anyLive = Object.values(ALL).some((g) => g.state === 'in');
-  const it = [['all', '🏠', 'Games'], ['live', '📡', 'Live'], ['win', '✅', 'Winning'], ['lose', '🔻', 'Losing'], ['won', '🏁', 'Final']];
-  $('#bn').innerHTML = it.map(([k, i, l]) => `<button class="${FILT === k ? 'on' : ''}" onclick="navGo('${k}')"><span>${i}</span>${l}${k === 'live' && anyLive ? '<i class="dot"></i>' : ''}</button>`).join('');
+  const it = [['all', '🏠', 'Games'], ['livepg', '📡', 'Live'], ['win', '✅', 'Winning'], ['lose', '🔻', 'Losing'], ['won', '🏁', 'Final']];
+  $('#bn').innerHTML = it.map(([k, i, l]) => `<button class="${(k === 'livepg' ? VIEW === 'live' : VIEW !== 'live' && FILT === k) ? 'on' : ''}" onclick="navGo('${k}')"><span>${i}</span>${l}${k === 'livepg' && anyLive ? '<i class="dot"></i>' : ''}</button>`).join('');
 }
 function navGo(k) {
+  if (k === 'livepg') { setView('live'); return; }
+  if (VIEW === 'live') { VIEW = 'main'; try { localStorage.setItem('pics-view', 'main'); } catch (e) {} }
   FILT = k === 'won' ? 'won' : k; try { localStorage.setItem('pics-filt', FILT); } catch (e) {} DET.wkrank = true; render();
   const el = document.querySelector('[data-k="wkrank"]'); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); else window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 document.addEventListener('DOMContentLoaded', () => { applyTheme(); $('#thm').onclick = () => { DARK = !DARK; try { localStorage.setItem('pics-dark', DARK ? '1' : '0'); } catch (e) {} applyTheme(); }; $('#rail').addEventListener('scroll', railDots, { passive: true }); });
 if (document.readyState !== 'loading') { applyTheme(); }
+
+// ---- Live page: big game cards (logos, score, down & distance, field bar, last play, win % buttons), tap for the chart ----
+let VIEW = (() => { try { return localStorage.getItem('pics-view') === 'live' ? 'live' : 'main'; } catch (e) { return 'main'; } })();
+let LF = 'all';
+function setView(v) { VIEW = v; try { localStorage.setItem('pics-view', v); } catch (e) {} render(); window.scrollTo(0, 0); }
+function setLF(f) { LF = f; render(); }
+function gcToggle(id) { DET['lp' + id] = !DET['lp' + id]; render(); liveFetch(); }
+function livePageRender(games) {
+  const el = $('#livepage'); if (!el) return;
+  const on = VIEW === 'live';
+  el.hidden = !on; ['#sums', '#list', '#rail', '#dots'].forEach((s) => { const n = $(s); if (n) n.hidden = on; });
+  if (!on) return;
+  const wk = games.filter((g) => g.week === CUR || g.state === 'in');
+  const grp = { live: wk.filter((g) => g.state === 'in'), pre: wk.filter((g) => g.state === 'pre').sort((a, b) => a.start - b.start), post: wk.filter((g) => g.state === 'post').sort((a, b) => b.start - a.start) };
+  const list = LF === 'all' ? [...grp.live, ...grp.pre, ...grp.post] : LF === 'live' ? grp.live : LF === 'pre' ? grp.pre : grp.post;
+  const chip = (k, l, n) => `<button class="${LF === k ? 'on' : ''}" onclick="setLF('${k}')"><b>${n}</b>${l}</button>`;
+  const cc = (t, d) => (t.color && t.color.length === 7 ? t.color : d);
+  const logo = (t, d) => t.logo ? `<img src="${t.logo}" alt="">` : `<div class="lgo" style="background:${cc(t, d)}">${t.abbr}</div>`;
+  const card = (g) => {
+    const p = pred(g), lv = g.state === 'in' && g.sit && g.sit.wp !== null && g.sit.wp !== undefined ? g.sit.wp : null, st = liveSt(g), s = g.state === 'in' ? g.sit : null;
+    const ph = lv === null ? p.ph : lv, pa = 1 - ph, pre = g.state === 'pre';
+    const ball = (t) => (s && s.poss === t.abbr ? ' 🏈' : '');
+    const mid = pre ? `<div class="gscore" style="font-size:22px">${new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</div><div class="gclk">Kickoff</div>`
+      : `<div class="gscore"><em>${g.away.score}</em><em>${g.home.score}</em></div>` + (g.state === 'in' ? `<div class="gst ${st === 'hit' ? 'hit' : ''}">● LIVE</div><div class="gclk">${g.detail}</div>` : '<div class="gst fin">Final</div>');
+    const dd = s && s.down ? `${ord(s.down)} & ${s.dist}` : '';
+    const x = s && s.yl !== undefined ? Math.max(1, Math.min(99, 100 - s.yl)) : null;
+    const field = x === null ? '' : `<div class="fld"><span class="ez" style="background:${cc(g.away, '#1d4ed8')}">${g.away.abbr}</span><div class="yd"><i style="left:${x}%"></i></div><span class="ez" style="background:${cc(g.home, '#bf5700')}">${g.home.abbr}</span></div>`;
+    const btn = (t, v, d) => `<div class="${v < 0.5 ? 'lo' : ''}" style="background:${cc(t, d)}">${t.abbr} · ${pct(v)}</div>`;
+    const open = DET['lp' + g.id];
+    return `<div class="gc ${st ? 'lv-' + st : ''}" onclick="gcToggle('${g.id}')"><div class="gtop"><div class="gtm">${logo(g.away, '#1d4ed8')}<span>${g.away.rank ? '<sup>' + g.away.rank + '</sup>' : ''}${g.away.abbr}${ball(g.away)}</span></div><div class="gmid">${mid}</div><div class="gtm">${logo(g.home, '#bf5700')}<span>${g.home.rank ? '<sup>' + g.home.rank + '</sup>' : ''}${g.home.abbr}${ball(g.home)}</span></div></div>
+      ${dd ? `<div class="gdd">${dd}${s.rz ? ' · red zone' : ''}</div>` : ''}${field}${s && s.text ? `<div class="gpl">${s.text}</div>` : ''}
+      <div class="gbt">${btn(g.away, pa, '#1d4ed8')}${btn(g.home, ph, '#bf5700')}</div>
+      <div class="gft"><span>${lineText(g)}</span><span>Pick ${p.su.abbr} ${pct(lv === null ? p.conf : (p.su === g.home ? ph : pa))}${lv !== null ? ' · live' : ''} · tap for chart</span></div>
+      ${open && g.state !== 'pre' ? `<div class="gcx" data-lvc="${g.id}">${WPH[g.id] ? wpChart(g, WPH[g.id]) : '<div class="sub">Loading win probability…</div>'}</div>` : ''}</div>`;
+  };
+  el.innerHTML = `<div class="lpg"><h2>Live</h2><div class="lchips">${chip('all', 'All', wk.length)}${chip('live', 'Live', grp.live.length)}${chip('pre', 'Upcoming', grp.pre.length)}${chip('post', 'Final', grp.post.length)}</div>${list.map(card).join('') || '<div class="note">No games here.</div>'}</div>`;
+}
 function liveSt(g) {
   if (g.state !== 'in') return '';
   const su = pred(g).su, d = (su === g.home ? 1 : -1) * (g.home.score - g.away.score);
@@ -601,12 +652,13 @@ function grade(g) {
 // ---- Live view: score, down & distance, field bar, last play and a win-probability line chart (ESPN play-by-play probabilities) ----
 const WPH = {};
 async function liveFetch() {
-  const want = Object.values(ALL).filter((g) => (g.state === 'in' || (g.state === 'post' && !WPH[g.id])) && ((TEAM && g.state === 'in' && (g.home.abbr === TEAM || g.away.abbr === TEAM)) || isOpen('wk' + g.id, false) || isOpen('g' + g.id, false)));
+  const want = Object.values(ALL).filter((g) => (g.state === 'in' || (g.state === 'post' && !WPH[g.id])) && ((TEAM && g.state === 'in' && (g.home.abbr === TEAM || g.away.abbr === TEAM)) || isOpen('wk' + g.id, false) || isOpen('g' + g.id, false) || DET['lp' + g.id]));
   await Promise.all(want.slice(0, 6).map(async (g) => {
     try { const s = await getJson(SB + 'summary?event=' + g.id); WPH[g.id] = (s.winprobability || []).map((w) => w.homeWinPercentage); } catch (e) {}
   }));
   // update the open charts in place; a full re-render made the page jump and the cards flicker
   want.forEach((g) => document.querySelectorAll('[data-lv="' + g.id + '"]').forEach((el) => { el.outerHTML = liveView(g); }));
+  want.forEach((g) => document.querySelectorAll('[data-lvc="' + g.id + '"]').forEach((el) => { if (WPH[g.id]) el.innerHTML = wpChart(g, WPH[g.id]); }));
 }
 const ord = (n) => ['', '1st', '2nd', '3rd', '4th'][n] || '';
 function wpChart(g, arr) {
@@ -746,7 +798,7 @@ function renderInner() {
   $('#sums').innerHTML += `
     <div class="sum lock"><b>${LST ? pct(LSH / LST, 1) : '–'}</b><span>🔒 Locked win picks</span><small>${LST ? LSH + '-' + (LST - LSH) : 'counts games picked before kickoff'}</small></div>
     <div class="sum lock"><b>${LAH + LAM ? pct(LAH / (LAH + LAM), 1) : '–'}</b><span>🔒 Locked spread</span><small>${LAH + LAM ? LAH + '-' + LAM : 'starts with the next finished game'}</small></div>`;
-  railRender(games, thisWeek); navRender();
+  railRender(games, thisWeek); livePageRender(games); navRender();
   $('#list').innerHTML = teamBox(games) + (TEAM ? '' : weekBoard([...thisWeek, ...post.filter((g) => g.week === CUR)]) + titleBoard()) + movesBoard(games) +
     (thisWeek.length ? '<div class="gh">This week</div>' + proj(thisWeek) + (TEAM ? thisWeek.map(card).join('') : '') : (TEAM ? '' : '<div class="note">No more games left this week.</div>')) +
     (Object.keys(future).length ? '<div class="gh">Rest of season</div>' + Object.keys(future).map(Number).sort((a, b) => a - b).map((n) => `<details data-k="f${n}" ${isOpen('f' + n, n === CUR + 1) ? 'open' : ''}><summary>Week ${n}: ${future[n].length} games · exp ${projText(future[n])}</summary>${future[n].map(card).join('')}</details>`).join('') : '') +

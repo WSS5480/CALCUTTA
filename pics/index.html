@@ -53,6 +53,7 @@ details>summary::after{content:'▾';color:var(--blue)}details[open]>summary::af
 .lg{display:flex;gap:8px;margin:6px 0}.lg button{border:1px solid var(--blue);background:#fff;color:var(--blue);border-radius:999px;padding:6px 16px;font:700 14px inherit;cursor:pointer}.lg button.on{background:var(--blue);color:#fff}
 input#tsearch{width:100%;max-width:320px;margin:2px 0 4px;padding:9px 12px;border:1px solid rgba(255,255,255,.4);border-radius:12px;background:rgba(0,0,0,.28);color:#fff;font:600 15px inherit;box-sizing:border-box}input#tsearch::placeholder{color:rgba(255,255,255,.7)}
 .gc{position:relative}.gpin{position:absolute;top:6px;right:8px;z-index:2;border:1px solid rgba(124,58,237,.5);background:rgba(124,58,237,.12);color:inherit;border-radius:999px;font:600 11px inherit;padding:3px 9px}.gpin.on{background:#7c3aed;color:#fff}.pinhd{font:700 12px inherit;letter-spacing:.08em;text-transform:uppercase;opacity:.75;margin:12px 4px 6px}
+.ldate{display:inline-block;font:700 11px inherit;padding:2px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted);vertical-align:middle}.ldate.diff{background:#facc15;border-color:#facc15;color:#1b1400}.also{margin:8px 4px 0}
 header .lg{margin-top:86px;flex-wrap:wrap}
 select#team{width:100%;max-width:320px;margin:2px 0 6px;padding:9px 12px;border:1px solid var(--blue);border-radius:12px;background:#fff;color:var(--ink);font:600 15px inherit}
 .sum.lock{border-color:#7c3aed;background:#f1ebff}
@@ -122,7 +123,7 @@ html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
 </head>
 <body>
 <div id="sc">
-<!-- Pics v94 -->
+<!-- Pics v95 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
   <h1>Oddable</h1>
@@ -130,7 +131,7 @@ html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
   <input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team">
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v94 (6-pick slips)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v95 (multi-day parlays)</div>
 </header>
 <main>
   <div id="livepage" hidden></div>
@@ -480,9 +481,13 @@ function betsRender(force) {
     pb.innerHTML = `<small class="lbl">TODAY</small><span class="amt">${money(net)}</span><small>risked ${riskTxt(td.risk)} · ${td.w}-${td.l}${td.p ? '-' + td.p : ''}</small>${td.live || td.settled ? `<small>settled ${money(td.settled)} · live ${money(td.live)}</small>` : ''}<small>tap for each bet ▾</small><div id="plbd" ${window.__plbo ? '' : 'hidden'}>${brk || '<div class="bk"><span>No bets today</span></div>'}<div class="bk tot"><span>Total wagered</span><b>${riskTxt(td.risk)}</b></div><div class="bk tot2"><span>Net today</span><b>${money(net)}</b></div></div>`;
     try { localStorage.setItem('plbhtml26', pb.innerHTML); } catch (e) {} pb.onclick = () => { window.__plbo = !window.__plbo; const d = $('#plbd'); if (d) d.hidden = !window.__plbo; };
   }
-  const allDays = { ...snap, ...days }, dkeys = Object.keys(allDays).sort().reverse();
+  const allDays = { ...snap, ...days };
+  // a parlay with legs on several days also shows up in each earlier day's log (its result still counts once, on its main day)
+  const alsoBy = {}; done.forEach((x) => { if (x.b.kind !== 'parlay') return; const pd = betDay(x.b); betDaySet(x.b).forEach((k) => { if (k !== pd && k < today) (alsoBy[k] = alsoBy[k] || []).push({ ...x, also: pd }); }); });
+  Object.keys(alsoBy).forEach((k) => { if (!allDays[k]) allDays[k] = { n: 0, risk: 0, w: 0, l: 0, p: 0, settled: 0, live: 0 }; });
+  const dkeys = Object.keys(allDays).sort().reverse();
   const nice = (k) => new Date(k + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-  const logHtmlF = () => dkeys.length ? `<details data-k="betlog" ${isOpen('betlog', false) ? 'open' : ''}><summary>Daily log (${dkeys.length} day${dkeys.length > 1 ? 's' : ''})</summary>${dkeys.map((k) => { const d = allDays[k], n = d.settled + d.live; return `<details class="dayd" data-k="d${k}" ${isOpen('d' + k, false) ? 'open' : ''}><summary class="card" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;margin:4px 0;cursor:pointer;list-style:none"><span><b>${nice(k)}${k === today ? ' · today' : ''}</b><small style="display:block;color:var(--muted)">${d.n} bet${d.n > 1 ? 's' : ''} · risked ${riskTxt(d.risk)} · ${d.w}-${d.l}${d.p ? '-' + d.p : ''}</small></span><b class="${n >= 0 ? 'hit' : 'miss'}">${money(n)}</b></summary>${(pastBy[k] || []).slice().sort(sortF).map(cardHtml).join('')}</details>`; }).join('')}</details>` : '';
+  const logHtmlF = () => dkeys.length ? `<details data-k="betlog" ${isOpen('betlog', false) ? 'open' : ''}><summary>Daily log (${dkeys.length} day${dkeys.length > 1 ? 's' : ''})</summary>${dkeys.map((k) => { const d = allDays[k], n = d.settled + d.live; return `<details class="dayd" data-k="d${k}" ${isOpen('d' + k, false) ? 'open' : ''}><summary class="card" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;margin:4px 0;cursor:pointer;list-style:none"><span><b>${nice(k)}${k === today ? ' · today' : ''}</b><small style="display:block;color:var(--muted)">${d.n} bet${d.n !== 1 ? 's' : ''} · risked ${riskTxt(d.risk)} · ${d.w}-${d.l}${d.p ? '-' + d.p : ''}${(alsoBy[k] || []).length ? ` · +${alsoBy[k].length} parlay leg${alsoBy[k].length > 1 ? 's' : ''}` : ''}</small></span><b class="${n >= 0 ? 'hit' : 'miss'}">${money(n)}</b></summary>${(pastBy[k] || []).slice().sort(sortF).map(cardHtml).join('')}${(alsoBy[k] || []).map((x) => '<div class="sub also">↳ Parlay leg on this day · result counts on ' + dayNice(x.also) + '</div>' + cardHtml(x)).join('')}</details>`; }).join('')}</details>` : '';
   const stat = (t, r, s) => `<div class="sum"><b>${r.s}</b><span>${t}</span><small>${r.pc}${s || ''}</small></div>`;
   const stake = fin.reduce((a, x) => a + (x.b.stake || 0), 0);
   const ordr = { live: 0, pending: 1, won: 2, lost: 2, push: 2 };
@@ -661,12 +666,16 @@ const badgeOf = (r, money, b) => r.st === 'live' ? `<span class="b ${r.cur === '
 const payTxt = (b) => (b.stake ? ` <small>· $${b.stake}</small>` : '') + (b.mult ? ` <small>· pays ${b.mult}x</small>` : (b.odds && b.odds !== -110 ? ` <small>· ${sgn(b.odds)}</small>` : ''));
 const legMark = (st, cur) => (st === 'won' ? '<span class="pm hit">✓</span>' : st === 'lost' ? '<span class="pm miss">✗</span>' : st === 'push' ? '<span class="pm push">push</span>' : st === 'live' ? `<span class="pm ${cur === 'won' ? 'hit' : cur === 'lost' ? 'miss' : 'push'}">●</span>` : '<span class="pm push">·</span>');
 function legText(l) { if (!l.gid) return l.text; const g = gameOf(l.gid); const a = g ? g.away.abbr : '?', h = g ? g.home.abbr : '?'; return `${l.side} ${l.type === 'sp' ? sgn(l.line) : 'to win'} <small>${a} @ ${h}</small>`; }
+const legDay = (l) => { const g = l.gid ? gameOf(l.gid) : null; return g ? dayKey(g.start) : (l.day || null); };
+const betDaySet = (b) => b.kind !== 'parlay' ? [betDay(b)] : [...new Set(b.legs.map(legDay).filter(Boolean))].sort();
+const dayNice = (k) => new Date(k + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 function parlayCard(b, r, money) {
+  const ds = betDaySet(b), multi = ds.length > 1;
   const hit = r.legs.filter((x) => x.st === 'won' || (x.st === 'live' && x.cur === 'won')).length;
   const rows = b.legs.map((l, i) => { const x = r.legs[i], g = x.g; const sc = g && g.state !== 'pre' ? `${g.away.abbr} ${g.away.score}–${g.home.abbr} ${g.home.score}${g.state === 'in' ? ' · ' + g.detail : ' · Final'}` : g ? new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '';
     const man = !l.gid ? `<span class="legbtn"><button onclick="legSet('${b.id}',${i},'won')">✓</button><button onclick="legSet('${b.id}',${i},'lost')">✗</button><button onclick="legSet('${b.id}',${i},'push')">push</button>${l.res ? `<button onclick="legSet('${b.id}',${i},'')">reset</button>` : ''}</span>` : '';
-    return `<div class="leg">${legMark(x.st, x.cur)}<div><b>${legText(l)}</b>${sc ? `<small class="sub" style="display:block">${sc}</small>` : ''}${man}</div></div>`; }).join('');
-  return `<div class="bcard ${r.st === 'won' ? 'bw' : r.st === 'lost' ? 'bl' : r.st === 'live' ? (r.cur === 'lost' ? 'bl' : 'bw') : ''}"><div class="bhd"><div><div class="bwhat">${b.legs.length}-leg parlay${payTxt(b)}</div><div class="sub">${hit} of ${b.legs.length} hitting</div></div>${badgeOf(r, money, b)}</div><div class="legs">${rows}</div>
+    const ld = multi ? legDay(l) : null; return `<div class="leg">${legMark(x.st, x.cur)}<div><b>${legText(l)}</b>${ld ? ` <span class="ldate ${ld !== ds[0] ? 'diff' : ''}">${dayNice(ld)}</span>` : ''}${sc ? `<small class="sub" style="display:block">${sc}</small>` : ''}${man}</div></div>`; }).join('');
+  return `<div class="bcard ${r.st === 'won' ? 'bw' : r.st === 'lost' ? 'bl' : r.st === 'live' ? (r.cur === 'lost' ? 'bl' : 'bw') : ''}"><div class="bhd"><div><div class="bwhat">${b.legs.length}-leg parlay${payTxt(b)}</div><div class="sub">${hit} of ${b.legs.length} hitting${multi ? ` · <b class="ldate diff">spans ${ds.length} days</b>` : ''}</div></div>${badgeOf(r, money, b)}</div><div class="legs">${rows}</div>
     <div class="bbtn"><button onclick="betEdit('${b.id}')">Edit</button><button onclick="betDel('${b.id}')">Delete</button></div></div>`;
 }
 function propCard(b, r, money) {

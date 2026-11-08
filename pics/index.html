@@ -100,7 +100,7 @@ body{padding-bottom:84px}
 #bform label{display:block;margin:8px 0;font-size:13px;color:var(--muted)}#bform input,#bform select{display:block;width:100%;margin-top:4px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);font:600 16px inherit}
 .bcard{border:1px solid var(--line);border-radius:28px;padding:12px 10px 10px;margin:14px 0;background:var(--panel)}.bcard.bw{border-color:var(--green)}.bcard.bl{border-color:var(--red)}.bcard .gc{margin:8px 0 0}.bhd{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:0 6px}.bcard .bbtn{padding:0 6px}
 #plb{position:fixed;top:max(10px,env(safe-area-inset-top));right:12px;z-index:40;padding:8px 16px;border-radius:999px;font:800 17px/1.1 system-ui;text-align:center;border:1.5px solid;backdrop-filter:blur(8px);box-shadow:0 4px 18px #0008}#plb small.lbl{font-size:9px;letter-spacing:.14em;opacity:.7;margin:0 0 2px}#plb small{display:block;font-size:10px;font-weight:700;opacity:.85;margin-top:1px}
-#plb.pos{color:#4fd18b;background:#0e2a1fe6;border-color:#4fd18b}#plb.neg{color:#ff5a4d;background:#2e1210e6;border-color:#ff5a4d}body.bets .thm{display:none}
+#plbd{text-align:left;margin-top:8px;border-top:1px solid #fff3;padding-top:6px;min-width:230px;max-width:80vw;font:600 12px/1.3 system-ui;color:#eee}#plbd .bk{display:flex;justify-content:space-between;gap:10px;padding:3px 0}#plbd .bk i{display:block;font-style:normal;opacity:.65;font-size:10px}#plbd .bk b.p{color:#4fd18b}#plbd .bk b.n{color:#ff5a4d}#plbd .tot{border-top:1px solid #fff3;margin-top:4px;padding-top:5px;font-weight:800}[hidden]{display:none!important}#plb{cursor:pointer}#plb.pos{color:#4fd18b;background:#0e2a1fe6;border-color:#4fd18b}#plb.neg{color:#ff5a4d;background:#2e1210e6;border-color:#ff5a4d}body.bets .thm{display:none}
 html,body{min-height:100dvh}body{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
 .bn{transform:translate3d(0,0,0);-webkit-transform:translate3d(0,0,0);will-change:transform}
 .chips{position:sticky;top:0;z-index:15;background:var(--bg);padding:8px 0;margin:0}
@@ -113,14 +113,14 @@ html,body{min-height:100dvh}body{padding-bottom:calc(92px + env(safe-area-inset-
 </style>
 </head>
 <body>
-<!-- Pics v55 -->
+<!-- Pics v56 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
   <h1>Oddable</h1>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">College</button></div>
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v55 (import reader)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v56 (banner breakdown)</div>
 </header>
 <main>
   <div id="livepage" hidden></div>
@@ -414,10 +414,14 @@ function betsRender() {
   let snap = {}; try { snap = JSON.parse(localStorage.getItem('betlog26')) || {}; } catch (e) {}
   Object.keys(days).filter((k) => k < today).forEach((k) => { snap[k] = { ...days[k] }; });
   try { localStorage.setItem('betlog26', JSON.stringify(snap)); } catch (e) {}
+  const bdLabel = (b) => b.kind === 'parlay' ? b.legs.length + '-leg parlay' : b.kind === 'prop' ? b.text : `${b.side} ${b.type === 'sp' ? sgn(b.line) : 'ML'} (${b.away}@${b.home})`;
+  const brk = done.filter(({ b }) => betDay(b) === today).map(({ b, r }) => { const pl = r.st === 'live' ? betPL(b, r.cur) : ['won', 'lost'].includes(r.st) ? betPL(b, r.st) : 0; return `<div class="bk"><span>${bdLabel(b).replace(/</g, '&lt;')}<i>${u0(b) ? (unitsMode ? u0(b) + 'u' : '$' + u0(b)) : ''} · ${r.st === 'live' ? 'live ' + r.cur : r.st}</i></span><b class="${pl < 0 ? 'n' : pl > 0 ? 'p' : ''}">${['won', 'lost'].includes(r.st) || r.st === 'live' ? money(pl) : '–'}</b></div>`; }).join('');
+  window.__brk = brk;
   const settledPL = td.settled, livePL = td.live, net = td.settled + td.live;
   const pb = $('#plb'); if (pb) {
     pb.className = net >= 0 ? 'pos' : 'neg';
-    pb.innerHTML = `<small class="lbl">TODAY</small>${money(net)}<small>risked ${riskTxt(td.risk)} · ${td.w}-${td.l}${td.p ? '-' + td.p : ''}</small>${td.live || td.settled ? `<small>settled ${money(td.settled)} · live ${money(td.live)}</small>` : ''}`;
+    pb.innerHTML = `<small class="lbl">TODAY</small>${money(net)}<small>risked ${riskTxt(td.risk)} · ${td.w}-${td.l}${td.p ? '-' + td.p : ''}</small>${td.live || td.settled ? `<small>settled ${money(td.settled)} · live ${money(td.live)}</small>` : ''}<small>tap for each bet ▾</small><div id="plbd" ${window.__plbo ? '' : 'hidden'}>${brk || '<div class="bk"><span>No bets today</span></div>'}<div class="bk tot"><span>Net today</span><b>${money(net)}</b></div></div>`;
+    pb.onclick = () => { window.__plbo = !window.__plbo; const d = $('#plbd'); if (d) d.hidden = !window.__plbo; };
   }
   const allDays = { ...snap, ...days }, dkeys = Object.keys(allDays).sort().reverse();
   const nice = (k) => new Date(k + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });

@@ -37,6 +37,7 @@ main{max-width:720px;margin:0 auto;padding:0 16px}
 a.back{color:var(--blue)}
 #plb{position:fixed;top:max(10px,env(safe-area-inset-top));right:12px;z-index:40;padding:8px 16px;border-radius:16px;min-width:116px;font:800 17px/1.1 system-ui;text-align:center;border:1.5px solid;backdrop-filter:blur(8px);box-shadow:0 4px 18px #0008}#plb small.lbl{font-size:9px;letter-spacing:.14em;opacity:.7;margin:0 0 2px}#plb small{display:block;font-size:10px;font-weight:700;opacity:.85;margin-top:1px}
 #plbd{text-align:left;margin-top:8px;border-top:1px solid #fff3;padding-top:6px;width:min(260px,72vw);font:600 12px/1.3 system-ui;color:#eee}#plbd .bk{display:flex;justify-content:space-between;gap:10px;padding:3px 0}#plbd .bk i{display:block;font-style:normal;opacity:.65;font-size:10px}#plbd .bk b.p{color:#4fd18b}#plbd .bk b.n{color:#ff5a4d}#plbd .tot{border-top:1px solid #fff3;margin-top:4px;padding-top:5px;font-weight:800}#plbd .tot2{font-weight:800}[hidden]{display:none!important}#plb{cursor:pointer}#plb{color:#fff;background:linear-gradient(135deg,#6d35e0f0,#3b1a8cf0);border-color:#ffffff59}#plb .amt{display:block;font-size:22px;letter-spacing:-.01em;margin:1px 0 2px}#plb.pos .amt{color:#8dffbd}#plb.neg .amt{color:#ff9a90}body.bets .thm{display:none}
+#plb:empty{display:none}
 #mir{position:absolute;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0}
 header .lg{margin-top:86px}
 .fwatch{border:1px solid rgba(124,58,237,.5);background:rgba(124,58,237,.12);color:inherit;border-radius:999px;font:600 12px inherit;padding:4px 10px}.fwatch.on{background:#7c3aed;color:#fff}
@@ -48,7 +49,7 @@ header .lg{margin-top:86px}
   <h1>Oddable</h1>
   <div class="lg" id="lg"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable sports v3 (banner, live odds, watch fix)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable sports v3 (banner, live odds, no flash)</div>
 </header>
 <main>
   <div class="day"><button onclick="goDay(-1)">◀</button><b id="dl"></b><button onclick="goDay(1)">▶</button></div>
@@ -79,9 +80,10 @@ const dayDate = () => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate
 
 // banner: mirror the My Bets banner (grading lives in the main app, loaded in a hidden frame)
 let PLBO = false;
-function mirror() { try { const d = $('#mir').contentDocument; const s = d && d.getElementById('plb'); const m = $('#plb'); if (!s || !m || !s.innerHTML) return; if (m.dataset.h !== s.innerHTML) { m.dataset.h = s.innerHTML; m.innerHTML = s.innerHTML; m.className = s.className; m.setAttribute('style', s.getAttribute('style') || ''); } const bd = $('#plbd'); if (bd) bd.hidden = !PLBO; } catch (e) {} }
+function mirror() { try { const d = $('#mir').contentDocument; const s = d && d.getElementById('plb'); const m = $('#plb'); if (!s || !m || !s.innerHTML) return; if (m.dataset.h !== s.innerHTML) { m.dataset.h = s.innerHTML; m.innerHTML = s.innerHTML; lss('plbhtml26', s.innerHTML); m.className = s.className; m.setAttribute('style', s.getAttribute('style') || ''); } const bd = $('#plbd'); if (bd) bd.hidden = !PLBO; } catch (e) {} }
+{ const c = lsg('plbhtml26'); if (c) { $('#plb').innerHTML = c; $('#plb').dataset.h = ''; { const bd = $('#plbd'); if (bd) bd.hidden = true; } } }
 $('#plb').onclick = () => { PLBO = !PLBO; const bd = $('#plbd'); if (bd) bd.hidden = !PLBO; };
-setInterval(mirror, 3000); setTimeout(mirror, 1500); setTimeout(mirror, 4000);
+setInterval(mirror, 3000); setTimeout(mirror, 600); setTimeout(mirror, 1500); setTimeout(mirror, 4000);
 // league tabs
 $('#lg').innerHTML = `<a href="./" onclick="lss('pics-lg','nfl')">NFL</a><a href="./" onclick="lss('pics-lg','cfb')">NCAA</a><a href="sports.html?lg=nba" class="${LG === 'nba' ? 'on' : ''}">NBA</a><a href="sports.html?lg=mlb" class="${LG === 'mlb' ? 'on' : ''}">MLB</a><a href="sports.html?lg=nhl" class="${LG === 'nhl' ? 'on' : ''}">NHL</a><a href="sports.html?lg=ncaab" class="${LG === 'ncaab' ? 'on' : ''}">NCAAB</a>`;
 

@@ -113,14 +113,14 @@ html,body{min-height:100dvh}body{padding-bottom:calc(92px + env(safe-area-inset-
 </style>
 </head>
 <body>
-<!-- Pics v57 -->
+<!-- Pics v58 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
   <h1>Oddable</h1>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">College</button></div>
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v57 (banner rectangle)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v58 (Kalshi winner slips)</div>
 </header>
 <main>
   <div id="livepage" hidden></div>
@@ -458,6 +458,17 @@ function parseSlip(raw) {
   m = /([A-Za-z0-9.&' -]+?)\s+wins by (?:over|more than)\s+([\d.]+)\s+points?/i.exec(txt); if (m) { o.pos = m[1].replace(/^.*?(?:Spread|Winner)\s+/i, '').trim(); o.type = 'sp'; o.line = -parseFloat(m[2]); }
   if (!o.pos) { m = /([A-Za-z0-9.&' -]+?)\s+(?:wins or )?loses by (?:fewer|less) than\s+([\d.]+)/i.exec(txt); if (m) { o.pos = m[1].replace(/^.*?(?:Spread|Winner)\s+/i, '').trim(); o.type = 'sp'; o.line = parseFloat(m[2]); } }
   if (!o.pos) { m = /([A-Za-z0-9.&' -]+?)\s+wins(?!\s+by)\b/i.exec(txt.replace(/^.*?Winner\s*/i, '')); if (m && o.t1) { o.pos = m[1].trim(); o.type = 'ml'; o.line = 0; } }
+  if (!o.pos) { // Kalshi layout without the colon: "Air Force vs Army  Army & 1.55x  Cost $50.00"
+    m = /([A-Za-z0-9.&' -]+?)\s+vs\.?\s+([A-Za-z0-9.&' -]+?)\s*(?:[&«»<>©]|\d+(?:\.\d+)?\s*x\b|Cost\b|$)/i.exec(txt);
+    if (m) {
+      const t1 = m[1].replace(/^.*?(?:FOOTBALL|BASKETBALL)\s+(?:Kalshi\s+\w+\s+)?/i, '').replace(/^[^A-Za-z0-9]+/, '').trim(); let seg = m[2].trim();
+      const d = /^(.+?)\s+\1$/i.exec(seg);
+      if (d) { o.t1 = t1; o.t2 = d[1]; o.pos = d[1]; }
+      else if (seg.toLowerCase().endsWith(t1.toLowerCase().split(' ').slice(-1)[0]) && seg.length > t1.length) { o.t1 = t1; o.pos = t1; o.t2 = seg.slice(0, seg.length - t1.length).trim() || seg; }
+      else { o.t1 = t1; o.t2 = seg; const rest = txt.slice(m.index + m[0].length); o.pos = new RegExp('^\\W*' + seg.replace(/[^A-Za-z0-9 ]/g, '.'), 'i').test(rest) || true ? seg : t1; }
+      o.type = 'ml'; o.line = 0;
+    }
+  }
   m = /Cost\s*\$?\s*([\d,]+(?:\.\d+)?)/i.exec(txt); if (m) o.stake = parseFloat(m[1].replace(/,/g, ''));
   m = /MAX\s*PAYOUT\s*\$?\s*([\d,]+(?:\.\d+)?)/i.exec(txt); if (m) o.payout = parseFloat(m[1].replace(/,/g, ''));
   m = /(\d+(?:\.\d+)?)\s*x\b/i.exec(txt); if (m) o.mult = parseFloat(m[1]);

@@ -62,7 +62,9 @@ if (process.env.RENDER_EXTERNAL_URL && process.env.KEEP_AWAKE !== '0') {
   setInterval(() => fetch(process.env.RENDER_EXTERNAL_URL + '/health').catch(() => {}), 10 * 60 * 1000);
 }
 
+const kalshi = require('../kalshi-sync/server.js');
 http.createServer(async (req, res) => {
+  if (req.url.startsWith('/kalshi')) { try { if (await kalshi.handle(req, res)) return; } catch (e) { res.statusCode = 500; return res.end('{"error":"kalshi"}'); } }
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Content-Type', 'application/json');
   if (req.url.startsWith('/health')) return res.end('{"ok":true}');

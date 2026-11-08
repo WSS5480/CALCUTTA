@@ -61,16 +61,21 @@ async function sync() {
 }
 sync(); setInterval(sync, EVERY);
 
-http.createServer(async (req, res) => {
-  const u = new URL(req.url, 'http://x'); const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'content-type': 'application/json' };
-  if (req.method === 'OPTIONS') { res.writeHead(204, cors); return res.end(); }
-  if (u.pathname === '/health') { res.writeHead(200, cors); return res.end(JSON.stringify({ ok: true, keyLoaded: !!KEY, keyId: !!KEY_ID, tokenSet: !!TOKEN, at: CACHE.at, err: CACHE.err ? 'see /debug' : null })); }
-  if (!TOKEN || u.searchParams.get('token') !== TOKEN) { res.writeHead(401, cors); return res.end(JSON.stringify({ error: 'bad token' })); }
-  if (u.pathname === '/bets') { if (Date.now() - CACHE.at > EVERY * 2) await sync(); res.writeHead(200, cors); return res.end(JSON.stringify({ at: CACHE.at, err: CACHE.err, bets: CACHE.bets })); }
-  if (u.pathname === '/debug') { // raw look at what Kalshi returns, so mapping can be tuned. No secrets.
-    let out = { err: CACHE.err, setErr: CACHE.setErr, counts: CACHE.counts };
+async function handle(req, res) { // mounted under /kalshi/*; returns false for other paths
+  const u = new URL(req.url, 'http://x'); if (!u.pathname.startsWith('/kalshi')) return false;
+  const path = u.pathname.replace(/^\/kalshi/, '') || '/';
+  const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'content-type': 'application/json' };
+  const send = (code, obj) => { res.writeHead(code, cors); res.end(obj === undefined ? '' : JSON.stringify(obj, null, path === '/debug' ? 1 : 0)); return true; };
+  if (req.method === 'OPTIONS') return send(204);
+  if (path === '/health') return send(200, { ok: true, keyLoaded: !!KEY, keyId: !!KEY_ID, tokenSet: !!TOKEN, at: CACHE.at, err: CACHE.err ? 'see /kalshi/debug' : null });
+  if (!TOKEN || u.searchParams.get('token') !== TOKEN) return send(401, { error: 'bad token' });
+  if (path === '/bets') { if (Date.now() - CACHE.at > EVERY * 2) await sync(); return send(200, { at: CACHE.at, err: CACHE.err, bets: CACHE.bets }); }
+  if (path === '/debug') { // raw look at what Kalshi returns, so the mapping can be tuned. No secrets.
+    const out = { err: CACHE.err, setErr: CACHE.setErr, counts: CACHE.counts };
     try { const f = await get('/portfolio/fills', { limit: '3' }); out.sampleFills = f.fills; if (f.fills && f.fills[0]) out.sampleMarket = (await get('/markets/' + encodeURIComponent(f.fills[0].ticker))).market; } catch (e) { out.fetchErr = e.message; }
-    res.writeHead(200, cors); return res.end(JSON.stringify(out, null, 1));
+    return send(200, out);
   }
-  res.writeHead(404, cors); res.end('{}');
-}).listen(process.env.PORT || 8080);
+  return send(404, {});
+}
+module.exports = { handle };
+if (require.main === module) http.createServer(async (req, res) => { if (!(await handle(req, res))) { res.writeHead(404); res.end('{}'); } }).listen(process.env.PORT || 8080);

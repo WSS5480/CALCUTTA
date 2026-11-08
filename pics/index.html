@@ -113,14 +113,14 @@ html,body{min-height:100dvh}body{padding-bottom:calc(92px + env(safe-area-inset-
 </style>
 </head>
 <body>
-<!-- Pics v65 -->
+<!-- Pics v66 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
   <h1>Oddable</h1>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">College</button></div>
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v65 (spread leg fix, Kalshi day)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v66 (slip checks, paste, link)</div>
 </header>
 <main>
   <div id="livepage" hidden></div>
@@ -442,7 +442,7 @@ function betsRender() {
   }).join('');
   el.innerHTML = `<div class="lpg"><h2>My Bets</h2>
     <div class="sums">${stat('Overall', all, stake ? ' · $' + stake + ' staked' : '')}${stat('Against the app', agA)}${stat('With the app', withA)}<div class="sum"><b>${BETS.length - fin.length}</b><span>Open bets</span><small>${BETS.length} total</small></div></div>
-    <button class="addb" onclick="betNew()">＋ Add a bet</button><label class="addb imp">📷 Import from a Kalshi / Underdog screenshot<input type="file" accept="image/*" hidden onchange="betImport(this.files[0]);this.value=''"></label><div class="sub" style="margin:0 0 6px">${lsg('kal-id') ? `<span>${KST || 'Kalshi connected'}</span> · <a href="#" onclick="kalshiSync(true);return false">Sync now</a> · <a href="#" onclick="kalshiOff();return false">Disconnect</a>` : `<a href="#" onclick="kalshiConnect();return false">⚡ Connect your Kalshi account for automatic bets</a>${KST ? `<div>${KST}</div>` : ''}`}</div>${KFORM ? kalshiFormHtml() : ''}<div class="sub" id="impst" style="margin:-4px 0 8px">${IMP}</div><div id="bform">${BF ? betFormHtml() : ''}</div>${logHtml}${list || '<div class="note">No bets yet. Tap “Add a bet”, pick a game, then set your side and the line you got.</div>'}</div>`;
+    <button class="addb" onclick="betNew()">＋ Add a bet</button><button class="addb imp" onclick="slipPaste()">📋 Paste slip text (from the iPhone Shortcut)</button><label class="addb imp">📷 Import from a Kalshi / Underdog screenshot<input type="file" accept="image/*" hidden onchange="betImport(this.files[0]);this.value=''"></label><div class="sub" style="margin:0 0 6px">${lsg('kal-id') ? `<span>${KST || 'Kalshi connected'}</span> · <a href="#" onclick="kalshiSync(true);return false">Sync now</a> · <a href="#" onclick="kalshiOff();return false">Disconnect</a>` : `<a href="#" onclick="kalshiConnect();return false">⚡ Connect your Kalshi account for automatic bets</a>${KST ? `<div>${KST}</div>` : ''}`}</div>${KFORM ? kalshiFormHtml() : ''}<div class="sub" id="impst" style="margin:-4px 0 8px">${IMP}</div><div id="bform">${BF ? betFormHtml() : ''}</div>${logHtml}${list || '<div class="note">No bets yet. Tap “Add a bet”, pick a game, then set your side and the line you got.</div>'}</div>`;
 }
 
 // ---- Import a bet from a Kalshi / Underdog screenshot: OCR in the browser (Tesseract.js), then pre-fill the bet form for you to confirm ----
@@ -488,7 +488,7 @@ function betApplySlip(s) {
 function parseMulti(raw) {
   const L = raw.split(/\n/).map((x) => x.replace(/[|_]/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean);
   const all = L.join(' '); const o = { legs: [] }; let m;
-  m = /(\d+)\s*picks?\s*at\s*(\d+(?:\.\d+)?)\s*x/i.exec(all) || /\bat\s*(\d+\.\d+)\s*x\b/i.exec(all); if (m) { o.mult = parseFloat(m[m.length - 1]); }
+  m = /(\d+)\s*picks?\s*at\s*(\d+(?:\.\d+)?)\s*x/i.exec(all) || /\bat\s*(\d+\.\d+)\s*x\b/i.exec(all); if (m) { o.mult = parseFloat(m[m.length - 1]); if (m.length > 2) o.n = parseInt(m[1], 10); }
   m = /[$§S]\s*([\d,]+(?:\.\d+)?)\s*to\s*win\s*[$§S]?\s*([\d,]+(?:\.\d+)?)/i.exec(all); if (m) { o.stake = parseFloat(m[1].replace(/,/g, '')); o.payout = parseFloat(m[2].replace(/,/g, '')); }
   for (let i = 0; i < L.length; i++) {
     const g = /^(.+?)\s+[@©]\s*(.+)$/.exec(L[i]); if (!g) continue;
@@ -507,19 +507,46 @@ function parseMulti(raw) {
   if (!o.mult && o.stake && o.payout) o.mult = Math.round(o.payout / o.stake * 100) / 100;
   return o.legs.length ? o : null;
 }
+const expLine = (g, side) => (g.line === null || g.line === undefined ? null : side === g.home.abbr ? -g.line : g.line);
 function betApplyMulti(s) {
-  const pool = Object.values(ALL);
+  const pool = Object.values(ALL), warn = [];
   const legs = s.legs.map((l) => {
     const sc = (g) => { const a = Math.max(teamMatch(l.away, g.home.abbr), teamMatch(l.away, g.away.abbr)), h = Math.max(teamMatch(l.home, g.home.abbr), teamMatch(l.home, g.away.abbr)); return a > 0 && h > 0 ? a + h : 0; };
     const c = pool.map((g) => ({ g, s: sc(g) })).filter((x) => x.s).sort((a, b) => b.s - a.s)[0];
-    if (!c) return { text: `${l.pos} ${l.type === 'sp' ? (l.line > 0 ? '+' : '') + l.line + ' spread' : 'to win'} (${l.away} @ ${l.home})`, miss: true };
-    const g = c.g; const side = teamMatch(l.pos, g.home.abbr) >= teamMatch(l.pos, g.away.abbr) ? g.home.abbr : g.away.abbr;
-    return { gid: g.id, side, type: l.type, line: l.type === 'sp' && isFinite(l.line) ? l.line : 0 };
+    if (!c) return { text: `${l.pos} ${l.type === 'sp' ? (l.line > 0 ? '+' : '') + l.line + ' spread' : 'to win'} (${l.away} @ ${l.home})`, miss: true, flag: 'game not found, you grade this one' };
+    const g = c.g; const side = teamMatch(l.pos, g.home.abbr) >= teamMatch(l.pos, g.away.abbr) ? g.home.abbr : g.away.abbr; const leg = { gid: g.id, side, type: l.type, line: 0 };
+    if (l.type === 'sp') {
+      const ex = expLine(g, side); leg.line = isFinite(l.line) ? l.line : 0;
+      if (ex !== null && isFinite(l.line)) {
+        if (l.line !== ex && Math.abs(l.line) === Math.abs(ex)) { leg.line = ex; leg.flag = `sign looked wrong, set to ${ex > 0 ? '+' : ''}${ex} to match the market`; }
+        else if (Math.abs(l.line - ex) > 3) leg.flag = `line ${l.line > 0 ? '+' : ''}${l.line} is far from the market (${ex > 0 ? '+' : ''}${ex}), check it`;
+      }
+    }
+    return leg;
   });
-  const miss = legs.filter((l) => l.miss).length;
-  BF = { step: 'parlay', legs, stake: s.stake || '', odds: s.mult || '', pt: 'x', note: `Imported ${legs.length}-leg parlay at ${s.mult}x${s.stake ? ' · $' + s.stake + ' to win $' + s.payout : ''}.${miss ? ' ' + miss + ' leg(s) not found in the game list, added as manual legs you grade yourself.' : ''} Check it, then Save.` };
+  if (s.n && legs.length !== s.n) warn.push(`slip says ${s.n} picks but I read ${legs.length}`);
+  if (s.stake && s.payout && s.mult && Math.abs(s.payout / s.stake - s.mult) > 0.03 * s.mult) warn.push('payout and multiplier do not match, check them');
+  if (!s.mult) warn.push('could not read the payout multiplier');
+  const flagged = legs.filter((l) => l.flag).length;
+  BF = { step: 'parlay', legs, stake: s.stake || '', odds: s.mult || '', pt: 'x', note: `Imported ${legs.length}-leg parlay${s.mult ? ' at ' + s.mult + 'x' : ''}${s.stake ? ' · $' + s.stake + (s.payout ? ' to win $' + s.payout : '') : ''}.${warn.length ? ' ⚠ ' + warn.join('; ') + '.' : ''}${flagged ? ' ⚠ ' + flagged + ' leg(s) marked below.' : ''} Check it, then Save.` };
   setImp(''); betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+function slipFromText(txt) {
+  txt = (txt || '').trim(); if (txt.length < 15) { setImp('That did not look like a slip. Copy the slip text first (see the Shortcut steps), then tap Paste.'); betsRender(); return; }
+  const ms = parseMulti(txt); window.__slip = ms || txt; if (ms) return betApplyMulti(ms);
+  const s = parseSlip(txt); if (!s.t1 || !s.pos) { setImp('Could not find a bet in that text. Text I saw: "' + txt.replace(/\s+/g, ' ').slice(0, 160) + '". Send me that and I will fix the reader.'); BF = { step: 'kind' }; return betsRender(); }
+  betApplySlip(s);
+}
+async function slipPaste() {
+  try { const t = await navigator.clipboard.readText(); slipFromText(t); }
+  catch (e) { const t = prompt('Paste the slip text here'); if (t) slipFromText(t); }
+}
+// Slip text handed in by link (#slip=...), e.g. from an iPhone Shortcut
+(function slipLink() {
+  const m = /[#&?]slip=([^&]+)/.exec(location.hash + location.search); if (!m) return; let t = ''; try { t = decodeURIComponent(m[1].replace(/\+/g, ' ')); } catch (e) { return; }
+  try { history.replaceState(null, '', location.pathname); } catch (e) {}
+  let tries = 0; const go = () => { if (typeof ALL !== 'undefined' && Object.keys(ALL).length) { setView('bets'); slipFromText(t); } else if (++tries < 40) setTimeout(go, 500); }; setTimeout(go, 1200);
+})();
 async function betImport(file) {
   if (!file) return;
   try {
@@ -572,7 +599,7 @@ function parlaySave() {
   betSync(); if (BF.legs.length < 2) { BF.note = 'A parlay needs at least 2 legs.'; betsRender(); return; }
   const old = BF.id ? BETS.find((x) => x.id === BF.id) : null; const first = BF.legs.find((l) => l.gid && ALL[l.gid]);
   const b = old || { id: 'b' + Date.now(), kind: 'parlay', t: Date.now(), week: first ? ALL[first.gid].week : CUR, day: first ? dayKey(Math.min(...BF.legs.filter((l) => l.gid && ALL[l.gid]).map((l) => ALL[l.gid].start))) : dayKey(Date.now()) };
-  b.legs = BF.legs; applyPay(b); if (!old) BETS.push(b); betsSave(); BF = null; betsRender();
+  b.legs = BF.legs.map((l) => { const c = { ...l }; delete c.flag; delete c.miss; return c; }); applyPay(b); if (!old) BETS.push(b); betsSave(); BF = null; betsRender();
 }
 function propSave() {
   betSync(); if (!BF.text.trim()) { BF.note = 'Describe the bet first.'; betsRender(); return; }
@@ -606,7 +633,7 @@ function betFormHtml() {
     <label>Leg type <select id="bft" onchange="betSync();betsRender()"><option value="sp" ${BF.leg.type === 'sp' ? 'selected' : ''}>Spread</option><option value="ml" ${BF.leg.type === 'ml' ? 'selected' : ''}>Win (moneyline)</option></select></label>
     ${BF.leg.type === 'sp' ? `<label>Your line for ${BF.leg.side} <input id="bfl" type="number" step="0.5" value="${BF.leg.line}"></label>` : ''}<div class="bbtn"><button class="pri" onclick="legAdd()">Add leg</button><button onclick="BF.step='legpick';betsRender()">Back</button></div></div>`; }
   if (BF.step === 'parlay') return `<div class="card"><div class="gh" style="margin-top:0">${BF.id ? 'Edit parlay' : 'New parlay'} · ${BF.legs.length} leg${BF.legs.length === 1 ? '' : 's'}</div>${note}
-    ${BF.legs.map((l, i) => `<div class="leg"><span class="pm push">${i + 1}</span><div><b>${legText(l)}</b></div><button class="x" onclick="legDrop(${i})">✕</button></div>`).join('') || '<div class="sub">No legs yet.</div>'}
+    ${BF.legs.map((l, i) => `<div class="leg"><span class="pm push">${i + 1}</span><div><b>${legText(l)}</b>${l.flag ? `<small style="display:block;color:#ffb020">⚠ ${l.flag}</small>` : ''}</div><button class="x" onclick="legDrop(${i})">✕</button></div>`).join('') || '<div class="sub">No legs yet.</div>'}
     <div class="bbtn"><button onclick="betSync();BF.step='legpick';betsRender()">＋ Game leg</button></div>
     <label>Or a prop leg (player or custom) <input id="bfm" type="text" placeholder="Mahomes 2+ TD passes"></label><div class="bbtn"><button onclick="legManual()">＋ Prop leg</button></div>
     ${payFields()}<div class="sub">Enter the total payout your app shows for the whole parlay (like 3.5x). Game legs grade themselves; prop legs have ✓ ✗ buttons on the card. All legs must hit to win.</div><div class="bbtn"><button class="pri" onclick="parlaySave()">Save parlay</button><button onclick="BF=null;betsRender()">Cancel</button></div></div>`;

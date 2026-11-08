@@ -179,8 +179,8 @@ function draw() {
   const chip = (k, l, n) => `<button class="${FILTER === k ? 'on' : ''}" onclick="setF('${k}')"><b>${n}</b>${l}</button>`;
   $('#chips').innerHTML = chip('all', 'All', GAMES.length) + chip('live', 'Live', grp.live.length) + chip('pre', 'Upcoming', grp.pre.length) + chip('post', 'Final', grp.post.length) + chip('watch', '📌 Watching', GAMES.filter((g) => PIN.includes(g.id)).length);
   const pins = GAMES.filter((g) => PIN.includes(g.id)).sort((a, b) => (b.state === 'in') - (a.state === 'in') || a.start - b.start);
-  let list = FILTER === 'all' ? [...grp.live, ...grp.pre, ...grp.post] : FILTER === 'watch' ? [] : grp[FILTER]; list = list.filter((g) => !PIN.includes(g.id));
-  $('#list').innerHTML = (pins.length ? '<div class="pinhd">📌 Watching</div>' + pins.map(card).join('') + (FILTER === 'watch' ? '' : '<div class="pinhd">All games</div>') : (FILTER === 'watch' ? '<div class="note">Nothing watched yet. Tap 📍 Watch on any game.</div>' : '')) + (list.map(card).join('') || (pins.length ? '' : `<div class="note">No ${CFG.name} games ${OFF === 0 ? 'today' : 'this day'}.${LG === 'mlb' ? ' MLB is in its offseason.' : ''}</div>`));
+  let list = FILTER === 'all' ? [...grp.live, ...grp.pre, ...grp.post] : FILTER === 'watch' ? [] : grp[FILTER];
+  $('#list').innerHTML = (FILTER === 'watch' ? (pins.map(card).join('') || '<div class="note">Nothing watched yet. Tap 📍 Watch on any game.</div>') : '') + (FILTER === 'watch' ? '' : (list.map(card).join('') || `<div class="note">No ${CFG.name} games ${OFF === 0 ? 'today' : 'this day'}.${LG === 'mlb' ? ' MLB is in its offseason.' : ''}</div>`));
 }
 async function load() {
   try { GAMES = parseEvents(await getJson(SB + '?dates=' + ymd(dayDate()) + '&limit=400' + CFG.q)).sort((a, b) => a.start - b.start); LASTAT = Date.now(); $('#upd').textContent = upText(); }

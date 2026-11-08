@@ -117,14 +117,14 @@ html,body{min-height:100dvh}body{padding-bottom:calc(92px + env(safe-area-inset-
 </style>
 </head>
 <body>
-<!-- Pics v75 -->
+<!-- Pics v76 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
   <h1>Oddable</h1>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">College</button></div>
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v75 (wagered on click, cross-league bets)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v76 (imports find games in either league)</div>
 </header>
 <main>
   <div id="livepage" hidden></div>
@@ -180,7 +180,7 @@ function parseLine(text, home, away) {
 function parseEvents(j, week) {
   return (j.events || []).map((e) => {
     const c = e.competitions[0], t = e.status.type;
-    const cs = c.competitors.map((x) => ({ abbr: ab(x.team.abbreviation), score: parseInt(x.score, 10) || 0, home: x.homeAway === 'home', record: (x.records && x.records[0] && x.records[0].summary) || '', color: x.team.color ? '#' + x.team.color : '', logo: x.team.logo || '', rank: x.curatedRank && x.curatedRank.current > 0 && x.curatedRank.current <= 25 ? x.curatedRank.current : 0 }));
+    const cs = c.competitors.map((x) => ({ abbr: ab(x.team.abbreviation), name: x.team.displayName || x.team.location || '', score: parseInt(x.score, 10) || 0, home: x.homeAway === 'home', record: (x.records && x.records[0] && x.records[0].summary) || '', color: x.team.color ? '#' + x.team.color : '', logo: x.team.logo || '', rank: x.curatedRank && x.curatedRank.current > 0 && x.curatedRank.current <= 25 ? x.curatedRank.current : 0 }));
     c.competitors.forEach((x) => { TEAMID[x.team.id] = ab(x.team.abbreviation); NAMES[ab(x.team.abbreviation)] = x.team.shortDisplayName || x.team.displayName || x.team.abbreviation; });
     cs.sort((a, b) => a.home - b.home);
     const o = c.odds && c.odds[0];
@@ -363,11 +363,12 @@ const sgn = (n) => (n > 0 ? '+' : '') + n;
 function legGrade(l) {
   if (l.gid) {
     const g = gameOf(l.gid); if (!g || g.state === 'pre') return { st: 'pending', g };
-    const margin = (l.side === g.home.abbr ? 1 : -1) * (g.home.score - g.away.score), m = l.type === 'sp' ? margin + l.line : margin;
+    const margin = (l.side === g.home.abbr ? 1 : -1) * (g.home.score - g.away.score), m = l.type === 'sp' ? margin + Number(l.line) : margin;
+    if (!isFinite(m)) return { st: 'pending', g };
     const r = m > 0 ? 'won' : m < 0 ? 'lost' : 'push';
     return g.state === 'in' ? { st: 'live', cur: r, g } : { st: r, g };
   }
-  return { st: l.res || 'pending' };
+  return { st: l.res === 'void' ? 'push' : l.res || 'pending' };
 }
 function betGrade(b) {
   if (b.kind === 'prop') return { st: b.res || 'pending' };
@@ -384,7 +385,8 @@ function betGrade(b) {
 function betGradeOne(b) {
   const g = gameOf(b.gid); if (!g || g.state === 'pre') return { st: 'pending', g };
   const margin = (b.side === g.home.abbr ? 1 : -1) * (g.home.score - g.away.score);
-  const m = b.type === 'sp' ? margin + b.line : margin;
+  const m = b.type === 'sp' ? margin + Number(b.line) : margin;
+  if (!isFinite(m)) return { st: 'pending', g };
   const r = m > 0 ? 'won' : m < 0 ? 'lost' : 'push';
   return g.state === 'in' ? { st: 'live', cur: r, g } : { st: r, g };
 }
@@ -393,14 +395,14 @@ function betGradeOne(b) {
 const XL = {}; let XLBUSY = 0;
 const gameOf = (id) => ALL[id] || XL[id];
 function miniGame(g) { const live = g.state === 'in'; return `<div class="mini"><div><b>${g.away.abbr}</b> ${g.state === 'pre' ? '' : g.away.score}</div><div class="mst">${live ? '<span class="lv">● LIVE</span> ' : ''}${g.state === 'pre' ? new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : g.detail}</div><div>${g.state === 'pre' ? '' : g.home.score} <b>${g.home.abbr}</b></div></div>`; }
-async function xlLoad() {
-  if (XLBUSY && Date.now() - XLBUSY < 50000) return; const ids = [], weeks = new Set();
+async function xlLoad(full) {
+  if (!full && XLBUSY && Date.now() - XLBUSY < 50000) return; const ids = [], weeks = new Set();
   BETS.forEach((b) => { (b.kind === 'parlay' ? b.legs : [b]).forEach((l) => { if (l.gid && !ALL[l.gid]) { ids.push(l.gid); if (b.week) weeks.add(b.week); } }); });
-  if (!ids.length) return; if (ids.every((i) => XL[i] && XL[i].state === 'post')) return; XLBUSY = Date.now();
+  if (!full) { if (!ids.length) return; if (ids.every((i) => XL[i] && XL[i].state === 'post')) return; } XLBUSY = Date.now();
   const other = CFB ? 'nfl' : 'college-football', base = 'https://site.api.espn.com/apis/site/v2/sports/football/' + other + '/scoreboard', sx = CFB ? '' : '&groups=80&limit=400';
   const urls = ['?seasontype=2' + sx, ...[...weeks].map((w) => '?week=' + w + '&seasontype=2' + sx)]; let changed = false;
-  for (const u of urls) { try { const j = await (await fetch(base + u)).json(); (j.events || []).forEach((e) => { const c = e.competitions[0], t = e.status.type, cs = c.competitors.map((x) => ({ abbr: ab(x.team.abbreviation), score: parseInt(x.score, 10) || 0, home: x.homeAway === 'home' })).sort((a, b) => a.home - b.home); const g = { id: e.id, week: (j.week && j.week.number) || 0, start: +new Date(e.date), state: t.state, detail: t.shortDetail || '', away: cs[0], home: cs[1], line: null }; const o = XL[g.id]; if (!o || o.state !== g.state || o.away.score !== g.away.score || o.home.score !== g.home.score) changed = true; XL[g.id] = g; }); } catch (e) {} }
-  XLBUSY = 0; if (changed) betsRender();
+  for (const u of urls) { try { const j = await (await fetch(base + u)).json(); (j.events || []).forEach((e) => { const c = e.competitions[0], t = e.status.type, cs = c.competitors.map((x) => ({ abbr: ab(x.team.abbreviation), name: x.team.displayName || x.team.location || '', score: parseInt(x.score, 10) || 0, home: x.homeAway === 'home' })).sort((a, b) => a.home - b.home); const g = { id: e.id, week: (j.week && j.week.number) || 0, start: +new Date(e.date), state: t.state, detail: t.shortDetail || '', away: cs[0], home: cs[1], line: null }; const o = XL[g.id]; if (!o || o.state !== g.state || o.away.score !== g.away.score || o.home.score !== g.home.score) changed = true; XL[g.id] = g; }); } catch (e) {} }
+  XLBUSY = 0; if (changed && !BF && !KFORM) betsRender();
 }
 setInterval(() => { if (!document.hidden) xlLoad(); }, 60000); setTimeout(xlLoad, 4000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) xlLoad(); });
@@ -415,7 +417,7 @@ function betPL(b, st) { // profit/loss for a result 'won'|'lost'|'push'; blank s
 const betAgainst = (b) => b.side !== (b.type === 'sp' ? (b.appAts || b.appSu) : b.appSu);
 const rec3 = (a) => { const w = a.filter((x) => x === 'won').length, l = a.filter((x) => x === 'lost').length, p = a.filter((x) => x === 'push').length; return { w, l, p, t: w + l, s: w + '-' + l + (p ? '-' + p : ''), pc: w + l ? Math.round(100 * w / (w + l)) + '%' : '–' }; };
 function betsRender() {
-  const el = $('#betspage'); if (!el) return;
+  const el = $('#betspage'); if (!el) return; try { betSync(); } catch (e) {}
   const done = BETS.map((b) => ({ b, r: betGrade(b) })), fin = done.filter((x) => ['won', 'lost', 'push'].includes(x.r.st));
   const all = rec3(fin.map((x) => x.r.st)), withA = rec3(fin.filter((x) => !x.b.kind && !betAgainst(x.b)).map((x) => x.r.st)), agA = rec3(fin.filter((x) => !x.b.kind && betAgainst(x.b)).map((x) => x.r.st));
   const money = (n) => (BETS.some((x) => x.stake) ? (n < 0 ? '−$' : '+$') + Math.abs(n).toFixed(2) : (n < 0 ? '−' : '+') + Math.abs(n).toFixed(2) + 'u');
@@ -470,7 +472,7 @@ let IMP = '';
 function setImp(m) { IMP = m; const el = $('#impst'); if (el) el.textContent = m; }
 function loadTess() { return window.Tesseract ? Promise.resolve() : new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'tesseract.min.js'; s.onload = res; s.onerror = () => { const t = document.createElement('script'); t.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js'; t.onload = res; t.onerror = () => rej(new Error('Could not load the reader (check your connection)')); document.head.appendChild(t); }; document.head.appendChild(s); }); }
 const nn = (s) => String(s || '').toLowerCase().replace(/&/g, ' and ').replace(/\bst\.?(?=\s|$)/g, 'state').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
-function teamMatch(txt, abbr) { const t = nn(txt), a = [nn(nm(abbr)), nn(abbr)].filter(Boolean); let best = 0; a.forEach((x) => { if (x === t) best = Math.max(best, 3); else if (x.length > 3 && (t.includes(x) || x.includes(t))) best = Math.max(best, 2); else if (x.length > 3 && t.split(' ').some((w) => w.length > 3 && x.split(' ').includes(w))) best = Math.max(best, 1); }); return best; }
+function teamMatch(txt, abbr, name) { const t = nn(String(txt || '').replace(/\([^)]*\)/g, ' ')), a = [nn(nm(abbr)), nn(abbr), nn(name)].filter(Boolean); let best = 0; a.forEach((x) => { if (x === t) best = Math.max(best, 3); else if (x.length > 3 && (t.includes(x) || x.includes(t))) best = Math.max(best, 2); else if (x.length > 3 && t.split(' ').some((w) => w.length > 3 && x.split(' ').includes(w))) best = Math.max(best, 1); }); return best; }
 function parseSlip(raw) {
   const txt = raw.replace(/[|_]/g, ' ').replace(/\s+/g, ' ');
   const o = { raw: txt };
@@ -534,13 +536,14 @@ function parseMulti(raw) {
   return o.legs.length ? o : null;
 }
 const expLine = (g, side) => (g.line === null || g.line === undefined ? null : side === g.home.abbr ? -g.line : g.line);
-function betApplyMulti(s) {
-  const pool = Object.values(ALL), warn = [];
+async function betApplyMulti(s) {
+  try { await xlLoad(true); } catch (e) {}
+  const pool = Object.values(ALL).concat(Object.values(XL).filter((x) => !ALL[x.id])), warn = [];
   const legs = s.legs.map((l) => {
-    const sc = (g) => { if (!l.away) { const t = Math.max(teamMatch(l.pos, g.home.abbr), teamMatch(l.pos, g.away.abbr)); return t >= 2 ? t + (g.state !== 'post' || dayKey(g.start) === dayKey(Date.now()) ? 5 : 0) - Math.abs(g.start - Date.now()) / 1e11 : 0; } const a = Math.max(teamMatch(l.away, g.home.abbr), teamMatch(l.away, g.away.abbr)), h = Math.max(teamMatch(l.home, g.home.abbr), teamMatch(l.home, g.away.abbr)); return a > 0 && h > 0 ? a + h : 0; };
+    const sc = (g) => { if (Math.abs(g.start - Date.now()) > 8 * 864e5) return 0; if (!l.away) { const t = Math.max(teamMatch(l.pos, g.home.abbr, g.home.name), teamMatch(l.pos, g.away.abbr, g.away.name)); return t >= 2 ? t + (g.state !== 'post' || dayKey(g.start) === dayKey(Date.now()) ? 5 : 0) - Math.abs(g.start - Date.now()) / 1e11 : 0; } const a = Math.max(teamMatch(l.away, g.home.abbr, g.home.name), teamMatch(l.away, g.away.abbr, g.away.name)), h = Math.max(teamMatch(l.home, g.home.abbr, g.home.name), teamMatch(l.home, g.away.abbr, g.away.name)); return a > 0 && h > 0 ? a + h : 0; };
     const c = pool.map((g) => ({ g, s: sc(g) })).filter((x) => x.s > 0).sort((a, b) => b.s - a.s)[0];
     if (!c) return { text: `${l.pos} ${l.type === 'sp' ? (l.line > 0 ? '+' : '') + l.line + ' spread' : 'to win'} ${l.away ? ' (' + l.away + ' @ ' + l.home + ')' : ''}`, miss: true, flag: 'game not found, you grade this one' };
-    const g = c.g; const side = teamMatch(l.pos, g.home.abbr) >= teamMatch(l.pos, g.away.abbr) ? g.home.abbr : g.away.abbr; const leg = { gid: g.id, side, type: l.type, line: 0 };
+    const g = c.g; const side = teamMatch(l.pos, g.home.abbr, g.home.name) >= teamMatch(l.pos, g.away.abbr, g.away.name) ? g.home.abbr : g.away.abbr; const leg = { gid: g.id, side, type: l.type, line: 0 };
     if (l.type === 'sp') {
       const ex = expLine(g, side); leg.line = isFinite(l.line) ? l.line : 0;
       if (ex !== null && isFinite(l.line)) {
@@ -623,8 +626,8 @@ function legManual() { betSync(); const e = $('#bfm'); const t = e ? e.value.tri
 function legDrop(i) { betSync(); BF.legs.splice(i, 1); betsRender(); }
 function parlaySave() {
   betSync(); if (BF.legs.length < 2) { BF.note = 'A parlay needs at least 2 legs.'; betsRender(); return; }
-  const old = BF.id ? BETS.find((x) => x.id === BF.id) : null; const first = BF.legs.find((l) => l.gid && ALL[l.gid]);
-  const b = old || { id: 'b' + Date.now(), kind: 'parlay', t: Date.now(), week: first ? ALL[first.gid].week : CUR, day: first ? dayKey(Math.min(...BF.legs.filter((l) => l.gid && ALL[l.gid]).map((l) => ALL[l.gid].start))) : dayKey(Date.now()) };
+  const old = BF.id ? BETS.find((x) => x.id === BF.id) : null; const first = BF.legs.find((l) => l.gid && gameOf(l.gid));
+  const b = old || { id: 'b' + Date.now(), kind: 'parlay', t: Date.now(), week: first ? gameOf(first.gid).week : CUR, day: first ? dayKey(Math.min(...BF.legs.filter((l) => l.gid && gameOf(l.gid)).map((l) => gameOf(l.gid).start))) : dayKey(Date.now()) };
   b.legs = BF.legs.map((l) => { const c = { ...l }; delete c.flag; delete c.miss; return c; }); applyPay(b); if (!old) BETS.push(b); betsSave(); BF = null; betsRender();
 }
 function propSave() {
@@ -737,7 +740,7 @@ async function kalshiSave() {
 }
 function kDay(first, m) { const f = Date.parse(first), e = Date.parse((m && (m.expected_expiration_time || m.close_time)) || ''); return dayKey(e && e >= f - 864e5 && e - f < 4 * 864e5 ? e : f); } // game day when the market ends within a few days, else the day you bought
 async function kalshiSync(manual) {
-  if (!lsg('kal-id') || !lsg('kal-pem') || KBUSY) return; KBUSY = true; KST = 'Syncing Kalshi…'; if (manual) betsRender();
+  if (!lsg('kal-id') || !lsg('kal-pem') || KBUSY) return; KBUSY = true; KST = 'Syncing Kalshi…'; if (manual && !BF && !KFORM) betsRender();
   try {
     const min = Math.floor(Date.now() / 1000 - 45 * 86400), fills = await kPages('/portfolio/fills', 'fills', { min_ts: min });
     let setl = []; try { setl = await kPages('/portfolio/settlements', 'settlements', { min_ts: min }); } catch (e) {}
@@ -759,13 +762,13 @@ async function kalshiSync(manual) {
     }
     KST = 'Kalshi synced ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + ' · ' + Object.keys(by).length + ' bets'; if (n) betsSave();
   } catch (e) { KST = e.status === 401 || e.status === 403 ? 'Kalshi rejected your key. Tap Disconnect, then connect again.' : 'Kalshi sync could not connect (the server may be waking up). Will retry.'; }
-  KBUSY = false; betsRender();
+  KBUSY = false; if (BF || KFORM) { const q = document.getElementById('kst'); if (q) q.textContent = KST; } else betsRender();
 }
 const kalshiFormHtml = () => `<div class="card kf"><div class="gh" style="margin-top:0">Connect your Kalshi account</div><div class="sub">1. On Kalshi: Profile → API Keys → create a key. Save the private key.<br>2. Paste the Key ID and the private key below.<br><b>Your key stays on this phone.</b> It signs requests here; the server only passes them to Kalshi and stores nothing.</div>
   <a class="addb" style="display:block;text-align:center;text-decoration:none;margin:10px 0" href="https://kalshi.com/account/profile" target="_blank" rel="noopener">🔑 Open Kalshi to get your keys</a><div class="sub" style="text-align:center;margin:-4px 0 6px">Scroll to <b>API Keys</b> → Create. <a href="https://docs.kalshi.com/getting_started/api_keys" target="_blank" rel="noopener">Help</a></div><label>Key ID <input id="kid" type="text" value="${(kDraft().id || '').replace(/"/g, '&quot;')}" oninput="kDraftSet('id',this.value)" autocomplete="off" autocapitalize="off" spellcheck="false"></label><label>Private key <textarea id="kpem" rows="5" oninput="kDraftSet('pem',this.value)" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="-----BEGIN PRIVATE KEY-----">${(kDraft().pem || '').replace(/</g, '&lt;')}</textarea></label>
   ${KERR ? `<div class="note" style="margin:8px 0;color:var(--red,#ff5a4d)">${KERR}</div>` : ''}<div class="bbtn"><button class="pri" onclick="kalshiSave()">Connect</button><button onclick="kFormClose()">Cancel</button></div></div>`;
 setInterval(() => { if (VIEW === 'bets' && !document.hidden && !BF && !KFORM) kalshiSync(false); }, 60000);
-document.addEventListener('visibilitychange', () => { if (!document.hidden && VIEW === 'bets' && !KFORM) kalshiSync(false); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && VIEW === 'bets' && !KFORM && !BF) kalshiSync(false); });
 function betDel(id) { if (!confirm('Delete this bet?')) return; const d = BETS.find((x) => x.id === id); if (d && d.src === 'kalshi') { let g = []; try { g = JSON.parse(lsg('kdel26')) || []; } catch (e) {} g.push(id); lss('kdel26', JSON.stringify(g)); } BETS = BETS.filter((x) => x.id !== id); betsSave(); betsRender(); }
 function liveSt(g) {
   if (g.state !== 'in') return '';

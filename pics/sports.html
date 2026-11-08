@@ -12,7 +12,10 @@
 <style>
 :root{--bg:#0a0c10;--panel:#13161d;--panel2:#1b1f29;--line:#272c38;--ink:#eef0f4;--muted:#8b93a3;--blue:#a78bfa;--green:#4fd18b;--red:#ff5a4d}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.35 system-ui,-apple-system,sans-serif;padding-bottom:40px}
+html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
+body{background:var(--bg);color:var(--ink);font:15px/1.35 system-ui,-apple-system,sans-serif}
+#sc{position:fixed;top:0;left:0;right:0;bottom:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding-bottom:40px}
+#plb{transform:translate3d(0,0,0);will-change:transform}
 header{padding:max(16px,env(safe-area-inset-top)) max(16px,calc((100% - 688px)/2)) 14px;background:linear-gradient(135deg,#7c3aed 0%,#4c1d95 55%,#1b1f29 100%);border-radius:0 0 26px 26px;color:#fff}
 h1{margin:0 0 6px;font-size:26px}
 .lg{display:flex;gap:8px;margin:6px 0;flex-wrap:wrap}.lg a,.lg button{border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.12);color:#fff;border-radius:999px;padding:6px 16px;font:700 14px inherit;cursor:pointer;text-decoration:none}.lg .on{background:#fff;color:#4c1d95}
@@ -45,6 +48,7 @@ header .lg{margin-top:86px}
 </head>
 <body>
 <div id="plb"></div><iframe id="mir" src="./?mirror=1" aria-hidden="true" tabindex="-1"></iframe>
+<div id="sc">
 <header>
   <h1>Oddable</h1>
   <div class="lg" id="lg"></div>
@@ -56,6 +60,7 @@ header .lg{margin-top:86px}
   <div class="chips" id="chips"></div>
   <div id="list"></div>
 </main>
+</div>
 <script>
 const $ = (s) => document.querySelector(s);
 const LGS = {

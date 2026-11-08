@@ -54,7 +54,6 @@ details>summary::after{content:'▾';color:var(--blue)}details[open]>summary::af
 input#tsearch{width:100%;max-width:320px;margin:2px 0 4px;padding:9px 12px;border:1px solid rgba(255,255,255,.4);border-radius:12px;background:rgba(0,0,0,.28);color:#fff;font:600 15px inherit;box-sizing:border-box}input#tsearch::placeholder{color:rgba(255,255,255,.7)}
 .gc{position:relative}.gpin{position:absolute;top:6px;right:8px;z-index:2;border:1px solid rgba(124,58,237,.5);background:rgba(124,58,237,.12);color:inherit;border-radius:999px;font:600 11px inherit;padding:3px 9px}.gpin.on{background:#7c3aed;color:#fff}.pinhd{font:700 12px inherit;letter-spacing:.08em;text-transform:uppercase;opacity:.75;margin:12px 4px 6px}
 header .lg{margin-top:86px;flex-wrap:wrap}
-html,body{overflow-x:clip;max-width:100vw}
 select#team{width:100%;max-width:320px;margin:2px 0 6px;padding:9px 12px;border:1px solid var(--blue);border-radius:12px;background:#fff;color:var(--ink);font:600 15px inherit}
 .sum.lock{border-color:#7c3aed;background:#f1ebff}
 body{border-top:6px solid #7c3aed}h1{color:#7c3aed}
@@ -105,7 +104,8 @@ body{padding-bottom:84px}
 .bcard{border:1px solid var(--line);border-radius:28px;padding:12px 10px 10px;margin:14px 0;background:var(--panel)}.bcard.bw{border-color:var(--green)}.bcard.bl{border-color:var(--red)}.bcard .gc{margin:8px 0 0}.bhd{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:0 6px}.bcard .bbtn{padding:0 6px}
 #plb{position:fixed;top:max(10px,env(safe-area-inset-top));right:12px;z-index:40;padding:8px 16px;border-radius:16px;min-width:116px;font:800 17px/1.1 system-ui;text-align:center;border:1.5px solid;backdrop-filter:blur(8px);box-shadow:0 4px 18px #0008}#plb small.lbl{font-size:9px;letter-spacing:.14em;opacity:.7;margin:0 0 2px}#plb small{display:block;font-size:10px;font-weight:700;opacity:.85;margin-top:1px}
 #plbd{text-align:left;margin-top:8px;border-top:1px solid #fff3;padding-top:6px;width:min(260px,72vw);font:600 12px/1.3 system-ui;color:#eee}#plbd .bk{display:flex;justify-content:space-between;gap:10px;padding:3px 0}#plbd .bk i{display:block;font-style:normal;opacity:.65;font-size:10px}#plbd .bk b.p{color:#4fd18b}#plbd .bk b.n{color:#ff5a4d}#plbd .tot{border-top:1px solid #fff3;margin-top:4px;padding-top:5px;font-weight:800}#plbd .tot2{font-weight:800}[hidden]{display:none!important}#plb{cursor:pointer}#plb{color:#fff;background:linear-gradient(135deg,#6d35e0f0,#3b1a8cf0);border-color:#ffffff59}#plb .amt{display:block;font-size:22px;letter-spacing:-.01em;margin:1px 0 2px}#plb.pos .amt{color:#8dffbd}#plb.neg .amt{color:#ff9a90}body.bets .thm{display:none}
-html,body{min-height:100dvh}body{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
+html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
+#sc{position:fixed;top:0;left:0;right:0;bottom:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding-bottom:calc(92px + env(safe-area-inset-bottom))}
 .bn,#plb,#ptr{transform:translate3d(0,0,0);-webkit-transform:translate3d(0,0,0);will-change:transform}
 .chips{position:sticky;top:0;z-index:15;background:var(--bg);padding:8px 0;margin:0}
 .pgin{animation:pgin .16s ease-out}@keyframes pgin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
@@ -121,7 +121,8 @@ html,body{min-height:100dvh}body{padding-bottom:calc(92px + env(safe-area-inset-
 </style>
 </head>
 <body>
-<!-- Pics v91 -->
+<div id="sc">
+<!-- Pics v92 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
   <h1>Oddable</h1>
@@ -129,7 +130,7 @@ html,body{min-height:100dvh}body{padding-bottom:calc(92px + env(safe-area-inset-
   <input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team">
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v91 (no redraw while scrolling)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v92 (locked bars)</div>
 </header>
 <main>
   <div id="livepage" hidden></div>
@@ -139,10 +140,15 @@ html,body{min-height:100dvh}body{padding-bottom:calc(92px + env(safe-area-inset-
   <div id="list"></div>
   <div class="foot" id="foot"></div>
 </main>
+</div>
 <div id="plb" hidden></div>
 <nav class="bn" id="bn"></nav>
 <script src="model.js"></script>
 <script>
+const SC = document.getElementById('sc');
+// The page scrolls inside #sc so the banner and bottom bar (outside it) can never drift on iOS
+try { Object.defineProperty(window, 'scrollY', { get: () => SC.scrollTop, configurable: true }); } catch (e) {}
+window.scrollTo = function (a, b) { if (a && typeof a === 'object') SC.scrollTo(a); else SC.scrollTo(0, b || 0); };
 const $ = (s) => document.querySelector(s);
 const pct = (x, d = 0) => (x * 100).toFixed(d) + '%';
 const LG = (() => { try { return localStorage.getItem('pics-lg') === 'cfb' ? 'cfb' : 'nfl'; } catch (e) { return 'nfl'; } })();
@@ -428,6 +434,7 @@ async function xlSports() {
 setInterval(() => { if (!document.hidden) xlSports(); }, 60000); setTimeout(xlSports, 4500);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) xlSports(); });
 // Never rebuild the page while a finger is on it or it is still scrolling (iOS lets fixed bars drift when the page changes under a scroll)
+SC.addEventListener('scroll', () => { window.__scrollAt = Date.now(); }, { passive: true });
 window.__scrollAt = 0; ['scroll', 'touchstart', 'touchmove', 'touchend'].forEach((ev) => window.addEventListener(ev, () => { window.__scrollAt = Date.now(); }, { passive: true }));
 const scrolling = () => Date.now() - window.__scrollAt < 700;
 const dayKey = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
@@ -1289,7 +1296,7 @@ function render(fresh) {
   const y = window.scrollY;
   renderInner();
   if (fresh) { window.scrollTo(0, 0); return; }
-  const mx = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+  const mx = Math.max(0, SC.scrollHeight - SC.clientHeight);
   if (Math.abs(window.scrollY - y) > 2) window.scrollTo(0, Math.min(y, mx));
 }
 function renderInner() {

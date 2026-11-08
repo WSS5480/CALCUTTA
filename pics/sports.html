@@ -27,7 +27,7 @@ main{max-width:720px;margin:0 auto;padding:0 16px}
 .bar{height:10px;border-radius:8px;background:var(--panel2);overflow:hidden;margin:8px 0 4px;display:flex}.bar i{display:block;height:100%}
 .pr{display:flex;justify-content:space-between;font-weight:700}
 .pick{margin-top:6px;font-size:14px}.pick b{color:var(--blue)}
-.ft{display:flex;justify-content:space-between;color:var(--muted);font-size:12px;margin-top:6px}
+.ft{display:flex;align-items:center;gap:8px;justify-content:space-between;color:var(--muted);font-size:12px;margin-top:6px}
 .gpin{position:absolute;top:6px;right:8px;border:1px solid rgba(124,58,237,.5);background:rgba(124,58,237,.12);color:inherit;border-radius:999px;font:600 11px inherit;padding:3px 9px}.gpin.on{background:#7c3aed;color:#fff}
 .pinhd{font:700 12px inherit;letter-spacing:.08em;text-transform:uppercase;opacity:.75;margin:12px 4px 6px}
 .bet{display:block;width:100%;margin-top:8px;border:1px dashed var(--blue);background:none;color:var(--blue);border-radius:12px;padding:9px;font:700 14px inherit}
@@ -35,14 +35,20 @@ main{max-width:720px;margin:0 auto;padding:0 16px}
 .bf .row{display:flex;gap:8px}.bf .row>*{flex:1}.bf button{border:1px solid var(--blue);background:var(--blue);color:#0a0c10;border-radius:12px;padding:10px;font:800 15px inherit}.bf button.x{background:none;color:var(--blue)}
 .note{color:var(--muted);text-align:center;padding:24px 8px}
 a.back{color:var(--blue)}
+#plb{position:fixed;top:max(10px,env(safe-area-inset-top));right:12px;z-index:40;padding:8px 16px;border-radius:16px;min-width:116px;font:800 17px/1.1 system-ui;text-align:center;border:1.5px solid;backdrop-filter:blur(8px);box-shadow:0 4px 18px #0008}#plb small.lbl{font-size:9px;letter-spacing:.14em;opacity:.7;margin:0 0 2px}#plb small{display:block;font-size:10px;font-weight:700;opacity:.85;margin-top:1px}
+#plbd{text-align:left;margin-top:8px;border-top:1px solid #fff3;padding-top:6px;width:min(260px,72vw);font:600 12px/1.3 system-ui;color:#eee}#plbd .bk{display:flex;justify-content:space-between;gap:10px;padding:3px 0}#plbd .bk i{display:block;font-style:normal;opacity:.65;font-size:10px}#plbd .bk b.p{color:#4fd18b}#plbd .bk b.n{color:#ff5a4d}#plbd .tot{border-top:1px solid #fff3;margin-top:4px;padding-top:5px;font-weight:800}#plbd .tot2{font-weight:800}[hidden]{display:none!important}#plb{cursor:pointer}#plb{color:#fff;background:linear-gradient(135deg,#6d35e0f0,#3b1a8cf0);border-color:#ffffff59}#plb .amt{display:block;font-size:22px;letter-spacing:-.01em;margin:1px 0 2px}#plb.pos .amt{color:#8dffbd}#plb.neg .amt{color:#ff9a90}body.bets .thm{display:none}
+#mir{position:absolute;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0}
+header .lg{margin-top:86px}
+.fwatch{border:1px solid rgba(124,58,237,.5);background:rgba(124,58,237,.12);color:inherit;border-radius:999px;font:600 12px inherit;padding:4px 10px}.fwatch.on{background:#7c3aed;color:#fff}
 </style>
 </head>
 <body>
+<div id="plb"></div><iframe id="mir" src="./?mirror=1" aria-hidden="true" tabindex="-1"></iframe>
 <header>
   <h1>Oddable</h1>
   <div class="lg" id="lg"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable sports v2 (NBA, MLB, NHL, NCAAB)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable sports v3 (banner, live odds, watch fix)</div>
 </header>
 <main>
   <div class="day"><button onclick="goDay(-1)">◀</button><b id="dl"></b><button onclick="goDay(1)">▶</button></div>
@@ -71,6 +77,11 @@ let OFF = 0, GAMES = [], RAT = {}, HAVE = false, FILTER = 'all', OPEN = null, PI
 try { PIN = JSON.parse(lsg('pinned26')) || []; } catch (e) {}
 const dayDate = () => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + OFF); return d; };
 
+// banner: mirror the My Bets banner (grading lives in the main app, loaded in a hidden frame)
+let PLBO = false;
+function mirror() { try { const d = $('#mir').contentDocument; const s = d && d.getElementById('plb'); const m = $('#plb'); if (!s || !m || !s.innerHTML) return; if (m.dataset.h !== s.innerHTML) { m.dataset.h = s.innerHTML; m.innerHTML = s.innerHTML; m.className = s.className; m.setAttribute('style', s.getAttribute('style') || ''); } const bd = $('#plbd'); if (bd) bd.hidden = !PLBO; } catch (e) {} }
+$('#plb').onclick = () => { PLBO = !PLBO; const bd = $('#plbd'); if (bd) bd.hidden = !PLBO; };
+setInterval(mirror, 3000); setTimeout(mirror, 1500); setTimeout(mirror, 4000);
 // league tabs
 $('#lg').innerHTML = `<a href="./" onclick="lss('pics-lg','nfl')">NFL</a><a href="./" onclick="lss('pics-lg','cfb')">NCAA</a><a href="sports.html?lg=nba" class="${LG === 'nba' ? 'on' : ''}">NBA</a><a href="sports.html?lg=mlb" class="${LG === 'mlb' ? 'on' : ''}">MLB</a><a href="sports.html?lg=nhl" class="${LG === 'nhl' ? 'on' : ''}">NHL</a><a href="sports.html?lg=ncaab" class="${LG === 'ncaab' ? 'on' : ''}">NCAAB</a>`;
 
@@ -95,26 +106,34 @@ function parseEvents(j) {
 
 // ratings: margin-based power ratings from recent finished games (ridge-regularised, home edge removed)
 async function loadRatings() {
-  const key = 'sprat-' + LG + '-' + ymd(new Date());
+  const key = 'sprat2-' + LG + '-' + ymd(new Date());
   try { const c = JSON.parse(lsg(key)); if (c && Object.keys(c).length) { RAT = c; HAVE = true; return; } } catch (e) {}
-  const fin = {}; const end = new Date(); let n = 0;
-  for (let k = 0; k < 8 && n < CFG.minG; k++) {
-    const e1 = new Date(end); e1.setDate(e1.getDate() - k * CFG.back); const s1 = new Date(e1); s1.setDate(s1.getDate() - CFG.back + 1);
-    try { const j = await getJson(SB + '?dates=' + ymd(s1) + '-' + ymd(e1) + '&limit=1000' + CFG.q); parseEvents(j).forEach((g) => { if (g.state === 'post' && g.completed !== false && g.home.score !== g.away.score) fin[g.id] = g; }); } catch (e) {}
-    n = Object.keys(fin).length;
-  }
-  const G = Object.values(fin); if (G.length < 30) return;
+  const fin = {}; const DAYS = { nba: 30, nhl: 30, mlb: 30, ncaab: 14 }[LG]; let off = 1;
+  const grab = async (from, to) => { const ds = []; for (let k = from; k <= to; k++) { const d = new Date(); d.setDate(d.getDate() - k); ds.push(ymd(d)); } await Promise.all(ds.map(async (x) => { try { parseEvents(await getJson(SB + '?dates=' + x + '&limit=400' + CFG.q)).forEach((g) => { if (g.state === 'post' && g.completed !== false && g.home.score !== g.away.score) fin[g.id] = g; }); } catch (e) {} })); };
+  await grab(1, DAYS); off = DAYS + 1;
+  while (Object.keys(fin).length < CFG.minG / 2 && off < 200) { await grab(off, off + 19); off += 20; }
+  const G = Object.values(fin); if (G.length < 20) return;
   const r = {}; G.forEach((g) => { r[g.home.abbr] = 0; r[g.away.abbr] = 0; });
   for (let it = 0; it < 60; it++) {
     const sum = {}, cnt = {};
     G.forEach((g) => { const m = g.home.score - g.away.score - CFG.hfa; const h = g.home.abbr, a = g.away.abbr; sum[h] = (sum[h] || 0) + m + r[a]; cnt[h] = (cnt[h] || 0) + 1; sum[a] = (sum[a] || 0) - m + r[h]; cnt[a] = (cnt[a] || 0) + 1; });
-    Object.keys(r).forEach((t) => { r[t] = sum[t] / (cnt[t] + 4); });
+    Object.keys(r).forEach((x) => { r[x] = sum[x] / (cnt[x] + 4); });
   }
   RAT = r; HAVE = true; lss(key, JSON.stringify(r));
 }
+// fallback when ratings are missing: win percentage from the team's record
+function recRat(t) { const m = /^(\d+)-(\d+)/.exec(t.record || ''); if (!m) return undefined; const w = +m[1], l = +m[2]; if (w + l < 2) return undefined; return ((w + 1) / (w + l + 2) - 0.5) * CFG.sd * 2.3; }
+// fraction of the game still to play, from the status text
+function fracLeft(g) {
+  const d = g.detail || '';
+  if (LG === 'mlb') { const m = /(Top|Bot|Mid|End)\w*\s+(\d+)/i.exec(d); if (!m) return null; const inn = +m[2], half = /top/i.test(m[1]) ? 0 : /bot/i.test(m[1]) ? 0.5 : /end/i.test(m[1]) ? 1 : 0.5; return Math.max(0.02, (9 - (inn - 1) - half) / 9); }
+  const pm = /(\d+)(?:st|nd|rd|th)/i.exec(d), ot = /OT/i.test(d), ck = /(\d+):(\d+)/.exec(d); const per = { nba: 4, ncaab: 2, nhl: 3 }[LG], len = { nba: 12, ncaab: 20, nhl: 20 }[LG];
+  if (/half/i.test(d) && LG === 'ncaab') return 0.5; if (/end of|halftime/i.test(d) && pm) { const p = +pm[1]; return Math.max(0.02, (per - p) / per); }
+  if (!pm && !ot) return null; if (ot) return 0.04; const p = +pm[1]; const left = ck ? (+ck[1] + +ck[2] / 60) / len : 0.5; return Math.max(0.02, ((per - p) + left) / per);
+}
 
 function pred(g) {
-  const rh = RAT[g.home.abbr], ra = RAT[g.away.abbr]; const hasM = rh !== undefined && ra !== undefined;
+  const rh = RAT[g.home.abbr] !== undefined ? RAT[g.home.abbr] : recRat(g.home), ra = RAT[g.away.abbr] !== undefined ? RAT[g.away.abbr] : recRat(g.away); const hasM = rh !== undefined && ra !== undefined;
   const mm = hasM ? rh - ra + CFG.hfa : null; // model expected home margin
   let mk = null; // market expected home margin / market home win prob
   if (SPREADY && g.line !== null) mk = g.line;
@@ -123,7 +142,8 @@ function pred(g) {
   if (pMkt === null && mk !== null) pMkt = cdf(mk / CFG.sd);
   let ph; if (pModel !== null && pMkt !== null) ph = CFG.w * pMkt + (1 - CFG.w) * pModel; else ph = pMkt !== null ? pMkt : pModel !== null ? pModel : 0.5;
   const margin = SPREADY ? (mk !== null && mm !== null ? CFG.w * mk + (1 - CFG.w) * mm : mk !== null ? mk : mm) : mm;
-  return { ph, pa: 1 - ph, margin, has: pModel !== null || pMkt !== null };
+  let live = null; if (g.state === 'in') { const f = fracLeft(g); if (f !== null) { const lead = g.home.score - g.away.score, exp = (margin !== null && margin !== undefined ? margin : 0); live = cdf((lead + exp * f) / (CFG.sd * Math.sqrt(f))); } }
+  return { ph, pa: 1 - ph, margin, live, has: pModel !== null || pMkt !== null || ph !== 0.5 };
 }
 const sgn = (n) => (n > 0 ? '+' : '') + n;
 function lineText(g) {
@@ -139,14 +159,13 @@ function card(g) {
   const when = live ? `<span class="lvtag">● LIVE</span> ${esc(g.detail)}` : pre ? new Date(g.start).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : esc(g.detail || 'Final');
   const side = (t) => `<div class="t">${t.logo ? `<img src="${esc(t.logo)}" alt="">` : ''}<div>${esc(t.abbr)}<div class="rec">${esc(t.record)}</div></div></div>`;
   const pickT = p.ph >= 0.5 ? g.home : g.away, pk = Math.max(p.ph, p.pa);
-  const pickLine = p.has ? `<div class="pick">Pick: <b>${esc(pickT.abbr)}</b> ${pct(pk)}${SPREADY && p.margin !== null ? ` <span class="rec">· expected margin ${p.margin >= 0 ? g.home.abbr : g.away.abbr} by ${Math.abs(p.margin).toFixed(1)}</span>` : ''}</div>` : '<div class="pick rec">Not enough data yet for a pick</div>';
+  const pickLine = p.has ? `<div class="pick">Pick: <b>${esc(pickT.abbr)}</b> ${pct(pk)}${p.live !== null ? ` <span class="rec">· now ${pct(pickT === g.home ? p.live : 1 - p.live)}</span>` : ''}${SPREADY && p.margin !== null ? ` <span class="rec">· expected margin ${p.margin >= 0 ? g.home.abbr : g.away.abbr} by ${Math.abs(p.margin).toFixed(1)}</span>` : ''}</div>` : '<div class="pick rec">Not enough data yet for a pick</div>';
   const o = OPEN === g.id;
-  return `<div class="gc ${live ? 'lv' : ''}"><button class="gpin ${pinned ? 'on' : ''}" onclick="pinToggle('${g.id}')">${pinned ? '📌 Watching' : '📍 Watch'}</button>
-    <div class="gtop">${side(g.away)}<div class="gmid">${when}</div>${side(g.home)}</div>
+  return `<div class="gc ${live ? 'lv' : ''}">    <div class="gtop">${side(g.away)}<div class="gmid">${when}</div>${side(g.home)}</div>
     <div class="gtop" style="margin-top:2px"><span>${pre ? '' : g.away.score}</span><span></span><span>${pre ? '' : g.home.score}</span></div>
     <div class="bar"><i style="width:${p.pa * 100}%;background:#7c6ad8"></i><i style="width:${p.ph * 100}%;background:#4fd18b"></i></div>
     <div class="pr"><span>${esc(g.away.abbr)} ${pct(p.pa)}</span><span>${pct(p.ph)} ${esc(g.home.abbr)}</span></div>
-    ${pickLine}<div class="ft"><span>${esc(lineText(g))}</span></div>
+    ${pickLine}<div class="ft"><span>${esc(lineText(g))}</span><button class="fwatch ${pinned ? 'on' : ''}" onclick="pinToggle('${g.id}')">${pinned ? '📌 Watching' : '📍 Watch'}</button></div>
     ${g.state === 'post' ? '' : `<button class="bet" onclick="betOpen('${g.id}')">＋ Add bet</button>`}${o ? betForm(g) : ''}</div>`;
 }
 function betForm(g) {

@@ -177,10 +177,10 @@ function draw() {
   const d = dayDate(); $('#dl').textContent = OFF === 0 ? 'Today · ' + d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
   const grp = { live: GAMES.filter((g) => g.state === 'in'), pre: GAMES.filter((g) => g.state === 'pre'), post: GAMES.filter((g) => g.state === 'post') };
   const chip = (k, l, n) => `<button class="${FILTER === k ? 'on' : ''}" onclick="setF('${k}')"><b>${n}</b>${l}</button>`;
-  $('#chips').innerHTML = chip('all', 'All', GAMES.length) + chip('live', 'Live', grp.live.length) + chip('pre', 'Upcoming', grp.pre.length) + chip('post', 'Final', grp.post.length);
+  $('#chips').innerHTML = chip('all', 'All', GAMES.length) + chip('live', 'Live', grp.live.length) + chip('pre', 'Upcoming', grp.pre.length) + chip('post', 'Final', grp.post.length) + chip('watch', '📌 Watching', GAMES.filter((g) => PIN.includes(g.id)).length);
   const pins = GAMES.filter((g) => PIN.includes(g.id)).sort((a, b) => (b.state === 'in') - (a.state === 'in') || a.start - b.start);
-  let list = FILTER === 'all' ? [...grp.live, ...grp.pre, ...grp.post] : grp[FILTER]; list = list.filter((g) => !PIN.includes(g.id));
-  $('#list').innerHTML = (pins.length ? '<div class="pinhd">📌 Watching</div>' + pins.map(card).join('') + '<div class="pinhd">All games</div>' : '') + (list.map(card).join('') || (pins.length ? '' : `<div class="note">No ${CFG.name} games ${OFF === 0 ? 'today' : 'this day'}.${LG === 'mlb' ? ' MLB is in its offseason.' : ''}</div>`));
+  let list = FILTER === 'all' ? [...grp.live, ...grp.pre, ...grp.post] : FILTER === 'watch' ? [] : grp[FILTER]; list = list.filter((g) => !PIN.includes(g.id));
+  $('#list').innerHTML = (pins.length ? '<div class="pinhd">📌 Watching</div>' + pins.map(card).join('') + (FILTER === 'watch' ? '' : '<div class="pinhd">All games</div>') : (FILTER === 'watch' ? '<div class="note">Nothing watched yet. Tap 📍 Watch on any game.</div>' : '')) + (list.map(card).join('') || (pins.length ? '' : `<div class="note">No ${CFG.name} games ${OFF === 0 ? 'today' : 'this day'}.${LG === 'mlb' ? ' MLB is in its offseason.' : ''}</div>`));
 }
 async function load() {
   try { GAMES = parseEvents(await getJson(SB + '?dates=' + ymd(dayDate()) + '&limit=400' + CFG.q)).sort((a, b) => a.start - b.start); LASTAT = Date.now(); $('#upd').textContent = upText(); }

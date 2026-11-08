@@ -113,14 +113,14 @@ html,body{min-height:100dvh}body{padding-bottom:calc(92px + env(safe-area-inset-
 </style>
 </head>
 <body>
-<!-- Pics v61 -->
+<!-- Pics v62 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
   <h1>Oddable</h1>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">College</button></div>
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v61 (Kalshi keys link)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v62 (keeps key form open)</div>
 </header>
 <main>
   <div id="livepage" hidden></div>
@@ -638,7 +638,10 @@ function betEdit(id) { const b = BETS.find((x) => x.id === id); if (!b) return;
   if (b.kind === 'prop') { BF = { step: 'prop', id, text: b.text, day: b.day, ...pay }; betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
   if (!ALL[b.gid]) return; BF = { step: 'form', id, gid: b.gid, side: b.side, type: b.type, line: b.line, stake: b.stake || '', odds: b.mult ? b.mult : (b.odds && b.odds !== -110 ? b.odds : ''), pt: b.mult ? 'x' : 'am' }; betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
 const PROXY = 'https://calcutta-odds.onrender.com/kalshi/proxy', KAPI = '/trade-api/v2', lsg = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, lss = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
-let KST = '', KFORM = false, KBUSY = false;
+let KST = '', KFORM = lsg('kal-formopen') === '1', KBUSY = false;
+const kDraft = () => { try { return JSON.parse(lsg('kal-draft')) || {}; } catch (e) { return {}; } };
+function kDraftSet(k, v) { const d = kDraft(); d[k] = v; lss('kal-draft', JSON.stringify(d)); }
+function kFormClose() { KFORM = false; try { localStorage.removeItem('kal-formopen'); localStorage.removeItem('kal-draft'); } catch (e) {} betsRender(); }
 const b64d = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0)), b64e = (u) => btoa(String.fromCharCode(...new Uint8Array(u)));
 const dlen = (n) => (n < 128 ? [n] : n < 256 ? [0x81, n] : [0x82, n >> 8, n & 255]);
 function pemToPkcs8(pem) { // Kalshi RSA keys come as PKCS#1 ("BEGIN RSA PRIVATE KEY"); WebCrypto needs PKCS#8
@@ -663,14 +666,14 @@ async function kalshiGet(path, query) {
 async function kPages(path, key, q) { let cur = '', out = [], n = 0; do { const j = await kalshiGet(path, { ...q, limit: 200, ...(cur ? { cursor: cur } : {}) }); out = out.concat(j[key] || []); cur = j.cursor || ''; } while (cur && ++n < 20); return out; }
 const kn = (...v) => { for (const x of v) if (x !== undefined && x !== null && x !== '' && !isNaN(+x)) return +x; return NaN; };
 const kc = (o, a, b) => { const c = kn(o[a]); if (!isNaN(c)) return c; const d = kn(o[b]); return isNaN(d) ? NaN : d * 100; };
-function kalshiConnect() { KFORM = true; betsRender(); }
+function kalshiConnect() { KFORM = true; lss('kal-formopen', '1'); betsRender(); }
 function kalshiOff() { if (!confirm('Disconnect Kalshi from this device? Your saved Kalshi bets stay.')) return; ['kal-id', 'kal-pem'].forEach((k) => { try { localStorage.removeItem(k); } catch (e) {} }); KKEY = null; KST = ''; betsRender(); }
 async function kalshiSave() {
   const id = ($('#kid').value || '').trim(), pem = ($('#kpem').value || '').trim();
   if (!id || !/BEGIN [A-Z ]*PRIVATE KEY/.test(pem)) { KST = 'Paste the Key ID and the whole private key (including the BEGIN and END lines).'; return betsRender(); }
-  lss('kal-id', id); lss('kal-pem', pem); KKEY = null; KFORM = false; KST = 'Checking your key…'; betsRender();
+  lss('kal-id', id); lss('kal-pem', pem); KKEY = null; KFORM = false; try { localStorage.removeItem('kal-formopen'); localStorage.removeItem('kal-draft'); } catch (e) {} KST = 'Checking your key…'; betsRender();
   try { await kalshiKey(); await kalshiGet('/portfolio/fills', { limit: 1 }); await kalshiSync(true); }
-  catch (e) { try { localStorage.removeItem('kal-id'); localStorage.removeItem('kal-pem'); } catch (_) {} KKEY = null; KST = e.status === 401 || e.status === 403 ? 'Kalshi rejected that key. Check the Key ID matches the private key.' : /Ed25519|algorithm|not supported/i.test(e.message || '') ? 'This phone cannot use that key type. Create a new Kalshi key and choose RSA.' : 'Could not connect: ' + (e.message || e); KFORM = true; betsRender(); }
+  catch (e) { try { localStorage.removeItem('kal-id'); localStorage.removeItem('kal-pem'); } catch (_) {} KKEY = null; KST = e.status === 401 || e.status === 403 ? 'Kalshi rejected that key. Check the Key ID matches the private key.' : /Ed25519|algorithm|not supported/i.test(e.message || '') ? 'This phone cannot use that key type. Create a new Kalshi key and choose RSA.' : 'Could not connect: ' + (e.message || e); KFORM = true; lss('kal-formopen', '1'); betsRender(); }
 }
 async function kalshiSync(manual) {
   if (!lsg('kal-id') || !lsg('kal-pem') || KBUSY) return; KBUSY = true; KST = 'Syncing Kalshi…'; if (manual) betsRender();
@@ -698,8 +701,8 @@ async function kalshiSync(manual) {
   KBUSY = false; betsRender();
 }
 const kalshiFormHtml = () => `<div class="card kf"><div class="gh" style="margin-top:0">Connect your Kalshi account</div><div class="sub">1. On Kalshi: Profile → API Keys → create a key. Save the private key.<br>2. Paste the Key ID and the private key below.<br><b>Your key stays on this phone.</b> It signs requests here; the server only passes them to Kalshi and stores nothing.</div>
-  <a class="addb" style="display:block;text-align:center;text-decoration:none;margin:10px 0" href="https://kalshi.com/account/profile" target="_blank" rel="noopener">🔑 Open Kalshi to get your keys</a><div class="sub" style="text-align:center;margin:-4px 0 6px">Scroll to <b>API Keys</b> → Create. <a href="https://docs.kalshi.com/getting_started/api_keys" target="_blank" rel="noopener">Help</a></div><label>Key ID <input id="kid" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"></label><label>Private key <textarea id="kpem" rows="5" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="-----BEGIN PRIVATE KEY-----"></textarea></label>
-  <div class="bbtn"><button class="pri" onclick="kalshiSave()">Connect</button><button onclick="KFORM=false;betsRender()">Cancel</button></div></div>`;
+  <a class="addb" style="display:block;text-align:center;text-decoration:none;margin:10px 0" href="https://kalshi.com/account/profile" target="_blank" rel="noopener">🔑 Open Kalshi to get your keys</a><div class="sub" style="text-align:center;margin:-4px 0 6px">Scroll to <b>API Keys</b> → Create. <a href="https://docs.kalshi.com/getting_started/api_keys" target="_blank" rel="noopener">Help</a></div><label>Key ID <input id="kid" type="text" value="${(kDraft().id || '').replace(/"/g, '&quot;')}" oninput="kDraftSet('id',this.value)" autocomplete="off" autocapitalize="off" spellcheck="false"></label><label>Private key <textarea id="kpem" rows="5" oninput="kDraftSet('pem',this.value)" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="-----BEGIN PRIVATE KEY-----">${(kDraft().pem || '').replace(/</g, '&lt;')}</textarea></label>
+  <div class="bbtn"><button class="pri" onclick="kalshiSave()">Connect</button><button onclick="kFormClose()">Cancel</button></div></div>`;
 setInterval(() => { if (VIEW === 'bets' && !document.hidden && !BF && !KFORM) kalshiSync(false); }, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && VIEW === 'bets' && !KFORM) kalshiSync(false); });
 function betDel(id) { if (!confirm('Delete this bet?')) return; const d = BETS.find((x) => x.id === id); if (d && d.src === 'kalshi') { let g = []; try { g = JSON.parse(lsg('kdel26')) || []; } catch (e) {} g.push(id); lss('kdel26', JSON.stringify(g)); } BETS = BETS.filter((x) => x.id !== id); betsSave(); betsRender(); }

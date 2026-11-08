@@ -68,6 +68,15 @@ async function handle(req, res) { // mounted under /kalshi/*; returns false for 
   const send = (code, obj) => { res.writeHead(code, cors); res.end(obj === undefined ? '' : JSON.stringify(obj, null, path === '/debug' ? 1 : 0)); return true; };
   if (req.method === 'OPTIONS') return send(204);
   if (path === '/health') return send(200, { ok: true, keyLoaded: !!KEY, keyId: !!KEY_ID, tokenSet: !!TOKEN, at: CACHE.at, err: CACHE.err ? 'see /kalshi/debug' : null });
+  if (path === '/proxy' && req.method === 'POST') { // stateless: forwards a request the user's own browser already signed. Nothing is stored or logged.
+    let body = ''; for await (const c of req) { body += c; if (body.length > 4000) return send(413, { error: 'too big' }); }
+    let j; try { j = JSON.parse(body); } catch (e) { return send(400, { error: 'bad json' }); }
+    const pth = String(j.path || ''); if (!/^\/(portfolio\/(fills|settlements)|markets\/[A-Za-z0-9._-]+)$/.test(pth)) return send(403, { error: 'path not allowed' });
+    const h = j.headers || {}; const hh = { 'KALSHI-ACCESS-KEY': String(h['KALSHI-ACCESS-KEY'] || ''), 'KALSHI-ACCESS-TIMESTAMP': String(h['KALSHI-ACCESS-TIMESTAMP'] || ''), 'KALSHI-ACCESS-SIGNATURE': String(h['KALSHI-ACCESS-SIGNATURE'] || '') };
+    if (!hh['KALSHI-ACCESS-KEY'] || !hh['KALSHI-ACCESS-SIGNATURE']) return send(400, { error: 'missing auth headers' });
+    const qs = j.query && typeof j.query === 'object' ? '?' + new URLSearchParams(Object.fromEntries(Object.entries(j.query).map(([k, v]) => [k, String(v)]))) : '';
+    try { const r = await fetch(BASE + pth + qs, { headers: hh }); const t = await r.text(); res.writeHead(r.status, cors); res.end(t); return true; } catch (e) { return send(502, { error: 'upstream' }); }
+  }
   if (!TOKEN || u.searchParams.get('token') !== TOKEN) return send(401, { error: 'bad token' });
   if (path === '/bets') { if (Date.now() - CACHE.at > EVERY * 2) await sync(); return send(200, { at: CACHE.at, err: CACHE.err, bets: CACHE.bets }); }
   if (path === '/debug') { // raw look at what Kalshi returns, so the mapping can be tuned. No secrets.

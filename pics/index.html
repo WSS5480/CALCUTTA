@@ -97,7 +97,7 @@ body{padding-bottom:84px}
 .bet.bw{border-color:var(--green)}.bet.bl{border-color:var(--red)}.bwhat{font-size:20px;font-weight:800;margin:4px 0}.bbtn{display:flex;gap:8px;margin-top:8px}.bbtn button,#bform .card>button{border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:10px;padding:8px 14px;font:600 14px inherit;cursor:pointer}.bbtn button.pri{background:var(--blue);color:#fff;border-color:var(--blue)}
 .pickrow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 4px;border-bottom:1px solid var(--line);cursor:pointer}.pickrow small{color:var(--muted)}
 .bsd{display:flex;gap:8px;margin:8px 0}.bsd button{flex:1;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:12px;padding:12px;font:800 16px inherit;cursor:pointer}.bsd button.on{background:var(--blue);color:#fff;border-color:var(--blue)}
-#bform label{display:block;margin:8px 0;font-size:13px;color:var(--muted)}#bform input,#bform select{display:block;width:100%;margin-top:4px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);font:600 16px inherit}
+#bform label,.kf label{display:block;margin:8px 0;font-size:13px;color:var(--muted)}#bform input,#bform select,.kf input,.kf textarea{display:block;width:100%;margin-top:4px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);font:600 16px inherit}
 .bcard{border:1px solid var(--line);border-radius:28px;padding:12px 10px 10px;margin:14px 0;background:var(--panel)}.bcard.bw{border-color:var(--green)}.bcard.bl{border-color:var(--red)}.bcard .gc{margin:8px 0 0}.bhd{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:0 6px}.bcard .bbtn{padding:0 6px}
 #plb{position:fixed;top:max(10px,env(safe-area-inset-top));right:12px;z-index:40;padding:8px 16px;border-radius:16px;min-width:116px;font:800 17px/1.1 system-ui;text-align:center;border:1.5px solid;backdrop-filter:blur(8px);box-shadow:0 4px 18px #0008}#plb small.lbl{font-size:9px;letter-spacing:.14em;opacity:.7;margin:0 0 2px}#plb small{display:block;font-size:10px;font-weight:700;opacity:.85;margin-top:1px}
 #plbd{text-align:left;margin-top:8px;border-top:1px solid #fff3;padding-top:6px;width:min(260px,72vw);font:600 12px/1.3 system-ui;color:#eee}#plbd .bk{display:flex;justify-content:space-between;gap:10px;padding:3px 0}#plbd .bk i{display:block;font-style:normal;opacity:.65;font-size:10px}#plbd .bk b.p{color:#4fd18b}#plbd .bk b.n{color:#ff5a4d}#plbd .tot{border-top:1px solid #fff3;margin-top:4px;padding-top:5px;font-weight:800}[hidden]{display:none!important}#plb{cursor:pointer}#plb.pos{color:#4fd18b;background:#0e2a1fe6;border-color:#4fd18b}#plb.neg{color:#ff5a4d;background:#2e1210e6;border-color:#ff5a4d}body.bets .thm{display:none}
@@ -113,14 +113,14 @@ html,body{min-height:100dvh}body{padding-bottom:calc(92px + env(safe-area-inset-
 </style>
 </head>
 <body>
-<!-- Pics v59 -->
+<!-- Pics v60 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
   <h1>Oddable</h1>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">College</button></div>
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v59 (Kalshi sync)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v60 (Kalshi sign-in per user)</div>
 </header>
 <main>
   <div id="livepage" hidden></div>
@@ -442,7 +442,7 @@ function betsRender() {
   }).join('');
   el.innerHTML = `<div class="lpg"><h2>My Bets</h2>
     <div class="sums">${stat('Overall', all, stake ? ' · $' + stake + ' staked' : '')}${stat('Against the app', agA)}${stat('With the app', withA)}<div class="sum"><b>${BETS.length - fin.length}</b><span>Open bets</span><small>${BETS.length} total</small></div></div>
-    <button class="addb" onclick="betNew()">＋ Add a bet</button><label class="addb imp">📷 Import from a Kalshi / Underdog screenshot<input type="file" accept="image/*" hidden onchange="betImport(this.files[0]);this.value=''"></label><div class="sub" style="margin:0 0 6px">${lsg('ksync-token') ? `<span>${KST || 'Kalshi connected'}</span> · <a href="#" onclick="kalshiSync(true);return false">Sync now</a> · <a href="#" onclick="kalshiOff();return false">Disconnect</a>` : `<a href="#" onclick="kalshiConnect();return false">⚡ Connect Kalshi for automatic bets</a>`}</div><div class="sub" id="impst" style="margin:-4px 0 8px">${IMP}</div><div id="bform">${BF ? betFormHtml() : ''}</div>${logHtml}${list || '<div class="note">No bets yet. Tap “Add a bet”, pick a game, then set your side and the line you got.</div>'}</div>`;
+    <button class="addb" onclick="betNew()">＋ Add a bet</button><label class="addb imp">📷 Import from a Kalshi / Underdog screenshot<input type="file" accept="image/*" hidden onchange="betImport(this.files[0]);this.value=''"></label><div class="sub" style="margin:0 0 6px">${lsg('kal-id') ? `<span>${KST || 'Kalshi connected'}</span> · <a href="#" onclick="kalshiSync(true);return false">Sync now</a> · <a href="#" onclick="kalshiOff();return false">Disconnect</a>` : `<a href="#" onclick="kalshiConnect();return false">⚡ Connect your Kalshi account for automatic bets</a>${KST ? `<div>${KST}</div>` : ''}`}</div>${KFORM ? kalshiFormHtml() : ''}<div class="sub" id="impst" style="margin:-4px 0 8px">${IMP}</div><div id="bform">${BF ? betFormHtml() : ''}</div>${logHtml}${list || '<div class="note">No bets yet. Tap “Add a bet”, pick a game, then set your side and the line you got.</div>'}</div>`;
 }
 
 // ---- Import a bet from a Kalshi / Underdog screenshot: OCR in the browser (Tesseract.js), then pre-fill the bet form for you to confirm ----
@@ -637,24 +637,71 @@ function betEdit(id) { const b = BETS.find((x) => x.id === id); if (!b) return;
   if (b.kind === 'parlay') { BF = { step: 'parlay', id, legs: JSON.parse(JSON.stringify(b.legs)), ...pay }; betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
   if (b.kind === 'prop') { BF = { step: 'prop', id, text: b.text, day: b.day, ...pay }; betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
   if (!ALL[b.gid]) return; BF = { step: 'form', id, gid: b.gid, side: b.side, type: b.type, line: b.line, stake: b.stake || '', odds: b.mult ? b.mult : (b.odds && b.odds !== -110 ? b.odds : ''), pt: b.mult ? 'x' : 'am' }; betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
-const KURL = 'https://calcutta-odds.onrender.com/kalshi/bets', lsg = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, lss = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
-let KST = '';
-function kalshiConnect() { const t = prompt('Paste your sync token (the SYNC_TOKEN you set in Render)'); if (t && t.trim()) { lss('ksync-token', t.trim()); kalshiSync(true); } }
-function kalshiOff() { try { localStorage.removeItem('ksync-token'); } catch (e) {} KST = ''; betsRender(); }
-async function kalshiSync(manual) {
-  const tok = lsg('ksync-token'); if (!tok) return;
-  KST = 'Syncing Kalshi…'; if (manual) betsRender();
-  try {
-    const r = await fetch(KURL + '?token=' + encodeURIComponent(tok), { cache: 'no-store' }); if (r.status === 401) { KST = 'Wrong sync token. Tap Reconnect.'; betsRender(); return; }
-    const j = await r.json(); if (j.err && !(j.bets || []).length) { KST = 'Kalshi: ' + j.err; betsRender(); return; }
-    let gone = []; try { gone = JSON.parse(lsg('kdel26')) || []; } catch (e) {}
-    let n = 0;
-    (j.bets || []).forEach((k) => { if (gone.includes(k.id)) return; const nb = { id: k.id, kind: 'prop', src: 'kalshi', text: k.text, stake: k.stake, mult: k.mult, odds: -110, res: k.res, day: k.day, t: k.t, week: CUR }; const i = BETS.findIndex((x) => x.id === k.id); if (i >= 0) { const o = BETS[i]; if (o.stake !== nb.stake || o.res !== nb.res || o.mult !== nb.mult) { BETS[i] = nb; n++; } } else { BETS.push(nb); n++; } });
-    KST = 'Kalshi synced ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + ' · ' + (j.bets || []).length + ' bets'; if (n) betsSave(); betsRender();
-  } catch (e) { KST = 'Kalshi sync could not connect (server may be waking up). Will retry.'; betsRender(); }
+const PROXY = 'https://calcutta-odds.onrender.com/kalshi/proxy', KAPI = '/trade-api/v2', lsg = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, lss = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+let KST = '', KFORM = false, KBUSY = false;
+const b64d = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0)), b64e = (u) => btoa(String.fromCharCode(...new Uint8Array(u)));
+const dlen = (n) => (n < 128 ? [n] : n < 256 ? [0x81, n] : [0x82, n >> 8, n & 255]);
+function pemToPkcs8(pem) { // Kalshi RSA keys come as PKCS#1 ("BEGIN RSA PRIVATE KEY"); WebCrypto needs PKCS#8
+  const body = pem.replace(/-----[^-]+-----/g, '').replace(/\s+/g, ''); const der = b64d(body);
+  if (!/RSA PRIVATE KEY/.test(pem)) return { der, kind: der.length === 48 ? 'ed' : 'rsa' };
+  const oct = [0x04, ...dlen(der.length)], algo = [0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00], ver = [0x02, 0x01, 0x00];
+  const inner = [...ver, ...algo, ...oct]; const out = new Uint8Array([0x30, ...dlen(inner.length + der.length), ...inner, ...der]); return { der: out, kind: 'rsa' };
 }
-setInterval(() => { if (VIEW === 'bets' && !document.hidden && !BF) kalshiSync(false); }, 60000);
-document.addEventListener('visibilitychange', () => { if (!document.hidden && VIEW === 'bets') kalshiSync(false); });
+let KKEY = null;
+async function kalshiKey() {
+  if (KKEY) return KKEY; const pem = lsg('kal-pem'); if (!pem) throw new Error('no key'); const { der, kind } = pemToPkcs8(pem);
+  if (kind === 'rsa') KKEY = { kind, key: await crypto.subtle.importKey('pkcs8', der, { name: 'RSA-PSS', hash: 'SHA-256' }, false, ['sign']) };
+  else KKEY = { kind, key: await crypto.subtle.importKey('pkcs8', der, { name: 'Ed25519' }, false, ['sign']) };
+  return KKEY;
+}
+async function kalshiGet(path, query) {
+  const { kind, key } = await kalshiKey(), ts = String(Date.now()), msg = new TextEncoder().encode(ts + 'GET' + KAPI + path);
+  const sig = kind === 'rsa' ? await crypto.subtle.sign({ name: 'RSA-PSS', saltLength: 32 }, key, msg) : await crypto.subtle.sign('Ed25519', key, msg);
+  const r = await fetch(PROXY, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path, query: query || {}, headers: { 'KALSHI-ACCESS-KEY': lsg('kal-id'), 'KALSHI-ACCESS-TIMESTAMP': ts, 'KALSHI-ACCESS-SIGNATURE': b64e(sig) } }) });
+  if (!r.ok) { const e = new Error('Kalshi ' + r.status); e.status = r.status; throw e; } return r.json();
+}
+async function kPages(path, key, q) { let cur = '', out = [], n = 0; do { const j = await kalshiGet(path, { ...q, limit: 200, ...(cur ? { cursor: cur } : {}) }); out = out.concat(j[key] || []); cur = j.cursor || ''; } while (cur && ++n < 20); return out; }
+const kn = (...v) => { for (const x of v) if (x !== undefined && x !== null && x !== '' && !isNaN(+x)) return +x; return NaN; };
+const kc = (o, a, b) => { const c = kn(o[a]); if (!isNaN(c)) return c; const d = kn(o[b]); return isNaN(d) ? NaN : d * 100; };
+function kalshiConnect() { KFORM = true; betsRender(); }
+function kalshiOff() { if (!confirm('Disconnect Kalshi from this device? Your saved Kalshi bets stay.')) return; ['kal-id', 'kal-pem'].forEach((k) => { try { localStorage.removeItem(k); } catch (e) {} }); KKEY = null; KST = ''; betsRender(); }
+async function kalshiSave() {
+  const id = ($('#kid').value || '').trim(), pem = ($('#kpem').value || '').trim();
+  if (!id || !/BEGIN [A-Z ]*PRIVATE KEY/.test(pem)) { KST = 'Paste the Key ID and the whole private key (including the BEGIN and END lines).'; return betsRender(); }
+  lss('kal-id', id); lss('kal-pem', pem); KKEY = null; KFORM = false; KST = 'Checking your key…'; betsRender();
+  try { await kalshiKey(); await kalshiGet('/portfolio/fills', { limit: 1 }); await kalshiSync(true); }
+  catch (e) { try { localStorage.removeItem('kal-id'); localStorage.removeItem('kal-pem'); } catch (_) {} KKEY = null; KST = e.status === 401 || e.status === 403 ? 'Kalshi rejected that key. Check the Key ID matches the private key.' : /Ed25519|algorithm|not supported/i.test(e.message || '') ? 'This phone cannot use that key type. Create a new Kalshi key and choose RSA.' : 'Could not connect: ' + (e.message || e); KFORM = true; betsRender(); }
+}
+async function kalshiSync(manual) {
+  if (!lsg('kal-id') || !lsg('kal-pem') || KBUSY) return; KBUSY = true; KST = 'Syncing Kalshi…'; if (manual) betsRender();
+  try {
+    const min = Math.floor(Date.now() / 1000 - 45 * 86400), fills = await kPages('/portfolio/fills', 'fills', { min_ts: min });
+    let setl = []; try { setl = await kPages('/portfolio/settlements', 'settlements', { min_ts: min }); } catch (e) {}
+    const S = {}; setl.forEach((s) => { S[s.ticker] = s; }); const by = {};
+    fills.forEach((f) => {
+      const side = (f.side || '').toLowerCase(); if ((f.action || 'buy').toLowerCase() !== 'buy') return;
+      const cnt = kn(f.count, f.count_fp), px = side === 'yes' ? kc(f, 'yes_price', 'yes_price_dollars') : kc(f, 'no_price', 'no_price_dollars'); if (isNaN(cnt) || isNaN(px)) return;
+      const k = f.ticker + '|' + side, b = by[k] = by[k] || { ticker: f.ticker, side, count: 0, cost: 0, first: f.created_time }; b.count += cnt; b.cost += cnt * px / 100; if (f.created_time < b.first) b.first = f.created_time;
+    });
+    const MK = (window.__kmk = window.__kmk || {}); let gone = []; try { gone = JSON.parse(lsg('kdel26')) || []; } catch (e) {}
+    let n = 0;
+    for (const b of Object.values(by)) {
+      const id = 'k-' + b.ticker + '-' + b.side; if (gone.includes(id)) continue;
+      let m = MK[b.ticker]; if (!m) { try { m = MK[b.ticker] = (await kalshiGet('/markets/' + encodeURIComponent(b.ticker))).market || {}; } catch (e) { m = {}; } }
+      const s = S[b.ticker], res = (s && s.market_result) || (m.status === 'settled' || m.status === 'finalized' ? m.result : '');
+      const pick = (b.side === 'yes' ? m.yes_sub_title : m.no_sub_title) || (b.side === 'yes' ? 'YES' : 'NO'), stake = Math.round(b.cost * 100) / 100;
+      const nb = { id, kind: 'prop', src: 'kalshi', text: pick + ' · ' + (m.title || b.ticker).replace(/\?$/, ''), stake, mult: stake ? Math.round(b.count / stake * 100) / 100 : null, odds: -110, res: res ? (res === 'scalar' || res === 'void' ? 'push' : res === b.side ? 'won' : 'lost') : null, day: dayKey(Date.parse(b.first)), t: Date.parse(b.first), week: CUR };
+      const i = BETS.findIndex((x) => x.id === id); if (i >= 0) { const o = BETS[i]; if (o.stake !== nb.stake || o.res !== nb.res || o.mult !== nb.mult) { BETS[i] = nb; n++; } } else { BETS.push(nb); n++; }
+    }
+    KST = 'Kalshi synced ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + ' · ' + Object.keys(by).length + ' bets'; if (n) betsSave();
+  } catch (e) { KST = e.status === 401 || e.status === 403 ? 'Kalshi rejected your key. Tap Disconnect, then connect again.' : 'Kalshi sync could not connect (the server may be waking up). Will retry.'; }
+  KBUSY = false; betsRender();
+}
+const kalshiFormHtml = () => `<div class="card kf"><div class="gh" style="margin-top:0">Connect your Kalshi account</div><div class="sub">1. On Kalshi: Profile → API Keys → create a key. Save the private key.<br>2. Paste the Key ID and the private key below.<br><b>Your key stays on this phone.</b> It signs requests here; the server only passes them to Kalshi and stores nothing.</div>
+  <label>Key ID <input id="kid" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"></label><label>Private key <textarea id="kpem" rows="5" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="-----BEGIN PRIVATE KEY-----"></textarea></label>
+  <div class="bbtn"><button class="pri" onclick="kalshiSave()">Connect</button><button onclick="KFORM=false;betsRender()">Cancel</button></div></div>`;
+setInterval(() => { if (VIEW === 'bets' && !document.hidden && !BF && !KFORM) kalshiSync(false); }, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && VIEW === 'bets' && !KFORM) kalshiSync(false); });
 function betDel(id) { if (!confirm('Delete this bet?')) return; const d = BETS.find((x) => x.id === id); if (d && d.src === 'kalshi') { let g = []; try { g = JSON.parse(lsg('kdel26')) || []; } catch (e) {} g.push(id); lss('kdel26', JSON.stringify(g)); } BETS = BETS.filter((x) => x.id !== id); betsSave(); betsRender(); }
 function liveSt(g) {
   if (g.state !== 'in') return '';
@@ -1265,7 +1312,7 @@ async function checkUpdate() {
   } catch (e) {}
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
-setTimeout(() => { if (lsg('ksync-token')) kalshiSync(false); }, 3000); setTimeout(checkUpdate, 4000); setInterval(checkUpdate, 10 * 60 * 1000);
+setTimeout(() => { if (lsg('kal-id')) kalshiSync(false); }, 3000); setTimeout(checkUpdate, 4000); setInterval(checkUpdate, 10 * 60 * 1000);
 if ('serviceWorker' in navigator) {
   const had = !!navigator.serviceWorker.controller; let rl = false;
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((r) => r.update().catch(() => {})).catch(() => {});

@@ -112,17 +112,18 @@ html,body{min-height:100dvh}body{padding-bottom:calc(92px + env(safe-area-inset-
 .legs{margin:8px 0}.leg{display:flex;gap:10px;align-items:flex-start;padding:7px 4px;border-top:1px solid var(--line)}.leg b{font-weight:600}.leg small{color:var(--muted)}.leg .pm{min-width:26px;text-align:center}.leg .x{margin-left:auto;border:0;background:none;color:var(--red);font-size:18px;cursor:pointer}.legbtn{display:flex;gap:6px;margin-top:4px}.legbtn button{border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:8px;padding:3px 10px;font:600 12px inherit;cursor:pointer}
 .bh{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}.bh h2{margin:0}.pillw{position:relative}.pill{border:1px solid var(--blue);background:var(--blue);color:#fff;border-radius:999px;padding:8px 14px;font:700 14px inherit;cursor:pointer;white-space:nowrap}#addmenu{position:absolute;right:0;top:calc(100% + 6px);z-index:30;min-width:210px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:6px;box-shadow:0 10px 30px #000a}#addmenu button,#addmenu label{display:block;width:100%;box-sizing:border-box;text-align:left;border:0;background:none;color:var(--ink);padding:11px 12px;border-radius:10px;font:600 15px inherit;cursor:pointer}#addmenu button:active,#addmenu label:active{background:var(--panel2)}
 .rkrow summary>b{text-align:right}.nowp{display:block;font-size:10px;font-weight:700;opacity:.75;margin-top:1px}
+.addtb{display:inline-block;margin:8px 8px 0 0;border:1px solid var(--blue);background:var(--blue);color:#fff;border-radius:999px;padding:5px 12px;font:600 13px inherit;cursor:pointer}
 </style>
 </head>
 <body>
-<!-- Pics v70 -->
+<!-- Pics v71 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
   <h1>Oddable</h1>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">College</button></div>
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v70 (pregame % + now)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v71 (add to bets on cards)</div>
 </header>
 <main>
   <div id="livepage" hidden></div>
@@ -1178,6 +1179,7 @@ function card(g) {
     <div class="row"><b>${rk(g.home)}${nm(g.home.abbr)} <small>${g.home.record} · home</small></b><b>${pct(p.ph)}</b></div>
     <div class="pick">${predPanel(g)}<div class="sub" style="margin-top:4px">${p.mkt ? 'Win % blends our model with the line' : 'Win % is our model only (no line yet)'} · model ${byText(g, p.mh)}${g.line !== null ? ' · line ' + byText(g, g.line) : ''}</div></div>
     ${p.inj ? `<div class="sub">🩹 Starters hurt (info only): ${[['a', g.away], ['h', g.home]].filter(([k]) => p.inj[k].pts).map(([k, t]) => `${t.abbr} −${p.inj[k].pts.toFixed(1)} (${p.inj[k].list.join(', ')})`).join(' · ')}</div>` : ''}
+    <button class="addtb" onclick="event.stopPropagation();betFromGame('${g.id}')">＋ Add to My Bets</button>
     ${lmBlock(g)}
   </div>`;
 }

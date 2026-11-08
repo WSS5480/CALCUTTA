@@ -122,7 +122,7 @@ html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
 </head>
 <body>
 <div id="sc">
-<!-- Pics v93 -->
+<!-- Pics v94 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
   <h1>Oddable</h1>
@@ -130,7 +130,7 @@ html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
   <input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team">
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v93 (live legs in Underdog slips)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v94 (6-pick slips)</div>
 </header>
 <main>
   <div id="livepage" hidden></div>
@@ -575,15 +575,18 @@ function parseMulti(raw) {
     }
     if (pos && leg) o.legs.push({ away: clean(g[1].trim()), home: g[2].trim(), pos, ...leg, at: i });
   }
-  { // picks shown under live/finished games (score block, no "@" line): "Kansas City Chiefs" then "To win"
+  { // picks shown under live/finished games (score block, no "@" line): team name, a little icon noise, then "To win" or "+7.5 Spread"
     const have = new Set(o.legs.map((l) => (l.pos || '').toLowerCase()));
+    const skip = (t) => !/[A-Za-z]{3}/.test(t) || /@/.test(t) || isTime(t) || /^(?:halftime|final|end|q\d|\d(?:st|nd|rd|th)|top|bot|mid|delayed|postponed)/i.test(t) || /^\W*(?:\d+\s*)?(?:picks?|boost|100%)/i.test(t) || /to\s*win\s*\$/i.test(t);
     for (let i = 0; i < L.length; i++) {
-      let nm = null, ty = null, ln = 0, m2;
-      if ((m2 = /^(.+?)\s+to\s*win$/i.exec(L[i])) && /[A-Za-z]{3}/.test(m2[1])) { nm = m2[1]; ty = 'ml'; }
-      else if (i + 1 < L.length && /^to\s*win$/i.test(L[i + 1]) && /[A-Za-z]{3}/.test(L[i]) && !/@|\d+:\d\d/.test(L[i])) { nm = L[i]; ty = 'ml'; }
-      else if (i + 1 < L.length && (m2 = /^([+\-\u2212\u2012-\u2015_~¥]?\s*\d+(?:\.\d+)?)\s*spread$/i.exec(L[i + 1])) && /[A-Za-z]{3}/.test(L[i]) && !/@/.test(L[i])) { nm = L[i]; ty = 'sp'; ln = parseFloat(m2[1].replace(/[\u2212\u2012-\u2015_~¥]/g, '-').replace(/\s/g, '')); if (isNaN(ln)) continue; }
-      if (!nm) continue; const pos = clean(nm); if (!pos || have.has(pos.toLowerCase())) continue;
-      have.add(pos.toLowerCase()); o.legs.push({ pos, type: ty, line: ln, at: i });
+      let ty = null, ln = 0, m2;
+      if (/^\W{0,3}to\s*win\b/i.test(L[i]) && !/\$/.test(L[i])) ty = 'ml';
+      else if ((m2 = /^\W{0,3}([+\-\u2212\u2012-\u2015_~¥]?\s*\d+(?:\.\d+)?)\s*spread\b/i.exec(L[i]))) { ty = 'sp'; ln = parseFloat(m2[1].replace(/[\u2212\u2012-\u2015_~¥]/g, '-').replace(/\s/g, '')); if (isNaN(ln)) continue; }
+      if (!ty) continue;
+      let k = i - 1; while (k >= 0 && i - k <= 4 && (skip(L[k]) || /^\W*(?:to\s*win|[+\-]?\d+(?:\.\d+)?\s*spread)\b/i.test(L[k]))) k--;
+      if (k < 0 || i - k > 4) continue;
+      const pos = clean(L[k].replace(/\s+\d+\s*[\].\u00b0o]*\s*$/i, '')); if (!pos || !/[A-Za-z]{3}/.test(pos) || have.has(pos.toLowerCase())) continue;
+      have.add(pos.toLowerCase()); o.legs.push({ pos, type: ty, line: ln, at: k });
     }
     o.legs.sort((a, b) => (a.at || 0) - (b.at || 0));
   }

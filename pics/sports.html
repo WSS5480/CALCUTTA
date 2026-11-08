@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Oddable</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#7c3aed">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<style>
+:root{--bg:#0a0c10;--panel:#13161d;--panel2:#1b1f29;--line:#272c38;--ink:#eef0f4;--muted:#8b93a3;--blue:#a78bfa;--green:#4fd18b;--red:#ff5a4d}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.35 system-ui,-apple-system,sans-serif;padding-bottom:40px}
+header{padding:max(16px,env(safe-area-inset-top)) max(16px,calc((100% - 688px)/2)) 14px;background:linear-gradient(135deg,#7c3aed 0%,#4c1d95 55%,#1b1f29 100%);border-radius:0 0 26px 26px;color:#fff}
+h1{margin:0 0 6px;font-size:26px}
+.lg{display:flex;gap:8px;margin:6px 0;flex-wrap:wrap}.lg a,.lg button{border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.12);color:#fff;border-radius:999px;padding:6px 16px;font:700 14px inherit;cursor:pointer;text-decoration:none}.lg .on{background:#fff;color:#4c1d95}
+.sub{font-size:12px;opacity:.8}
+main{max-width:720px;margin:0 auto;padding:0 16px}
+.day{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:14px 0 8px}.day button{border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:12px;padding:8px 14px;font:700 15px inherit}.day b{font-size:16px}
+.chips{display:flex;gap:8px;margin:6px 0 10px}.chips button{flex:1;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:12px;padding:8px;font:600 13px inherit}.chips button.on{border-color:var(--blue);background:var(--panel2)}.chips b{display:block;font-size:18px}
+.gc{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:12px 14px;margin:10px 0}.gc.lv{border-color:var(--blue)}
+.gtop{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:22px;font-weight:800}.gtop .t{display:flex;align-items:center;gap:8px;min-width:0}.gtop img{width:32px;height:32px;object-fit:contain}
+.gmid{text-align:center;font-size:12px;font-weight:600;color:var(--muted)}.lvtag{color:var(--red)}
+.rec{font-size:11px;color:var(--muted);font-weight:500}
+.bar{height:10px;border-radius:8px;background:var(--panel2);overflow:hidden;margin:8px 0 4px;display:flex}.bar i{display:block;height:100%}
+.pr{display:flex;justify-content:space-between;font-weight:700}
+.pick{margin-top:6px;font-size:14px}.pick b{color:var(--blue)}
+.ft{display:flex;justify-content:space-between;color:var(--muted);font-size:12px;margin-top:6px}
+.gpin{position:absolute;top:6px;right:8px;border:1px solid rgba(124,58,237,.5);background:rgba(124,58,237,.12);color:inherit;border-radius:999px;font:600 11px inherit;padding:3px 9px}.gpin.on{background:#7c3aed;color:#fff}
+.pinhd{font:700 12px inherit;letter-spacing:.08em;text-transform:uppercase;opacity:.75;margin:12px 4px 6px}
+.bet{display:block;width:100%;margin-top:8px;border:1px dashed var(--blue);background:none;color:var(--blue);border-radius:12px;padding:9px;font:700 14px inherit}
+.bf{border-top:1px solid var(--line);margin-top:8px;padding-top:8px}.bf label{display:block;margin:6px 0;font-size:13px;color:var(--muted)}.bf input,.bf select{display:block;width:100%;margin-top:4px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel2);color:var(--ink);font:16px inherit}
+.bf .row{display:flex;gap:8px}.bf .row>*{flex:1}.bf button{border:1px solid var(--blue);background:var(--blue);color:#0a0c10;border-radius:12px;padding:10px;font:800 15px inherit}.bf button.x{background:none;color:var(--blue)}
+.note{color:var(--muted);text-align:center;padding:24px 8px}
+a.back{color:var(--blue)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Oddable</h1>
+  <div class="lg" id="lg"></div>
+  <div class="sub" id="upd">Loading…</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable sports v1 (NBA + MLB)</div>
+</header>
+<main>
+  <div class="day"><button onclick="goDay(-1)">◀</button><b id="dl"></b><button onclick="goDay(1)">▶</button></div>
+  <div class="chips" id="chips"></div>
+  <div id="list"></div>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const LG = new URLSearchParams(location.search).get('lg') === 'mlb' ? 'mlb' : 'nba';
+const CFG = LG === 'nba'
+  ? { path: 'basketball/nba', name: 'NBA', sd: 12, hfa: 2.5, w: 0.8, back: 45, minG: 120, unit: 'pts' }
+  : { path: 'baseball/mlb', name: 'MLB', sd: 4.4, hfa: 0.25, w: 0.8, back: 40, minG: 400, unit: 'runs' };
+const SB = 'https://site.api.espn.com/apis/site/v2/sports/' + CFG.path + '/scoreboard';
+const lsg = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const lss = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const cdf = (z) => { const t = 1 / (1 + 0.2316419 * Math.abs(z)), d = 0.3989423 * Math.exp(-z * z / 2); const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274)))); return z > 0 ? 1 - p : p; };
+const pct = (x) => Math.round(x * 100) + '%';
+const ymd = (d) => d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+const dashed = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+let OFF = 0, GAMES = [], RAT = {}, HAVE = false, FILTER = 'all', OPEN = null, PIN = [];
+try { PIN = JSON.parse(lsg('pinned26')) || []; } catch (e) {}
+const dayDate = () => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + OFF); return d; };
+
+// league tabs
+$('#lg').innerHTML = `<a href="./" onclick="lss('pics-lg','nfl')">NFL</a><a href="./" onclick="lss('pics-lg','cfb')">NCAA</a><a href="sports.html?lg=nba" class="${LG === 'nba' ? 'on' : ''}">NBA</a><a href="sports.html?lg=mlb" class="${LG === 'mlb' ? 'on' : ''}">MLB</a>`;
+
+async function getJson(u) { const r = await fetch(u, { cache: 'no-store' }); if (!r.ok) throw new Error(r.status); return r.json(); }
+
+function americanProb(ml) { ml = +ml; if (!ml) return null; return ml < 0 ? -ml / (-ml + 100) : 100 / (ml + 100); }
+function parseEvents(j) {
+  return (j.events || []).map((e) => {
+    const c = e.competitions[0], t = e.status.type;
+    const cs = c.competitors.map((x) => ({ id: x.team.id, abbr: x.team.abbreviation, name: x.team.shortDisplayName || x.team.displayName || x.team.abbreviation, full: x.team.displayName || '', score: parseInt(x.score, 10) || 0, home: x.homeAway === 'home', record: (x.records && x.records[0] && x.records[0].summary) || '', logo: x.team.logo || '' })).sort((a, b) => a.home - b.home);
+    const o = c.odds && c.odds[0]; let line = null, total = null, mlA = null, mlH = null;
+    if (o) {
+      total = o.overUnder != null ? +o.overUnder : null;
+      if (o.homeTeamOdds && o.homeTeamOdds.moneyLine != null) mlH = +o.homeTeamOdds.moneyLine;
+      if (o.awayTeamOdds && o.awayTeamOdds.moneyLine != null) mlA = +o.awayTeamOdds.moneyLine;
+      if (o.spread != null && !isNaN(+o.spread) && o.homeTeamOdds && o.homeTeamOdds.favorite != null) { const s = Math.abs(+o.spread); line = o.homeTeamOdds.favorite ? s : -s; }
+      else if (o.details) { const m = /^([A-Z]{2,4})\s+(-\d+(?:\.\d+)?)$/.exec(o.details.trim()); if (m && LG === 'nba') { const s = Math.abs(+m[2]); line = m[1] === cs[1].abbr ? s : m[1] === cs[0].abbr ? -s : null; } }
+    }
+    return { id: e.id, start: +new Date(e.date), state: t.state, detail: t.shortDetail || '', away: cs[0], home: cs[1], line, total, mlA, mlH, completed: t.completed };
+  });
+}
+
+// ratings: margin-based power ratings from recent finished games (ridge-regularised, home edge removed)
+async function loadRatings() {
+  const key = 'sprat-' + LG + '-' + ymd(new Date());
+  try { const c = JSON.parse(lsg(key)); if (c && Object.keys(c).length) { RAT = c; HAVE = true; return; } } catch (e) {}
+  const fin = {}; const end = new Date(); let n = 0;
+  for (let k = 0; k < 8 && n < CFG.minG; k++) {
+    const e1 = new Date(end); e1.setDate(e1.getDate() - k * CFG.back); const s1 = new Date(e1); s1.setDate(s1.getDate() - CFG.back + 1);
+    try { const j = await getJson(SB + '?dates=' + ymd(s1) + '-' + ymd(e1) + '&limit=1000'); parseEvents(j).forEach((g) => { if (g.state === 'post' && g.completed !== false && g.home.score !== g.away.score) fin[g.id] = g; }); } catch (e) {}
+    n = Object.keys(fin).length;
+  }
+  const G = Object.values(fin); if (G.length < 30) return;
+  const r = {}; G.forEach((g) => { r[g.home.abbr] = 0; r[g.away.abbr] = 0; });
+  for (let it = 0; it < 60; it++) {
+    const sum = {}, cnt = {};
+    G.forEach((g) => { const m = g.home.score - g.away.score - CFG.hfa; const h = g.home.abbr, a = g.away.abbr; sum[h] = (sum[h] || 0) + m + r[a]; cnt[h] = (cnt[h] || 0) + 1; sum[a] = (sum[a] || 0) - m + r[h]; cnt[a] = (cnt[a] || 0) + 1; });
+    Object.keys(r).forEach((t) => { r[t] = sum[t] / (cnt[t] + 4); });
+  }
+  RAT = r; HAVE = true; lss(key, JSON.stringify(r));
+}
+
+function pred(g) {
+  const rh = RAT[g.home.abbr], ra = RAT[g.away.abbr]; const hasM = rh !== undefined && ra !== undefined;
+  const mm = hasM ? rh - ra + CFG.hfa : null; // model expected home margin
+  let mk = null; // market expected home margin / market home win prob
+  if (LG === 'nba' && g.line !== null) mk = g.line;
+  let pModel = hasM ? cdf(mm / CFG.sd) : null, pMkt = null;
+  if (g.mlH !== null && g.mlA !== null) { const a = americanProb(g.mlA), h = americanProb(g.mlH); if (a && h) pMkt = h / (a + h); }
+  if (pMkt === null && mk !== null) pMkt = cdf(mk / CFG.sd);
+  let ph; if (pModel !== null && pMkt !== null) ph = CFG.w * pMkt + (1 - CFG.w) * pModel; else ph = pMkt !== null ? pMkt : pModel !== null ? pModel : 0.5;
+  const margin = LG === 'nba' ? (mk !== null && mm !== null ? CFG.w * mk + (1 - CFG.w) * mm : mk !== null ? mk : mm) : mm;
+  return { ph, pa: 1 - ph, margin, has: pModel !== null || pMkt !== null };
+}
+const sgn = (n) => (n > 0 ? '+' : '') + n;
+function lineText(g) {
+  const bits = [];
+  if (g.line !== null) bits.push(g.line === 0 ? 'PK' : (g.line > 0 ? g.home.abbr : g.away.abbr) + ' -' + Math.abs(g.line));
+  if (g.mlA !== null && g.mlH !== null) bits.push(g.away.abbr + ' ' + sgn(g.mlA) + ' / ' + g.home.abbr + ' ' + sgn(g.mlH));
+  if (g.total !== null) bits.push('O/U ' + g.total);
+  return bits.join(' · ') || 'No odds posted';
+}
+
+function card(g) {
+  const p = pred(g), live = g.state === 'in', pre = g.state === 'pre', pinned = PIN.includes(g.id);
+  const when = live ? `<span class="lvtag">● LIVE</span> ${esc(g.detail)}` : pre ? new Date(g.start).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : esc(g.detail || 'Final');
+  const side = (t) => `<div class="t">${t.logo ? `<img src="${esc(t.logo)}" alt="">` : ''}<div>${esc(t.abbr)}<div class="rec">${esc(t.record)}</div></div></div>`;
+  const pickT = p.ph >= 0.5 ? g.home : g.away, pk = Math.max(p.ph, p.pa);
+  const pickLine = p.has ? `<div class="pick">Pick: <b>${esc(pickT.abbr)}</b> ${pct(pk)}${LG === 'nba' && p.margin !== null ? ` <span class="rec">· expected margin ${p.margin >= 0 ? g.home.abbr : g.away.abbr} by ${Math.abs(p.margin).toFixed(1)}</span>` : ''}</div>` : '<div class="pick rec">Not enough data yet for a pick</div>';
+  const o = OPEN === g.id;
+  return `<div class="gc ${live ? 'lv' : ''}"><button class="gpin ${pinned ? 'on' : ''}" onclick="pinToggle('${g.id}')">${pinned ? '📌 Watching' : '📍 Watch'}</button>
+    <div class="gtop">${side(g.away)}<div class="gmid">${when}</div>${side(g.home)}</div>
+    <div class="gtop" style="margin-top:2px"><span>${pre ? '' : g.away.score}</span><span></span><span>${pre ? '' : g.home.score}</span></div>
+    <div class="bar"><i style="width:${p.pa * 100}%;background:#7c6ad8"></i><i style="width:${p.ph * 100}%;background:#4fd18b"></i></div>
+    <div class="pr"><span>${esc(g.away.abbr)} ${pct(p.pa)}</span><span>${pct(p.ph)} ${esc(g.home.abbr)}</span></div>
+    ${pickLine}<div class="ft"><span>${esc(lineText(g))}</span></div>
+    ${g.state === 'post' ? '' : `<button class="bet" onclick="betOpen('${g.id}')">＋ Add bet</button>`}${o ? betForm(g) : ''}</div>`;
+}
+function betForm(g) {
+  const opts = [`<option value="${g.away.abbr}|ml">${g.away.abbr} to win</option>`, `<option value="${g.home.abbr}|ml">${g.home.abbr} to win</option>`];
+  const sp = (a, ln) => `<option value="${a}|sp|${ln}">${a} ${sgn(ln)} ${CFG.unit === 'pts' ? 'spread' : 'run line'}</option>`;
+  const l = g.line !== null ? g.line : (LG === 'mlb' ? -1.5 : 0);
+  opts.push(sp(g.home.abbr, -l), sp(g.away.abbr, l));
+  return `<div class="bf"><label>Your bet<select id="bs">${opts.join('')}</select></label>
+    <div class="row"><label>Stake $<input id="bk" inputmode="decimal" placeholder="50"></label><label>Odds (American)<input id="bo" inputmode="numeric" placeholder="-110"></label></div>
+    <div class="row"><button onclick="betSave('${g.id}')">Save bet</button><button class="x" onclick="OPEN=null;draw()">Cancel</button></div></div>`;
+}
+function betOpen(id) { OPEN = OPEN === id ? null : id; draw(); }
+function betSave(id) {
+  const g = GAMES.find((x) => x.id === id); if (!g) return; const v = ($('#bs') || {}).value || ''; const [side, type, ln] = v.split('|');
+  const stake = parseFloat(($('#bk') || {}).value) || null, od = parseFloat(($('#bo') || {}).value);
+  let bets = []; try { bets = JSON.parse(lsg('bets26')) || []; } catch (e) {}
+  const p = pred(g);
+  bets.push({ id: 'b' + Date.now(), gid: g.id, lg: LG, week: 0, away: g.away.abbr, home: g.home.abbr, day: dashed(new Date(g.start)), t: Date.now(), side, type, line: type === 'sp' ? parseFloat(ln) : 0, stake, mult: null, odds: Math.abs(od) >= 100 ? od : -110, appSu: p.ph >= 0.5 ? g.home.abbr : g.away.abbr, appConf: +Math.max(p.ph, p.pa).toFixed(3), appAts: null, appLine: g.line });
+  lss('bets26', JSON.stringify(bets)); OPEN = null; draw(); alert_('Saved to My Bets');
+}
+function alert_(t) { $('#upd').textContent = t; setTimeout(() => ($('#upd').textContent = upText()), 2500); }
+function pinToggle(id) { PIN = PIN.includes(id) ? PIN.filter((x) => x !== id) : PIN.concat(id); lss('pinned26', JSON.stringify(PIN)); draw(); }
+function goDay(n) { OFF += n; load(); }
+function setF(f) { FILTER = f; draw(); }
+let LASTAT = 0; const upText = () => CFG.name + ' · updated ' + new Date(LASTAT).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) + (HAVE ? '' : ' · building ratings…');
+
+function draw() {
+  const d = dayDate(); $('#dl').textContent = OFF === 0 ? 'Today · ' + d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  const grp = { live: GAMES.filter((g) => g.state === 'in'), pre: GAMES.filter((g) => g.state === 'pre'), post: GAMES.filter((g) => g.state === 'post') };
+  const chip = (k, l, n) => `<button class="${FILTER === k ? 'on' : ''}" onclick="setF('${k}')"><b>${n}</b>${l}</button>`;
+  $('#chips').innerHTML = chip('all', 'All', GAMES.length) + chip('live', 'Live', grp.live.length) + chip('pre', 'Upcoming', grp.pre.length) + chip('post', 'Final', grp.post.length);
+  const pins = GAMES.filter((g) => PIN.includes(g.id)).sort((a, b) => (b.state === 'in') - (a.state === 'in') || a.start - b.start);
+  let list = FILTER === 'all' ? [...grp.live, ...grp.pre, ...grp.post] : grp[FILTER]; list = list.filter((g) => !PIN.includes(g.id));
+  $('#list').innerHTML = (pins.length ? '<div class="pinhd">📌 Watching</div>' + pins.map(card).join('') + '<div class="pinhd">All games</div>' : '') + (list.map(card).join('') || (pins.length ? '' : `<div class="note">No ${CFG.name} games ${OFF === 0 ? 'today' : 'this day'}.${LG === 'mlb' ? ' MLB is in its offseason.' : ''}</div>`));
+}
+async function load() {
+  try { GAMES = parseEvents(await getJson(SB + '?dates=' + ymd(dayDate()) + '&limit=300')).sort((a, b) => a.start - b.start); LASTAT = Date.now(); $('#upd').textContent = upText(); }
+  catch (e) { $('#upd').textContent = 'Could not load ' + CFG.name + ' games. Pull to refresh.'; }
+  draw();
+}
+(async () => { await load(); await loadRatings(); draw(); $('#upd').textContent = upText(); })();
+setInterval(() => { if (!document.hidden && OFF === 0 && !OPEN && (GAMES.some((g) => g.state === 'in') || Date.now() - LASTAT > 120000)) load(); }, 30000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && !OPEN) load(); });
+</script>
+</body>
+</html>

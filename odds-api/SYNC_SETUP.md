@@ -8,3 +8,6 @@ alter table oddable_sync enable row level security;
 3. Project Settings > API: copy the Project URL and the `service_role` key.
 4. Render > calcutta-odds > Environment: add SUPABASE_URL (the Project URL) and SUPABASE_KEY (the service_role key). Save (it redeploys).
 5. Check https://calcutta-odds.onrender.com/sync/status shows {"configured":true}.
+
+## Claude (Anthropic API)
+Render > calcutta-odds > Environment: ANTHROPIC_API_KEY = key from console.anthropic.com. Optional AI_MODEL. Check: /ai/status returns {"ok":true}.

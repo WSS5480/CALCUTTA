@@ -48,6 +48,26 @@ header .lg{margin-top:86px}
 .lg{flex-wrap:nowrap!important;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin-right:-16px;padding-right:16px}.lg::-webkit-scrollbar{display:none}.lg>*{flex:none;white-space:nowrap}
 .dsc{margin-top:6px;font-size:12px}.dsc summary{cursor:pointer;opacity:.85;font-weight:600;list-style:none}.dsc summary::-webkit-details-marker{display:none}.dsc[open] summary{margin-bottom:4px}
 .ntk{margin-top:6px;padding:7px 10px;border-radius:10px;font:800 14px inherit;border:1px solid var(--line)}.ntk small{font-weight:600;opacity:.8;font-size:11px}.ntk.g{background:rgba(79,209,139,.16);border-color:rgba(79,209,139,.55);color:#7ee8ae}.ntk.a{background:rgba(255,196,0,.12);border-color:rgba(255,196,0,.4);color:#ffd65a}.ntk.n{color:var(--muted);font-weight:700}
+/* desktop view */
+@media (min-width:900px){
+main{max-width:1200px}header{max-width:none!important;margin-left:0!important;margin-right:0!important}
+#plb{right:max(16px,calc((100vw - 1168px)/2))}
+.bn{left:50%;right:auto;transform:translateX(-50%);width:min(760px,100%);border-radius:18px 18px 0 0;border:1px solid var(--line);border-bottom:0}
+.bn button{padding:6px 22px}
+header .lg{margin-top:30px!important}
+header input#tsearch,header select#team{max-width:360px}
+.dsc{max-width:560px}
+.ng,.gc{margin:0!important}
+}
+@media (min-width:1500px){main{max-width:1360px}#plb{right:max(16px,calc((100vw - 1328px)/2))}}
+@media (min-width:900px){
+#list{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px;align-items:start}
+#list>.note,#list>.gh,#list>h3{grid-column:1/-1}
+.day{max-width:520px;margin-left:auto;margin-right:auto}
+.chips{max-width:620px;margin-left:auto;margin-right:auto}
+}
+@media (min-width:900px){header{max-width:none!important;padding-left:max(16px,calc((100% - 1168px)/2))!important;padding-right:max(16px,calc((100% - 1168px)/2))!important}}
+@media (min-width:1500px){header{padding-left:max(16px,calc((100% - 1328px)/2))!important;padding-right:max(16px,calc((100% - 1328px)/2))!important}}
 </style>
 </head>
 <body>

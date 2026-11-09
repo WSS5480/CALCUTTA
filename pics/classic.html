@@ -1472,7 +1472,8 @@ loadAll();
 
 // Auto-update: when the app comes back to the front (or every 10 minutes) check for a newer version and reload into it
 const vnum = (x) => +((/(?:Pics|Oddable) v(\d+)/.exec(x) || [])[1] || 0);
-async function checkUpdate() {
+async function checkUpdate() { return; // frozen build: never auto-reload into the new version
+
   try {
     const t = await (await fetch('index.html?c=' + Date.now(), { cache: 'no-store' })).text();
     if (vnum(t) > vnum(document.querySelector('header').innerText)) {

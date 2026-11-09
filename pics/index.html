@@ -1566,7 +1566,10 @@ const vnum = (x) => +((/(?:Pics|Oddable) v(\d+)/.exec(x) || [])[1] || 0);
 async function checkUpdate() {
   try {
     const t = await (await fetch('index.html?c=' + Date.now(), { cache: 'no-store' })).text();
-    if (vnum(t) > vnum(document.querySelector('header').innerText)) {
+    const mine = vnum(document.querySelector('header').textContent) || vnum(document.documentElement.innerHTML), theirs = vnum(t);
+    let done = ''; try { done = sessionStorage.getItem('upd-v') || ''; } catch (e) {}
+    if (mine && theirs > mine && done !== String(theirs)) {
+      try { sessionStorage.setItem('upd-v', String(theirs)); } catch (e) {}
       if ('serviceWorker' in navigator) (await navigator.serviceWorker.getRegistrations()).forEach((r) => r.unregister());
       if (window.caches) (await caches.keys()).forEach((k) => caches.delete(k));
       const u = new URL(location.href); u.searchParams.set('r', Date.now()); location.replace(u.toString());

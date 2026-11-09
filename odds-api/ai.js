@@ -25,12 +25,12 @@ async function handle(req, res) {
   try {
     if (path === '/ai/slip') {
       const m = /^data:(image\/(?:png|jpeg|webp|gif));base64,(.+)$/s.exec(b.image || ''); if (!m) { send(res, 400, { error: 'image required' }); return true; }
-      const text = await claude(SLIP, [{ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } }, { type: 'text', text: 'Transcribe this bet slip.' }], 1200);
+      const text = await claude(SLIP, [{ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } }, { type: 'text', text: 'Transcribe this bet slip.' }], 4000);
       send(res, 200, { text }); return true;
     }
     if (path === '/ai/chat') {
       const q = String(b.q || '').slice(0, 1500), ctx = String(b.ctx || '').slice(0, 14000); if (!q) { send(res, 400, { error: 'question required' }); return true; }
-      const text = await claude(CHAT, `DATA:\n${ctx}\n\nQUESTION: ${q}`, 1500);
+      const text = await claude(CHAT, `DATA:\n${ctx}\n\nQUESTION: ${q}`, 4000);
       send(res, 200, { text }); return true;
     }
   } catch (e) { send(res, 502, { error: String(e.message || e).slice(0, 200) }); return true; }

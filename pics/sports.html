@@ -101,6 +101,12 @@ html.cb .ntk.a{background:rgba(198,203,215,.12);border-color:rgba(198,203,215,.4
 html.cb .sbtn,html.cb #syncsheet .sbtn{background:#c6cbd7;border-color:#c6cbd7;color:#041e42}html.cb #syncsheet .sbtn.x{background:none;color:#c6cbd7}
 html.cb .ng.lv,html.cb .gc.lv{border-color:#c6cbd7}
 html.cb .pinhd{opacity:.85}
+.gvbar{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:12px 0 4px;padding-bottom:2px}.gvbar::-webkit-scrollbar{display:none}.gvbar button{flex:none;white-space:nowrap;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:8px 16px;font:700 13px inherit;cursor:pointer}.gvbar button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.sums{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}@media(min-width:900px){.sums{grid-template-columns:repeat(4,1fr)}}.sum{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px}.sum b{display:block;font-size:26px}.sum span{display:block;color:var(--muted);font-size:13px;margin-top:2px}.sum small{display:block;color:var(--muted);font-size:11px;margin-top:2px}.sum.lock{border-color:#7c3aed;background:#161226;cursor:pointer}
+.lkbar{display:flex;gap:8px;margin:8px 0}.lkbar button{flex:1;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:12px;padding:9px;font:700 13px inherit}.lkbar button.on{border-color:var(--blue);background:var(--panel2)}
+.lkrow{display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--line);padding:10px 2px}.lkrow small{display:block;color:var(--muted);font-size:12px;font-weight:500}.lkrow b.hit{color:var(--green)}.lkrow b.miss{color:var(--red)}
+#list>:not(.gc){grid-column:1/-1}
+html.cb .sum.lock{border-color:#2b5aa8!important;background:#0e2140!important}
 </style>
 </head>
 <body>
@@ -117,6 +123,7 @@ html.cb .pinhd{opacity:.85}
   </details>
 </header>
 <main>
+  <div class="gvbar" id="gvbar"></div>
   <div class="day"><button onclick="goDay(-1)">◀</button><b id="dl"></b><button onclick="goDay(1)">▶</button></div>
   <div class="chips" id="chips"></div>
   <div id="list"></div>
@@ -268,7 +275,7 @@ function lineText(g) {
 const LKS = 'splk-' + LG; let LKM = {}; try { LKM = JSON.parse(lsg(LKS)) || {}; } catch (e) {}
 function lockSnapS(g, p) {
   let ch = false; const k = LKM[g.id];
-  if (!k && g.state === 'pre' && p.has && g.start - Date.now() < 2 * 864e5) { const md = modelOf(g); LKM[g.id] = { su: p.ph >= 0.5 ? 'h' : 'a', L: g.line, ats: (SPREADY && g.line !== null && md) ? (md.margin > g.line ? 'h' : 'a') : null }; ch = true; }
+  if (!k && g.state === 'pre' && p.has && g.start - Date.now() < 2 * 864e5) { const md = modelOf(g); LKM[g.id] = { h: g.home.abbr, a: g.away.abbr, d: dashed(new Date(g.start)), su: p.ph >= 0.5 ? 'h' : 'a', L: g.line, ats: (SPREADY && g.line !== null && md) ? (md.margin > g.line ? 'h' : 'a') : null }; ch = true; }
   else if (k && !k.r && g.state === 'post') { k.r = [g.home.score, g.away.score]; ch = true; }
   if (ch) lss(LKS, JSON.stringify(LKM));
 }
@@ -320,7 +327,42 @@ function mcToggle() { const e = $('#mc'); e.dataset.o = e.dataset.o ? '' : '1'; 
 function mcDraw() { const e = $('#mc'); if (!e) return; if (e.dataset.o) e.innerHTML = mcText() + '<div style="margin:6px 0 0;opacity:.9">Each team gets an offence and defence rating from this season\'s scores (recent games count more, blowouts capped, home edge removed). That gives a margin, a win chance and a total. ' + (LG === 'mlb' ? 'MLB also adjusts for the posted starting pitchers. ' : '') + (ENG.rest ? 'Back-to-backs are adjusted. ' : '') + 'Final picks blend 80% betting line with 20% model. The check above re-fits the model before each of the last days and grades that day\'s picks, so it is not hindsight. Injuries and lineups are not included.</div>'; else e.innerHTML = mcText(); }
 let LASTAT = 0; const upText = () => CFG.name + ' · updated ' + new Date(LASTAT).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) + (HAVE ? '' : ' · building ratings…');
 
+const GVS = [['games', 'Games'], ['best', 'Best odds'], ['stats', 'Stats & locked']];
+let GV = lsg('pics-gv-sp'); if (!GVS.some((x) => x[0] === GV)) GV = 'games';
+let LKV = 'win', LKF = 'all';
+function gvSet(k) { GV = k; lss('pics-gv-sp', k); draw(); }
+function lkSet(v, f) { if (v) LKV = v; if (f) LKF = f; draw(); }
+function lockRows() {
+  const out = [];
+  Object.keys(LKM).forEach((id) => { const k = LKM[id]; if (!k.r || !k.h) return; const m = k.r[0] - k.r[1], fin = `Final ${k.a} ${k.r[1]} @ ${k.h} ${k.r[0]}`;
+    if (LKV === 'win') { if (m === 0) return; const ok = (m > 0) === (k.su === 'h'); out.push({ d: k.d, ok, t: `${k.su === 'h' ? k.h : k.a} to WIN`, sub: `${fin} · ${m > 0 ? k.h : k.a} won by ${Math.abs(m)}` }); }
+    else { if (!k.ats || k.L === null || k.L === undefined) return; const cm = (k.ats === 'h' ? m : -m) + (k.ats === 'h' ? -k.L : k.L); if (cm === 0) return; const d = k.ats === 'h' ? -k.L : k.L; out.push({ d: k.d, ok: cm > 0, t: `${k.ats === 'h' ? k.h : k.a} ${d > 0 ? '+' : ''}${d} spread`, sub: `${fin} · ${cm > 0 ? 'beat' : 'missed'} the spread by ${Math.abs(cm)}` }); } });
+  return out.sort((a, b) => String(b.d).localeCompare(String(a.d)));
+}
+function statsHtml() {
+  const f = (h, n) => (n ? Math.round(h / n * 100) + '%' : '–');
+  const cnt = (v) => { const sv = LKV; LKV = v; const r = lockRows(); LKV = sv; return [r.filter((x) => x.ok).length, r.length]; };
+  const [wh, wn] = cnt('win'), [ah, an] = cnt('spread');
+  const rows = lockRows(), hits = rows.filter((x) => x.ok).length, miss = rows.length - hits, shown = rows.filter((x) => LKF === 'all' || (LKF === 'hit' ? x.ok : !x.ok));
+  const btn = (kind, val, label, on) => `<button class="${on ? 'on' : ''}" onclick="${kind === 'v' ? `lkSet('${val}')` : `lkSet(null,'${val}')`}">${label}</button>`;
+  return `<div class="sums"><div class="sum"><b>${BT ? Math.round(BT.hit / BT.n * 100) + '%' : '–'}</b><span>Model winners (check)</span><small>${BT ? BT.hit + '-' + (BT.n - BT.hit) + ' on the last ' + BT.n + ' games' : 'building…'}</small></div>
+    <div class="sum"><b>–</b><span>Spread (backtest)</span><small>no past lines kept for ${CFG.name}</small></div>
+    <div class="sum lock" onclick="lkSet('win','all')"><b>${f(wh, wn)}</b><span>🔒 Locked win picks</span><small>${wn ? wh + '-' + (wn - wh) : 'fills in after games finish'}</small></div>
+    <div class="sum lock" onclick="lkSet('spread','all')"><b>${f(ah, an)}</b><span>🔒 Locked spread</span><small>${an ? ah + '-' + (an - ah) : 'fills in after games finish'}</small></div></div>
+    <div class="pick rec" style="margin:4px 2px 8px">🔒 Locked picks are saved before the game and graded after. ✓ hit = ${LKV === 'win' ? 'the team we picked won outright (moneyline).' : 'our side beat the point spread.'}</div>
+    <div class="lkbar">${btn('v', 'win', 'Win picks', LKV === 'win')}${btn('v', 'spread', 'Spread picks', LKV === 'spread')}</div>
+    <div class="lkbar">${btn('f', 'all', 'All ' + rows.length, LKF === 'all')}${btn('f', 'hit', '✓ Hit ' + hits, LKF === 'hit')}${btn('f', 'miss', '✗ Miss ' + miss, LKF === 'miss')}</div>
+    ${shown.map((x) => `<div class="lkrow"><span><b>${esc(x.t)}</b><small>${esc(x.sub)}</small></span><b class="${x.ok ? 'hit' : 'miss'}">${x.ok ? '✓ hit' : '✗ miss'}</b></div>`).join('') || '<div class="note">Nothing here yet. Picks lock before games and show up after they finish.</div>'}`;
+}
 function draw() {
+  $('#gvbar').innerHTML = GVS.map(([k, l]) => `<button class="${GV === k ? 'on' : ''}" onclick="gvSet('${k}')">${l}</button>`).join('');
+  const dayEl = document.querySelector('.day'); if (dayEl) dayEl.hidden = GV === 'stats'; $('#chips').hidden = GV !== 'games';
+  if (GV === 'stats') { $('#list').innerHTML = statsHtml(); return; }
+  if (GV === 'best') {
+    const d0 = dayDate(); $('#dl').textContent = OFF === 0 ? 'Today · ' + d0.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : d0.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    const L = GAMES.filter((g) => g.state !== 'post').map((g) => ({ g, c: Math.max(pred(g).ph, pred(g).pa) })).sort((a, b) => b.c - a.c).map((x) => x.g);
+    $('#list').innerHTML = L.length ? '<div class="pinhd">Most confident picks first</div>' + L.map(card).join('') : `<div class="note">No upcoming or live ${CFG.name} games ${OFF === 0 ? 'today' : 'this day'}.</div>`; return;
+  }
   const d = dayDate(); $('#dl').textContent = OFF === 0 ? 'Today · ' + d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
   const BG = betGids(); const isW = (g) => PIN.includes(g.id) || BG.has(String(g.id)); const grp = { live: GAMES.filter((g) => g.state === 'in'), pre: GAMES.filter((g) => g.state === 'pre'), post: GAMES.filter((g) => g.state === 'post') };
   const chip = (k, l, n) => `<button class="${FILTER === k ? 'on' : ''}" onclick="setF('${k}')"><b>${n}</b>${l}</button>`;

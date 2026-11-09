@@ -9,7 +9,7 @@ async function claude(system, content, max) {
   const key = (process.env.ANTHROPIC_API_KEY || '').trim();
   const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, body: JSON.stringify({ model: MODEL(), max_tokens: max, system, messages: [{ role: 'user', content }] }) });
   const j = await r.json(); if (!r.ok) throw new Error((j.error && j.error.message) || 'api ' + r.status);
-  return (j.content || []).map((x) => x.text || '').join('').trim();
+  const t = (j.content || []).map((x) => x.text || '').join('').trim(); if (!t) throw new Error('Empty answer (' + (j.stop_reason || '?') + '), try again'); return t;
 }
 const SLIP = 'You read screenshots of sports bet slips (Kalshi, Underdog, sportsbooks). Transcribe the slip as plain text, one line per item, keeping the exact wording and numbers you see: teams, the pick/side, bet type (moneyline/spread/total/parlay with each leg), line, odds or chance %, cost/stake, payout. Do not guess missing numbers. Output only the text, no commentary.';
 const CHAT = 'You are the assistant inside Oddable, a personal sports pick and bet-tracking app. Be terse and practical. Use only the data given (model win %, lines, user bets); say when something is not in the data. Model numbers are estimates, not guarantees. Give reasoning in a few short lines. Not licensed financial advice; no guarantees.';
@@ -25,12 +25,12 @@ async function handle(req, res) {
   try {
     if (path === '/ai/slip') {
       const m = /^data:(image\/(?:png|jpeg|webp|gif));base64,(.+)$/s.exec(b.image || ''); if (!m) { send(res, 400, { error: 'image required' }); return true; }
-      const text = await claude(SLIP, [{ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } }, { type: 'text', text: 'Transcribe this bet slip.' }], 700);
+      const text = await claude(SLIP, [{ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } }, { type: 'text', text: 'Transcribe this bet slip.' }], 1200);
       send(res, 200, { text }); return true;
     }
     if (path === '/ai/chat') {
       const q = String(b.q || '').slice(0, 1500), ctx = String(b.ctx || '').slice(0, 14000); if (!q) { send(res, 400, { error: 'question required' }); return true; }
-      const text = await claude(CHAT, `DATA:\n${ctx}\n\nQUESTION: ${q}`, 700);
+      const text = await claude(CHAT, `DATA:\n${ctx}\n\nQUESTION: ${q}`, 1500);
       send(res, 200, { text }); return true;
     }
   } catch (e) { send(res, 502, { error: String(e.message || e).slice(0, 200) }); return true; }

@@ -13,13 +13,13 @@ const same = (a, b) => { const x = Buffer.from(a), y = Buffer.from(b); return x.
 async function dbGet(id) {
   const { url, key } = cfg();
   const r = await fetch(`${url}/rest/v1/oddable_sync?id=eq.${id}&select=*`, { headers: hdr(key) });
-  if (!r.ok) throw new Error('db read ' + r.status);
+  if (!r.ok) throw new Error('db read ' + r.status + ' ' + (await r.text()).slice(0, 200));
   const j = await r.json(); return j[0] || null;
 }
 async function dbPut(row) {
   const { url, key } = cfg();
   const r = await fetch(`${url}/rest/v1/oddable_sync`, { method: 'POST', headers: { ...hdr(key), Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(row) });
-  if (!r.ok) throw new Error('db write ' + r.status);
+  if (!r.ok) throw new Error('db write ' + r.status + ' ' + (await r.text()).slice(0, 200));
 }
 
 const arr = (x) => (Array.isArray(x) ? x : []);

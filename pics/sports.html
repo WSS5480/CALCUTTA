@@ -14,7 +14,7 @@
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
 body{background:var(--bg);color:var(--ink);font:15px/1.35 system-ui,-apple-system,sans-serif}
-#sc{position:fixed;top:0;left:0;right:0;bottom:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding-bottom:40px}
+#sc{position:fixed;top:0;left:0;right:0;bottom:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding-bottom:84px}
 #plb{transform:translate3d(0,0,0);will-change:transform}
 header{padding:max(16px,env(safe-area-inset-top)) max(16px,calc((100% - 688px)/2)) 14px;background:linear-gradient(135deg,#7c3aed 0%,#4c1d95 55%,#1b1f29 100%);border-radius:0 0 26px 26px;color:#fff}
 h1{margin:0 0 6px;font-size:26px}
@@ -44,6 +44,7 @@ a.back{color:var(--blue)}
 #mir{position:absolute;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0}
 header .lg{margin-top:86px}
 .fwatch{border:1px solid rgba(124,58,237,.5);background:rgba(124,58,237,.12);color:inherit;border-radius:999px;font:600 12px inherit;padding:4px 10px}.fwatch.on{background:#7c3aed;color:#fff}
+.bn{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:space-around;background:var(--panel);border-top:1px solid var(--line);padding:6px 4px max(8px,env(safe-area-inset-bottom));z-index:20}.bn button{background:none;border:0;color:var(--muted);font:600 11px inherit;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 10px;cursor:pointer}.bn button span{font-size:19px}.bn button.on{color:var(--ink)}
 </style>
 </head>
 <body>
@@ -54,7 +55,7 @@ header .lg{margin-top:86px}
   <div class="lg" id="lg"></div>
   <div class="sub" id="upd">Loading…</div>
   <div class="sub" id="mc" style="margin-top:2px;cursor:pointer" onclick="mcToggle()"></div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable sports v4 (offence/defence model)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v99 (one look · sports model v4)</div>
 </header>
 <main>
   <div class="day"><button onclick="goDay(-1)">◀</button><b id="dl"></b><button onclick="goDay(1)">▶</button></div>
@@ -62,7 +63,11 @@ header .lg{margin-top:86px}
   <div id="list"></div>
 </main>
 </div>
+<nav class="bn" id="bn"></nav>
 <script>
+const NAVI = [['all', '🏠', 'Games'], ['livepg', '📡', 'Live'], ['bets', '🧾', 'My Bets'], ['win', '✅', 'Winning'], ['lose', '🔻', 'Losing']];
+function navGo(k) { if (k === 'all') { document.getElementById('sc').scrollTo({ top: 0, behavior: 'smooth' }); return; } try { localStorage.setItem('pics-view', k === 'livepg' ? 'live' : k === 'bets' ? 'bets' : 'main'); if (k === 'win' || k === 'lose') localStorage.setItem('pics-filt', k); } catch (e) {} location.href = './'; }
+document.getElementById('bn').innerHTML = NAVI.map(([k, i, l]) => `<button class="${k === 'all' ? 'on' : ''}" onclick="navGo('${k}')"><span>${i}</span>${l}</button>`).join('');
 const $ = (s) => document.querySelector(s);
 const LGS = {
   nba: { path: 'basketball/nba', name: 'NBA', sd: 12, hfa: 2.5, w: 0.8, back: 45, minG: 120, unit: 'pts', q: '' },

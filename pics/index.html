@@ -136,6 +136,7 @@ html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
 .nbet{display:block;width:100%;margin-top:8px;border:1px dashed var(--blue);background:none;color:var(--blue);border-radius:12px;padding:9px;font:700 14px inherit}
 .ng{padding-top:32px}.nst{position:absolute;top:5px;right:12px;font-size:9px;line-height:1.2;color:var(--muted);font-weight:600;text-align:right;white-space:nowrap}.nst b{color:var(--ink)}
 .ntk{margin-top:6px;padding:7px 10px;border-radius:10px;font:800 14px inherit;border:1px solid var(--line)}.ntk small{font-weight:600;opacity:.8;font-size:11px}.ntk.g{background:rgba(79,209,139,.16);border-color:rgba(79,209,139,.55);color:#7ee8ae}.ntk.a{background:rgba(255,196,0,.12);border-color:rgba(255,196,0,.4);color:#ffd65a}.ntk.n{color:var(--muted);font-weight:700}
+.gvbar{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:12px 0 4px;padding-bottom:2px}.gvbar::-webkit-scrollbar{display:none}.gvbar button{flex:none;white-space:nowrap;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:8px 16px;font:700 13px inherit;cursor:pointer}.gvbar button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}#nb>:not(.ng){grid-column:1/-1}
 .nsw{font-size:11px;opacity:.8;margin-top:2px}.nsw a{color:inherit;text-decoration:underline;cursor:pointer}
 .lg{flex-wrap:nowrap!important;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin-right:-16px;padding-right:16px}.lg::-webkit-scrollbar{display:none}.lg>*{flex:none;white-space:nowrap}
 .dsc{margin-top:6px;font-size:12px}.dsc summary{cursor:pointer;opacity:.85;font-weight:600;list-style:none}.dsc summary::-webkit-details-marker{display:none}.dsc[open] summary{margin-bottom:4px}
@@ -212,6 +213,7 @@ html.cb .pinhd{opacity:.85}
   <div id="livepage" hidden></div>
   <div id="betspage" hidden></div>
   <div class="rail" id="rail"></div><div class="dots" id="dots"></div>
+  <div class="gvbar" id="gvbar"></div>
   <div id="nb"></div>
   <div class="sums" id="sums"></div>
   <div id="list"></div>
@@ -370,6 +372,10 @@ function openGame(id) {
 let STYLE = (() => { try { return localStorage.getItem('pics-style') === 'classic' ? 'classic' : 'new'; } catch (e) { return 'new'; } })();
 function styleSet(v) { try { localStorage.setItem('pics-style', v); } catch (e) {} location.reload(); }
 let WKV = null, NFILT = 'all', NST = '';
+const GVS = [['games', 'Games'], ['stats', 'Stats & locked'], ['best', 'Best odds'], ['moves', 'Line moves'], ['results', 'Results'], ['rest', 'Rest of season']];
+let GV = (() => { try { const v = localStorage.getItem('pics-gv'); return GVS.some((x) => x[0] === v) ? v : 'games'; } catch (e) { return 'games'; } })();
+function gvSet(k) { GV = k; try { localStorage.setItem('pics-gv', k); } catch (e) {} render(true); }
+const gvHide = (sel) => STYLE === 'new' && (sel === '#rail' || sel === '#dots' || (sel === '#nb' && GV !== 'games') || (sel === '#sums' && GV !== 'stats') || (sel === '#list' && GV === 'games'));
 function nGo(n) { WKV = (WKV == null ? CUR : WKV) + n; render(); }
 function nSet(f) { NFILT = f; render(); }
 function takeHtml(g, p) {
@@ -418,7 +424,7 @@ function navGo(k) {
   if (k === 'livepg') { setView('live'); return; }
   if (k === 'bets') { setView('bets'); return; }
   if (VIEW !== 'main') { VIEW = 'main'; try { localStorage.setItem('pics-view', 'main'); } catch (e) {} }
-  FILT = k === 'won' ? 'won' : k; try { localStorage.setItem('pics-filt', FILT); } catch (e) {} DET.wkrank = true; render(true);
+  FILT = k === 'won' ? 'won' : k; try { localStorage.setItem('pics-filt', FILT); } catch (e) {} if (STYLE === 'new') { GV = k === 'all' ? 'games' : 'best'; try { localStorage.setItem('pics-gv', GV); } catch (e) {} } DET.wkrank = true; render(true);
   const el = document.querySelector('[data-k="wkrank"]'); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); else window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 document.addEventListener('DOMContentLoaded', () => { applyTheme(); $('#thm').onclick = () => { DARK = !DARK; try { localStorage.setItem('pics-dark', DARK ? '1' : '0'); } catch (e) {} applyTheme(); }; $('#rail').addEventListener('scroll', railDots, { passive: true }); });
@@ -480,7 +486,7 @@ const gameCard = (g, noBet) => {
 function livePageRender(games) {
   const el = $('#livepage'); if (!el) return;
   const on = VIEW === 'live';
-  el.hidden = !on; ['#nb', '#sums', '#list', '#rail', '#dots'].forEach((s) => { const n = $(s); if (n) n.hidden = VIEW !== 'main' || (STYLE === 'new' && (s === '#rail' || s === '#dots')); });
+  el.hidden = !on; ['#nb', '#sums', '#list', '#rail', '#dots'].forEach((s) => { const n = $(s); if (n) n.hidden = VIEW !== 'main' || gvHide(s); }); { const gb = $('#gvbar'); if (gb) gb.hidden = VIEW !== 'main' || STYLE !== 'new'; }
   const bp = $('#betspage'); if (bp) { bp.hidden = VIEW !== 'bets'; document.body.classList.add('bets'); const pb = $('#plb'); if (pb) pb.hidden = false; betsRender(); }
   if (!on) return;
   const wk = games.filter((g) => g.week === CUR || g.state === 'in');
@@ -1518,11 +1524,19 @@ function renderInner() {
   railRender(games, thisWeek); livePageRender(games); navRender();
   const lockedBox = lockedHtml(LK);
   { const f = (h, t) => (t ? Math.round(h / t * 100) + '%' : '–'); NST = `<div class="nst">Win <b>${f(SH, ST)}</b> · Spread <b>${f(AH, atsN)}</b><br>🔒 Win <b>${f(LSH, LST)}</b> · 🔒 Spread <b>${f(LAH, LAH + LAM)}</b></div>`; }
-  $('#nb').innerHTML = STYLE === 'new' ? newBoard(games) : '';
-  $('#list').innerHTML = lockedBox + teamBox(games) + (TEAM ? '' : weekBoard([...thisWeek, ...post.filter((g) => g.week === CUR)]) + titleBoard()) + movesBoard(games) +
-    (STYLE === 'new' ? '' : thisWeek.length ? '<div class="gh">This week</div>' + proj(thisWeek) + (TEAM ? thisWeek.map(card).join('') : '') : (TEAM ? '' : '<div class="note">No more games left this week.</div>')) +
-    (Object.keys(future).length ? '<div class="gh">Rest of season</div>' + Object.keys(future).map(Number).sort((a, b) => a - b).map((n) => `<details data-k="f${n}" ${isOpen('f' + n, n === CUR + 1) ? 'open' : ''}><summary>Week ${n}: ${future[n].length} games · exp ${projText(future[n])}</summary>${future[n].map(card).join('')}</details>`).join('') : '') +
-    (weeks.length ? '<div class="gh">Results</div>' + weeks.map((w) => `<details data-k="r${w.n}" ${isOpen('r' + w.n, w.n === CUR) ? 'open' : ''}><summary>Week ${w.n}: ${w.h}-${w.t - w.h} picks · spread ${w.ah}-${w.am}${w.ap ? '-' + w.ap : ''}</summary>${w.rows}</details>`).join('') : '');
+  const bestHtml = TEAM ? '' : weekBoard([...thisWeek, ...post.filter((g) => g.week === CUR)]) + titleBoard();
+  const restHtml = Object.keys(future).length ? '<div class="gh">Rest of season</div>' + Object.keys(future).map(Number).sort((a, b) => a - b).map((n) => `<details data-k="f${n}" ${isOpen('f' + n, n === CUR + 1) ? 'open' : ''}><summary>Week ${n}: ${future[n].length} games · exp ${projText(future[n])}</summary>${future[n].map(card).join('')}</details>`).join('') : '';
+  const resHtml = weeks.length ? '<div class="gh">Results</div>' + weeks.map((w) => `<details data-k="r${w.n}" ${isOpen('r' + w.n, w.n === CUR) ? 'open' : ''}><summary>Week ${w.n}: ${w.h}-${w.t - w.h} picks · spread ${w.ah}-${w.am}${w.ap ? '-' + w.ap : ''}</summary>${w.rows}</details>`).join('') : '';
+  if (STYLE === 'new') {
+    $('#gvbar').innerHTML = GVS.map(([k, l]) => `<button class="${GV === k ? 'on' : ''}" onclick="gvSet('${k}')">${l}</button>`).join('');
+    $('#nb').innerHTML = teamBox(games) + newBoard(games);
+    const part = { stats: lockedBox, best: bestHtml, moves: movesBoard(games), rest: restHtml, results: resHtml }[GV] || '';
+    $('#list').innerHTML = part || (GV === 'stats' ? '' : '<div class="note">Nothing here yet.</div>');
+  } else {
+    $('#nb').innerHTML = '';
+    $('#list').innerHTML = lockedBox + teamBox(games) + bestHtml + movesBoard(games) +
+      (thisWeek.length ? '<div class="gh">This week</div>' + proj(thisWeek) + (TEAM ? thisWeek.map(card).join('') : '') : (TEAM ? '' : '<div class="note">No more games left this week.</div>')) + restHtml + resHtml;
+  }
   const liveN = live.length;
   $('#upd').innerHTML = `<span class="dot ${liveN ? 'on' : ''}"></span>${liveN ? liveN + ' live · ' : ''}updated ${LAST ? LAST.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }) : '…'}`;
   $('#foot').innerHTML = CFB ? 'College football (FBS). Strength is a power rating built from every final this season (blowouts capped at 28, home edge removed) and pulled toward the AP Top 25 rank early on, so it updates after each game. Win chance blends that with the current spread; spread lean compares the model margin with the line. Past games are graded with today\'s ratings, so record is flattering. Line movement logs from the day you first open a game.' : `Starters hurt (ESPN report) are listed for information only. The team model uses this season's score margins and efficiency (yards per play, turnovers) plus home field, then blends with the current spread, so it shifts when the line moves. Spread lean compares the model's expected margin with the DraftKings line (closing line for past games). Past games are graded with today's ratings, so records flatter the model and are not what it would have said before kickoff. ${ODDS_NOTE}`;

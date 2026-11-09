@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const FAILS = new Map();
 const MAX_BODY = 1.5e6;
 const cfg = () => ({ url: (process.env.SUPABASE_URL || '').replace(/\/+$/, ''), key: process.env.SUPABASE_KEY || '' });
-const hdr = (k) => ({ apikey: k, Authorization: 'Bearer ' + k, 'Content-Type': 'application/json' });
+const hdr = (k) => ({ apikey: k, ...(k.startsWith('eyJ') ? { Authorization: 'Bearer ' + k } : {}), 'Content-Type': 'application/json' });
 const idOf = (phone) => crypto.createHash('sha256').update('oddable|' + phone).digest('hex');
 const normPhone = (p) => { const d = String(p || '').replace(/\D/g, ''); return d.length === 11 && d[0] === '1' ? d.slice(1) : d; };
 const hashPin = (pin, salt) => crypto.scryptSync(String(pin), salt, 32).toString('hex');

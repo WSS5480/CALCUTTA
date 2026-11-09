@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script>try{if(localStorage.getItem('pics-theme')!=='violet')document.documentElement.classList.add('cb')}catch(e){document.documentElement.classList.add('cb')}function themeSet(v){try{localStorage.setItem('pics-theme',v)}catch(e){}location.reload()}document.addEventListener('DOMContentLoaded',()=>{if(document.documentElement.classList.contains('cb')){const m=document.querySelector('meta[name=theme-color]');if(m)m.content='#041e42'}})</script>
+
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Oddable</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -168,6 +170,27 @@ header{padding-left:max(16px,calc((100% - 1168px)/2))!important;padding-right:ma
 #plb{right:max(16px,calc((100vw - 104px - 1168px)/2))}
 }
 @media (min-width:1500px){#plb{right:max(16px,calc((100vw - 104px - 1328px)/2))}}
+/* ---- Dallas Cowboys theme (navy #041E42 / royal #003594 / silver #869397 / white; site navy #002B5C) ---- */
+html.cb body,html.cb body.dark{--bg:#050c17;--panel:#0b1a30;--panel2:#10264a;--line:#1f3d69;--ink:#f3f6fa;--muted:#9aabbf;--blue:#c6cbd7;--green:#4fd18b;--red:#ff5a4d;background:#050c17;color:#f3f6fa;border-top:6px solid #869397}
+html.cb h1,html.cb body.dark h1{color:#fff}
+html.cb header{background:linear-gradient(135deg,#003594 0%,#002b5c 38%,#041e42 74%,#08111f 100%)!important;border-bottom:3px solid #869397}
+html.cb header .sub,html.cb header #upd{color:#c6cbd7}
+html.cb header .lg button,html.cb header .lg a{background:rgba(198,203,215,.10);border-color:rgba(198,203,215,.5);color:#fff}
+html.cb header .lg button.on,html.cb header .lg a.on,html.cb body.dark header .lg button.on{background:#fff;color:#041e42}
+html.cb header select#team,html.cb header input#tsearch{background:rgba(4,30,66,.55);border-color:rgba(198,203,215,.45);color:#fff}
+html.cb .thm{display:none!important}
+html.cb #plb{background:linear-gradient(135deg,#003594f2,#041e42f2)!important;border-color:#c6cbd7aa!important}
+html.cb .nw,html.cb .fwatch,html.cb .gpin{border-color:rgba(134,147,151,.65);background:rgba(0,53,148,.28)}
+html.cb .nw.on,html.cb .fwatch.on,html.cb .gpin.on{background:#003594;color:#fff;border-color:#c6cbd7}
+html.cb .nbr i:first-child,html.cb .bar i:first-child{background:#869397!important}
+html.cb .nbet,html.cb .bet{border-color:#869397;color:#c6cbd7}
+html.cb .sum.lock{border-color:#2b5aa8!important;background:#0e2140!important}
+html.cb .nchips button.on,html.cb .chips button.on{border-color:#c6cbd7;background:#10264a}
+html.cb .bn{background:#08142a}html.cb .bn button.on{color:#fff}
+html.cb .ntk.a{background:rgba(198,203,215,.12);border-color:rgba(198,203,215,.4);color:#e3e7ee}
+html.cb .sbtn,html.cb #syncsheet .sbtn{background:#c6cbd7;border-color:#c6cbd7;color:#041e42}html.cb #syncsheet .sbtn.x{background:none;color:#c6cbd7}
+html.cb .ng.lv,html.cb .gc.lv{border-color:#c6cbd7}
+html.cb .pinhd{opacity:.85}
 </style>
 </head>
 <body>
@@ -385,7 +408,7 @@ function newBoard(games) {
   <div class="nchips">${chip('all', 'All', wg.length)}${chip('live', 'Live', grp.live.length)}${chip('pre', 'Upcoming', grp.pre.length)}${chip('post', 'Final', grp.post.length)}${chip('watch', '📌 Watch', watch.length)}</div>
   ${list.map(nCard).join('') || '<div class="note">' + (NFILT === 'watch' ? 'Nothing watched yet. Tap 📍 Watch on any game.' : 'No games here.') + '</div>'}`;
 }
-function swRender() { const e = $('#nsw'); if (e) e.innerHTML = STYLE === 'new' ? '<a onclick="styleSet(\'classic\')">Use classic view</a> · <a href="classic.html">frozen classic build</a>' : '<a onclick="styleSet(\'new\')">Use new look</a>'; }
+function swRender() { const e = $('#nsw'); if (e) e.innerHTML = STYLE === 'new' ? '<a onclick="styleSet(\'classic\')">Use classic view</a> · <a href="classic.html">frozen classic build</a>' : '<a onclick="styleSet(\'new\')">Use new look</a>'; if (e) e.innerHTML += ' · <a onclick="themeSet(document.documentElement.classList.contains(\'cb\') ? \'violet\' : \'cowboys\')">' + (document.documentElement.classList.contains('cb') ? 'Original violet colors' : 'Cowboys colors') + '</a>'; }
 function navRender() { swRender();
   const anyLive = Object.values(ALL).some((g) => g.state === 'in');
   const it = [['all', '🏠', 'Games'], ['livepg', '📡', 'Live'], ['bets', '🧾', 'My Bets'], ['win', '✅', 'Winning'], ['lose', '🔻', 'Losing']];

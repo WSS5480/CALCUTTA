@@ -53,7 +53,8 @@ header .lg{margin-top:86px}
   <h1>Oddable</h1>
   <div class="lg" id="lg"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable sports v3 (banner, live odds, no flash)</div>
+  <div class="sub" id="mc" style="margin-top:2px;cursor:pointer" onclick="mcToggle()"></div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable sports v4 (offence/defence model)</div>
 </header>
 <main>
   <div class="day"><button onclick="goDay(-1)">◀</button><b id="dl"></b><button onclick="goDay(1)">▶</button></div>
@@ -96,10 +97,13 @@ $('#lg').innerHTML = `<a href="./" onclick="lss('pics-lg','nfl')">NFL</a><a href
 async function getJson(u) { const r = await fetch(u, { cache: 'no-store' }); if (!r.ok) throw new Error(r.status); return r.json(); }
 
 function americanProb(ml) { ml = +ml; if (!ml) return null; return ml < 0 ? -ml / (-ml + 100) : 100 / (ml + 100); }
+function pitcherOf(x) {
+  try { const pr = x.probables && x.probables[0]; if (!pr || !pr.athlete) return null; let era = null; (pr.statistics || []).forEach((st) => { if (/^era$/i.test(st.name || st.abbreviation || '')) era = parseFloat(st.displayValue != null ? st.displayValue : st.value); }); return { name: pr.athlete.shortName || pr.athlete.displayName || '', era: isFinite(era) ? era : null }; } catch (e) { return null; }
+}
 function parseEvents(j) {
   return (j.events || []).map((e) => {
     const c = e.competitions[0], t = e.status.type;
-    const cs = c.competitors.map((x) => ({ id: x.team.id, abbr: x.team.abbreviation, name: x.team.shortDisplayName || x.team.displayName || x.team.abbreviation, full: x.team.displayName || '', score: parseInt(x.score, 10) || 0, home: x.homeAway === 'home', record: (x.records && x.records[0] && x.records[0].summary) || '', logo: x.team.logo || '' })).sort((a, b) => a.home - b.home);
+    const cs = c.competitors.map((x) => ({ id: x.team.id, abbr: x.team.abbreviation, name: x.team.shortDisplayName || x.team.displayName || x.team.abbreviation, full: x.team.displayName || '', score: parseInt(x.score, 10) || 0, home: x.homeAway === 'home', pit: pitcherOf(x), record: (x.records && x.records[0] && x.records[0].summary) || '', logo: x.team.logo || '' })).sort((a, b) => a.home - b.home);
     const o = c.odds && c.odds[0]; let line = null, total = null, mlA = null, mlH = null;
     if (o) {
       total = o.overUnder != null ? +o.overUnder : null;
@@ -112,22 +116,55 @@ function parseEvents(j) {
   });
 }
 
-// ratings: margin-based power ratings from recent finished games (ridge-regularised, home edge removed)
-async function loadRatings() {
-  const key = 'sprat2-' + LG + '-' + ymd(new Date());
-  try { const c = JSON.parse(lsg(key)); if (c && Object.keys(c).length) { RAT = c; HAVE = true; return; } } catch (e) {}
-  const fin = {}; const DAYS = { nba: 30, nhl: 30, mlb: 30, ncaab: 14 }[LG]; let off = 1;
-  const grab = async (from, to) => { const ds = []; for (let k = from; k <= to; k++) { const d = new Date(); d.setDate(d.getDate() - k); ds.push(ymd(d)); } await Promise.all(ds.map(async (x) => { try { parseEvents(await getJson(SB + '?dates=' + x + '&limit=400' + CFG.q)).forEach((g) => { if (g.state === 'post' && g.completed !== false && g.home.score !== g.away.score) fin[g.id] = g; }); } catch (e) {} })); };
-  await grab(1, DAYS); off = DAYS + 1;
-  while (Object.keys(fin).length < CFG.minG / 2 && off < 200) { await grab(off, off + 19); off += 20; }
-  const G = Object.values(fin); if (G.length < 20) return;
-  const r = {}; G.forEach((g) => { r[g.home.abbr] = 0; r[g.away.abbr] = 0; });
-  for (let it = 0; it < 60; it++) {
-    const sum = {}, cnt = {};
-    G.forEach((g) => { const m = g.home.score - g.away.score - CFG.hfa; const h = g.home.abbr, a = g.away.abbr; sum[h] = (sum[h] || 0) + m + r[a]; cnt[h] = (cnt[h] || 0) + 1; sum[a] = (sum[a] || 0) - m + r[h]; cnt[a] = (cnt[a] || 0) + 1; });
-    Object.keys(r).forEach((x) => { r[x] = sum[x] / (cnt[x] + 4); });
+// ---- Prediction engine --------------------------------------------------------------------------
+// Each team gets an OFFENCE and a DEFENCE rating fit to this season's scores (recent games count more,
+// blowouts are capped, home edge removed, ridge-shrunk toward average). Expected score for each side =
+// league average +/- half the home edge + own offence + opponent's defence. That gives a margin (win chance)
+// AND a total. NBA/NHL also adjust for back-to-backs; MLB adjusts for the posted starting pitchers.
+const ENG = { nba: { adv: 2.5, cap: 25, hl: 40, k: 4, rest: 1.5, thr: 3, bt: 14 }, ncaab: { adv: 3.5, cap: 30, hl: 25, k: 3, rest: 0, thr: 4, bt: 7 }, nhl: { adv: 0.25, cap: 4, hl: 45, k: 4, rest: 0.25, thr: 0.5, bt: 14 }, mlb: { adv: 0.3, cap: 8, hl: 70, k: 6, rest: 0, thr: 0.7, bt: 21 } }[LG];
+let HIST = [], MODEL = null, BT = null;
+function fitModel(G, asOf) {
+  if (G.length < 30) return null;
+  let sw = 0, sp = 0; const W = G.map((g) => { const w = Math.pow(0.5, Math.max(0, asOf - g.start) / (ENG.hl * 864e5)); let hs = g.home.score, as = g.away.score; const m = hs - as; if (Math.abs(m) > ENG.cap) { const d = (Math.abs(m) - ENG.cap) / 2 * Math.sign(m); hs -= d; as += d; } sw += 2 * w; sp += w * (hs + as); return { w, h: g.home.abbr, a: g.away.abbr, hs, as }; });
+  const mu = sp / sw, off = {}, def = {}; W.forEach((x) => { off[x.h] = off[x.a] = def[x.h] = def[x.a] = 0; });
+  for (let it = 0; it < 40; it++) {
+    const no = {}, nd = {}, sw2 = {};
+    W.forEach((x) => { const ha = ENG.adv / 2;
+      no[x.h] = (no[x.h] || 0) + x.w * (x.hs - mu - ha - def[x.a]); nd[x.a] = (nd[x.a] || 0) + x.w * (x.hs - mu - ha - off[x.h]);
+      no[x.a] = (no[x.a] || 0) + x.w * (x.as - mu + ha - def[x.h]); nd[x.h] = (nd[x.h] || 0) + x.w * (x.as - mu + ha - off[x.a]);
+      sw2[x.h] = (sw2[x.h] || 0) + x.w; sw2[x.a] = (sw2[x.a] || 0) + x.w; });
+    Object.keys(off).forEach((t) => { off[t] = (no[t] || 0) / (sw2[t] + ENG.k); def[t] = (nd[t] || 0) / (sw2[t] + ENG.k); });
   }
-  RAT = r; HAVE = true; lss(key, JSON.stringify(r));
+  return { mu, off, def };
+}
+const dkey = (t) => dashed(new Date(t));
+function b2b(abbr, start) { if (!ENG.rest) return false; const y = new Date(start); y.setDate(y.getDate() - 1); const yk = dashed(y); return HIST.some((g) => (g.home.abbr === abbr || g.away.abbr === abbr) && dkey(g.start) === yk); }
+function eraShift(pit) { if (!pit || pit.era === null || LG !== 'mlb') return 0; const lg = 4.2, e = lg + 0.5 * (pit.era - lg); return (e - lg) * (5.5 / 9) * 0.5; }
+function modelOf(g) {
+  if (!MODEL || MODEL.off[g.home.abbr] === undefined || MODEL.off[g.away.abbr] === undefined) return null;
+  const M = MODEL, h = g.home.abbr, a = g.away.abbr; let eh = M.mu + ENG.adv / 2 + M.off[h] + M.def[a], ea = M.mu - ENG.adv / 2 + M.off[a] + M.def[h];
+  if (ENG.rest) { const bh = b2b(h, g.start), ba = b2b(a, g.start); if (bh && !ba) { eh -= ENG.rest / 2; ea += ENG.rest / 2; } else if (ba && !bh) { eh += ENG.rest / 2; ea -= ENG.rest / 2; } }
+  if (LG === 'mlb') { ea += eraShift(g.home.pit); eh += eraShift(g.away.pit); }
+  return { margin: eh - ea, total: eh + ea, eh, ea };
+}
+async function loadRatings() {
+  const key = 'sphist3-' + LG + '-' + ymd(new Date());
+  let G = null; try { G = JSON.parse(lsg(key)); } catch (e) {}
+  if (!G || !G.length) {
+    const fin = {}; const DAYS = { nba: 45, nhl: 45, mlb: 30, ncaab: 21 }[LG]; let off = 1;
+    const grab = async (from, to) => { const ds = []; for (let k = from; k <= to; k++) { const d = new Date(); d.setDate(d.getDate() - k); ds.push(ymd(d)); } await Promise.all(ds.map(async (x) => { try { parseEvents(await getJson(SB + '?dates=' + x + '&limit=400' + CFG.q)).forEach((g) => { if (g.state === 'post' && g.completed !== false && g.home.score !== g.away.score) fin[g.id] = { start: g.start, home: { abbr: g.home.abbr, score: g.home.score }, away: { abbr: g.away.abbr, score: g.away.score } }; }); } catch (e) {} })); };
+    await grab(1, DAYS); off = DAYS + 1;
+    while (Object.keys(fin).length < CFG.minG && off < 220) { await grab(off, off + 19); off += 20; }
+    G = Object.values(fin).sort((x, y) => x.start - y.start); if (G.length >= 30) lss(key, JSON.stringify(G));
+  }
+  HIST = G || []; MODEL = fitModel(HIST, Date.now()); if (MODEL) HAVE = true;
+  // walk-forward check: for each of the last N days, fit on games before that day and grade that day's picks
+  try {
+    const days = [...new Set(HIST.map((g) => dkey(g.start)))].sort().slice(-ENG.bt); let n = 0, hit = 0, ae = 0, tae = 0;
+    days.forEach((d) => { const t0 = +new Date(d + 'T00:00:00'); const m = fitModel(HIST.filter((g) => g.start < t0), t0); if (!m) return; const keep = MODEL; MODEL = m;
+      HIST.filter((g) => dkey(g.start) === d).forEach((g) => { const r = modelOf({ home: { abbr: g.home.abbr }, away: { abbr: g.away.abbr }, start: g.start }); if (!r) return; n++; const am = g.home.score - g.away.score; if ((r.margin > 0) === (am > 0)) hit++; ae += Math.abs(r.margin - am); tae += Math.abs(r.total - (g.home.score + g.away.score)); }); MODEL = keep; });
+    if (n >= 20) BT = { n, hit, mae: ae / n, tae: tae / n };
+  } catch (e) {}
 }
 // fallback when ratings are missing: win percentage from the team's record
 function recRat(t) { const m = /^(\d+)-(\d+)/.exec(t.record || ''); if (!m) return undefined; const w = +m[1], l = +m[2]; if (w + l < 2) return undefined; return ((w + 1) / (w + l + 2) - 0.5) * CFG.sd * 2.3; }
@@ -141,17 +178,18 @@ function fracLeft(g) {
 }
 
 function pred(g) {
-  const rh = RAT[g.home.abbr] !== undefined ? RAT[g.home.abbr] : recRat(g.home), ra = RAT[g.away.abbr] !== undefined ? RAT[g.away.abbr] : recRat(g.away); const hasM = rh !== undefined && ra !== undefined;
-  const mm = hasM ? rh - ra + CFG.hfa : null; // model expected home margin
-  let mk = null; // market expected home margin / market home win prob
-  if (SPREADY && g.line !== null) mk = g.line;
+  const md = modelOf(g); let rh, ra; if (!md) { rh = RAT[g.home.abbr] !== undefined ? RAT[g.home.abbr] : recRat(g.home); ra = RAT[g.away.abbr] !== undefined ? RAT[g.away.abbr] : recRat(g.away); }
+  const hasM = md ? true : rh !== undefined && ra !== undefined;
+  const mm = md ? md.margin : hasM ? rh - ra + CFG.hfa : null; // model expected home margin
+  let mk = null; if (SPREADY && g.line !== null) mk = g.line;
   let pModel = hasM ? cdf(mm / CFG.sd) : null, pMkt = null;
   if (g.mlH !== null && g.mlA !== null) { const a = americanProb(g.mlA), h = americanProb(g.mlH); if (a && h) pMkt = h / (a + h); }
   if (pMkt === null && mk !== null) pMkt = cdf(mk / CFG.sd);
   let ph; if (pModel !== null && pMkt !== null) ph = CFG.w * pMkt + (1 - CFG.w) * pModel; else ph = pMkt !== null ? pMkt : pModel !== null ? pModel : 0.5;
   const margin = SPREADY ? (mk !== null && mm !== null ? CFG.w * mk + (1 - CFG.w) * mm : mk !== null ? mk : mm) : mm;
   let live = null; if (g.state === 'in') { const f = fracLeft(g); if (f !== null) { const lead = g.home.score - g.away.score, exp = (margin !== null && margin !== undefined ? margin : 0); live = cdf((lead + exp * f) / (CFG.sd * Math.sqrt(f))); } }
-  return { ph, pa: 1 - ph, margin, live, has: pModel !== null || pMkt !== null || ph !== 0.5 };
+  let tl = null; if (md && g.total !== null && g.total !== undefined) { const d = md.total - g.total; tl = { model: md.total, mkt: g.total, lean: Math.abs(d) >= ENG.thr ? (d > 0 ? 'Over' : 'Under') : null, d }; }
+  return { ph, pa: 1 - ph, margin, live, tl, mm, mk, engine: !!md, has: pModel !== null || pMkt !== null || ph !== 0.5 };
 }
 const sgn = (n) => (n > 0 ? '+' : '') + n;
 function lineText(g) {
@@ -173,7 +211,7 @@ function card(g) {
     <div class="gtop" style="margin-top:2px"><span>${pre ? '' : g.away.score}</span><span></span><span>${pre ? '' : g.home.score}</span></div>
     <div class="bar"><i style="width:${p.pa * 100}%;background:#7c6ad8"></i><i style="width:${p.ph * 100}%;background:#4fd18b"></i></div>
     <div class="pr"><span>${esc(g.away.abbr)} ${pct(p.pa)}</span><span>${pct(p.ph)} ${esc(g.home.abbr)}</span></div>
-    ${pickLine}<div class="ft"><span>${esc(lineText(g))}</span>${betGids().has(String(g.id)) ? '<button class="fwatch on" disabled>📌 My bet</button>' : `<button class="fwatch ${pinned ? 'on' : ''}" onclick="pinToggle('${g.id}')">${pinned ? '📌 Watching' : '📍 Watch'}</button>`}</div>
+    ${pickLine}${p.tl ? `<div class="pick rec">Total: model ${p.tl.model.toFixed(1)} vs line ${p.tl.mkt}${p.tl.lean ? ` · lean <b style="color:var(--blue)">${p.tl.lean}</b>` : ' · no edge'}</div>` : ''}${LG === 'mlb' && (g.away.pit || g.home.pit) ? `<div class="pick rec">Starters: ${esc(g.away.abbr)} ${esc(g.away.pit ? g.away.pit.name + (g.away.pit.era !== null ? ' ' + g.away.pit.era + ' ERA' : '') : 'TBD')} · ${esc(g.home.abbr)} ${esc(g.home.pit ? g.home.pit.name + (g.home.pit.era !== null ? ' ' + g.home.pit.era + ' ERA' : '') : 'TBD')}</div>` : ''}<div class="ft"><span>${esc(lineText(g))}</span>${betGids().has(String(g.id)) ? '<button class="fwatch on" disabled>📌 My bet</button>' : `<button class="fwatch ${pinned ? 'on' : ''}" onclick="pinToggle('${g.id}')">${pinned ? '📌 Watching' : '📍 Watch'}</button>`}</div>
     ${g.state === 'post' ? '' : `<button class="bet" onclick="betOpen('${g.id}')">＋ Add bet</button>`}${o ? betForm(g) : ''}</div>`;
 }
 function betForm(g) {
@@ -198,6 +236,9 @@ function alert_(t) { $('#upd').textContent = t; setTimeout(() => ($('#upd').text
 function pinToggle(id) { PIN = PIN.includes(id) ? PIN.filter((x) => x !== id) : PIN.concat(id); lss('pinned26', JSON.stringify(PIN)); draw(); }
 function goDay(n) { OFF += n; load(); }
 function setF(f) { FILTER = f; draw(); }
+const mcText = () => BT ? `Model check: ${Math.round(BT.hit / BT.n * 100)}% winners on the last ${BT.n} games · margin off by ${BT.mae.toFixed(1)} · tap for how it works` : (HAVE ? '' : '');
+function mcToggle() { const e = $('#mc'); e.dataset.o = e.dataset.o ? '' : '1'; mcDraw(); }
+function mcDraw() { const e = $('#mc'); if (!e) return; if (e.dataset.o) e.innerHTML = mcText() + '<div style="margin:6px 0 0;opacity:.9">Each team gets an offence and defence rating from this season\'s scores (recent games count more, blowouts capped, home edge removed). That gives a margin, a win chance and a total. ' + (LG === 'mlb' ? 'MLB also adjusts for the posted starting pitchers. ' : '') + (ENG.rest ? 'Back-to-backs are adjusted. ' : '') + 'Final picks blend 80% betting line with 20% model. The check above re-fits the model before each of the last days and grades that day\'s picks, so it is not hindsight. Injuries and lineups are not included.</div>'; else e.innerHTML = mcText(); }
 let LASTAT = 0; const upText = () => CFG.name + ' · updated ' + new Date(LASTAT).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) + (HAVE ? '' : ' · building ratings…');
 
 function draw() {
@@ -214,7 +255,7 @@ async function load() {
   catch (e) { $('#upd').textContent = 'Could not load ' + CFG.name + ' games. Pull to refresh.'; }
   draw();
 }
-(async () => { await load(); await loadRatings(); draw(); $('#upd').textContent = upText(); })();
+(async () => { await load(); await loadRatings(); draw(); $('#upd').textContent = upText(); mcDraw(); })();
 setInterval(() => { if (!document.hidden && OFF === 0 && !OPEN && (GAMES.some((g) => g.state === 'in') || Date.now() - LASTAT > 120000)) load(); }, 30000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !OPEN) load(); });
 </script>

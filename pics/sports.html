@@ -23,7 +23,7 @@ h1{margin:0 0 6px;font-size:26px}
 main{max-width:720px;margin:0 auto;padding:0 16px}
 .day{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:14px 0 8px}.day button{border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:12px;padding:8px 14px;font:700 15px inherit}.day b{font-size:16px}
 .chips{display:flex;gap:8px;margin:6px 0 10px}.chips button{flex:1;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:12px;padding:8px;font:600 13px inherit}.chips button.on{border-color:var(--blue);background:var(--panel2)}.chips b{display:block;font-size:18px}
-.gc{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:12px 14px;margin:10px 0}.gc.lv{border-color:var(--blue)}
+.nst{position:absolute;top:5px;right:12px;font-size:9px;line-height:1.2;color:var(--muted);font-weight:600;white-space:nowrap}.nst b{color:var(--ink)}.gc{padding-top:20px!important;position:relative;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:12px 14px;margin:10px 0}.gc.lv{border-color:var(--blue)}
 .gtop{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:22px;font-weight:800}.gtop .t{display:flex;align-items:center;gap:8px;min-width:0}.gtop img{width:32px;height:32px;object-fit:contain}
 .gmid{text-align:center;font-size:12px;font-weight:600;color:var(--muted)}.lvtag{color:var(--red)}
 .rec{font-size:11px;color:var(--muted);font-weight:500}
@@ -205,14 +205,28 @@ function lineText(g) {
   return bits.join(' · ') || 'No odds posted';
 }
 
+// locked picks: the pregame pick is saved once (within 2 days of the game) and graded when the game ends
+const LKS = 'splk-' + LG; let LKM = {}; try { LKM = JSON.parse(lsg(LKS)) || {}; } catch (e) {}
+function lockSnapS(g, p) {
+  let ch = false; const k = LKM[g.id];
+  if (!k && g.state === 'pre' && p.has && g.start - Date.now() < 2 * 864e5) { const md = modelOf(g); LKM[g.id] = { su: p.ph >= 0.5 ? 'h' : 'a', L: g.line, ats: (SPREADY && g.line !== null && md) ? (md.margin > g.line ? 'h' : 'a') : null }; ch = true; }
+  else if (k && !k.r && g.state === 'post') { k.r = [g.home.score, g.away.score]; ch = true; }
+  if (ch) lss(LKS, JSON.stringify(LKM));
+}
+function stBadge() {
+  const f = (h, n) => (n ? Math.round(h / n * 100) + '%' : '–');
+  let wn = 0, wh = 0, an = 0, ah = 0;
+  Object.values(LKM).forEach((k) => { if (!k.r) return; const m = k.r[0] - k.r[1]; if (m !== 0) { wn++; if ((m > 0) === (k.su === 'h')) wh++; } if (k.ats && k.L !== null && m !== k.L) { an++; if ((m > k.L) === (k.ats === 'h')) ah++; } });
+  return `<div class="nst">Win <b>${BT ? Math.round(BT.hit / BT.n * 100) + '%' : '–'}</b> · Spread <b>–</b><br>🔒 Win <b>${f(wh, wn)}</b> · 🔒 Spread <b>${f(ah, an)}</b></div>`;
+}
 function card(g) {
-  const p = pred(g), live = g.state === 'in', pre = g.state === 'pre', pinned = PIN.includes(g.id);
+  const p = pred(g); lockSnapS(g, p); const live = g.state === 'in', pre = g.state === 'pre', pinned = PIN.includes(g.id);
   const when = live ? `<span class="lvtag">● LIVE</span> ${esc(g.detail)}` : pre ? new Date(g.start).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : esc(g.detail || 'Final');
   const side = (t) => `<div class="t">${t.logo ? `<img src="${esc(t.logo)}" alt="">` : ''}<div>${esc(t.abbr)}<div class="rec">${esc(t.record)}</div></div></div>`;
   const pickT = p.ph >= 0.5 ? g.home : g.away, pk = Math.max(p.ph, p.pa);
   const pickLine = p.has ? `<div class="pick">Pick: <b>${esc(pickT.abbr)}</b> ${pct(pk)}${p.live !== null ? ` <span class="rec">· now ${pct(pickT === g.home ? p.live : 1 - p.live)}</span>` : ''}${SPREADY && p.margin !== null ? ` <span class="rec">· expected margin ${p.margin >= 0 ? g.home.abbr : g.away.abbr} by ${Math.abs(p.margin).toFixed(1)}</span>` : ''}</div>` : '<div class="pick rec">Not enough data yet for a pick</div>';
   const o = OPEN === g.id;
-  return `<div class="gc ${live ? 'lv' : ''}">    <div class="gtop">${side(g.away)}<div class="gmid">${when}</div>${side(g.home)}</div>
+  return `<div class="gc ${live ? 'lv' : ''}">${stBadge()}    <div class="gtop">${side(g.away)}<div class="gmid">${when}</div>${side(g.home)}</div>
     <div class="gtop" style="margin-top:2px"><span>${pre ? '' : g.away.score}</span><span></span><span>${pre ? '' : g.home.score}</span></div>
     <div class="bar"><i style="width:${p.pa * 100}%;background:#7c6ad8"></i><i style="width:${p.ph * 100}%;background:#4fd18b"></i></div>
     <div class="pr"><span>${esc(g.away.abbr)} ${pct(p.pa)}</span><span>${pct(p.ph)} ${esc(g.home.abbr)}</span></div>

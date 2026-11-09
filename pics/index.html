@@ -132,6 +132,7 @@ html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
 .nft{display:flex;align-items:center;gap:8px;justify-content:space-between;color:var(--muted);font-size:12px;margin-top:6px}
 .nw{border:1px solid rgba(124,58,237,.5);background:rgba(124,58,237,.12);color:inherit;border-radius:999px;font:600 12px inherit;padding:4px 10px}.nw.on{background:#7c3aed;color:#fff}
 .nbet{display:block;width:100%;margin-top:8px;border:1px dashed var(--blue);background:none;color:var(--blue);border-radius:12px;padding:9px;font:700 14px inherit}
+.ng{padding-top:20px}.nst{position:absolute;top:5px;right:12px;font-size:9px;line-height:1.2;color:var(--muted);font-weight:600;text-align:right;white-space:nowrap}.nst b{color:var(--ink)}
 .nsw{font-size:11px;opacity:.8;margin-top:2px}.nsw a{color:inherit;text-decoration:underline;cursor:pointer}
 </style>
 </head>
@@ -309,7 +310,7 @@ function openGame(id) {
 // ---- One look for every sport: the sports-page cards (win bar, pick, watch, add bet) with a week picker; classic view stays one tap away ----
 let STYLE = (() => { try { return localStorage.getItem('pics-style') === 'classic' ? 'classic' : 'new'; } catch (e) { return 'new'; } })();
 function styleSet(v) { try { localStorage.setItem('pics-style', v); } catch (e) {} location.reload(); }
-let WKV = null, NFILT = 'all';
+let WKV = null, NFILT = 'all', NST = '';
 function nGo(n) { WKV = (WKV == null ? CUR : WKV) + n; render(); }
 function nSet(f) { NFILT = f; render(); }
 function nCard(g) {
@@ -319,7 +320,7 @@ function nCard(g) {
   const pk = p.su || (p.ph >= 0.5 ? g.home : g.away), pc = Math.max(p.ph, p.pa);
   const ats = p.ats ? `<div class="npk nrec">Spread: <b>${p.ats.side.abbr} ${sp(p.ats.line)}</b> · covers ${pct(p.ats.cover)}</div>` : '';
   const bits = []; if (g.line !== null && g.line !== undefined) bits.push('Line ' + byText(g, g.line)); if (p.mh !== undefined && p.mh !== null) bits.push('Model ' + byText(g, p.mh));
-  return `<div class="ng ${live ? 'lv' : ''}"><div class="ngt">${side(g.away)}<div class="ngm">${when}</div>${side(g.home)}</div>
+  return `<div class="ng ${live ? 'lv' : ''}">${NST}<div class="ngt">${side(g.away)}<div class="ngm">${when}</div>${side(g.home)}</div>
     <div class="ngt" style="margin-top:2px"><span>${pre ? '' : g.away.score}</span><span></span><span>${pre ? '' : g.home.score}</span></div>
     <div class="nbr"><i style="width:${p.pa * 100}%;background:#7c6ad8"></i><i style="width:${p.ph * 100}%;background:#4fd18b"></i></div>
     <div class="npr"><span>${g.away.abbr} ${pct(p.pa)}</span><span>${pct(p.ph)} ${g.home.abbr}</span></div>
@@ -1445,6 +1446,7 @@ function renderInner() {
     <div class="sum lock" onclick="lockOpen('spread')" style="cursor:pointer"><i class="ibtn" onclick="event.stopPropagation();infoOpen('lock')">ⓘ</i><b>${LAH + LAM ? pct(LAH / (LAH + LAM), 1) : '–'}</b><span>🔒 Locked spread</span><small>${LAH + LAM ? LAH + '-' + LAM : 'starts with the next finished game'} · tap to see</small></div>`;
   railRender(games, thisWeek); livePageRender(games); navRender();
   const lockedBox = lockedHtml(LK);
+  { const f = (h, t) => (t ? Math.round(h / t * 100) + '%' : '–'); NST = `<div class="nst">Win <b>${f(SH, ST)}</b> · Spread <b>${f(AH, atsN)}</b><br>🔒 Win <b>${f(LSH, LST)}</b> · 🔒 Spread <b>${f(LAH, LAH + LAM)}</b></div>`; }
   $('#nb').innerHTML = STYLE === 'new' ? newBoard(games) : '';
   $('#list').innerHTML = lockedBox + teamBox(games) + (TEAM ? '' : weekBoard([...thisWeek, ...post.filter((g) => g.week === CUR)]) + titleBoard()) + movesBoard(games) +
     (STYLE === 'new' ? '' : thisWeek.length ? '<div class="gh">This week</div>' + proj(thisWeek) + (TEAM ? thisWeek.map(card).join('') : '') : (TEAM ? '' : '<div class="note">No more games left this week.</div>')) +

@@ -133,6 +133,7 @@ html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
 .nw{border:1px solid rgba(124,58,237,.5);background:rgba(124,58,237,.12);color:inherit;border-radius:999px;font:600 12px inherit;padding:4px 10px}.nw.on{background:#7c3aed;color:#fff}
 .nbet{display:block;width:100%;margin-top:8px;border:1px dashed var(--blue);background:none;color:var(--blue);border-radius:12px;padding:9px;font:700 14px inherit}
 .ng{padding-top:20px}.nst{position:absolute;top:5px;right:12px;font-size:9px;line-height:1.2;color:var(--muted);font-weight:600;text-align:right;white-space:nowrap}.nst b{color:var(--ink)}
+.ntk{margin-top:6px;padding:7px 10px;border-radius:10px;font:800 14px inherit;border:1px solid var(--line)}.ntk small{font-weight:600;opacity:.8;font-size:11px}.ntk.g{background:rgba(79,209,139,.16);border-color:rgba(79,209,139,.55);color:#7ee8ae}.ntk.a{background:rgba(255,196,0,.12);border-color:rgba(255,196,0,.4);color:#ffd65a}.ntk.n{color:var(--muted);font-weight:700}
 .nsw{font-size:11px;opacity:.8;margin-top:2px}.nsw a{color:inherit;text-decoration:underline;cursor:pointer}
 .lg{flex-wrap:nowrap!important;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin-right:-16px;padding-right:16px}.lg::-webkit-scrollbar{display:none}.lg>*{flex:none;white-space:nowrap}
 .dsc{margin-top:6px;font-size:12px}.dsc summary{cursor:pointer;opacity:.85;font-weight:600;list-style:none}.dsc summary::-webkit-details-marker{display:none}.dsc[open] summary{margin-bottom:4px}
@@ -317,6 +318,13 @@ function styleSet(v) { try { localStorage.setItem('pics-style', v); } catch (e) 
 let WKV = null, NFILT = 'all', NST = '';
 function nGo(n) { WKV = (WKV == null ? CUR : WKV) + n; render(); }
 function nSet(f) { NFILT = f; render(); }
+function takeHtml(g, p) {
+  if (g.state === 'post') return '';
+  const pk = p.su || (p.ph >= 0.5 ? g.home : g.away), pc = Math.max(p.ph, p.pa);
+  const ml = pc >= 0.65 ? `<div class="ntk g">✅ TAKE ${pk.abbr} to win <small>(moneyline) · ${pct(pc)}</small></div>` : pc >= 0.57 ? `<div class="ntk a">👍 Lean ${pk.abbr} to win <small>${pct(pc)} · not a strong edge</small></div>` : `<div class="ntk n">⚖️ Toss-up — pass on the winner <small>${pct(pc)}</small></div>`;
+  const at = p.ats ? (p.ats.cover >= 0.55 ? `<div class="ntk g">✅ TAKE spread ${p.ats.side.abbr} ${sp(p.ats.line)} <small>covers ${pct(p.ats.cover)}</small></div>` : `<div class="ntk n">Spread: no clear edge — pass <small>${p.ats.side.abbr} ${pct(p.ats.cover)}</small></div>`) : '';
+  return ml + at;
+}
 function nCard(g) {
   const p = pred(g), live = g.state === 'in', pre = g.state === 'pre', pinned = PIN.includes(g.id);
   const when = live ? `<span class="nlv">● LIVE</span> ${g.detail || ''}` : pre ? new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : (g.detail || 'Final');
@@ -328,7 +336,7 @@ function nCard(g) {
     <div class="ngt" style="margin-top:2px"><span>${pre ? '' : g.away.score}</span><span></span><span>${pre ? '' : g.home.score}</span></div>
     <div class="nbr"><i style="width:${p.pa * 100}%;background:#7c6ad8"></i><i style="width:${p.ph * 100}%;background:#4fd18b"></i></div>
     <div class="npr"><span>${g.away.abbr} ${pct(p.pa)}</span><span>${pct(p.ph)} ${g.home.abbr}</span></div>
-    <div class="npk">Pick: <b>${pk.abbr}</b> ${pct(pc)}</div>${ats}
+    ${takeHtml(g, p)}<i class="ibtn inl" style="float:none;margin-left:4px" onclick="infoOpen('hit')">ⓘ what counts as a hit</i>
     <div class="nft"><span>${bits.join(' · ') || 'No line posted'}</span>${betGids().has(String(g.id)) ? '<button class="nw on" disabled>📌 My bet</button>' : `<button class="nw ${pinned ? 'on' : ''}" onclick="pinToggle('${g.id}')">${pinned ? '📌 Watching' : '📍 Watch'}</button>`}</div>
     ${g.state === 'post' ? '' : `<button class="nbet" onclick="event.stopPropagation();betFromGame('${g.id}')">＋ Add bet</button>`}</div>`;
 }
@@ -1237,6 +1245,7 @@ const lkLoad = (id) => { try { return JSON.parse(localStorage.getItem(lkKey(id))
 const INFO = {
   picks: ['How the app picks winners', "<p><b>Win pick.</b> Two things are blended: the betting line (90% NFL, 80% NCAA) turned into a win chance, and the app's own team ratings (10% / 20%). The side with the higher chance is the pick, and that chance is the confidence shown.</p><p>The ratings come from this season: score margins (blowouts capped), yards per play, turnovers, home edge, and AP rank for NCAA. Injuries are shown for info only; they did not improve picks in testing.</p><p><b>Best odds to win list.</b> This week's games sorted by that confidence, highest first. It is where the model and the line agree most, not a promise.</p><p><b>Backtest</b> grades every finished game using today's ratings, which already know those results, so it looks better than real life.</p>"],
   spread: ['How the spread pick works', "<p>The model's expected margin is compared with the line. If its margin beats the line it picks the home side, otherwise the away side.</p><p>The cover percentage is deliberately pulled toward 50%, because the line is usually smarter than the model. Expect 52-55%, not 70%. Treat spread picks as a small edge.</p>"],
+  hit: ['What counts as a hit', "<p><b>Win pick hit</b> = the team we picked won the game outright. That is a moneyline bet: it wins if your team wins, by any score. It says nothing about the spread.</p><p><b>Spread pick hit</b> = our side beat the point spread. A -3 team must win by 4 or more; a +3 team can lose by 2 or less, or win. Exactly on the number is a push (money back).</p><p><b>Which to take?</b> Green cards are where the model is most sure. Moneyline on heavy favorites pays little, so the spread is often the better bet there. Picks are an edge, not a guarantee.</p>"],
   lock: ['What Locked means', "<p>Every game is locked automatically. While a game is still pregame (kickoff within 8 days) the app saves its win pick, spread pick and line to this phone each time it refreshes. At kickoff the saving stops, so the last saved pick is the locked pick.</p><p>Locked picks are the honest record: made before the game, never changed after. Tap the tiles to see each one with its result.</p><p><b>Limits.</b> A game only locks if the app was open on this phone before kickoff. Locked picks live on this phone and browser; clearing browser data wipes them. Small samples (under about 30 games) are mostly luck either way.</p>"]
 };
 function infoOpen(k) {
@@ -1249,14 +1258,18 @@ function lkSet(v, f) { if (v) LKV = v; if (f) LKF = f; render(); }
 function lockedHtml(LK) {
   if (!LK.length) return '';
   const mk = (ok) => ok === true || ok === 'hit' ? '<b class="hit">✓ hit</b>' : ok === false || ok === 'miss' ? '<b class="miss">✗ miss</b>' : '<b>push</b>';
-  const rows = LK.map(({ g, r }) => { const k = r.lk; if (LKV === 'win') return { g, ok: r.lsu === true ? 'hit' : 'miss', t: `${k.su} <small class="sub">${pct(k.conf, 0)}</small>`, ok0: r.lsu }; if (!(k.ats && k.L !== null && k.L !== undefined)) return null; const d = k.ats.side === g.home.abbr ? -k.L : k.L; return { g, ok: r.lats, t: `${k.ats.side} ${d === 0 ? 'PK' : (d > 0 ? '+' : '') + d}`, ok0: r.lats }; }).filter(Boolean);
+  const rows = LK.map(({ g, r }) => { const k = r.lk, fm = g.home.score - g.away.score, win = fm > 0 ? g.home : g.away, by = Math.abs(fm), fin = `Final ${g.away.abbr} ${g.away.score} @ ${g.home.abbr} ${g.home.score}`;
+    if (LKV === 'win') return { g, ok: r.lsu === true ? 'hit' : 'miss', t: `${k.su} to WIN <small class="sub">${pct(k.conf, 0)} chance</small>`, sub: `${fin} · ${fm === 0 ? 'tie' : win.abbr + ' won by ' + by}`, ok0: r.lsu };
+    if (!(k.ats && k.L !== null && k.L !== undefined)) return null;
+    const d = k.ats.side === g.home.abbr ? -k.L : k.L, mine = k.ats.side === g.home.abbr ? fm : -fm, cm = mine + d;
+    return { g, ok: r.lats, t: `${k.ats.side} ${d === 0 ? 'PK' : (d > 0 ? '+' : '') + d} <small class="sub">spread</small>`, sub: `${fin} · ${cm === 0 ? 'push' : (cm > 0 ? 'beat' : 'missed') + ' the spread by ' + Math.abs(cm)}`, ok0: r.lats }; }).filter(Boolean);
   const tot = rows.length, hits = rows.filter((x) => x.ok === 'hit').length, miss = rows.filter((x) => x.ok === 'miss').length;
   const shown = rows.filter((x) => LKF === 'all' || x.ok === LKF).sort((a, b) => b.g.start - a.g.start);
   const btn = (kind, val, label, on) => `<button class="${on ? 'on' : ''}" onclick="${kind === 'v' ? `lkSet('${val}')` : `lkSet(null,'${val}')`}">${label}</button>`;
   return `<details data-k="lockedlist" ${isOpen('lockedlist', false) ? 'open' : ''}><summary>🔒 Locked picks <i class="ibtn inl" onclick="event.stopPropagation();event.preventDefault();infoOpen('lock')">ⓘ</i></summary>
     <div class="lkbar">${btn('v', 'win', 'Win picks', LKV === 'win')}${btn('v', 'spread', 'Spread picks', LKV === 'spread')}</div>
     <div class="lkbar">${btn('f', 'all', 'All ' + tot, LKF === 'all')}${btn('f', 'hit', '✓ Hit ' + hits, LKF === 'hit')}${btn('f', 'miss', '✗ Miss ' + miss, LKF === 'miss')}</div>
-    ${shown.map(({ g, ok0, t }) => `<div class="lkrow"><span><b>${t}</b><small class="sub" style="display:block">${g.away.abbr} ${g.away.score} @ ${g.home.abbr} ${g.home.score}</small></span>${mk(ok0)}</div>`).join('') || '<div class="note">Nothing here yet.</div>'}</details>`;
+    <div class="note" style="padding:6px 0;text-align:left">${LKV === 'win' ? '✓ hit = the team we picked won the game outright (a moneyline bet would have won).' : '✓ hit = our side beat the point spread (a spread bet would have won).'}</div>${shown.map(({ g, ok0, t, sub }) => `<div class="lkrow"><span><b>${t}</b><small class="sub" style="display:block">${sub}</small></span>${mk(ok0)}</div>`).join('') || '<div class="note">Nothing here yet.</div>'}</details>`;
 }
 function lockOpen(v) { if (v && v !== LKV) { LKV = v; LKF = 'all'; render(); } const d = document.querySelector('[data-k="lockedlist"]'); if (!d) return; d.open = true; try { d.dispatchEvent(new Event('toggle')); } catch (e) {} d.scrollIntoView({ block: 'start', behavior: 'smooth' }); }
 function lockSnap(g) {
@@ -1338,7 +1351,7 @@ function liveView(g) {
     ${dd ? `<div class="lvd">${dd}${s.poss ? ' · ' + s.poss + ' ball' : ''}${s.rz ? ' · red zone' : ''}</div>` : ''}${field}
     ${s && s.text ? `<div class="lvp">${s.text}</div>` : ''}
     ${arr ? wpChart(g, arr) : '<div class="sub">Loading win probability…</div>'}
-    <div class="sub">${pre ? 'Our win chance (model + line) · the live chart fills in at kickoff' : (post ? 'Win chance through the game (ESPN)' : 'Live win chance from ESPN') + ' · our pregame pick ' + p.su.abbr + ' ' + pct(p.conf)}</div>
+    ${pre ? '<details class="dsc"><summary>ⓘ About this chart</summary><div class="sub">Pregame this shows our win chance (model + line). The line only moves once the game starts, so it is for watching live, not for betting.</div></details>' : ''}<div class="sub">${pre ? '' : (post ? 'Win chance through the game (ESPN)' : 'Live win chance from ESPN') + ' · our pregame pick ' + p.su.abbr + ' ' + pct(p.conf)}</div>
   </div>`;
 }
 function card(g) {

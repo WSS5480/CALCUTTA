@@ -200,7 +200,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v113 -->
+<!-- Pics v114 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
   <div class="hrow"><h1>Oddable</h1><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button></div>
@@ -209,7 +209,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v113 (one look)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v114 (one look)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -970,6 +970,10 @@ function betEdit(id) { const b = BETS.find((x) => x.id === id); if (!b) return;
 const PROXY = 'https://calcutta-odds.onrender.com/kalshi/proxy', KAPI = '/trade-api/v2', lsg = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, lss = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
 let KERR = '', KST = '', KFORM = lsg('kal-formopen') === '1', KBUSY = false;
 const kDraft = () => { try { return JSON.parse(lsg('kal-draft')) || {}; } catch (e) { return {}; } };
+function kParse(t) { t = String(t || ''); const id = (t.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i) || [''])[0]; const pm = t.match(/-----BEGIN[A-Z ]*-----[\s\S]*?-----END[A-Z ]*-----/); return { id, pem: pm ? pm[0].replace(/\r/g, '').trim() : '' }; }
+function kFill(t, fname) { const p = kParse(t), d = kDraft(); if (!p.id && fname) p.id = kParse(fname).id; if (p.id) d.id = p.id; if (p.pem) d.pem = p.pem; lss('kal-draft', JSON.stringify(d)); if (!p.pem && !p.id) KERR = 'I could not find a key in that. Copy the whole private key (it starts with -----BEGIN) or choose the file Kalshi downloaded.'; else KERR = ''; betsRender(); if (p.id && p.pem) kalshiSave({ id: p.id, pem: p.pem }); }
+async function kPaste() { try { kFill(await navigator.clipboard.readText()); } catch (e) { KERR = 'Your phone blocked the paste button. Press and hold in the box below and tap Paste.'; betsRender(); } }
+function kFile(f) { if (!f) return; const r = new FileReader(); r.onload = () => kFill(r.result, f.name); r.readAsText(f); }
 function kDraftSet(k, v) { const d = kDraft(); d[k] = v; lss('kal-draft', JSON.stringify(d)); }
 function kFormClose() { KFORM = false; KERR = ''; try { localStorage.removeItem('kal-formopen'); localStorage.removeItem('kal-draft'); } catch (e) {} betsRender(); }
 const b64d = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0)), b64e = (u) => btoa(String.fromCharCode(...new Uint8Array(u)));
@@ -1002,13 +1006,13 @@ const kn = (...v) => { for (const x of v) if (x !== undefined && x !== null && x
 const kc = (o, a, b) => { const c = kn(o[a]); if (!isNaN(c)) return c; const d = kn(o[b]); return isNaN(d) ? NaN : d * 100; };
 function kalshiConnect() { KFORM = true; lss('kal-formopen', '1'); betsRender(); setTimeout(() => { const f = document.querySelector('.kf'); if (f) f.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 50); }
 function kalshiOff() { if (!confirm('Disconnect Kalshi from this device? Your saved Kalshi bets stay.')) return; ['kal-id', 'kal-pem'].forEach((k) => { try { localStorage.removeItem(k); } catch (e) {} }); KKEY = null; KST = ''; betsRender(); }
-async function kalshiSave() {
-  const id = ($('#kid').value || '').trim(), pem = ($('#kpem').value || '').trim();
+async function kalshiSave(ov) {
+  const gv = (i) => { const e = $(i); return e ? e.value || '' : ''; }; const raw = ov ? ov.id + '\n' + ov.pem : gv('#kid') + '\n' + gv('#kpem'), pp = kParse(raw); let id = pp.id || gv('#kid').trim(), pem = pp.pem || gv('#kpem').trim();
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pem)) { KERR = 'That second box has an ID, not the private key. The private key is a long block of text (many lines) that Kalshi shows once when you create the key, or in the file it downloads. If you do not have it, create a new key.'; return betsRender(); }
   if (!id || pem.length < 40) { KERR = 'Paste both the Key ID and the private key first.'; return betsRender(); }
   KERR = ''; lss('kal-id', id); lss('kal-pem', pem); KKEY = null; KFORM = false; try { localStorage.removeItem('kal-formopen'); localStorage.removeItem('kal-draft'); } catch (e) {} KST = 'Checking your key…'; betsRender();
   try { await kalshiKey(); await kalshiGet('/portfolio/fills', { limit: 1 }); await kalshiSync(true); }
-  catch (e) { try { localStorage.removeItem('kal-id'); localStorage.removeItem('kal-pem'); } catch (_) {} KKEY = null; KST = ''; KERR = e.status === 401 || e.status === 403 ? 'Kalshi rejected that key. Check the Key ID matches the private key.' : /Ed25519|algorithm|not supported/i.test(e.message || '') ? 'This phone cannot use that key type. Create a new Kalshi key and choose RSA.' : 'Could not connect: ' + (e.name === 'TypeError' ? 'the sync server is waking up, try again in 30 seconds' : (e.message || e)); KFORM = true; lss('kal-formopen', '1'); betsRender(); }
+  catch (e) { try { localStorage.removeItem('kal-id'); localStorage.removeItem('kal-pem'); } catch (_) {} KKEY = null; KST = ''; KERR = e.status === 401 || e.status === 403 ? 'Kalshi rejected that key. Check the Key ID matches the private key.' : /Ed25519|algorithm|not supported/i.test(e.message || '') ? 'This phone cannot use that key type. Create a new Kalshi key and choose RSA.' : 'Could not connect: ' + (e.name === 'TypeError' ? 'the sync server is waking up, try again in 30 seconds' : (e.message || e)); KFORM = true; lss('kal-formopen', '1'); lss('kal-draft', JSON.stringify({ id, pem })); betsRender(); }
 }
 function kDay(first, m) { const f = Date.parse(first), e = Date.parse((m && (m.expected_expiration_time || m.close_time)) || ''); return dayKey(e && e >= f - 864e5 && e - f < 4 * 864e5 ? e : f); } // game day when the market ends within a few days, else the day you bought
 async function kalshiSync(manual) {
@@ -1036,8 +1040,12 @@ async function kalshiSync(manual) {
   } catch (e) { KST = e.status === 401 || e.status === 403 ? 'Kalshi rejected your key. Tap Disconnect, then connect again.' : 'Kalshi sync could not connect (the server may be waking up). Will retry.'; }
   KBUSY = false; if (BF || KFORM) { const q = document.getElementById('kst'); if (q) q.textContent = KST; } else betsRender();
 }
-const kalshiFormHtml = () => `<div class="card kf"><div class="gh" style="margin-top:0">Connect your Kalshi account</div><div class="sub">1. On Kalshi: Profile → API Keys → create a key. Save the private key.<br>2. Paste the Key ID and the private key below.<br><b>Your key stays on this phone.</b> It signs requests here; the server only passes them to Kalshi and stores nothing.</div>
-  <a class="addb" style="display:block;text-align:center;text-decoration:none;margin:10px 0" href="https://kalshi.com/account/profile" target="_blank" rel="noopener">🔑 Open Kalshi to get your keys</a><div class="sub" style="text-align:center;margin:-4px 0 6px">Scroll to <b>API Keys</b> → Create. <a href="https://docs.kalshi.com/getting_started/api_keys" target="_blank" rel="noopener">Help</a></div><label>Key ID <input id="kid" type="text" value="${(kDraft().id || '').replace(/"/g, '&quot;')}" oninput="kDraftSet('id',this.value)" autocomplete="off" autocapitalize="off" spellcheck="false"></label><label>Private key <textarea id="kpem" rows="5" oninput="kDraftSet('pem',this.value)" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="-----BEGIN PRIVATE KEY-----">${(kDraft().pem || '').replace(/</g, '&lt;')}</textarea></label>
+const kalshiFormHtml = () => `<div class="card kf"><div class="gh" style="margin-top:0">Connect Kalshi — 3 taps</div><div class="sub"><b>1.</b> Open Kalshi → <b>API Keys</b> → <b>Create key</b>. Copy the Key ID and the private key (or save the file).<br><b>2.</b> Come back here and tap Paste, or choose the file.<br><b>3.</b> That's it — it connects by itself. Your key stays on this phone.</div>
+  <a class="addb" style="display:block;text-align:center;text-decoration:none;margin:10px 0" href="https://kalshi.com/account/profile" target="_blank" rel="noopener">🔑 Open Kalshi API Keys</a>
+  <button class="pri" style="width:100%;margin:4px 0" onclick="kPaste()">📋 Paste from clipboard</button>
+  <label class="addb" style="display:block;text-align:center;margin:6px 0">📁 Choose the key file<input type="file" hidden onchange="kFile(this.files[0]);this.value=''"></label>
+  <div class="sub" style="margin:8px 0 2px">Or type it in (you can paste both into either box):</div>
+  <label>Key ID <input id="kid" type="text" value="${(kDraft().id || '').replace(/"/g, '&quot;')}" oninput="kDraftSet('id',this.value)" autocomplete="off" autocapitalize="off" spellcheck="false"></label><label>Private key <textarea id="kpem" rows="4" oninput="kDraftSet('pem',this.value)" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="-----BEGIN PRIVATE KEY-----">${(kDraft().pem || '').replace(/</g, '&lt;')}</textarea></label>
   ${KERR ? `<div class="note" style="margin:8px 0;color:var(--red,#ff5a4d)">${KERR}</div>` : ''}<div class="bbtn"><button class="pri" onclick="kalshiSave()">Connect</button><button onclick="kFormClose()">Cancel</button></div></div>`;
 setInterval(() => { if (VIEW === 'bets' && !document.hidden && !BF && !KFORM) kalshiSync(false); }, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && VIEW === 'bets' && !KFORM && !BF) kalshiSync(false); });

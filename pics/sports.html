@@ -119,7 +119,7 @@ html.cb .sum.lock{border-color:#2b5aa8!important;background:#0e2140!important}
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div class="sub" id="upd">Loading…</div>
   <div class="sub" id="mc" style="margin-top:2px;cursor:pointer" onclick="mcToggle()"></div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v107 (one look · sports model v4)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v108 (one look · sports model v4)</div>
   <div class="sub" style="font-size:11px"><a style="color:inherit;text-decoration:underline;cursor:pointer" onclick="themeSet(document.documentElement.classList.contains('cb') ? 'violet' : 'cowboys')">Switch colors: Cowboys / original violet</a></div>
   </details>
 </header>
@@ -240,6 +240,28 @@ async function loadRatings() {
       HIST.filter((g) => dkey(g.start) === d).forEach((g) => { const r = modelOf({ home: { abbr: g.home.abbr }, away: { abbr: g.away.abbr }, start: g.start }); if (!r) return; n++; const am = g.home.score - g.away.score; if ((r.margin > 0) === (am > 0)) hit++; ae += Math.abs(r.margin - am); tae += Math.abs(r.total - (g.home.score + g.away.score)); }); MODEL = keep; });
     if (n >= 20) BT = { n, hit, mae: ae / n, tae: tae / n };
   } catch (e) {}
+  backfill();
+}
+
+// ---- Rebuilt picks: for every finished game this season, refit the model on games played before (kickoff - 30 min) and record the pick it would have made. No hindsight. ----
+let BFM = [], BFBUSY = false;
+async function backfill() {
+  if (BFBUSY || !HIST.length) return; const G = HIST.slice().sort((a, b) => a.start - b.start);
+  let s0 = 0; for (let i = 1; i < G.length; i++) if (G[i].start - G[i - 1].start > 45 * 864e5) s0 = i;
+  const key = 'spbf4-' + LG + '-' + G.length + '-' + G[G.length - 1].start; let c = null; try { c = JSON.parse(lsg(key)); } catch (e) {}
+  if (c && c.length) { BFM = c.map((r) => ({ id: r[0], h: r[1], a: r[2], d: r[3], su: r[4], c: r[5], r: [r[6], r[7]] })); if (GV === 'stats') draw(); return; }
+  BFBUSY = true; const keep = MODEL, out = []; const slots = {};
+  G.slice(s0).forEach((g) => { const k = Math.floor((g.start - 30 * 60e3) / (30 * 60e3)); (slots[k] = slots[k] || []).push(g); });
+  const ks = Object.keys(slots).sort((a, b) => a - b); let budget = 6e6, lo = 0; // cap work for big leagues: keep the most recent slots
+  for (let i = ks.length - 1; i >= 0; i--) { budget -= G.length * 40; if (budget < 0) { lo = i + 1; break; } }
+  for (let i = lo; i < ks.length; i++) {
+    const gs = slots[ks[i]], cut = Math.min(...gs.map((g) => g.start)) - 30 * 60e3, m = fitModel(G.filter((x) => x.start < cut - 3 * 36e5), cut);
+    if (m) { MODEL = m; gs.forEach((g) => { const r = modelOf({ home: { abbr: g.home.abbr }, away: { abbr: g.away.abbr }, start: g.start }); if (!r) return; const ph = cdf(r.margin / CFG.sd); out.push({ id: g.id, h: g.home.abbr, a: g.away.abbr, d: dkey(g.start), su: ph >= 0.5 ? 'h' : 'a', c: Math.max(ph, 1 - ph), r: [g.home.score, g.away.score] }); }); }
+    if (i % 4 === 0) await new Promise((r) => setTimeout(r, 0));
+  }
+  MODEL = keep; BFM = out; BFBUSY = false;
+  try { lss(key, JSON.stringify(out.map((x) => [x.id, x.h, x.a, x.d, x.su, +x.c.toFixed(3), x.r[0], x.r[1]]))); } catch (e) {}
+  if (GV === 'stats') draw();
 }
 // fallback when ratings are missing: win percentage from the team's record
 function recRat(t) { const m = /^(\d+)-(\d+)/.exec(t.record || ''); if (!m) return undefined; const w = +m[1], l = +m[2]; if (w + l < 2) return undefined; return ((w + 1) / (w + l + 2) - 0.5) * CFG.sd * 2.3; }
@@ -342,18 +364,22 @@ function lockRows() {
   Object.keys(LKM).forEach((id) => { const k = LKM[id]; if (!k.r || !k.h) return; const m = k.r[0] - k.r[1], fin = `Final ${k.a} ${k.r[1]} @ ${k.h} ${k.r[0]}`;
     if (LKV === 'win') { if (m === 0) return; const ok = (m > 0) === (k.su === 'h'); out.push({ d: k.d, ok, t: `${k.su === 'h' ? k.h : k.a} to WIN`, sub: `${fin} · ${m > 0 ? k.h : k.a} won by ${Math.abs(m)}` }); }
     else { if (!k.ats || k.L === null || k.L === undefined) return; const cm = (k.ats === 'h' ? m : -m) + (k.ats === 'h' ? -k.L : k.L); if (cm === 0) return; const d = k.ats === 'h' ? -k.L : k.L; out.push({ d: k.d, ok: cm > 0, t: `${k.ats === 'h' ? k.h : k.a} ${d > 0 ? '+' : ''}${d} spread`, sub: `${fin} · ${cm > 0 ? 'beat' : 'missed'} the spread by ${Math.abs(cm)}` }); } });
+  if (LKV === 'win' && LKS_SRC !== 'live') BFM.forEach((x) => { if (LKM[x.id] && LKM[x.id].r) return; const m = x.r[0] - x.r[1]; if (m === 0) return; out.push({ d: x.d, ok: (m > 0) === (x.su === 'h'), bf: 1, c: x.c, t: `🔁 ${x.su === 'h' ? x.h : x.a} to WIN (${Math.round(x.c * 100)}%)`, sub: `Final ${x.a} ${x.r[1]} @ ${x.h} ${x.r[0]} · ${m > 0 ? x.h : x.a} won by ${Math.abs(m)} · rebuilt from games before kickoff` }); });
   return out.sort((a, b) => String(b.d).localeCompare(String(a.d)));
 }
+let LKS_SRC = 'all';
 function statsHtml() {
   const f = (h, n) => (n ? Math.round(h / n * 100) + '%' : '–');
-  const cnt = (v) => { const sv = LKV; LKV = v; const r = lockRows(); LKV = sv; return [r.filter((x) => x.ok).length, r.length]; };
+  const cnt = (v) => { const sv = LKV; LKV = v; const r = lockRows().filter((x) => !x.bf); LKV = sv; return [r.filter((x) => x.ok).length, r.length]; };
   const [wh, wn] = cnt('win'), [ah, an] = cnt('spread');
   const rows = lockRows(), hits = rows.filter((x) => x.ok).length, miss = rows.length - hits, shown = rows.filter((x) => LKF === 'all' || (LKF === 'hit' ? x.ok : !x.ok));
   const btn = (kind, val, label, on) => `<button class="${on ? 'on' : ''}" onclick="${kind === 'v' ? `lkSet('${val}')` : `lkSet(null,'${val}')`}">${label}</button>`;
-  return `<div class="sums"><div class="sum"><b>${BT ? Math.round(BT.hit / BT.n * 100) + '%' : '–'}</b><span>Model winners (check)</span><small>${BT ? BT.hit + '-' + (BT.n - BT.hit) + ' on the last ' + BT.n + ' games' : 'building…'}</small></div>
+  const bw = BFM.filter((x) => x.r[0] !== x.r[1]), bh = bw.filter((x) => (x.r[0] > x.r[1]) === (x.su === 'h')).length, hi = bw.filter((x) => x.c >= 0.65), hih = hi.filter((x) => (x.r[0] > x.r[1]) === (x.su === 'h')).length;
+  return `<div class="sums"><div class="sum" onclick="lkSet('win','all')"><b>${bw.length ? Math.round(bh / bw.length * 100) + '%' : (BFBUSY ? '…' : '–')}</b><span>🔁 Rebuilt win picks</span><small>${bw.length ? bh + '-' + (bw.length - bh) + (hi.length ? ' · 65%+ picks ' + hih + '-' + (hi.length - hih) : '') : 'rebuilding this season…'}</small></div>
     <div class="sum"><b>–</b><span>Spread (backtest)</span><small>no past lines kept for ${CFG.name}</small></div>
     <div class="sum lock" onclick="lkSet('win','all')"><b>${f(wh, wn)}</b><span>🔒 Locked win picks</span><small>${wn ? wh + '-' + (wn - wh) : 'fills in after games finish'}</small></div>
     <div class="sum lock" onclick="lkSet('spread','all')"><b>${f(ah, an)}</b><span>🔒 Locked spread</span><small>${an ? ah + '-' + (an - ah) : 'fills in after games finish'}</small></div></div>
+    <div class="pick rec" style="margin:4px 2px 8px">🔁 Rebuilt = for each finished game this season, the model refit using only games played before kickoff minus 30 min, so no hindsight. 🔒 Locked = saved live on this phone. Rebuilt picks use the model as it is today, so its settings were still chosen after seeing this data; treat small samples as luck either way.</div>
     <div class="pick rec" style="margin:4px 2px 8px">🔒 Locked picks are saved before the game and graded after. ✓ hit = ${LKV === 'win' ? 'the team we picked won outright (moneyline).' : 'our side beat the point spread.'}</div>
     <div class="lkbar">${btn('v', 'win', 'Win picks', LKV === 'win')}${btn('v', 'spread', 'Spread picks', LKV === 'spread')}</div>
     <div class="lkbar">${btn('f', 'all', 'All ' + rows.length, LKF === 'all')}${btn('f', 'hit', '✓ Hit ' + hits, LKF === 'hit')}${btn('f', 'miss', '✗ Miss ' + miss, LKF === 'miss')}</div>

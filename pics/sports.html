@@ -108,6 +108,7 @@ html.cb .pinhd{opacity:.85}
 .lkrow{display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--line);padding:10px 2px}.lkrow small{display:block;color:var(--muted);font-size:12px;font-weight:500}.lkrow b.hit{color:var(--green)}.lkrow b.miss{color:var(--red)}
 #list>:not(.gc){grid-column:1/-1}
 html.cb .sum.lock{border-color:#2b5aa8!important;background:#0e2140!important}
+html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}button,a,select,input,label,[onclick],.pill,.tab,.card{touch-action:manipulation}button,[onclick]{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}button:active,[onclick]:active{opacity:.78}
 </style>
 </head>
 <body>
@@ -119,7 +120,7 @@ html.cb .sum.lock{border-color:#2b5aa8!important;background:#0e2140!important}
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div class="sub" id="upd">Loading…</div>
   <div class="sub" id="mc" style="margin-top:2px;cursor:pointer" onclick="mcToggle()"></div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v111 (one look · sports model v4)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v112 (one look · sports model v4)</div>
   <div class="sub" style="font-size:11px"><a style="color:inherit;text-decoration:underline;cursor:pointer" onclick="themeSet(document.documentElement.classList.contains('cb') ? 'violet' : 'cowboys')">Switch colors: Cowboys / original violet</a></div>
   </details>
 </header>
@@ -412,7 +413,7 @@ setInterval(() => { if (!document.hidden && OFF === 0 && !OPEN && (GAMES.some((g
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !OPEN) load(); });
 </script>
 <script>setTimeout(()=>{const l=document.querySelector('.lg'),o=l&&l.querySelector('.on');if(o)l.scrollLeft=Math.max(0,o.offsetLeft-60);},500);</script>
-<script src="ai.js"></script>
+<script src="gate.js"></script><script src="ai.js"></script>
 <script>
 function aiCtx(gid) {
   const pc = (v) => Math.round((v || 0) * 100) + '%';

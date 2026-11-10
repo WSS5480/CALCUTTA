@@ -64,6 +64,7 @@ if (process.env.RENDER_EXTERNAL_URL && process.env.KEEP_AWAKE !== '0') {
 
 const kalshi = require('../kalshi-sync/server.js'); const BT = {};
 http.createServer(async (req, res) => {
+  if (req.url.startsWith('/acct')) { try { if (await require('./acct.js').handle(req, res)) return; } catch (e) { res.statusCode = 500; return res.end('{"error":"acct"}'); } }
   if (req.url.startsWith('/ai')) { try { if (await require('./ai.js').handle(req, res)) return; } catch (e) { res.statusCode = 500; return res.end('{"error":"ai"}'); } }
   if (req.url.startsWith('/sync')) { try { if (await require('./sync.js').handle(req, res)) return; } catch (e) { res.statusCode = 500; return res.end('{"error":"sync"}'); } }
   if (req.url.startsWith('/kalshi')) { try { if (await kalshi.handle(req, res)) return; } catch (e) { res.statusCode = 500; return res.end('{"error":"kalshi"}'); } }

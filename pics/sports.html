@@ -119,7 +119,7 @@ html.cb .sum.lock{border-color:#2b5aa8!important;background:#0e2140!important}
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div class="sub" id="upd">Loading…</div>
   <div class="sub" id="mc" style="margin-top:2px;cursor:pointer" onclick="mcToggle()"></div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v104 (one look · sports model v4)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v105 (one look · sports model v4)</div>
   <div class="sub" style="font-size:11px"><a style="color:inherit;text-decoration:underline;cursor:pointer" onclick="themeSet(document.documentElement.classList.contains('cb') ? 'violet' : 'cowboys')">Switch colors: Cowboys / original violet</a></div>
   </details>
 </header>
@@ -275,6 +275,7 @@ function lineText(g) {
 // locked picks: the pregame pick is saved once (within 2 days of the game) and graded when the game ends
 const LKS = 'splk-' + LG; let LKM = {}; try { LKM = JSON.parse(lsg(LKS)) || {}; } catch (e) {}
 function lockSnapS(g, p) {
+  if (p.has) { try { const o = JSON.parse(lsg('spm-' + LG)) || {}, su = p.ph >= 0.5 ? g.home.abbr : g.away.abbr, c = +Math.max(p.ph, p.pa).toFixed(3); if (!o[g.id] || o[g.id].su !== su || o[g.id].c !== c) { o[g.id] = { su, c }; const ks = Object.keys(o); if (ks.length > 400) delete o[ks[0]]; lss('spm-' + LG, JSON.stringify(o)); } } catch (e) {} }
   let ch = false; const k = LKM[g.id];
   if (!k && g.state === 'pre' && p.has && g.start - Date.now() < 2 * 864e5) { const md = modelOf(g); LKM[g.id] = { h: g.home.abbr, a: g.away.abbr, d: dashed(new Date(g.start)), su: p.ph >= 0.5 ? 'h' : 'a', L: g.line, ats: (SPREADY && g.line !== null && md) ? (md.margin > g.line ? 'h' : 'a') : null }; ch = true; }
   else if (k && !k.r && g.state === 'post') { k.r = [g.home.score, g.away.score]; ch = true; }

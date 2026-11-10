@@ -200,7 +200,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v115 -->
+<!-- Pics v116 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
   <div class="hrow"><h1>Oddable</h1><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button></div>
@@ -209,7 +209,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v115 (one look)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v116 (one look)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -974,6 +974,9 @@ function kParse(t) { t = String(t || ''); const id = (t.match(/[0-9a-f]{8}-[0-9a
 function kFill(t, fname) { const p = kParse(t), d = kDraft(); if (!p.id && fname) p.id = kParse(fname).id; if (p.id) d.id = p.id; if (p.pem) d.pem = p.pem; lss('kal-draft', JSON.stringify(d)); if (!p.pem && !p.id) KERR = 'I could not find a key in that. Copy the whole private key (it starts with -----BEGIN) or choose the file Kalshi downloaded.'; else KERR = ''; betsRender(); if (p.id && p.pem) kalshiSave({ id: p.id, pem: p.pem }); }
 async function kPaste() { try { kFill(await navigator.clipboard.readText()); } catch (e) { KERR = 'Your phone blocked the paste button. Press and hold in the box below and tap Paste.'; betsRender(); } }
 function kFile(f) { if (!f) return; const r = new FileReader(); r.onload = () => kFill(r.result, f.name); r.readAsText(f); }
+const pemOf = (buf, t) => '-----BEGIN ' + t + '-----\n' + btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/(.{64})/g, '$1\n') + '\n-----END ' + t + '-----';
+async function kGen() { try { KERR = ''; const k = await crypto.subtle.generateKey({ name: 'RSA-PSS', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['sign', 'verify']); const d = kDraft(); d.pem = pemOf(await crypto.subtle.exportKey('pkcs8', k.privateKey), 'PRIVATE KEY'); d.pub = pemOf(await crypto.subtle.exportKey('spki', k.publicKey), 'PUBLIC KEY'); d.id = ''; lss('kal-draft', JSON.stringify(d)); betsRender(); } catch (e) { KERR = 'This phone could not make a key. Use the steps below instead.'; betsRender(); } }
+function kCopyPub(b) { const t = kDraft().pub || ''; (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => { b.textContent = '✅ Copied'; }).catch(() => { const x = document.getElementById('kpub'); if (x) { x.select(); } b.textContent = 'Press Copy on the selected text'; }); }
 function kDraftSet(k, v) { const d = kDraft(); d[k] = v; lss('kal-draft', JSON.stringify(d)); }
 function kFormClose() { KFORM = false; KERR = ''; try { localStorage.removeItem('kal-formopen'); localStorage.removeItem('kal-draft'); } catch (e) {} betsRender(); }
 const b64d = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0)), b64e = (u) => btoa(String.fromCharCode(...new Uint8Array(u)));
@@ -1040,14 +1043,23 @@ async function kalshiSync(manual) {
   } catch (e) { KST = e.status === 401 || e.status === 403 ? 'Kalshi rejected your key. Tap Disconnect, then connect again.' : 'Kalshi sync could not connect (the server may be waking up). Will retry.'; }
   KBUSY = false; if (BF || KFORM) { const q = document.getElementById('kst'); if (q) q.textContent = KST; } else betsRender();
 }
-const kalshiFormHtml = () => `<div class="card kf"><div class="gh" style="margin-top:0">Connect Kalshi</div><div class="sub"><b>Do this in your phone's browser (Safari/Chrome), not the Kalshi app</b> — the app has no API keys page.<br><br><b>1.</b> Tap the button below. If it opens the Kalshi app instead, tap <b>Copy link</b>, then paste it into Safari/Chrome. Log in.<br><b>2.</b> Scroll down to <b>API Keys</b> → <b>Create key</b>. <b>Choose RSA</b> (not Ed25519). Name it Oddable.<br><b>3.</b> Kalshi shows a Key ID and a private key <i>once</i> and downloads a .txt file. Keep that file.<br><b>4.</b> Come back here → <b>Choose the key file</b> and pick the .txt. It connects by itself. Your key stays on this phone.</div>
+const kalshiFormHtml = () => `<div class="card kf"><div class="gh" style="margin-top:0">Connect Kalshi</div>
+  ${kDraft().pub ? `<div class="sub"><b>Your key is made.</b> Do this in your phone's browser (Safari/Chrome), not the Kalshi app:<br><b>1.</b> Tap <b>Copy public key</b>.<br><b>2.</b> Open Kalshi API Keys, log in, and add your own public key (paste it there). Kalshi gives you a <b>Key ID</b>.<br><b>3.</b> Paste the Key ID below and tap <b>Connect</b>.</div>
+  <button class="pri" style="width:100%;margin:8px 0 4px" onclick="kCopyPub(this)">📋 Copy public key</button><textarea id="kpub" readonly rows="2" style="width:100%;font-size:11px">${(kDraft().pub || '').replace(/</g, '&lt;')}</textarea>
+  <a class="addb" style="display:block;text-align:center;text-decoration:none;margin:10px 0" href="https://kalshi.com/account/profile" target="_blank" rel="noopener">🔑 Open Kalshi API Keys (browser)</a>
+  <button style="width:100%;margin:2px 0 8px" onclick="navigator.clipboard&&navigator.clipboard.writeText('https://kalshi.com/account/profile').then(()=>{this.textContent='✅ Link copied'})">📎 Copy link</button>
+  <label>Key ID from Kalshi <input id="kid" type="text" value="${(kDraft().id || '').replace(/"/g, '&quot;')}" oninput="kDraftSet('id',this.value)" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="paste the Key ID here"></label><textarea id="kpem" hidden>${(kDraft().pem || '').replace(/</g, '&lt;')}</textarea>
+  ${KERR ? `<div class="note" style="margin:8px 0;color:var(--red,#ff5a4d)">${KERR}</div>` : ''}<div class="bbtn"><button class="pri" onclick="kalshiSave()">Connect</button><button onclick="kFormClose()">Cancel</button></div></div>` : `<div class="sub">Easiest way: Oddable makes the key for you. You only paste one thing into Kalshi.</div>
+  <button class="pri" style="width:100%;margin:8px 0" onclick="kGen()">✨ Make my key for me</button>
+  <details style="margin:8px 0"><summary class="sub">I already have a Kalshi key / file</summary>
+  <div class="sub"><b>Do this in your phone's browser (Safari/Chrome), not the Kalshi app</b> — the app has no API keys page.<br><br><b>1.</b> Tap the button below. If it opens the Kalshi app instead, tap <b>Copy link</b>, then paste it into Safari/Chrome. Log in.<br><b>2.</b> Scroll down to <b>API Keys</b> → <b>Create key</b>. <b>Choose RSA</b> (not Ed25519). Name it Oddable.<br><b>3.</b> Kalshi shows a Key ID and a private key <i>once</i> and downloads a .txt file. Keep that file.<br><b>4.</b> Come back here → <b>Choose the key file</b> and pick the .txt. It connects by itself. Your key stays on this phone.</div>
   <a class="addb" style="display:block;text-align:center;text-decoration:none;margin:10px 0" href="https://kalshi.com/account/profile" target="_blank" rel="noopener">🔑 Open Kalshi API Keys (browser)</a>
   <button style="width:100%;margin:2px 0 8px" onclick="navigator.clipboard&&navigator.clipboard.writeText('https://kalshi.com/account/profile').then(()=>{this.textContent='✅ Link copied'})">📎 Copy link</button>
   <button class="pri" style="width:100%;margin:4px 0" onclick="kPaste()">📋 Paste key from clipboard</button>
   <label class="addb" style="display:block;text-align:center;margin:6px 0">📁 Choose the key file<input type="file" hidden onchange="kFile(this.files[0]);this.value=''"></label>
   <div class="sub" style="margin:8px 0 2px">Or type it in (you can paste both into either box):</div>
   <label>Key ID <input id="kid" type="text" value="${(kDraft().id || '').replace(/"/g, '&quot;')}" oninput="kDraftSet('id',this.value)" autocomplete="off" autocapitalize="off" spellcheck="false"></label><label>Private key <textarea id="kpem" rows="4" oninput="kDraftSet('pem',this.value)" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="-----BEGIN PRIVATE KEY-----">${(kDraft().pem || '').replace(/</g, '&lt;')}</textarea></label>
-  ${KERR ? `<div class="note" style="margin:8px 0;color:var(--red,#ff5a4d)">${KERR}</div>` : ''}<div class="bbtn"><button class="pri" onclick="kalshiSave()">Connect</button><button onclick="kFormClose()">Cancel</button></div></div>`;
+  ${KERR ? `<div class="note" style="margin:8px 0;color:var(--red,#ff5a4d)">${KERR}</div>` : ''}<div class="bbtn"><button class="pri" onclick="kalshiSave()">Connect</button><button onclick="kFormClose()">Cancel</button></div></details></div>`}`;
 setInterval(() => { if (VIEW === 'bets' && !document.hidden && !BF && !KFORM) kalshiSync(false); }, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && VIEW === 'bets' && !KFORM && !BF) kalshiSync(false); });
 function betDel(id) { if (!confirm('Delete this bet?')) return; const d = BETS.find((x) => x.id === id); if (d && d.src === 'kalshi') { let g = []; try { g = JSON.parse(lsg('kdel26')) || []; } catch (e) {} g.push(id); lss('kdel26', JSON.stringify(g)); } BETS = BETS.filter((x) => x.id !== id); betsSave(); betsRender(); }

@@ -173,7 +173,7 @@ header{padding-left:max(16px,calc((100% - 1168px)/2))!important;padding-right:ma
 @media (min-width:1500px){#plb{right:max(16px,calc((100vw - 104px - 1328px)/2))}}
 /* ---- Dallas Cowboys theme (navy #041E42 / royal #003594 / silver #869397 / white; site navy #002B5C) ---- */
 html.cb body,html.cb body.dark{--bg:#050c17;--panel:#0b1a30;--panel2:#10264a;--line:#1f3d69;--ink:#f3f6fa;--muted:#9aabbf;--blue:#c6cbd7;--green:#4fd18b;--red:#ff5a4d;background:#050c17;color:#f3f6fa;border-top:6px solid #869397}
-.hrow{display:flex;align-items:center;gap:12px}.aibtn{border:1px solid rgba(255,255,255,.55);background:rgba(0,0,0,.28);color:#fff;border-radius:999px;padding:7px 13px;font:700 13px inherit;cursor:pointer;margin-top:6px}
+.hrow{display:flex;flex-direction:column;align-items:flex-start;gap:2px}.aibtn{border:1px solid rgba(255,255,255,.55);background:rgba(0,0,0,.28);color:#fff;border-radius:999px;padding:7px 13px;font:700 13px inherit;cursor:pointer;margin-top:0}
 html.cb .pill,html.cb .addtb,html.cb .bbtn button.pri,html.cb .bsd button.on,html.cb .lm .tg button.on{background:#003594;color:#fff;border-color:#c6cbd7}html.cb .aibtn{background:#003594;border-color:#c6cbd7}
 .mini img.ml{width:26px;height:26px;object-fit:contain;vertical-align:middle;margin:0 6px}
 html.cb h1,html.cb body.dark h1{color:#fff}
@@ -199,7 +199,7 @@ html.cb .pinhd{opacity:.85}
 </head>
 <body>
 <div id="sc">
-<!-- Pics v110 -->
+<!-- Pics v111 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
   <div class="hrow"><h1>Oddable</h1><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button></div>
@@ -208,7 +208,7 @@ html.cb .pinhd{opacity:.85}
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v110 (one look)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v111 (one look)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -537,7 +537,8 @@ function betGradeOne(b) {
 }
 
 // Games from the other league (e.g. a college bet while the NFL tab is open): light scoreboard so bets still grade
-const XL = {}; let XLBUSY = 0;
+const XL = (() => { try { return JSON.parse(localStorage.getItem('xl26')) || {}; } catch (e) { return {}; } })(); let XLBUSY = 0;
+const xlPersist = () => { try { const f = Object.values(XL).filter((g) => g.state === 'post').sort((a, b) => b.start - a.start).slice(0, 400), o = {}; f.forEach((g) => { o[g.id] = g; }); localStorage.setItem('xl26', JSON.stringify(o)); } catch (e) {} };
 const gameOf = (id) => ALL[id] || XL[id];
 function miniGame(g) { const live = g.state === 'in'; return `<div class="mini"><div>${g.away.logo ? `<img class="ml" src="${g.away.logo}" alt="">` : ''}<b>${g.away.abbr}</b> ${g.state === 'pre' ? '' : g.away.score}</div><div class="mst">${live ? '<span class="lv">● LIVE</span> ' : ''}${g.state === 'pre' ? new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : g.detail}</div><div>${g.state === 'pre' ? '' : g.home.score} <b>${g.home.abbr}</b>${g.home.logo ? `<img class="ml" src="${g.home.logo}" alt="">` : ''}</div></div>`; }
 async function xlLoad(full) {
@@ -545,9 +546,10 @@ async function xlLoad(full) {
   BETS.forEach((b) => { (b.kind === 'parlay' ? b.legs : [b]).forEach((l) => { if (l.gid && !ALL[l.gid]) { ids.push(l.gid); if (b.week) weeks.add(b.week); } }); });
   if (!full) { if (!ids.length) return; if (ids.every((i) => XL[i] && XL[i].state === 'post')) return; } XLBUSY = Date.now();
   const other = CFB ? 'nfl' : 'college-football', base = 'https://site.api.espn.com/apis/site/v2/sports/football/' + other + '/scoreboard', sx = CFB ? '' : '&groups=80&limit=400';
-  const urls = ['?seasontype=2' + sx, ...[...weeks].map((w) => '?week=' + w + '&seasontype=2' + sx)]; let changed = false;
+  const dts = new Set(); BETS.forEach((b) => { const miss = (b.kind === 'parlay' ? b.legs : [b]).some((l) => l.gid && !ALL[l.gid] && !(XL[l.gid] && XL[l.gid].state === 'post')); if (miss && b.day && !b.lg) { for (let k = -1; k <= 3; k++) { const d = new Date(b.day + 'T12:00:00'); d.setDate(d.getDate() + k); dts.add(d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0')); } } });
+  const urls = ['?seasontype=2' + sx, ...[...weeks].map((w) => '?week=' + w + '&seasontype=2' + sx), ...[...dts].slice(0, 10).map((d) => '?dates=' + d + (CFB ? '' : '&groups=80&limit=400'))]; let changed = false;
   for (const u of urls) { try { const j = await (await fetch(base + u)).json(); (j.events || []).forEach((e) => { const c = e.competitions[0], t = e.status.type, cs = c.competitors.map((x) => ({ abbr: ab(x.team.abbreviation), name: x.team.displayName || x.team.location || '', logo: x.team.logo || '', score: parseInt(x.score, 10) || 0, home: x.homeAway === 'home' })).sort((a, b) => a.home - b.home); const g = { id: e.id, week: (j.week && j.week.number) || 0, start: +new Date(e.date), state: t.state, detail: t.shortDetail || '', away: cs[0], home: cs[1], line: null }; const o = XL[g.id]; if (!o || o.state !== g.state || o.away.score !== g.away.score || o.home.score !== g.home.score) changed = true; XL[g.id] = g; }); } catch (e) {} }
-  XLBUSY = 0; if (changed && !BF && !KFORM) betsRender();
+  XLBUSY = 0; if (changed) xlPersist(); if (changed && !BF && !KFORM) betsRender();
 }
 setInterval(() => { if (!document.hidden) xlLoad(); }, 60000); setTimeout(xlLoad, 4000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) xlLoad(); });
@@ -559,7 +561,7 @@ async function xlSports() {
   BETS.forEach((b) => { if (['nba', 'mlb', 'nhl', 'ncaab'].includes(b.lg) && b.gid && b.day && !(XL[b.gid] && XL[b.gid].state === 'post')) { need[b.lg] = need[b.lg] || new Set(); const d = new Date(b.day + 'T12:00:00'); [-1, 0, 1].forEach((k) => { const e = new Date(d); e.setDate(e.getDate() + k); need[b.lg].add(e.getFullYear() + String(e.getMonth() + 1).padStart(2, '0') + String(e.getDate()).padStart(2, '0')); }); } });
   const L = Object.keys(need); if (!L.length) return; XSBUSY = Date.now(); let changed = false;
   for (const lg of L) for (const dt of need[lg]) { try { const j = await (await fetch('https://site.api.espn.com/apis/site/v2/sports/' + ({ nba: 'basketball/nba', mlb: 'baseball/mlb', nhl: 'hockey/nhl', ncaab: 'basketball/mens-college-basketball' }[lg]) + '/scoreboard?dates=' + dt + '&limit=400' + (lg === 'ncaab' ? '&groups=50' : ''))).json(); (j.events || []).forEach((e) => { const c = e.competitions[0], t = e.status.type, cs = c.competitors.map((x) => ({ abbr: x.team.abbreviation, name: x.team.displayName || '', logo: x.team.logo || '', score: parseInt(x.score, 10) || 0, home: x.homeAway === 'home' })).sort((a, b) => a.home - b.home); const g = { id: e.id, week: 0, start: +new Date(e.date), state: t.state, detail: t.shortDetail || '', away: cs[0], home: cs[1], line: null }; const o = XL[g.id]; if (!o || o.state !== g.state || o.away.score !== g.away.score || o.home.score !== g.home.score) changed = true; XL[g.id] = g; }); } catch (e) {} }
-  XSBUSY = 0; if (changed && !BF && !KFORM) betsRender();
+  XSBUSY = 0; if (changed) xlPersist(); if (changed && !BF && !KFORM) betsRender();
 }
 setInterval(() => { if (!document.hidden) xlSports(); }, 60000); setTimeout(xlSports, 4500);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) xlSports(); });
@@ -621,6 +623,11 @@ function betsRender(force) {
   const dkeys = Object.keys(allDays).sort().reverse();
   const nice = (k) => new Date(k + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
   const logHtmlF = () => dkeys.length ? `<details data-k="betlog" ${isOpen('betlog', false) ? 'open' : ''}><summary>Daily log (${dkeys.length} day${dkeys.length > 1 ? 's' : ''})</summary>${dkeys.map((k) => { const d = allDays[k], n = d.settled + d.live; return `<details class="dayd" data-k="d${k}" ${isOpen('d' + k, false) ? 'open' : ''}><summary class="card" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;margin:4px 0;cursor:pointer;list-style:none"><span><b>${nice(k)}${k === today ? ' · today' : ''}</b><small style="display:block;color:var(--muted)">${d.n} bet${d.n !== 1 ? 's' : ''} · risked ${riskTxt(d.risk)} · ${d.w}-${d.l}${d.p ? '-' + d.p : ''}${(alsoBy[k] || []).length ? ` · +${alsoBy[k].length} parlay leg${alsoBy[k].length > 1 ? 's' : ''}` : ''}</small></span><b class="${n >= 0 ? 'hit' : 'miss'}">${money(n)}</b></summary>${(pastBy[k] || []).slice().sort(sortF).map(cardHtml).join('')}${(alsoBy[k] || []).map((x) => '<div class="sub also">↳ Parlay leg on this day · result counts on ' + dayNice(x.also) + '</div>' + cardHtml(x)).join('')}</details>`; }).join('')}</details>` : '';
+  // How am I doing: settled bets only, by the day each bet is tied to
+  const mk = (d) => dayKey(d.getTime()), nowD = new Date(), wk0 = new Date(nowD), mo0 = new Date(nowD.getFullYear(), nowD.getMonth(), 1), yr0 = new Date(nowD.getFullYear(), 0, 1);
+  wk0.setDate(wk0.getDate() - ((wk0.getDay() + 6) % 7));
+  const perf = (lbl, from) => { let w = 0, l = 0, p = 0, net = 0, risk = 0; fin.forEach(({ b, r }) => { if (from && betDay(b) < from) return; if (r.st === 'won') { w++; net += betPL(b, 'won'); risk += u0(b); } else if (r.st === 'lost') { l++; net += betPL(b, 'lost'); risk += u0(b); } else p++; }); const roi = risk ? Math.round(net / risk * 100) + '% ROI' : ''; return `<div class="sum"><b class="${net < 0 ? 'miss' : net > 0 ? 'hit' : ''}">${money(net)}</b><span>${lbl}</span><small>${w}-${l}${p ? '-' + p : ''}${roi ? ' · ' + roi : ''}</small></div>`; };
+  const perfHtml = `<details data-k="perf" ${isOpen('perf', true) ? 'open' : ''}><summary>How I'm doing (settled bets)</summary><div class="sums">${perf('Today', mk(nowD))}${perf('This week', mk(wk0))}${perf('This month', mk(mo0))}${perf('Year to date', mk(yr0))}${perf('All time', '')}</div></details>`;
   const stat = (t, r, s) => `<div class="sum"><b>${r.s}</b><span>${t}</span><small>${r.pc}${s || ''}</small></div>`;
   const stake = fin.reduce((a, x) => a + (x.b.stake || 0), 0);
   const ordr = { live: 0, pending: 1, won: 2, lost: 2, push: 2 };
@@ -642,7 +649,7 @@ function betsRender(force) {
   const list = done.filter((x) => !isPast(x) || betDay(x.b) >= keepFrom).sort(sortF).map(cardHtml).join('');
   const html = `<div class="lpg"><div class="bh"><h2>My Bets</h2><div class="pillw"><button class="pill" onclick="aiOpen(null,'Analyze all my open bets one by one: for each say keep, hedge or leave alone with a one-line reason using the model numbers, then give an overall risk summary.')">🤖 Analyze</button><button class="pill" onclick="addMenu()">＋ Add bet ▾</button><div id="addmenu" ${window.__addm ? '' : 'hidden'}><button onclick="addMenu(0);betNew()">✍️ Add a bet</button><label>📷 Import screenshot<input type="file" accept="image/*" hidden onchange="addMenu(0);betImport(this.files[0]);this.value=''"></label><button onclick="addMenu(0);slipPaste()">📋 Paste slip text</button><button onclick="addMenu(0);aiOpen()">🤖 Ask Claude</button>${lsg('kal-id') ? `<button onclick="addMenu(0);kalshiSync(true)">🔄 Sync Kalshi now</button><button onclick="addMenu(0);kalshiOff()">⛓️‍💥 Disconnect Kalshi</button>` : `<button onclick="addMenu(0);kalshiConnect()">⚡ Connect Kalshi</button>`}</div></div></div>
     <div class="sums">${stat('Overall', all, stake ? ' · $' + stake + ' staked' : '')}${stat('Against the app', agA)}${stat('With the app', withA)}<div class="sum"><b>${BETS.length - fin.length}</b><span>Open bets</span><small>${BETS.length} total</small></div></div>
-    <div class="sub" style="margin:0 0 6px"><span id="kst"></span></div>${KFORM ? kalshiFormHtml() : ''}<div class="sub" id="impst" style="margin:-4px 0 8px">${IMP}</div><div id="bform">${BF ? betFormHtml() : ''}</div>${logHtmlF()}${list || '<div class="note">No bets yet. Tap “Add a bet”, pick a game, then set your side and the line you got.</div>'}</div>`;
+    ${perfHtml}<div class="sub" style="margin:0 0 6px"><span id="kst"></span></div>${KFORM ? kalshiFormHtml() : ''}<div class="sub" id="impst" style="margin:-4px 0 8px">${IMP}</div><div id="bform">${BF ? betFormHtml() : ''}</div>${logHtmlF()}${list || '<div class="note">No bets yet. Tap “Add a bet”, pick a game, then set your side and the line you got.</div>'}</div>`;
   const kt = lsg('kal-id') ? (KST || 'Kalshi connected') : (KST || '');
   const hh = html.replace('<span id="kst"></span>', '');
   if (el.__h !== hh) { el.innerHTML = html; el.__h = hh; }

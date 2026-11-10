@@ -17,6 +17,7 @@
     try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (/^lk26-[a-z]+-/.test(k) && !k.endsWith('-s')) locks[k] = J(k, null); else if (/^splk-/.test(k)) splk[k.slice(5)] = J(k, {}); } } catch (e) {}
     return { bets, pins: J('pinned26', []), log: J('betlog26', {}), kdel: J('kdel26', []), locks, splk, tomb: [...tomb] };
   }
+  const gatherFrom = (d) => d;
   const hashOf = (d) => stable({ b: [...d.bets].sort((a, b) => String(a.id).localeCompare(String(b.id))), p: [...d.pins].map(String).sort(), l: d.log, k: [...d.kdel].map(String).sort(), lk: d.locks, sp: d.splk });
   function apply(d) {
     s('bets26', JSON.stringify(d.bets || [])); s('pinned26', JSON.stringify(d.pins || [])); s('betlog26', JSON.stringify(d.log || {})); s('kdel26', JSON.stringify(d.kdel || []));
@@ -43,7 +44,9 @@
         apply(merged);
         const after = hashOf(gather());
         LASTHASH = after;
-        if (after !== lh && !editing()) {
+        // reload only when bets were added/removed/settled or pins changed; field-level differences (stake, app pick) must never trigger reloads or two devices ping-pong forever
+        const sig = (d) => stable({ b: d.bets.map((b) => [String(b.id), b.res == null ? 0 : 1]).sort(), p: [...d.pins].map(String).sort() });
+        if (sig(gatherFrom(local)) !== sig(gather()) && !editing()) {
           const t = +g('sync-rl') || 0;
           if (Date.now() - t > 60000) { s('sync-rl', String(Date.now())); location.reload(); return; }
         }

@@ -40,6 +40,9 @@
       const j = await call('/push', { ...c, data: local });
       const merged = j.data || {};
       s('sync-last', String(Date.now()));
+      // the server can be slow (cold start): if bets changed while we waited, applying the older merged copy would wipe the new bet, so push again instead
+      const bk = (d) => stable(d.bets.map((b) => [String(b.id), b.t, b.stake, b.res == null ? 0 : 1, (b.legs || []).length]).sort()), moved = bk(gather()) !== bk(local) && (o.n || 0) < 3;
+      if (moved) { o = { ...o, n: (o.n || 0) + 1 }; s('sync-err', ''); BUSY = false; setTimeout(() => syncNow(o), 300); return true; }
       if (o.apply) {
         apply(merged);
         const after = hashOf(gather());

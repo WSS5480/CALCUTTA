@@ -82,6 +82,7 @@ header input#tsearch,header select#team{max-width:360px}
 @media (min-width:1500px){#plb{right:max(16px,calc((100vw - 104px - 1328px)/2))}}
 /* ---- Dallas Cowboys theme (navy #041E42 / royal #003594 / silver #869397 / white; site navy #002B5C) ---- */
 html.cb body,html.cb body.dark{--bg:#050c17;--panel:#0b1a30;--panel2:#10264a;--line:#1f3d69;--ink:#f3f6fa;--muted:#9aabbf;--blue:#c6cbd7;--green:#4fd18b;--red:#ff5a4d;background:#050c17;color:#f3f6fa;border-top:6px solid #869397}
+.hrow{display:flex;align-items:center;gap:12px}.aibtn{border:1px solid rgba(255,255,255,.55);background:rgba(0,0,0,.28);color:#fff;border-radius:999px;padding:7px 13px;font:700 13px inherit;cursor:pointer}html.cb .aibtn{background:#003594;border-color:#c6cbd7}html.cb .pill{background:#003594;color:#fff;border-color:#c6cbd7}
 html.cb h1,html.cb body.dark h1{color:#fff}
 html.cb header{background:linear-gradient(135deg,#003594 0%,#002b5c 38%,#041e42 74%,#08111f 100%)!important;border-bottom:3px solid #869397}
 html.cb header .sub,html.cb header #upd{color:#c6cbd7}
@@ -113,12 +114,12 @@ html.cb .sum.lock{border-color:#2b5aa8!important;background:#0e2140!important}
 <div id="plb"></div><iframe id="mir" src="./?mirror=1" aria-hidden="true" tabindex="-1"></iframe>
 <div id="sc">
 <header>
-  <h1>Oddable</h1>
+  <div class="hrow"><h1>Oddable</h1><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button></div>
   <div class="lg" id="lg"></div>
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div class="sub" id="upd">Loading…</div>
   <div class="sub" id="mc" style="margin-top:2px;cursor:pointer" onclick="mcToggle()"></div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v99 (one look · sports model v4)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v104 (one look · sports model v4)</div>
   <div class="sub" style="font-size:11px"><a style="color:inherit;text-decoration:underline;cursor:pointer" onclick="themeSet(document.documentElement.classList.contains('cb') ? 'violet' : 'cowboys')">Switch colors: Cowboys / original violet</a></div>
   </details>
 </header>
@@ -381,6 +382,17 @@ setInterval(() => { if (!document.hidden && OFF === 0 && !OPEN && (GAMES.some((g
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !OPEN) load(); });
 </script>
 <script>setTimeout(()=>{const l=document.querySelector('.lg'),o=l&&l.querySelector('.on');if(o)l.scrollLeft=Math.max(0,o.offsetLeft-60);},500);</script>
+<script src="ai.js"></script>
+<script>
+function aiCtx(gid) {
+  const pc = (v) => Math.round((v || 0) * 100) + '%';
+  const gs = gid ? GAMES.filter((g) => String(g.id) === String(gid)) : GAMES.filter((g) => g.state !== 'post').sort((a, b) => a.start - b.start).slice(0, 30);
+  const L = gs.map((g) => { let p = {}; try { p = pred(g); } catch (e) {} return `${g.away.abbr} @ ${g.home.abbr} | ${g.state === 'in' ? 'LIVE ' + (g.away.score || 0) + '-' + (g.home.score || 0) : new Date(g.start).toLocaleString()} | line ${g.line == null ? 'n/a' : g.line} | model win ${g.away.abbr} ${pc(p.pa)} / ${g.home.abbr} ${pc(p.ph)}`; });
+  let bets = []; try { bets = JSON.parse(lsg('bets26')) || []; } catch (e) {}
+  const B = bets.slice(-25).map((b) => (b.kind === 'parlay' ? 'PARLAY ' + (b.legs || []).map((l) => l.text || (l.side + ' ' + l.type)).join(' + ') : 'SINGLE ' + (b.side || '') + ' ' + (b.type === 'sp' ? 'spread ' + b.line : 'moneyline') + ' (' + (b.away || '') + '@' + (b.home || '') + ')') + ' | stake ' + (b.stake || '?') + (b.mult ? ', pays ' + b.mult + 'x' : ''));
+  return LG.toUpperCase() + ' GAMES:\n' + (L.join('\n') || 'none loaded') + (gid ? '' : '\n\nMY BETS:\n' + (B.join('\n') || 'none'));
+}
+</script>
 <script src="sync.js"></script>
 </body>
 </html>

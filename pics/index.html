@@ -173,6 +173,8 @@ header{padding-left:max(16px,calc((100% - 1168px)/2))!important;padding-right:ma
 @media (min-width:1500px){#plb{right:max(16px,calc((100vw - 104px - 1328px)/2))}}
 /* ---- Dallas Cowboys theme (navy #041E42 / royal #003594 / silver #869397 / white; site navy #002B5C) ---- */
 html.cb body,html.cb body.dark{--bg:#050c17;--panel:#0b1a30;--panel2:#10264a;--line:#1f3d69;--ink:#f3f6fa;--muted:#9aabbf;--blue:#c6cbd7;--green:#4fd18b;--red:#ff5a4d;background:#050c17;color:#f3f6fa;border-top:6px solid #869397}
+.hrow{display:flex;align-items:center;gap:12px}.aibtn{border:1px solid rgba(255,255,255,.55);background:rgba(0,0,0,.28);color:#fff;border-radius:999px;padding:7px 13px;font:700 13px inherit;cursor:pointer;margin-top:6px}
+html.cb .pill,html.cb .addtb,html.cb .bbtn button.pri,html.cb .bsd button.on,html.cb .lm .tg button.on{background:#003594;color:#fff;border-color:#c6cbd7}html.cb .aibtn{background:#003594;border-color:#c6cbd7}
 html.cb h1,html.cb body.dark h1{color:#fff}
 html.cb header{background:linear-gradient(135deg,#003594 0%,#002b5c 38%,#041e42 74%,#08111f 100%)!important;border-bottom:3px solid #869397}
 html.cb header .sub,html.cb header #upd{color:#c6cbd7}
@@ -196,16 +198,16 @@ html.cb .pinhd{opacity:.85}
 </head>
 <body>
 <div id="sc">
-<!-- Pics v103 -->
+<!-- Pics v104 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <h1>Oddable</h1>
+  <div class="hrow"><h1>Oddable</h1><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button></div>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">NCAA</button><button data-sp="nba">NBA</button><button data-sp="mlb">MLB</button><button data-sp="nhl">NHL</button><button data-sp="ncaab">NCAAB</button></div>
   <input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team">
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v103 (one look)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v104 (one look)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -679,35 +681,13 @@ function parseSlip(raw) {
   return o;
 }
 
-// ---- Claude (Anthropic API) via our server: slip reading + Ask Claude. Key lives on the server only. ----
-const AIURL = 'https://calcutta-odds.onrender.com/ai';
-let AIOK = null;
-async function aiReady() { if (AIOK !== null) return AIOK; try { const r = await fetch(AIURL + '/status', { cache: 'no-store' }); AIOK = r.ok && (await r.json()).ok === true; } catch (e) { AIOK = false; } return AIOK; }
+// ---- Claude: shared code in ai.js; this page supplies the context ----
 function aiCtx(gid) {
   const gs = (gid ? [ALL[gid]].filter(Boolean) : Object.values(ALL).filter((g) => g.state !== 'post').sort((a, b) => a.start - b.start).slice(0, 30));
   const L = gs.map((g) => { let p = {}; try { p = pred(g); } catch (e) {} const pc = (x) => Math.round((x || 0) * 100) + '%'; return `${g.away.abbr} @ ${g.home.abbr} | ${g.state === 'in' ? 'LIVE ' + (g.away.score || 0) + '-' + (g.home.score || 0) : new Date(g.start).toLocaleString()} | line ${g.line == null ? 'n/a' : g.line} | model win ${g.away.abbr} ${pc(p.pa)} / ${g.home.abbr} ${pc(p.ph)}${p.ats ? ' | spread pick ' + p.ats.side.abbr + ' ' + p.ats.line + ' covers ' + pc(p.ats.cover) : ''}`; });
   const side = (x) => { const g = x.gid ? gameOf(x.gid) : null; let p = null; try { if (g) p = pred(g); } catch (e) {} const pc = (v) => Math.round((v || 0) * 100) + '%'; const gm = g ? g.away.abbr + '@' + g.home.abbr + (g.state === 'post' ? ' FINAL ' + g.away.score + '-' + g.home.score : g.state === 'in' ? ' LIVE ' + g.away.score + '-' + g.home.score : '') : (x.away && x.home ? x.away + '@' + x.home : ''); const mp = g && p && x.side ? (x.side === g.home.abbr ? p.ph : x.side === g.away.abbr ? p.pa : null) : null; return [x.text, x.side, x.type === 'sp' ? 'spread ' + (x.line == null ? '' : x.line) : x.type === 'ml' ? 'moneyline' : x.type === 'ou' || x.type === 'tot' ? 'total ' + (x.line == null ? '' : x.line) : (x.type || ''), gm && '(' + gm + ')', mp != null ? 'model win ' + pc(mp) : ''].filter(Boolean).join(' '); };
   const B = (BETS || []).slice(-25).map((b) => (b.kind === 'parlay' ? 'PARLAY: ' + (b.legs || []).map(side).join(' + ') : 'SINGLE: ' + side(b)) + ` | stake ${b.stake || '?'}${b.mult ? ', pays ' + b.mult + 'x' : ''}${b.odds && !b.mult ? ', odds ' + b.odds : ''}`);
   return 'GAMES:\n' + (L.join('\n') || 'none loaded') + (gid ? '' : '\n\nMY BETS:\n' + (B.join('\n') || 'none'));
-}
-async function aiAsk(q, gid) {
-  const out = document.getElementById('aiout'); if (out) out.textContent = 'Thinking…';
-  try {
-    const r = await fetch(AIURL + '/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ q, ctx: aiCtx(gid) }) }); const j = await r.json();
-    if (out) { if (r.ok) out.innerHTML = String(j.text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>'); else out.textContent = j.error || 'Failed'; }
-  } catch (e) { if (out) out.textContent = 'Could not reach Claude: ' + (e.message || e); }
-}
-async function aiOpen(gid, auto) {
-  let o = document.getElementById('infosheet');
-  if (!o) { o = document.createElement('div'); o.id = 'infosheet'; o.onclick = (e) => { if (e.target === o) o.hidden = true; }; document.body.appendChild(o); }
-  const g = gid ? ALL[gid] : null, pre = g ? [['Take or pass?', `Should I take ${g.away.abbr} @ ${g.home.abbr}? Moneyline and spread, brief reasoning.`]] : [['Best plays today', 'Which games on this slate are the best plays and which should I pass? Short list.'], ['Review my bets', 'Review my open bets: what looks good, what looks risky?']];
-  o.innerHTML = '<div class="isb"><div class="ish"><b>🤖 Ask Claude' + (g ? ' · ' + g.away.abbr + ' @ ' + g.home.abbr : '') + '</b><button onclick="document.getElementById(\'infosheet\').hidden=true">✕</button></div><div id="aipre" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">' + pre.map((x, i) => `<button class="pill" data-q="${x[1].replace(/"/g, '&quot;')}">${x[0]}</button>`).join('') + '</div><div style="display:flex;gap:6px"><input id="aiq" placeholder="Ask about the games or your bets" style="flex:1;min-width:0;padding:10px;border-radius:10px;border:1px solid var(--line,#444);background:transparent;color:inherit;font-size:16px"><button class="pill" id="aigo">Ask</button></div><div id="aiout" style="white-space:pre-wrap;margin-top:12px;line-height:1.45"></div></div>';
-  o.hidden = false;
-  const go = (q) => { if (q) aiAsk(q, gid); };
-  o.querySelectorAll('#aipre button').forEach((b) => (b.onclick = () => go(b.dataset.q)));
-  o.querySelector('#aigo').onclick = () => go(o.querySelector('#aiq').value.trim());
-  o.querySelector('#aiq').onkeydown = (e) => { if (e.key === 'Enter') go(e.target.value.trim()); };
-  if (!(await aiReady())) document.getElementById('aiout').textContent = 'Claude is not connected yet. Add ANTHROPIC_API_KEY to the calcutta-odds service in Render.'; else if (auto) go(auto);
 }
 async function aiSlipText(cv) {
   if (!(await aiReady())) return null;
@@ -1736,6 +1716,7 @@ if ('serviceWorker' in navigator) {
 })();
 </script>
 <script>setTimeout(()=>{const l=document.querySelector('.lg'),o=l&&l.querySelector('.on');if(o)l.scrollLeft=Math.max(0,o.offsetLeft-60);},500);</script>
+<script src="ai.js"></script>
 <script src="sync.js"></script>
 </body>
 </html>

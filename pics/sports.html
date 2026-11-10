@@ -119,7 +119,7 @@ html.cb .sum.lock{border-color:#2b5aa8!important;background:#0e2140!important}
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div class="sub" id="upd">Loading…</div>
   <div class="sub" id="mc" style="margin-top:2px;cursor:pointer" onclick="mcToggle()"></div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v106 (one look · sports model v4)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v107 (one look · sports model v4)</div>
   <div class="sub" style="font-size:11px"><a style="color:inherit;text-decoration:underline;cursor:pointer" onclick="themeSet(document.documentElement.classList.contains('cb') ? 'violet' : 'cowboys')">Switch colors: Cowboys / original violet</a></div>
   </details>
 </header>
@@ -153,6 +153,9 @@ const pct = (x) => Math.round(x * 100) + '%';
 const ymd = (d) => d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
 const dashed = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 const betGids = () => { const o = new Set(); try { (JSON.parse(lsg('bets26')) || []).forEach((b) => { (b.kind === 'parlay' ? b.legs || [] : [b]).forEach((l) => { if (l && l.gid) o.add(String(l.gid)); }); }); } catch (e) {} return o; };
+const setH = (el, h) => { if (!el) return; if (el.__h === h && el.childNodes.length) return; el.innerHTML = h; el.__h = h; };
+window.__touch = 0; ['touchstart', 'pointerdown', 'touchend'].forEach((ev) => document.addEventListener(ev, () => { window.__touch = Date.now(); }, { capture: true, passive: true }));
+const touching = () => Date.now() - (window.__touch || 0) < 900;
 let OFF = 0, GAMES = [], RAT = {}, HAVE = false, FILTER = 'all', OPEN = null, PIN = [];
 try { PIN = JSON.parse(lsg('pinned26')) || []; } catch (e) {}
 const dayDate = () => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + OFF); return d; };
@@ -357,21 +360,21 @@ function statsHtml() {
     ${shown.map((x) => `<div class="lkrow"><span><b>${esc(x.t)}</b><small>${esc(x.sub)}</small></span><b class="${x.ok ? 'hit' : 'miss'}">${x.ok ? '✓ hit' : '✗ miss'}</b></div>`).join('') || '<div class="note">Nothing here yet. Picks lock before games and show up after they finish.</div>'}`;
 }
 function draw() {
-  $('#gvbar').innerHTML = GVS.map(([k, l]) => `<button class="${GV === k ? 'on' : ''}" onclick="gvSet('${k}')">${l}</button>`).join('');
+  setH($('#gvbar'), GVS.map(([k, l]) => `<button class="${GV === k ? 'on' : ''}" onclick="gvSet('${k}')">${l}</button>`).join(''));
   const dayEl = document.querySelector('.day'); if (dayEl) dayEl.hidden = GV === 'stats'; $('#chips').hidden = GV !== 'games';
-  if (GV === 'stats') { $('#list').innerHTML = statsHtml(); return; }
+  if (GV === 'stats') { setH($('#list'), statsHtml()); return; }
   if (GV === 'best') {
     const d0 = dayDate(); $('#dl').textContent = OFF === 0 ? 'Today · ' + d0.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : d0.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
     const L = GAMES.filter((g) => g.state !== 'post').map((g) => ({ g, c: Math.max(pred(g).ph, pred(g).pa) })).sort((a, b) => b.c - a.c).map((x) => x.g);
-    $('#list').innerHTML = L.length ? '<div class="pinhd">Most confident picks first</div>' + L.map(card).join('') : `<div class="note">No upcoming or live ${CFG.name} games ${OFF === 0 ? 'today' : 'this day'}.</div>`; return;
+    setH($('#list'), L.length ? '<div class="pinhd">Most confident picks first</div>' + L.map(card).join('') : `<div class="note">No upcoming or live ${CFG.name} games ${OFF === 0 ? 'today' : 'this day'}.</div>`); return;
   }
   const d = dayDate(); $('#dl').textContent = OFF === 0 ? 'Today · ' + d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
   const BG = betGids(); const isW = (g) => PIN.includes(g.id) || BG.has(String(g.id)); const grp = { live: GAMES.filter((g) => g.state === 'in'), pre: GAMES.filter((g) => g.state === 'pre'), post: GAMES.filter((g) => g.state === 'post') };
   const chip = (k, l, n) => `<button class="${FILTER === k ? 'on' : ''}" onclick="setF('${k}')"><b>${n}</b>${l}</button>`;
-  $('#chips').innerHTML = chip('all', 'All', GAMES.length) + chip('live', 'Live', grp.live.length) + chip('pre', 'Upcoming', grp.pre.length) + chip('post', 'Final', grp.post.length) + chip('watch', '📌 Watching', GAMES.filter(isW).length);
+  setH($('#chips'), chip('all', 'All', GAMES.length) + chip('live', 'Live', grp.live.length) + chip('pre', 'Upcoming', grp.pre.length) + chip('post', 'Final', grp.post.length) + chip('watch', '📌 Watching', GAMES.filter(isW).length));
   const pins = GAMES.filter(isW).sort((a, b) => (b.state === 'in') - (a.state === 'in') || a.start - b.start);
   let list = FILTER === 'all' ? [...grp.live, ...grp.pre, ...grp.post] : FILTER === 'watch' ? [] : grp[FILTER];
-  $('#list').innerHTML = (FILTER === 'watch' ? (pins.map(card).join('') || '<div class="note">Nothing watched yet. Tap 📍 Watch on any game.</div>') : '') + (FILTER === 'watch' ? '' : (list.map(card).join('') || `<div class="note">No ${CFG.name} games ${OFF === 0 ? 'today' : 'this day'}.${LG === 'mlb' ? ' MLB is in its offseason.' : ''}</div>`));
+  setH($('#list'), (FILTER === 'watch' ? (pins.map(card).join('') || '<div class="note">Nothing watched yet. Tap 📍 Watch on any game.</div>') : '') + (FILTER === 'watch' ? '' : (list.map(card).join('') || `<div class="note">No ${CFG.name} games ${OFF === 0 ? 'today' : 'this day'}.${LG === 'mlb' ? ' MLB is in its offseason.' : ''}</div>`)));
 }
 async function load() {
   try { GAMES = parseEvents(await getJson(SB + '?dates=' + ymd(dayDate()) + '&limit=400' + CFG.q)).sort((a, b) => a.start - b.start); LASTAT = Date.now(); $('#upd').textContent = upText(); }

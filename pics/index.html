@@ -200,7 +200,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v116 -->
+<!-- Pics v117 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
   <div class="hrow"><h1>Oddable</h1><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button></div>
@@ -209,7 +209,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v116 (one look)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v117 (one look)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -295,7 +295,7 @@ async function loadServerLines() {
   try { const r = await fetch(LINES_URL, { cache: 'no-store' }); if (r.ok) add(await r.json()); } catch (e) {}
   try { const r = await fetch('https://calcutta-odds.onrender.com/lines', { cache: 'no-store' }); if (r.ok) add(await r.json()); } catch (e) {}
   Object.keys(merged).forEach((id) => merged[id].sort((a, b) => a[0] - b[0]));
-  SERVER_LM = merged; render();
+  SERVER_LM = merged; renderBg();
 }
 function lmRecord(g) {
   if (g.line === null || g.state === 'post') return;
@@ -1271,7 +1271,7 @@ async function loadInjuries() {
     const j = await getJson(SB + 'injuries');
     Object.keys(INJ).forEach((k) => delete INJ[k]);
     (j.injuries || []).forEach((t) => { const a = TEAMID[t.id]; if (!a) return; INJ[a] = (t.injuries || []).map((i) => ({ id: ((((i.athlete && i.athlete.links) || []).map((l) => /\/id\/(\d+)/.exec(l.href || '')).find(Boolean)) || [])[1], name: (i.athlete && i.athlete.displayName) || '', pos: (i.athlete && i.athlete.position && i.athlete.position.abbreviation) || '', st: i.status })); });
-    render();
+    renderBg();
   } catch (e) { INJ_AT = 0; }
 }
 
@@ -1290,7 +1290,7 @@ async function fillLive() {
     }
   };
   await Promise.all([worker(), worker(), worker(), worker()]);
-  if (todo.length) render();
+  if (todo.length) renderBg();
 }
 // Closing line for finished games (ESPN game summary, DraftKings)
 async function fillSpreads() {
@@ -1566,6 +1566,8 @@ function teamBox(games) {
   </div>${leadersHtml(TEAM)}${nxt ? `<div class="note">Next: <b>${nxt.away.abbr} @ ${nxt.home.abbr}</b> · ${new Date(nxt.start).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}${nxt.line !== null ? ' · ' + lineText(nxt) : ''}${rating}</div>` : rating ? `<div class="note">${rating.slice(3)}</div>` : ''}`;
 }
 
+// Background refreshes (data arriving) are batched into one redraw and wait while a finger is on the screen, so taps are never swallowed
+let __rbg = 0; function renderBg() { if (__rbg) return; __rbg = setTimeout(function run() { if (touching() || scrolling()) { __rbg = setTimeout(run, 350); return; } __rbg = 0; render(); }, 200); }
 function render(fresh) {
   if (!fresh && scrolling()) { clearTimeout(window.__rdef); window.__rdef = setTimeout(() => render(), 800); return; }
   const y = window.scrollY;
@@ -1647,7 +1649,7 @@ async function loadOdds() {
     TD.teams.forEach((t) => { if (Number.isFinite(j.odds[t.abbr])) t.sbOdds = j.odds[t.abbr]; });
     M = Calcutta.compute(TD, LOTS, PAY);
     ODDS_NOTE = 'Super Bowl odds: ' + (j.book || '') + ' via The Odds API, ' + new Date(j.updated).toLocaleString() + '.';
-    render();
+    renderBg();
   } catch (e) { ODDS_AT = Date.now() - 8 * 60 * 1000; }
 }
 
@@ -1658,7 +1660,7 @@ async function tick() {
     CUR = (j.week && j.week.number) || CUR;
     merge(parseEvents(j, CUR));
     LAST = new Date();
-    render();
+    renderBg();
     liveFetch();
     fillLive();
   } catch (e) { $('#upd').textContent = 'Live scores unavailable · retrying'; }
@@ -1676,12 +1678,12 @@ async function loadAll() {
     await tick();
     const wk = []; for (let n = CFB ? 0 : 1; n <= NWEEKS; n++) wk.push(n);
     let i = 0;
-    const w = async () => { while (i < wk.length) { const n = wk[i++]; try { await loadWeek(n); } catch (e) {} render(); } };
+    const w = async () => { while (i < wk.length) { const n = wk[i++]; try { await loadWeek(n); } catch (e) {} renderBg(); } };
     await Promise.all([w(), w(), w()]);
-    render();
+    renderBg();
     loadOdds();
-    await fillSpreads(); render(); loadInjuries();
-    await fillOpens(); render();
+    await fillSpreads(); renderBg(); loadInjuries();
+    await fillOpens(); renderBg();
     loadServerLines();
   } catch (e) { $('#upd').textContent = 'Could not load: ' + e.message; }
   BUSY = false;
@@ -1700,7 +1702,7 @@ document.addEventListener('click', async (e) => {
   render();
 });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && M) { tick(); loadOdds(); } });
-setInterval(() => { if (M) { loadInjuries(); loadWeek(CUR + 1).then(render).catch(() => {}); fillSpreads().then(render); fillOpens().then(render); loadServerLines(); } }, 30 * 60 * 1000);
+setInterval(() => { if (M) { loadInjuries(); loadWeek(CUR + 1).then(renderBg).catch(() => {}); fillSpreads().then(renderBg); fillOpens().then(renderBg); loadServerLines(); } }, 30 * 60 * 1000);
 loadAll();
 
 // Auto-update: when the app comes back to the front (or every 10 minutes) check for a newer version and reload into it

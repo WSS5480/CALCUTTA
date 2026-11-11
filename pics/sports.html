@@ -115,12 +115,12 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 <div id="plb"></div><iframe id="mir" aria-hidden="true" tabindex="-1"></iframe><script>setTimeout(function(){var f=document.getElementById("mir");if(f)f.src="./?mirror=1"},3500)</script>
 <div id="sc">
 <header>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="location.href='./?add=1'">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v123</span></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="location.href='./?add=1'">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v124</span></div></div>
   <div class="lg" id="lg"></div>
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div class="sub" id="upd">Loading…</div>
   <div class="sub" id="mc" style="margin-top:2px;cursor:pointer" onclick="mcToggle()"></div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v123 (one look · sports model v4)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v124 (one look · sports model v4)</div>
   <div class="sub" style="font-size:11px"><a style="color:inherit;text-decoration:underline;cursor:pointer" onclick="themeSet(document.documentElement.classList.contains('cb') ? 'violet' : 'cowboys')">Switch colors: Cowboys / original violet</a></div>
   </details>
 </header>
@@ -355,10 +355,12 @@ function mcToggle() { const e = $('#mc'); e.dataset.o = e.dataset.o ? '' : '1'; 
 function mcDraw() { const e = $('#mc'); if (!e) return; if (e.dataset.o) e.innerHTML = mcText() + '<div style="margin:6px 0 0;opacity:.9">Each team gets an offence and defence rating from this season\'s scores (recent games count more, blowouts capped, home edge removed). That gives a margin, a win chance and a total. ' + (LG === 'mlb' ? 'MLB also adjusts for the posted starting pitchers. ' : '') + (ENG.rest ? 'Back-to-backs are adjusted. ' : '') + 'Final picks blend 80% betting line with 20% model. The check above re-fits the model before each of the last days and grades that day\'s picks, so it is not hindsight. Injuries and lineups are not included.</div>'; else e.innerHTML = mcText(); }
 let LASTAT = 0; const upText = () => CFG.name + ' · updated ' + new Date(LASTAT).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) + (HAVE ? '' : ' · building ratings…');
 
-const GVS = [['games', 'Games'], ['best', 'Best odds'], ['stats', 'Stats & locked']];
+const GVS = [['games', 'Games'], ['up', 'Upcoming'], ['best', 'Best odds'], ['stats', 'Stats & locked']];
 let GV = lsg('pics-gv-sp'); if (!GVS.some((x) => x[0] === GV)) GV = 'games';
 let LKV = 'win', LKF = 'all';
-function gvSet(k) { GV = k; lss('pics-gv-sp', k); draw(); }
+let UP = null, UPAT = 0, UPBUSY = false;
+async function upLoad(force) { if (UPBUSY || (!force && UP && Date.now() - UPAT < 600000)) return; UPBUSY = true; const out = []; await Promise.all([0, 1, 2, 3, 4, 5, 6].map(async (k) => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + k); try { parseEvents(await getJson(SB + '?dates=' + ymd(d) + '&limit=400' + CFG.q)).forEach((g) => { if (g.state === 'pre') out.push(g); }); } catch (e) {} })); const seen = {}; UP = out.filter((g) => !seen[g.id] && (seen[g.id] = 1)).sort((a, b) => a.start - b.start); UPAT = Date.now(); UPBUSY = false; draw(); }
+function gvSet(k) { GV = k; lss('pics-gv-sp', k); if (k === 'up') upLoad(); draw(); }
 function lkSet(v, f) { if (v) LKV = v; if (f) LKF = f; draw(); }
 function lockRows() {
   const out = [];
@@ -388,7 +390,14 @@ function statsHtml() {
 }
 function draw() {
   setH($('#gvbar'), GVS.map(([k, l]) => `<button class="${GV === k ? 'on' : ''}" onclick="gvSet('${k}')">${l}</button>`).join(''));
-  const dayEl = document.querySelector('.day'); if (dayEl) dayEl.hidden = GV === 'stats'; $('#chips').hidden = GV !== 'games';
+  const dayEl = document.querySelector('.day'); if (dayEl) dayEl.hidden = GV === 'stats' || GV === 'up'; $('#chips').hidden = GV !== 'games';
+  if (GV === 'up') {
+    const dh = document.querySelector('.day'); if (dh) dh.hidden = true;
+    if (!UP) { upLoad(); setH($('#list'), `<div class="note">Loading the next 7 days of ${CFG.name} games…</div>`); return; }
+    let h = '<div class="pinhd">Next 7 days — the app pick on every upcoming game</div>', last = '';
+    UP.forEach((g) => { const dk = new Date(g.start).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }); if (dk !== last) { h += `<div class="gh">${dk}</div>`; last = dk; } h += card(g); });
+    setH($('#list'), UP.length ? h : `<div class="note">No upcoming ${CFG.name} games found in the next 7 days.</div>`); return;
+  }
   if (GV === 'stats') { setH($('#list'), statsHtml()); return; }
   if (GV === 'best') {
     const d0 = dayDate(); $('#dl').textContent = OFF === 0 ? 'Today · ' + d0.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : d0.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
@@ -408,7 +417,7 @@ async function load() {
   catch (e) { $('#upd').textContent = 'Could not load ' + CFG.name + ' games. Pull to refresh.'; }
   draw();
 }
-(async () => { await load(); await loadRatings(); draw(); $('#upd').textContent = upText(); mcDraw(); })();
+(async () => { await load(); await loadRatings(); if (GV === 'up') upLoad(); draw(); $('#upd').textContent = upText(); mcDraw(); })();
 setInterval(() => { if (!document.hidden && OFF === 0 && !OPEN && (GAMES.some((g) => g.state === 'in') || Date.now() - LASTAT > 120000)) load(); }, 30000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !OPEN) load(); });
 </script>

@@ -34,7 +34,7 @@ main{max-width:720px;margin:0 auto;padding:0 16px}
 .pick{margin-top:6px;font-size:14px}.pick b{color:var(--blue)}
 .ft{display:flex;align-items:center;gap:8px;justify-content:space-between;color:var(--muted);font-size:12px;margin-top:6px}
 .gpin{position:absolute;top:6px;right:8px;border:1px solid rgba(124,58,237,.5);background:rgba(124,58,237,.12);color:inherit;border-radius:999px;font:600 11px inherit;padding:3px 9px}.gpin.on{background:#7c3aed;color:#fff}
-.botd{border:2px solid #f5c542;border-radius:16px;padding:8px 8px 2px;margin:6px 0 12px;background:linear-gradient(135deg,rgba(245,197,66,.22),rgba(255,226,140,.08));box-shadow:0 0 18px rgba(245,197,66,.35)}.botd>.bh2{font:800 13px inherit;letter-spacing:.08em;text-transform:uppercase;color:#b8860b;margin:2px 4px 6px}.botd>.bh2 small{font-weight:600;letter-spacing:0;text-transform:none;opacity:.8;display:block;margin-top:2px}html.cb .botd>.bh2,.botd>.bh2{color:#d4a017}.botd .gc{border-color:#f5c542!important}.pinhd{font:700 12px inherit;letter-spacing:.08em;text-transform:uppercase;opacity:.75;margin:12px 4px 6px}
+.botd{border:2px solid #f5c542;border-radius:16px;padding:8px 8px 2px;margin:6px 0 12px;background:linear-gradient(135deg,rgba(245,197,66,.22),rgba(255,226,140,.08));box-shadow:0 0 18px rgba(245,197,66,.35)}.botd>.bh2{font:800 13px inherit;letter-spacing:.08em;text-transform:uppercase;color:#b8860b;margin:2px 4px 6px}.botd>.bh2 small{font-weight:600;letter-spacing:0;text-transform:none;opacity:.8;display:block;margin-top:2px}html.cb .botd>.bh2,.botd>.bh2{color:#d4a017}.botd .bmoney{margin:0 4px;font-size:17px}.botd .bmoney span{font-size:12px;opacity:.85}.botd .gc{border-color:#f5c542!important}.pinhd{font:700 12px inherit;letter-spacing:.08em;text-transform:uppercase;opacity:.75;margin:12px 4px 6px}
 .bet{display:block;width:100%;margin-top:8px;border:1px dashed var(--blue);background:none;color:var(--blue);border-radius:12px;padding:9px;font:700 14px inherit}
 .bf{border-top:1px solid var(--line);margin-top:8px;padding-top:8px}.bf label{display:block;margin:6px 0;font-size:13px;color:var(--muted)}.bf input,.bf select{display:block;width:100%;margin-top:4px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel2);color:var(--ink);font:16px inherit}
 .bf .row{display:flex;gap:8px}.bf .row>*{flex:1}.bf button{border:1px solid var(--blue);background:var(--blue);color:#0a0c10;border-radius:12px;padding:10px;font:800 15px inherit}.bf button.x{background:none;color:var(--blue)}
@@ -120,7 +120,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div class="sub" id="upd">Loading…</div>
   <div class="sub" id="mc" style="margin-top:2px;cursor:pointer" onclick="mcToggle()"></div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v128 (one look · sports model v4)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v129 (one look · sports model v4)</div>
   <div class="sub" style="font-size:11px"><a style="color:inherit;text-decoration:underline;cursor:pointer" onclick="themeSet(document.documentElement.classList.contains('cb') ? 'violet' : 'cowboys')">Switch colors: Cowboys / original violet</a></div>
   </details>
 </header>
@@ -426,8 +426,10 @@ function draw() {
   setH($('#chips'), chip('all', 'All', GAMES.length) + chip('live', 'Live', grp.live.length) + chip('pre', 'Upcoming', grp.pre.length) + chip('post', 'Final', grp.post.length) + chip('watch', '📌 Watching', GAMES.filter(isW).length));
   const pins = GAMES.filter(isW).sort((a, b) => (b.state === 'in') - (a.state === 'in') || a.start - b.start);
   let list = FILTER === 'all' ? [...grp.live, ...grp.pre, ...grp.post] : FILTER === 'watch' ? [] : grp[FILTER];
-  const bp = GAMES.filter((g) => g.state !== 'post').map((g) => ({ g, p: pred(g) })).filter((x) => x.p.has).sort((a, b) => Math.max(b.p.ph, b.p.pa) - Math.max(a.p.ph, a.p.pa))[0];
-  const botd = bp && FILTER !== 'watch' ? `<div class="botd"><div class="bh2">🏆 Bet of the Day<small>Highest-confidence ${CFG.name} pick left today · ${pct(Math.max(bp.p.ph, bp.p.pa))} ${esc((bp.p.ph >= 0.5 ? bp.g.home : bp.g.away).abbr)} to win. A model edge, not a guarantee.</small></div>${card(bp.g)}</div>` : '';
+  const bo = (g) => { const p = pred(g); if (!p.has) return null; const home = p.ph >= 0.5, conf = Math.max(p.ph, p.pa), ml = home ? g.mlH : g.mlA; let dec, am = null; if (ml !== null && ml !== undefined && +ml) { am = +ml; dec = am > 0 ? 1 + am / 100 : 1 + 100 / -am; } else dec = 1 / Math.min(0.97, conf + 0.024); if (am === null) am = dec >= 2 ? Math.round((dec - 1) * 100) : -Math.round(100 / (dec - 1)); return { g, p, t: home ? g.home : g.away, conf, dec, am, real: ml !== null && ml !== undefined && !!+ml, ev: conf * dec - 1 }; };
+  const cand = GAMES.filter((g) => g.state !== 'post').map(bo).filter(Boolean), good = cand.filter((x) => x.conf >= 0.55 && x.dec >= 1.4);
+  const bp = FILTER === 'watch' ? null : (good.length ? good : cand).sort((a, c) => c.ev - a.ev)[0];
+  const botd = bp ? `<div class="botd"><div class="bh2">🏆 Bet of the Day<small>${esc(bp.t.abbr)} to win · ${pct(bp.conf)} chance · best value left today</small></div><div class="bmoney"><b>$100 bet → $${(100 * bp.dec).toFixed(0)} back</b> <span>(+$${(100 * (bp.dec - 1)).toFixed(0)} profit) · ${bp.dec.toFixed(2)}x · ${bp.am > 0 ? '+' : ''}${bp.am}${bp.real ? '' : ' (estimated)'}</span></div><div class="pick rec" style="margin:2px 4px 6px">A model edge, not a guarantee. Check your book for the exact price.</div>${card(bp.g)}</div>` : '';
   setH($('#list'), botd + (FILTER === 'watch' ? (pins.map(card).join('') || '<div class="note">Nothing watched yet. Tap 📍 Watch on any game.</div>') : '') + (FILTER === 'watch' ? '' : (list.filter((g) => !bp || g !== bp.g).map(card).join('') || `<div class="note">No ${CFG.name} games ${OFF === 0 ? 'today' : 'this day'}.${LG === 'mlb' ? ' MLB is in its offseason.' : ''}</div>`)));
 }
 async function load() {

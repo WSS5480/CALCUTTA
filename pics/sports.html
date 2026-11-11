@@ -115,12 +115,12 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 <div id="plb"></div><iframe id="mir" aria-hidden="true" tabindex="-1"></iframe><script>setTimeout(function(){var f=document.getElementById("mir");if(f)f.src="./?mirror=1"},3500)</script>
 <div id="sc">
 <header>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="location.href='./?add=1'">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v125</span></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="location.href='./?add=1'">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v126</span></div></div>
   <div class="lg" id="lg"></div>
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div class="sub" id="upd">Loading…</div>
   <div class="sub" id="mc" style="margin-top:2px;cursor:pointer" onclick="mcToggle()"></div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v125 (one look · sports model v4)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v126 (one look · sports model v4)</div>
   <div class="sub" style="font-size:11px"><a style="color:inherit;text-decoration:underline;cursor:pointer" onclick="themeSet(document.documentElement.classList.contains('cb') ? 'violet' : 'cowboys')">Switch colors: Cowboys / original violet</a></div>
   </details>
 </header>
@@ -342,7 +342,7 @@ function card(g) {
     <div class="pr"><span>${esc(g.away.abbr)} ${pct(p.pa)}</span><span>${pct(p.ph)} ${esc(g.home.abbr)}</span></div>
     ${g.state === 'post' || !p.has ? '' : pk >= 0.65 ? `<div class="ntk g">✅ TAKE ${esc(pickT.abbr)} to win <small>(moneyline) · ${pct(pk)}</small></div>` : pk >= 0.57 ? `<div class="ntk a">👍 Lean ${esc(pickT.abbr)} to win <small>${pct(pk)} · not a strong edge</small></div>` : `<div class="ntk n">⚖️ Toss-up — pass on the winner <small>${pct(pk)}</small></div>`}
     ${pickLine}${p.tl ? `<div class="pick rec">Total: model ${p.tl.model.toFixed(1)} vs line ${p.tl.mkt}${p.tl.lean ? ` · lean <b style="color:var(--blue)">${p.tl.lean}</b>` : ' · no edge'}</div>` : ''}${LG === 'mlb' && (g.away.pit || g.home.pit) ? `<div class="pick rec">Starters: ${esc(g.away.abbr)} ${esc(g.away.pit ? g.away.pit.name + (g.away.pit.era !== null ? ' ' + g.away.pit.era + ' ERA' : '') : 'TBD')} · ${esc(g.home.abbr)} ${esc(g.home.pit ? g.home.pit.name + (g.home.pit.era !== null ? ' ' + g.home.pit.era + ' ERA' : '') : 'TBD')}</div>` : ''}<div class="ft"><span>${esc(lineText(g))}</span>${betGids().has(String(g.id)) ? '<button class="fwatch on" disabled>📌 My bet</button>' : `<button class="fwatch ${pinned ? 'on' : ''}" onclick="pinToggle('${g.id}')">${pinned ? '📌 Watching' : '📍 Watch'}</button>`}</div>
-    ${g.state === 'post' ? '' : `<button class="bet" onclick="betOpen('${g.id}')">＋ Add bet</button>`}${o ? betForm(g) : ''}</div>`;
+    <button class="bet" onclick="betOpen('${g.id}')">${g.state === 'post' ? '＋ Add past bet' : '＋ Add bet'}</button>${o ? betForm(g) : ''}</div>`;
 }
 function betForm(g) {
   const opts = [`<option value="${g.away.abbr}|ml">${g.away.abbr} to win</option>`, `<option value="${g.home.abbr}|ml">${g.home.abbr} to win</option>`];
@@ -358,8 +358,8 @@ function betSave(id) {
   const g = GAMES.find((x) => x.id === id); if (!g) return; const v = ($('#bs') || {}).value || ''; const [side, type, ln] = v.split('|');
   const stake = parseFloat(($('#bk') || {}).value) || null, od = parseFloat(($('#bo') || {}).value);
   let bets = []; try { bets = JSON.parse(lsg('bets26')) || []; } catch (e) {}
-  const p = pred(g);
-  bets.push({ id: 'b' + Date.now(), gid: g.id, lg: LG, week: 0, away: g.away.abbr, home: g.home.abbr, day: dashed(new Date(g.start)), t: Date.now(), side, type, line: type === 'sp' ? parseFloat(ln) : 0, stake, mult: null, odds: Math.abs(od) >= 100 ? od : -110, appSu: p.ph >= 0.5 ? g.home.abbr : g.away.abbr, appConf: +Math.max(p.ph, p.pa).toFixed(3), appAts: null, appLine: g.line });
+  const p = pred(g), past = g.state === 'post'; let lk = null; try { lk = (JSON.parse(lsg('spm-' + LG)) || {})[g.id] || null; } catch (e) {}
+  bets.push({ id: 'b' + Date.now(), gid: g.id, lg: LG, week: 0, away: g.away.abbr, home: g.home.abbr, day: dashed(new Date(g.start)), t: Date.now(), side, type, line: type === 'sp' ? parseFloat(ln) : 0, stake, mult: null, odds: Math.abs(od) >= 100 ? od : -110, appSu: past ? (lk ? lk.su : null) : (p.ph >= 0.5 ? g.home.abbr : g.away.abbr), appConf: past ? (lk ? lk.c : null) : +Math.max(p.ph, p.pa).toFixed(3), noApp: past && !lk ? true : undefined, appAts: null, appLine: g.line });
   lss('bets26', JSON.stringify(bets)); OPEN = null; draw(); alert_('Saved to My Bets');
 }
 function alert_(t) { $('#upd').textContent = t; setTimeout(() => ($('#upd').textContent = upText()), 2500); }

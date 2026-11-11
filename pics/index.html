@@ -201,16 +201,16 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v122 -->
+<!-- Pics v123 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v122</span></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v123</span></div></div>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">NCAA</button><button data-sp="nba">NBA</button><button data-sp="mlb">MLB</button><button data-sp="nhl">NHL</button><button data-sp="ncaab">NCAAB</button></div>
   <input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team">
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v122 (one look)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v123 (one look)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -951,7 +951,7 @@ function betFormHtml() {
     <label>Leg type <select id="bft" onchange="betSync();betsRender()"><option value="sp" ${BF.leg.type === 'sp' ? 'selected' : ''}>Spread</option><option value="ml" ${BF.leg.type === 'ml' ? 'selected' : ''}>Win (moneyline)</option></select></label>
     ${BF.leg.type === 'sp' ? `<label>Your line for ${BF.leg.side} <input id="bfl" type="number" step="0.5" value="${BF.leg.line}"></label>` : ''}<div class="bbtn"><button class="pri" onclick="legAdd()">Add leg</button><button onclick="BF.step='legpick';betsRender()">Back</button></div></div>`; }
   if (BF.step === 'parlay') return `<div class="card"><div class="gh" style="margin-top:0">${BF.id ? 'Edit parlay' : 'New parlay'} · ${BF.legs.length} leg${BF.legs.length === 1 ? '' : 's'}</div>${note}
-    ${BF.legs.map((l, i) => `<div class="leg"><span class="pm push">${i + 1}</span><div><b>${legText(l)}</b>${l.flag ? `<small style="display:block;color:#ffb020">⚠ ${l.flag}</small>` : ''}</div><button class="x" onclick="legDrop(${i})">✕</button></div>`).join('') || '<div class="sub">No legs yet.</div>'}
+    ${BF.legs.map((l, i) => { let x = {}; try { x = l.gid ? legGrade(l) : { st: l.res || 'pending' }; } catch (e) {} const g = x.g, sc = g && g.state !== 'pre' ? `${g.away.abbr} ${g.away.score}–${g.home.abbr} ${g.home.score}${g.state === 'in' ? ' · ' + g.detail : ' · Final'}` : g ? new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : ''; const rt = x.st === 'won' ? '✓ WON' : x.st === 'lost' ? '✗ LOST' : x.st === 'push' ? 'PUSH' : x.st === 'live' ? '● LIVE ' + (x.cur === 'won' ? 'covering' : x.cur === 'lost' ? 'losing' : 'even') : 'Pending'; const rc = x.st === 'won' || (x.st === 'live' && x.cur === 'won') ? 'hit' : x.st === 'lost' || (x.st === 'live' && x.cur === 'lost') ? 'miss' : 'push'; return `<div class="leg"><span class="pm push">${i + 1}</span><div><b>${legText(l)}</b> <span class="b ${rc}" style="font-size:11px">${rt}</span>${sc ? `<small class="sub" style="display:block">${sc}</small>` : ''}${l.flag ? `<small style="display:block;color:#ffb020">⚠ ${l.flag}</small>` : ''}</div><button class="x" onclick="legDrop(${i})">✕</button></div>`; }).join('') || '<div class="sub">No legs yet.</div>'}
     <div class="bbtn"><button onclick="betSync();BF.step='legpick';betsRender()">＋ Game leg</button></div>
     <label>Or a prop leg (player or custom) <input id="bfm" type="text" placeholder="Mahomes 2+ TD passes"></label><div class="bbtn"><button onclick="legManual()">＋ Prop leg</button></div>
     ${payFields()}<div class="sub">Enter the total payout your app shows for the whole parlay (like 3.5x). Game legs grade themselves; prop legs have ✓ ✗ buttons on the card. All legs must hit to win.</div><div class="bbtn"><button class="pri" onclick="parlaySave()">Save parlay</button><button onclick="BF=null;betsRender()">Cancel</button></div></div>`;

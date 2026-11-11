@@ -173,7 +173,7 @@ header{padding-left:max(16px,calc((100% - 1168px)/2))!important;padding-right:ma
 @media (min-width:1500px){#plb{right:max(16px,calc((100vw - 104px - 1328px)/2))}}
 /* ---- Dallas Cowboys theme (navy #041E42 / royal #003594 / silver #869397 / white; site navy #002B5C) ---- */
 html.cb body,html.cb body.dark{--bg:#050c17;--panel:#0b1a30;--panel2:#10264a;--line:#1f3d69;--ink:#f3f6fa;--muted:#9aabbf;--blue:#c6cbd7;--green:#4fd18b;--red:#ff5a4d;background:#050c17;color:#f3f6fa;border-top:6px solid #869397}
-.hbt{display:flex;gap:8px;flex-wrap:wrap}.hrow{display:flex;flex-direction:column;align-items:flex-start;gap:2px}.aibtn{border:1px solid rgba(255,255,255,.55);background:rgba(0,0,0,.28);color:#fff;border-radius:999px;padding:7px 13px;font:700 13px inherit;cursor:pointer;margin-top:0}
+.sum[data-dr]{position:relative;cursor:pointer}.sum[data-dr]:active{opacity:.75}.sum[data-dr]::after{content:'›';position:absolute;right:12px;top:8px;font-size:22px;opacity:.55}.hbt{display:flex;gap:8px;flex-wrap:wrap}.hrow{display:flex;flex-direction:column;align-items:flex-start;gap:2px}.aibtn{border:1px solid rgba(255,255,255,.55);background:rgba(0,0,0,.28);color:#fff;border-radius:999px;padding:7px 13px;font:700 13px inherit;cursor:pointer;margin-top:0}
 html.cb .pill,html.cb .addtb,html.cb .bbtn button.pri,html.cb .bsd button.on,html.cb .lm .tg button.on{background:#003594;color:#fff;border-color:#c6cbd7}html.cb .aibtn{background:#003594;border-color:#c6cbd7}
 .mini img.ml{width:26px;height:26px;object-fit:contain;vertical-align:middle;margin:0 6px}
 html.cb h1,html.cb body.dark h1{color:#fff}
@@ -196,20 +196,21 @@ html.cb .sbtn,html.cb #syncsheet .sbtn{background:#c6cbd7;border-color:#c6cbd7;c
 html.cb .ng.lv,html.cb .gc.lv{border-color:#c6cbd7}
 html.cb .pinhd{opacity:.85}
 html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}button,a,select,input,label,[onclick],.pill,.tab,.card{touch-action:manipulation}button,[onclick]{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}button:active,[onclick]:active{opacity:.78}
+.bbtn{flex-wrap:wrap}
 </style>
 </head>
 <body>
 <div id="sc">
-<!-- Pics v121 -->
+<!-- Pics v122 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v121</span></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v122</span></div></div>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">NCAA</button><button data-sp="nba">NBA</button><button data-sp="mlb">MLB</button><button data-sp="nhl">NHL</button><button data-sp="ncaab">NCAAB</button></div>
   <input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team">
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v121 (one look)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v122 (one look)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -628,9 +629,9 @@ function betsRender(force) {
   // How am I doing: settled bets only, by the day each bet is tied to
   const mk = (d) => dayKey(d.getTime()), nowD = new Date(), wk0 = new Date(nowD), mo0 = new Date(nowD.getFullYear(), nowD.getMonth(), 1), yr0 = new Date(nowD.getFullYear(), 0, 1);
   wk0.setDate(wk0.getDate() - ((wk0.getDay() + 6) % 7));
-  const perf = (lbl, from) => { let w = 0, l = 0, p = 0, net = 0, risk = 0; fin.forEach(({ b, r }) => { if (from && betDay(b) < from) return; if (r.st === 'won') { w++; net += betPL(b, 'won'); risk += u0(b); } else if (r.st === 'lost') { l++; net += betPL(b, 'lost'); risk += u0(b); } else p++; }); const roi = risk ? Math.round(net / risk * 100) + '% ROI' : ''; return `<div class="sum"><b class="${net < 0 ? 'miss' : net > 0 ? 'hit' : ''}">${money(net)}</b><span>${lbl}</span><small>${w}-${l}${p ? '-' + p : ''}${roi ? ' · ' + roi : ''}</small></div>`; };
+  const perf = (lbl, from) => { let w = 0, l = 0, p = 0, net = 0, risk = 0; fin.forEach(({ b, r }) => { if (from && betDay(b) < from) return; if (r.st === 'won') { w++; net += betPL(b, 'won'); risk += u0(b); } else if (r.st === 'lost') { l++; net += betPL(b, 'lost'); risk += u0(b); } else p++; }); const roi = risk ? Math.round(net / risk * 100) + '% ROI' : ''; return `<div class="sum" data-dr="1" onclick="bDrill('p','${from || ''}','${lbl}')"><b class="${net < 0 ? 'miss' : net > 0 ? 'hit' : ''}">${money(net)}</b><span>${lbl}</span><small>${w}-${l}${p ? '-' + p : ''}${roi ? ' · ' + roi : ''}</small></div>`; };
   const perfHtml = `<details data-k="perf" ${isOpen('perf', true) ? 'open' : ''}><summary>How I'm doing (settled bets)</summary><div class="sums">${perf('Today', mk(nowD))}${perf('This week', mk(wk0))}${perf('This month', mk(mo0))}${perf('Year to date', mk(yr0))}${perf('All time', '')}</div></details>`;
-  const stat = (t, r, s) => `<div class="sum"><b>${r.s}</b><span>${t}</span><small>${r.pc}${s || ''}</small></div>`;
+  const stat = (t, r, s, k) => `<div class="sum" data-dr="1" onclick="bDrill('${k}')"><b>${r.s}</b><span>${t}</span><small>${r.pc}${s || ''}</small></div>`;
   const stake = fin.reduce((a, x) => a + (x.b.stake || 0), 0);
   const ordr = { live: 0, pending: 1, won: 2, lost: 2, push: 2 };
   const sortF = (a, z) => ordr[a.r.st] - ordr[z.r.st] || (z.b.t || 0) - (a.b.t || 0);
@@ -649,8 +650,19 @@ function betsRender(force) {
   const pastBy = {}; done.filter(isPast).forEach((x) => { (pastBy[betDay(x.b)] = pastBy[betDay(x.b)] || []).push(x); });
   const keepFrom = dayKey(Date.now() - 3 * 864e5); // bets settled in the last 3 days stay in the main list (also in the log); older ones live in the log only
   const list = done.filter((x) => !isPast(x) || betDay(x.b) >= keepFrom).sort(sortF).map(cardHtml).join('');
-  const html = `<div class="lpg"><div class="bh"><h2>My Bets</h2><div class="pillw"><button class="pill" onclick="aiOpen(null,'Analyze all my open bets one by one: for each say keep, hedge or leave alone with a one-line reason using the model numbers, then give an overall risk summary.')">🤖 Analyze</button><button class="pill" onclick="addMenu()">＋ Add bet ▾</button><div id="addmenu" ${window.__addm ? '' : 'hidden'}><button onclick="addMenu(0);betNew()">✍️ Add a bet</button><label>📷 Import screenshot<input type="file" accept="image/*" hidden onchange="addMenu(0);betImport(this.files[0]);this.value=''"></label><button onclick="addMenu(0);slipPaste()">📋 Paste slip text</button><button onclick="addMenu(0);aiOpen()">🤖 Ask Claude</button>${lsg('kal-id') ? `<button onclick="addMenu(0);kalshiSync(true)">🔄 Sync Kalshi now</button><button onclick="addMenu(0);kalshiOff()">⛓️‍💥 Disconnect Kalshi</button>` : `<button onclick="addMenu(0);kalshiConnect()">⚡ Connect Kalshi</button>`}</div></div></div>
-    <div class="sums">${stat('Overall', all, stake ? ' · ' + usd(stake) + ' staked' : '')}${stat('Against the app', agA)}${stat('With the app', withA)}<div class="sum"><b>${BETS.length - fin.length}</b><span>Open bets</span><small>${BETS.length} total</small></div></div>
+  let drillHtml = '';
+  if (BDRILL) {
+    const D = BDRILL; let rows, ttl;
+    if (D.k === 'all') { rows = fin; ttl = 'Overall — settled bets'; }
+    else if (D.k === 'against') { rows = fin.filter((x) => !x.b.kind && betAgainst(x.b)); ttl = 'Against the app'; }
+    else if (D.k === 'with') { rows = fin.filter((x) => !x.b.kind && !betAgainst(x.b)); ttl = 'With the app'; }
+    else if (D.k === 'open') { rows = done.filter((x) => !['won', 'lost', 'push'].includes(x.r.st)); ttl = 'Open bets'; }
+    else { rows = fin.filter((x) => !D.from || betDay(x.b) >= D.from); ttl = D.lbl + ' — settled bets'; }
+    const net = rows.reduce((a, x) => a + (x.r.st === 'won' ? betPL(x.b, 'won') : x.r.st === 'lost' ? betPL(x.b, 'lost') : 0), 0);
+    drillHtml = `<div class="lpg"><button class="pill" style="margin:4px 0 10px" onclick="bDrill(null)">← Back</button><div class="bh"><h2>${ttl}</h2></div><div class="sub" style="margin-bottom:8px">${rows.length} bet${rows.length === 1 ? '' : 's'}${D.k !== 'open' && rows.length ? ' · ' + money(net) : ''}</div>${rows.slice().sort(sortF).map(cardHtml).join('') || '<div class="note">Nothing here yet.</div>'}<button class="pill" style="margin:10px 0" onclick="bDrill(null)">← Back to My Bets</button></div>`;
+  }
+  const html = drillHtml || `<div class="lpg"><div class="bh"><h2>My Bets</h2><div class="pillw"><button class="pill" onclick="aiOpen(null,'Analyze all my open bets one by one: for each say keep, hedge or leave alone with a one-line reason using the model numbers, then give an overall risk summary.')">🤖 Analyze</button><button class="pill" onclick="addMenu()">＋ Add bet ▾</button><div id="addmenu" ${window.__addm ? '' : 'hidden'}><button onclick="addMenu(0);betNew()">✍️ Add a bet</button><label>📷 Import screenshot<input type="file" accept="image/*" hidden onchange="addMenu(0);betImport(this.files[0]);this.value=''"></label><button onclick="addMenu(0);slipPaste()">📋 Paste slip text</button><button onclick="addMenu(0);aiOpen()">🤖 Ask Claude</button>${lsg('kal-id') ? `<button onclick="addMenu(0);kalshiSync(true)">🔄 Sync Kalshi now</button><button onclick="addMenu(0);kalshiOff()">⛓️‍💥 Disconnect Kalshi</button>` : `<button onclick="addMenu(0);kalshiConnect()">⚡ Connect Kalshi</button>`}</div></div></div>
+    <div class="sums">${stat('Overall', all, stake ? ' · ' + usd(stake) + ' staked' : '', 'all')}${stat('Against the app', agA, '', 'against')}${stat('With the app', withA, '', 'with')}<div class="sum" data-dr="1" onclick="bDrill('open')"><b>${BETS.length - fin.length}</b><span>Open bets</span><small>${BETS.length} total</small></div></div>
     ${KFORM ? kalshiFormHtml() : ''}${perfHtml}<div class="sub" style="margin:0 0 6px"><span id="kst"></span></div><div class="sub" id="impst" style="margin:-4px 0 8px">${IMP}</div><div id="bform">${BF ? betFormHtml() : ''}</div>${logHtmlF()}${list || '<div class="note">No bets yet. Tap “Add a bet”, pick a game, then set your side and the line you got.</div>'}</div>`;
   const kt = lsg('kal-id') ? (KST || 'Kalshi connected') : (KST || '');
   const hh = html.replace('<span id="kst"></span>', '');
@@ -660,6 +672,8 @@ function betsRender(force) {
 
 // ---- Import a bet from a Kalshi / Underdog screenshot: OCR in the browser (Tesseract.js), then pre-fill the bet form for you to confirm ----
 let IMP = '';
+let BDRILL = null;
+function bDrill(k, from, lbl) { BDRILL = k ? { k, from: from || '', lbl: lbl || '' } : null; window.scrollTo(0, 0); betsRender(true); }
 function setImp(m) { IMP = m; const el = $('#impst'); if (el) el.textContent = m; }
 function loadTess() { return window.Tesseract ? Promise.resolve() : new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'tesseract.min.js'; s.onload = res; s.onerror = () => { const t = document.createElement('script'); t.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js'; t.onload = res; t.onerror = () => rej(new Error('Could not load the reader (check your connection)')); document.head.appendChild(t); }; document.head.appendChild(s); }); }
 const nn = (s) => String(s || '').toLowerCase().replace(/&/g, ' and ').replace(/\bst\.?(?=\s|$)/g, 'state').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();

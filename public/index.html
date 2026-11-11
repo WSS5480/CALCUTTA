@@ -281,10 +281,13 @@ let TSORT = 'c';
 function renderTeams() {
   const owner = {};
   M.groups.forEach((g) => g.teams.forEach((a) => (owner[a] = g)));
-  const arr = [...M.teams].sort((a, b) => (TSORT === 'name' ? a.name.localeCompare(b.name) : b[TSORT] - a[TSORT]));
+  let FL = {}; try { FL = JSON.parse(localStorage.getItem('flag26')) || {}; } catch (e) {}
+  const fl = (t) => (FL[t.abbr] ? 1 : 0);
+  const arr = [...M.teams].sort((a, b) => fl(b) - fl(a) || (TSORT === 'name' ? a.name.localeCompare(b.name) : b[TSORT] - a[TSORT]));
   const th = (k, l) => `<th data-k="${k}">${l}${TSORT === k ? ' ▾' : ''}</th>`;
-  $('#teamTable').innerHTML = `<tr><th>#</th>${th('name', 'Team')}<th>Owner</th>${th('w', 'Rec')}${th('m', 'Playoffs')}${th('c', 'Title')}${th('a3', 'Reach SB')}${th('worst', 'Worst')}${th('ev', 'Exp $')}</tr>` +
-    arr.map((t, i) => `<tr><td>${TSORT === 'name' ? '' : i + 1}</td><td>${t.name}</td><td><span class="mini">${avatar(owner[t.abbr].buyer)}${owner[t.abbr].buyer}</span></td><td>${rec(t)}</td><td>${pctSmart(t.m)}</td><td>${pctSmart(t.c)}</td><td>${pctSmart(t.a3)}</td><td>${pctSmart(t.worst)}</td><td>${money(t.ev)}</td></tr>`).join('');
+  $('#teamTable').innerHTML = `<tr><th>⭐</th>${th('name', 'Team')}<th>Owner</th>${th('w', 'Rec')}${th('m', 'Playoffs')}${th('c', 'Title')}${th('a3', 'Reach SB')}${th('worst', 'Worst')}${th('ev', 'Exp $')}</tr>` +
+    arr.map((t, i) => `<tr${fl(t) ? ' style="background:rgba(255,200,0,.10)"' : ''}><td><button class="flg" data-ab="${t.abbr}" style="background:none;border:0;font-size:20px;padding:4px 8px;touch-action:manipulation">${fl(t) ? '⭐' : '☆'}</button></td><td>${t.name}</td><td><span class="mini">${avatar(owner[t.abbr].buyer)}${owner[t.abbr].buyer}</span></td><td>${rec(t)}</td><td>${pctSmart(t.m)}</td><td>${pctSmart(t.c)}</td><td>${pctSmart(t.a3)}</td><td>${pctSmart(t.worst)}</td><td>${money(t.ev)}</td></tr>`).join('');
+  document.querySelectorAll('#teamTable .flg').forEach((b) => (b.onclick = () => { FL[b.dataset.ab] = FL[b.dataset.ab] ? 0 : 1; try { localStorage.setItem('flag26', JSON.stringify(FL)); } catch (e) {} renderTeams(); }));
   document.querySelectorAll('#teamTable th[data-k]').forEach((h) => (h.onclick = () => { TSORT = h.dataset.k; renderTeams(); }));
 }
 

@@ -200,16 +200,16 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v120 -->
+<!-- Pics v121 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v120</span></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v121</span></div></div>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">NCAA</button><button data-sp="nba">NBA</button><button data-sp="mlb">MLB</button><button data-sp="nhl">NHL</button><button data-sp="ncaab">NCAAB</button></div>
   <input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team">
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v120 (one look)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v121 (one look)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -570,6 +570,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) xlSp
 SC.addEventListener('scroll', () => { window.__scrollAt = Date.now(); }, { passive: true });
 window.__scrollAt = 0; ['scroll', 'touchstart', 'touchmove', 'touchend'].forEach((ev) => window.addEventListener(ev, () => { window.__scrollAt = Date.now(); }, { passive: true }));
 // Write HTML only when it changed, and never while a finger is down: stops taps being eaten by background re-renders
+const usd = (n) => { const r = Math.round((Number(n) || 0) * 100) / 100; return '$' + (Number.isInteger(r) ? r : r.toFixed(2)); };
 const setH = (el, h) => { if (!el) return; if (el.__h === h && el.childNodes.length) return; el.innerHTML = h; el.__h = h; };
 window.__touch = 0; ['touchstart', 'pointerdown'].forEach((ev) => document.addEventListener(ev, () => { window.__touch = Date.now(); }, { capture: true, passive: true })); document.addEventListener('touchend', () => { window.__touch = Date.now(); }, { capture: true, passive: true });
 const touching = () => Date.now() - (window.__touch || 0) < 900;
@@ -640,7 +641,7 @@ function betsRender(force) {
     const what = b.type === 'sp' ? `${b.side} ${sgn(b.line)}` : `${b.side} to win`;
     const sc = g && g.state !== 'pre' ? `${g.away.abbr} ${g.away.score} – ${g.home.abbr} ${g.home.score}${g.state === 'in' ? ' · ' + g.detail : ' · Final'}` : (g ? new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : 'game not loaded');
     const badge = r.st === 'live' ? `<span class="b ${r.cur === 'won' ? 'hit' : r.cur === 'lost' ? 'miss' : 'push'}">● LIVE ${r.cur === 'won' ? 'covering' : r.cur === 'lost' ? 'losing' : 'even'}</span>` : r.st === 'pending' ? '<span class="b push">Pending</span>' : `<span class="b ${r.st === 'won' ? 'hit' : r.st === 'lost' ? 'miss' : 'push'}">${r.st === 'won' ? '✓ WON' : r.st === 'lost' ? '✗ LOST' : 'PUSH'} ${money(betPL(b, r.st))}</span>`;
-    return `<div class="bcard ${['won', 'lost'].includes(r.st) ? (r.st === 'won' ? 'bw' : 'bl') : r.st === 'live' ? (r.cur === 'won' ? 'bw' : r.cur === 'lost' ? 'bl' : '') : ''}"><div class="bhd"><div><div class="bwhat">${what}${b.stake ? ` <small>· $${b.stake}</small>` : ''}${b.mult ? ` <small>· pays ${b.mult}x</small>` : (b.odds && b.odds !== -110 ? ` <small>· ${sgn(b.odds)}</small>` : '')}</div><div class="sub">${b.noApp ? '<b>Imported slip</b> · open the ' + (b.lg || '').toUpperCase() + ' page once to add the app pick' : (ag ? '<b style="color:var(--red)">Against the app</b>' : '<b style="color:var(--green)">With the app</b>') + ' · app had ' + b.appSu + (b.appConf ? ' ' + pct(b.appConf) : '')}${b.type === 'sp' && b.appAts ? ' · spread ' + b.appAts : ''}${b.type === 'sp' && b.appLine !== null && b.appLine !== undefined ? ' · app line ' + sgn(b.side === b.home ? -b.appLine : b.appLine) : ''}</div></div>${badge}</div>
+    return `<div class="bcard ${['won', 'lost'].includes(r.st) ? (r.st === 'won' ? 'bw' : 'bl') : r.st === 'live' ? (r.cur === 'won' ? 'bw' : r.cur === 'lost' ? 'bl' : '') : ''}"><div class="bhd"><div><div class="bwhat">${what}${b.stake ? ` <small>· ${usd(b.stake)}</small>` : ''}${b.mult ? ` <small>· pays ${b.mult}x</small>` : (b.odds && b.odds !== -110 ? ` <small>· ${sgn(b.odds)}</small>` : '')}</div><div class="sub">${b.noApp ? '<b>Imported slip</b> · open the ' + (b.lg || '').toUpperCase() + ' page once to add the app pick' : (ag ? '<b style="color:var(--red)">Against the app</b>' : '<b style="color:var(--green)">With the app</b>') + ' · app had ' + b.appSu + (b.appConf ? ' ' + pct(b.appConf) : '')}${b.type === 'sp' && b.appAts ? ' · spread ' + b.appAts : ''}${b.type === 'sp' && b.appLine !== null && b.appLine !== undefined ? ' · app line ' + sgn(b.side === b.home ? -b.appLine : b.appLine) : ''}</div></div>${badge}</div>
       ${g ? (ALL[b.gid] ? gameCard(g, true) : miniGame(g)) : `<div class="sub" style="padding:8px 0">${b.away} @ ${b.home} · wk ${b.week} · game not loaded</div>`}
       <div class="bbtn"><button onclick="betEdit('${b.id}')">Edit</button><button onclick="betDel('${b.id}')">Delete</button></div></div>`;
   };
@@ -649,7 +650,7 @@ function betsRender(force) {
   const keepFrom = dayKey(Date.now() - 3 * 864e5); // bets settled in the last 3 days stay in the main list (also in the log); older ones live in the log only
   const list = done.filter((x) => !isPast(x) || betDay(x.b) >= keepFrom).sort(sortF).map(cardHtml).join('');
   const html = `<div class="lpg"><div class="bh"><h2>My Bets</h2><div class="pillw"><button class="pill" onclick="aiOpen(null,'Analyze all my open bets one by one: for each say keep, hedge or leave alone with a one-line reason using the model numbers, then give an overall risk summary.')">🤖 Analyze</button><button class="pill" onclick="addMenu()">＋ Add bet ▾</button><div id="addmenu" ${window.__addm ? '' : 'hidden'}><button onclick="addMenu(0);betNew()">✍️ Add a bet</button><label>📷 Import screenshot<input type="file" accept="image/*" hidden onchange="addMenu(0);betImport(this.files[0]);this.value=''"></label><button onclick="addMenu(0);slipPaste()">📋 Paste slip text</button><button onclick="addMenu(0);aiOpen()">🤖 Ask Claude</button>${lsg('kal-id') ? `<button onclick="addMenu(0);kalshiSync(true)">🔄 Sync Kalshi now</button><button onclick="addMenu(0);kalshiOff()">⛓️‍💥 Disconnect Kalshi</button>` : `<button onclick="addMenu(0);kalshiConnect()">⚡ Connect Kalshi</button>`}</div></div></div>
-    <div class="sums">${stat('Overall', all, stake ? ' · $' + stake + ' staked' : '')}${stat('Against the app', agA)}${stat('With the app', withA)}<div class="sum"><b>${BETS.length - fin.length}</b><span>Open bets</span><small>${BETS.length} total</small></div></div>
+    <div class="sums">${stat('Overall', all, stake ? ' · ' + usd(stake) + ' staked' : '')}${stat('Against the app', agA)}${stat('With the app', withA)}<div class="sum"><b>${BETS.length - fin.length}</b><span>Open bets</span><small>${BETS.length} total</small></div></div>
     ${KFORM ? kalshiFormHtml() : ''}${perfHtml}<div class="sub" style="margin:0 0 6px"><span id="kst"></span></div><div class="sub" id="impst" style="margin:-4px 0 8px">${IMP}</div><div id="bform">${BF ? betFormHtml() : ''}</div>${logHtmlF()}${list || '<div class="note">No bets yet. Tap “Add a bet”, pick a game, then set your side and the line you got.</div>'}</div>`;
   const kt = lsg('kal-id') ? (KST || 'Kalshi connected') : (KST || '');
   const hh = html.replace('<span id="kst"></span>', '');
@@ -746,7 +747,7 @@ async function slipSports(s) {
   if (BETS.some((b) => b.gid === g.id && b.side === side && b.type === (s.type || 'ml') && Math.abs((b.stake || 0) - (s.stake || 0)) < 0.01)) { setImp('That bet is already in My Bets.'); betsRender(); return; }
   const b = { id: 'b' + Date.now(), gid: g.id, lg: g.lg, week: 0, away: g.away.abbr, home: g.home.abbr, day: dayKey(g.start), t: Date.now(), side, type: s.type || 'ml', line: s.type === 'sp' ? (s.line || 0) : 0, stake: s.stake || null, mult: s.mult || null, odds: s.mult ? -110 : -110, appSu: side, appConf: 0, appAts: null, appLine: null, noApp: true, note: 'Imported from slip' }; spApply(b);
   BETS.push(b); betsSave(); BF = null; betsRender();
-  setImp(`Saved ${g.lg.toUpperCase()}: ${side} ${b.type === 'sp' ? sgn(b.line) : 'to win'} (${g.away.abbr} @ ${g.home.abbr})${b.mult ? ' · ' + b.mult + 'x' : ''}${b.stake ? ' · $' + b.stake : ''}.` + (s.stakeGuess ? ` I couldn't read the cost reliably (saw $${s.stakeGuess}); edit the stake.` : ''));
+  setImp(`Saved ${g.lg.toUpperCase()}: ${side} ${b.type === 'sp' ? sgn(b.line) : 'to win'} (${g.away.abbr} @ ${g.home.abbr})${b.mult ? ' · ' + b.mult + 'x' : ''}${b.stake ? ' · ' + usd(b.stake) : ''}.` + (s.stakeGuess ? ` I couldn't read the cost reliably (saw ${usd(s.stakeGuess)}); edit the stake.` : ''));
 }
 function betApplySlip(s) {
   if (!s.t1 || !s.pos) { setImp('Could not read a bet from that image. Try a clearer screenshot, or add it by hand.'); BF = { step: 'pick' }; betsRender(); return; }
@@ -756,7 +757,7 @@ function betApplySlip(s) {
   if (!cand.length) { slipSports(s); return; }
   const g = cand[0].g; const side = teamMatch(s.pos, g.home.abbr) >= teamMatch(s.pos, g.away.abbr) ? g.home.abbr : g.away.abbr;
   BF = { step: 'form', gid: g.id, side, type: s.type || 'sp', line: s.line || 0, stake: s.stake || '', odds: s.mult || '', pt: s.mult ? 'x' : 'am', note: `Imported: ${s.pos} ${s.type === 'sp' ? (s.line < 0 ? 'wins by over ' + Math.abs(s.line) : 'loses by fewer than ' + s.line) : 'wins'}${s.mult ? ' · ' + s.mult + 'x' : ''}${s.stake ? ' · cost $' + s.stake : ''}. Check it, then Save.` };
-  setImp(s.stakeGuess ? `I couldn't read the cost reliably (saw $${s.stakeGuess}). Check the stake below.` : ''); betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' });
+  setImp(s.stakeGuess ? `I couldn't read the cost reliably (saw ${usd(s.stakeGuess)}). Check the stake below.` : ''); betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 function parseMulti(raw) {
   const L = raw.split(/\n/).map((x) => x.replace(/[|_]/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean);
@@ -863,7 +864,7 @@ function betFromGame(gid) { setView('bets'); betPick(gid); window.scrollTo(0, 0)
 (function midnight() { const n = new Date(); const ms = new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1, 0, 0, 2) - n; setTimeout(() => { if (typeof render === 'function' && VIEW === 'bets') render(); midnight(); }, ms); })();
 
 const badgeOf = (r, money, b) => r.st === 'live' ? `<span class="b ${r.cur === 'won' ? 'hit' : r.cur === 'lost' ? 'miss' : 'push'}">● LIVE ${r.cur === 'won' ? 'winning now' : r.cur === 'lost' ? (r.legs ? r.legs.filter((x) => (x.st === 'live' && x.cur === 'lost')).length + ' leg losing' : 'losing now') : 'even'}</span>` : r.st === 'pending' ? '<span class="b push">Pending</span>' : `<span class="b ${r.st === 'won' ? 'hit' : r.st === 'lost' ? 'miss' : 'push'}">${r.st === 'won' ? '✓ WON' : r.st === 'lost' ? '✗ LOST' : 'PUSH'} ${money(betPL(b, r.st))}</span>`;
-const payTxt = (b) => (b.stake ? ` <small>· $${b.stake}</small>` : '') + (b.mult ? ` <small>· pays ${b.mult}x</small>` : (b.odds && b.odds !== -110 ? ` <small>· ${sgn(b.odds)}</small>` : ''));
+const payTxt = (b) => (b.stake ? ` <small>· ${usd(b.stake)}</small>` : '') + (b.mult ? ` <small>· pays ${b.mult}x</small>` : (b.odds && b.odds !== -110 ? ` <small>· ${sgn(b.odds)}</small>` : ''));
 const legMark = (st, cur) => (st === 'won' ? '<span class="pm hit">✓</span>' : st === 'lost' ? '<span class="pm miss">✗</span>' : st === 'push' ? '<span class="pm push">push</span>' : st === 'live' ? `<span class="pm ${cur === 'won' ? 'hit' : cur === 'lost' ? 'miss' : 'push'}">●</span>` : '<span class="pm push">·</span>');
 function legText(l) { if (!l.gid) return l.text; const g = gameOf(l.gid); const a = g ? g.away.abbr : '?', h = g ? g.home.abbr : '?'; return `${l.side} ${l.type === 'sp' ? sgn(l.line) : 'to win'} <small>${a} @ ${h}</small>`; }
 const legDay = (l) => { const g = l.gid ? gameOf(l.gid) : null; return g ? dayKey(g.start) : (l.day || null); };

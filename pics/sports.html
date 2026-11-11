@@ -115,12 +115,12 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 <div id="plb"></div><iframe id="mir" aria-hidden="true" tabindex="-1"></iframe><script>setTimeout(function(){var f=document.getElementById("mir");if(f)f.src="./?mirror=1"},3500)</script>
 <div id="sc">
 <header>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="location.href='./?add=1'">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v124</span></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="location.href='./?add=1'">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v125</span></div></div>
   <div class="lg" id="lg"></div>
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div class="sub" id="upd">Loading…</div>
   <div class="sub" id="mc" style="margin-top:2px;cursor:pointer" onclick="mcToggle()"></div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v124 (one look · sports model v4)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v125 (one look · sports model v4)</div>
   <div class="sub" style="font-size:11px"><a style="color:inherit;text-decoration:underline;cursor:pointer" onclick="themeSet(document.documentElement.classList.contains('cb') ? 'violet' : 'cowboys')">Switch colors: Cowboys / original violet</a></div>
   </details>
 </header>
@@ -199,9 +199,24 @@ function parseEvents(j) {
 // AND a total. NBA/NHL also adjust for back-to-backs; MLB adjusts for the posted starting pitchers.
 const ENG = { nba: { adv: 2.5, cap: 25, hl: 40, k: 4, rest: 1.5, thr: 3, bt: 14 }, ncaab: { adv: 3.5, cap: 30, hl: 25, k: 3, rest: 0, thr: 4, bt: 7 }, nhl: { adv: 0.25, cap: 4, hl: 45, k: 4, rest: 0.25, thr: 0.5, bt: 14 }, mlb: { adv: 0.3, cap: 8, hl: 70, k: 6, rest: 0, thr: 0.7, bt: 21 } }[LG];
 let HIST = [], MODEL = null, BT = null;
-function fitModel(G, asOf) {
+// Last season's results are a low-weight starting point so early-season ratings are steadier (loaded once, then cached)
+let PRIOR = []; const PRW = 0.15;
+async function loadPrior() {
+  if (LG === 'ncaab') return;
+  const d0 = new Date(), Y = d0.getFullYear(), m = d0.getMonth(), season = LG === 'mlb' ? (m >= 2 ? Y - 1 : Y - 2) : (m >= 7 ? Y : Y - 1), key = 'spprior1-' + LG + '-' + season;
+  let A = null; try { A = JSON.parse(lsg(key)); } catch (e) {}
+  if (!A || !A.length) {
+    const ids = []; for (let i = 1; i <= 30; i++) ids.push(i); if (LG === 'nhl') ids.push(37, 124292, 129764);
+    const fin = {}, base = 'https://site.api.espn.com/apis/site/v2/sports/' + CFG.path + '/teams/', num = (x) => (x && x.value != null ? +x.value : +x);
+    for (let i = 0; i < ids.length; i += 8) await Promise.all(ids.slice(i, i + 8).map(async (id) => { try { const j = await getJson(base + id + '/schedule?season=' + season + '&seasontype=2'); (j.events || []).forEach((e) => { const c = e.competitions && e.competitions[0]; if (!c || !c.status || !c.status.type.completed) return; const h = c.competitors.find((x) => x.homeAway === 'home'), a = c.competitors.find((x) => x.homeAway === 'away'); if (!h || !a) return; const hs = num(h.score), as = num(a.score); if (isNaN(hs) || isNaN(as) || hs === as) return; fin[e.id] = [Date.parse(e.date), h.team.abbreviation, hs, a.team.abbreviation, as]; }); } catch (e) {} }));
+    A = Object.values(fin).sort((x, y) => x[0] - y[0]); if (A.length > 200) lss(key, JSON.stringify(A));
+  }
+  PRIOR = A.map((r) => ({ start: r[0], home: { abbr: r[1], score: r[2] }, away: { abbr: r[3], score: r[4] }, pr: 1 }));
+}
+function fitModel(G, asOf) { return fitCore(PRIOR.length ? PRIOR.filter((g) => g.start < asOf).concat(G) : G, asOf); }
+function fitCore(G, asOf) {
   if (G.length < 30) return null;
-  let sw = 0, sp = 0; const W = G.map((g) => { const w = Math.pow(0.5, Math.max(0, asOf - g.start) / (ENG.hl * 864e5)); let hs = g.home.score, as = g.away.score; const m = hs - as; if (Math.abs(m) > ENG.cap) { const d = (Math.abs(m) - ENG.cap) / 2 * Math.sign(m); hs -= d; as += d; } sw += 2 * w; sp += w * (hs + as); return { w, h: g.home.abbr, a: g.away.abbr, hs, as }; });
+  let sw = 0, sp = 0; const W = G.map((g) => { const w = g.pr ? PRW : Math.pow(0.5, Math.max(0, asOf - g.start) / (ENG.hl * 864e5)); let hs = g.home.score, as = g.away.score; const m = hs - as; if (Math.abs(m) > ENG.cap) { const d = (Math.abs(m) - ENG.cap) / 2 * Math.sign(m); hs -= d; as += d; } sw += 2 * w; sp += w * (hs + as); return { w, h: g.home.abbr, a: g.away.abbr, hs, as }; });
   const mu = sp / sw, off = {}, def = {}; W.forEach((x) => { off[x.h] = off[x.a] = def[x.h] = def[x.a] = 0; });
   for (let it = 0; it < 40; it++) {
     const no = {}, nd = {}, sw2 = {};
@@ -224,6 +239,7 @@ function modelOf(g) {
   return { margin: eh - ea, total: eh + ea, eh, ea };
 }
 async function loadRatings() {
+  try { await loadPrior(); } catch (e) {}
   const key = 'sphist3-' + LG + '-' + ymd(new Date());
   let G = null; try { G = JSON.parse(lsg(key)); } catch (e) {}
   if (!G || !G.length) {
@@ -249,7 +265,7 @@ let BFM = [], BFBUSY = false;
 async function backfill() {
   if (BFBUSY || !HIST.length) return; const G = HIST.slice().sort((a, b) => a.start - b.start);
   let s0 = 0; for (let i = 1; i < G.length; i++) if (G[i].start - G[i - 1].start > 45 * 864e5) s0 = i;
-  const key = 'spbf4-' + LG + '-' + G.length + '-' + G[G.length - 1].start; let c = null; try { c = JSON.parse(lsg(key)); } catch (e) {}
+  const key = 'spbf5-' + LG + '-' + G.length + '-' + G[G.length - 1].start; let c = null; try { c = JSON.parse(lsg(key)); } catch (e) {}
   if (c && c.length) { BFM = c.map((r) => ({ id: r[0], h: r[1], a: r[2], d: r[3], su: r[4], c: r[5], r: [r[6], r[7]] })); if (GV === 'stats') draw(); return; }
   BFBUSY = true; const keep = MODEL, out = []; const slots = {};
   G.slice(s0).forEach((g) => { const k = Math.floor((g.start - 30 * 60e3) / (30 * 60e3)); (slots[k] = slots[k] || []).push(g); });

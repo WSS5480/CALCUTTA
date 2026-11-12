@@ -202,16 +202,16 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v136 -->
+<!-- Pics v137 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v136</span></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v137</span></div></div>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">NCAA</button><button data-sp="nba">NBA</button><button data-sp="mlb">MLB</button><button data-sp="nhl">NHL</button><button data-sp="ncaab">NCAAB</button></div>
   <input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team">
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v136 (one look)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v137 (one look)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -734,9 +734,9 @@ function svAssign(weeks, teams, P) {
 }
 function survRender() {
   const el = $('#survpage'); if (!el) return;
-  if (CFB) { el.innerHTML = '<div class="note">Survivor League is for NFL. Switch to the NFL app (not college) to use it.</div>'; return; }
+  if (CFB) { setH(el, '<div class="note">Survivor League is for NFL. Switch to the NFL app (not college) to use it.</div>'); return; }
   const T = svTeams(), abbrs = Object.keys(T).sort((a, b) => T[a].name.localeCompare(T[b].name));
-  if (!abbrs.length) { el.innerHTML = '<div class="note">Loading NFL games…</div>'; return; }
+  if (!abbrs.length) { setH(el, '<div class="note">Loading NFL games…</div>'); return; }
   const wk = SVW || CUR || 1; SVW = wk;
   const usedSet = new Set(SV.picks.map((p) => p.t)), res = SV.picks.map(svResult), lost = res.filter((r) => r === 'lost').length, won = res.filter((r) => r === 'won').length;
   const left = abbrs.filter((a) => !usedSet.has(a));
@@ -753,14 +753,14 @@ function survRender() {
   const why = best && safest && best !== safest ? `<div class="note" style="color:inherit"><b>Why not ${safest.t.name}?</b> They are the safest this week (${pct(safest.conf)}), but they are worth more later. Using them now cuts your full-season survival from ${(best.surv * 100).toFixed(1)}% to ${(safest.surv * 100).toFixed(1)}%.</div>` : best ? '<div class="note" style="color:inherit">The safest pick this week is also the best for the long run.</div>' : '';
   const strat = best ? `<div class="card" style="border:2px solid #f5c542"><b>🧠 Strategic pick for week ${wk}: ${best.t.name}</b> <i onclick="infoOpen('surv')" style="position:static!important;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;border:1.5px solid var(--blue);color:var(--blue);font:700 15px system-ui;font-style:normal;cursor:pointer;vertical-align:middle;margin-left:6px">i</i><div class="sub">${pct(best.conf)} to win now · about ${(best.surv * 100).toFixed(1)}% to survive through week ${lastW} if you follow the plan below</div>${why}<details><summary class="sub" style="cursor:pointer">Show my best plan for the rest of the season</summary>${planRows || '<div class="note">No later weeks loaded yet.</div>'}</details></div>` : '';
   const det = SVD ? `<div class="card"><b>Teams found in your screenshot</b><div class="svchips">${SVD.map((d) => `<span onclick="svDetToggle('${d.t}')" style="cursor:pointer;${d.on ? '' : 'opacity:.4'}">${d.on ? '☑' : '☐'} ${(T[d.t] || {}).name || d.t}${d.w ? ' · wk ' + d.w : ''}</span>`).join('')}</div><div class="bbtn"><button class="pri" onclick="svApply()">Add to my used teams</button><button onclick="SVD=null;survRender()">Cancel</button></div></div>` : '';
-  el.innerHTML = `<div class="sv-top"><h2>🛡️ Survivor <i onclick="infoOpen('surv')" style="position:static!important;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;border:1.5px solid var(--blue);color:var(--blue);font:700 15px system-ui;font-style:normal;cursor:pointer;vertical-align:middle;margin-left:6px">i</i></h2><span class="svs ${lost ? 'no' : 'ok'}">${lost ? '❌ ' + lost + ' loss' + (lost > 1 ? 'es' : '') : '✅ Alive'} · ${won}-${lost}</span></div>
+  setH(el, `<div class="sv-top"><h2>🛡️ Survivor <i onclick="infoOpen('surv')" style="position:static!important;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;border:1.5px solid var(--blue);color:var(--blue);font:700 15px system-ui;font-style:normal;cursor:pointer;vertical-align:middle;margin-left:6px">i</i></h2><span class="svs ${lost ? 'no' : 'ok'}">${lost ? '❌ ' + lost + ' loss' + (lost > 1 ? 'es' : '') : '✅ Alive'} · ${won}-${lost}</span></div>
     <label class="addb imp" style="display:block;text-align:center;margin:8px 0">📷 Upload a screenshot of my picks<input type="file" accept="image/*" hidden onchange="svShot(this.files[0]);this.value=''"></label>
     <div class="note" id="svmsg">${SVMSG}</div>${det}
     ${strat}<div class="gh">Week ${wk} — available teams, best long-run first</div>
     <div class="svwk"><button onclick="svWk(-1)">◀</button><b>Week ${wk}${wk === CUR ? ' · this week' : ''}</b><button onclick="svWk(1)">▶</button></div>${avail}
     <div class="gh">My picks (${SV.picks.length})</div>${picksHtml}
     <div class="gh">Teams left: ${left.length} of ${abbrs.length}</div>
-    <div class="svchips">${abbrs.map((a) => `<span class="${usedSet.has(a) ? 'used' : ''}">${logo(a)}${a}</span>`).join('')}</div>`;
+    <div class="svchips">${abbrs.map((a) => `<span class="${usedSet.has(a) ? 'used' : ''}">${logo(a)}${a}</span>`).join('')}</div>`);
 }
 // ---- Import a bet from a Kalshi / Underdog screenshot: OCR in the browser (Tesseract.js), then pre-fill the bet form for you to confirm ----
 let IMP = '';

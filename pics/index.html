@@ -202,16 +202,16 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v143 -->
+<!-- Pics v144 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v143</span></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v144</span></div></div>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">NCAA</button><button data-sp="nba">NBA</button><button data-sp="mlb">MLB</button><button data-sp="nhl">NHL</button><button data-sp="ncaab">NCAAB</button></div>
   <input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team">
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v143 (one look)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v144 (one look)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -1383,20 +1383,20 @@ function buildPlayers() {
   Object.values(ALL).forEach((g) => { if (g.state === 'post' && g.bx) Object.keys(g.bx).forEach((t) => { if (!g.bx[t].qb) return; const o = (PL[t] = PL[t] || { qb: {}, rb: {}, rec: {}, def: {} }); ['qb', 'rb', 'rec', 'def'].forEach((c) => Object.keys(g.bx[t][c]).forEach((id) => (o[c][id] = (o[c][id] || 0) + g.bx[t][c][id]))); }); });
 }
 const topN = (m, n) => Object.keys(m || {}).sort((a, b) => m[b] - m[a]).slice(0, n);
-let INJM = 'off', QBP = 5.5; try { INJM = localStorage.getItem('injm') || 'off'; QBP = parseFloat(localStorage.getItem('qbp')) || 5.5; } catch (e) {}
+let INJM = 'qb', QBP = 5.5; try { INJM = localStorage.getItem('injm') || 'qb'; QBP = parseFloat(localStorage.getItem('qbp')) || 5.5; } catch (e) {}
 const STW = { Out: 1, 'Injured Reserve': 1, Suspension: 1, Doubtful: 1, Questionable: 0.35 };
 // Points a team loses when its current-season starters are hurt (QB biggest). Starters are whoever has the most usage this season.
 function injPen(t) {
-  const o = PL[t], list = []; let pts = 0;
-  if (!o) return { pts: 0, list };
+  const o = PL[t], list = []; let pts = 0, qpts = 0;
+  if (!o) return { pts: 0, list, qb: 0 };
   const qb = topN(o.qb, 1)[0], rb = topN(o.rb, 1)[0], rec = topN(o.rec, 3), df = topN(o.def, 4);
   (INJ[t] || []).forEach((x) => {
     const w = STW[x.st]; if (!w) return;
     let v = 0;
-    if (x.id === qb) v = QBP; else if (x.id === rb) v = 1; else if (rec.includes(x.id)) v = [1, 0.8, 0.6][rec.indexOf(x.id)]; else if (df.includes(x.id)) v = 0.5;
+    if (x.id === qb) { v = QBP; if (w === 1) qpts = QBP; } else if (x.id === rb) v = 1; else if (rec.includes(x.id)) v = [1, 0.8, 0.6][rec.indexOf(x.id)]; else if (df.includes(x.id)) v = 0.5;
     if (v) { pts += v * w; list.push(`${x.pos} ${x.name.split(' ').slice(-1)[0]} ${x.st.toLowerCase()}`); }
   });
-  return { pts: Math.min(pts, 10), list };
+  return { pts: Math.min(pts, 10), list, qb: qpts };
 }
 async function loadInjuries() {
   if (CFB || Date.now() - INJ_AT < 30 * 60 * 1000) return;
@@ -1464,20 +1464,23 @@ function pred(g, o) {
   if (!CFB && g.state !== 'post') { const a = injPen(g.away.abbr), h = injPen(g.home.abbr); if (a.pts || h.pts) inj = { a, h }; }
   // Injury TEST mode (off by default): o = {a,h,mode} forces penalties; otherwise uses the toggle and the live injury list
   const imode = o ? o.mode : INJM;
-  const ia = o && o.a !== undefined ? o.a : inj ? inj.a.pts : 0, ih = o && o.h !== undefined ? o.h : inj ? inj.h.pts : 0;
+  const qk = imode === 'qb' ? 'qb' : 'pts';
+  const ia = o && o.a !== undefined ? o.a : inj ? inj.a[qk] : 0, ih = o && o.h !== undefined ? o.h : inj ? inj.h[qk] : 0;
   const dInj = imode === 'off' || CFB ? 0 : ia - ih; // shift in expected home margin
-  mh += dInj; phModel = Math.min(0.99, Math.max(0.01, Phi(mh / SD)));
+  // 'qb' (default): only the spread pick moves; win chance is untouched. 'model'/'line' are test modes that also move the win chance.
+  const mhAts = mh + dInj;
+  if (imode !== 'qb') { mh = mhAts; phModel = Math.min(0.99, Math.max(0.01, Phi(mh / SD))); }
   // Win chance blends the model with what the current spread implies, so it moves when the line moves
   const phMkt = g.line === null ? null : Math.min(0.99, Math.max(0.01, Phi((g.line + (imode === 'line' ? dInj : 0)) / SD)));
   const ph = phMkt === null ? phModel : W_MKT * phMkt + (1 - W_MKT) * phModel;
   const pa = 1 - ph;
   const su = pa >= 0.5 ? g.away : g.home;
-  const out = { pa, ph, su, conf: Math.max(pa, ph), mh, ats: null, mkt: phMkt !== null, inj, phModel, phMkt, dInj };
+  const out = { pa, ph, su, conf: Math.max(pa, ph), mh: mhAts, ats: null, mkt: phMkt !== null, inj, phModel, phMkt, dInj };
   if (g.line !== null) {
-    const homeCover = mh > g.line;
+    const homeCover = mhAts > g.line;
     // Betting lines are sharp, so shrink hard toward 50%: our model rarely knows more than the market
-    const pHome = 0.5 + 0.3 * (cdf((mh - g.line) / SD) - 0.5); // chance the home side covers
-    out.ats = { side: homeCover ? g.home : g.away, line: homeCover ? -g.line : g.line, edge: Math.abs(mh - g.line), cover: homeCover ? pHome : 1 - pHome };
+    const pHome = 0.5 + 0.3 * (cdf((mhAts - g.line) / SD) - 0.5); // chance the home side covers
+    out.ats = { side: homeCover ? g.home : g.away, line: homeCover ? -g.line : g.line, edge: Math.abs(mhAts - g.line), cover: homeCover ? pHome : 1 - pHome };
   }
   return out;
 }
@@ -1537,8 +1540,8 @@ const lineText = (g) => (g.line === null ? '' : g.line === 0 ? 'Pick ’em' : `$
 const lkKey = (id) => 'lk26-' + LG + '-' + id;
 const lkLoad = (id) => { try { return JSON.parse(localStorage.getItem(lkKey(id))); } catch (e) { return null; } };
 const INFO = {
-  picks: ['How the app picks winners', "<p><b>Win pick.</b> Two things are blended: the betting line (90% NFL, 80% NCAA) turned into a win chance, and the app's own team ratings (10% / 20%). The side with the higher chance is the pick, and that chance is the confidence shown.</p><p>The ratings come from this season: score margins (blowouts capped), yards per play, turnovers, home edge, and AP rank for NCAA. Injuries are info only by default. A test switch on the Stats tab (🧪 Injury lab) can subtract hurt starters (QB biggest) from the margin so you can compare picks with and without them.</p><p><b>Best odds to win list.</b> This week's games sorted by that confidence, highest first. It is where the model and the line agree most, not a promise.</p><p><b>Backtest</b> grades every finished game using today's ratings, which already know those results, so it looks better than real life.</p>"],
-  spread: ['How the spread pick works', "<p>The model's expected margin is compared with the line. If its margin beats the line it picks the home side, otherwise the away side.</p><p>The cover percentage is deliberately pulled toward 50%, because the line is usually smarter than the model. Expect 52-55%, not 70%. Treat spread picks as a small edge.</p>"],
+  picks: ['How the app picks winners', "<p><b>Win pick.</b> Two things are blended: the betting line (90% NFL, 80% NCAA) turned into a win chance, and the app's own team ratings (10% / 20%). The side with the higher chance is the pick, and that chance is the confidence shown.</p><p>The ratings come from this season: score margins (blowouts capped), yards per play, turnovers, home edge, and AP rank for NCAA. One injury rule: if a team's starting QB is Out or Doubtful, its expected margin drops 5.5 points. That moves the <i>spread</i> pick only, not the win pick. Tested on 949 games over 4 seasons: with the QB out, spread picks went from 52% to 65%, while win picks did not improve. Other injuries (RB, WR, defense) did not help, so they are info only. The 🧪 Injury lab on the Stats tab lets you switch it off or test more.</p><p><b>Best odds to win list.</b> This week's games sorted by that confidence, highest first. It is where the model and the line agree most, not a promise.</p><p><b>Backtest</b> grades every finished game using today's ratings, which already know those results, so it looks better than real life.</p>"],
+  spread: ['How the spread pick works', "<p>The model's expected margin is compared with the line. If a team's starting QB is Out or Doubtful, its expected margin is cut by 5.5 first. If its margin beats the line it picks the home side, otherwise the away side.</p><p>The cover percentage is deliberately pulled toward 50%, because the line is usually smarter than the model. Expect 52-55%, not 70%. Treat spread picks as a small edge.</p>"],
   hit: ['What counts as a hit', "<p><b>Win pick hit</b> = the team we picked won the game outright. That is a moneyline bet: it wins if your team wins, by any score. It says nothing about the spread.</p><p><b>Spread pick hit</b> = our side beat the point spread. A -3 team must win by 4 or more; a +3 team can lose by 2 or less, or win. Exactly on the number is a push (money back).</p><p><b>Which to take?</b> Green cards are where the model is most sure. Moneyline on heavy favorites pays little, so the spread is often the better bet there. Picks are an edge, not a guarantee.</p>"],
   surv: ['How the Survivor page works', "<p><b>Using it.</b> Upload a screenshot of your picks (or tap Pick on a team) so the app knows who you have used. You make the real pick on Yahoo. Oddable shows who is still available and the best choice.</p><p><b>Goal.</b> Pick one team each week. If it loses you are out, and you can never use a team twice. So the best pick is not always the safest team this week.</p><p><b>Win chance.</b> For every team in every week: the Vegas spread (about 90%) blended with Oddable's own team ratings (about 10%: scores, yards per play, turnovers, home field). Weeks with no lines yet use the ratings alone, so far-off weeks are less certain.</p><p><b>The plan.</b> Using only teams you have not used, the app finds the one-team-per-week plan, no repeats, that gives the best chance of surviving every remaining week.</p><p><b>⭐ Strategic pick.</b> For each team available this week it asks: if I use this team now, then follow the best plan after, what is my chance to survive the whole season? The highest wins the star. A big favorite can lose the star when they are worth more in a later week.</p><p><b>Not included.</b> Injuries (like a quarterback out) and which teams the rest of your pool is picking. In a big pool, check how popular a team is on Yahoo before you lock in.</p><p><b>Result badges.</b> Your picks turn Survived or Lost on their own when the game ends. Everything is saved on this phone.</p>"],
   lock: ['What Locked means', "<p>Every game is locked automatically. While a game is still pregame (kickoff within 8 days) the app saves its win pick, spread pick and line to this phone each time it refreshes. At kickoff the saving stops, so the last saved pick is the locked pick.</p><p>Locked picks are the honest record: made before the game, never changed after. Tap the tiles to see each one with its result.</p><p><b>Limits.</b> A game only locks if the app was open on this phone before kickoff. Locked picks live on this phone and browser; clearing browser data wipes them. Small samples (under about 30 games) are mostly luck either way.</p>"]
@@ -1602,17 +1605,17 @@ function labHtml(games) {
   if (CFB) return '';
   labNames();
   const open = isOpen('injlab', false);
-  const head = `<summary>🧪 Injury lab <small class="sub">${INJM === 'off' ? 'test off' : INJM === 'model' ? 'testing: model' : 'testing: model + line'}</small></summary>`;
+  const head = `<summary>🧪 Injury lab <small class="sub">${{ off: 'off', qb: 'QB rule on', model: 'testing: model', line: 'testing: model + line' }[INJM]}</small></summary>`;
   if (!open) return `<details data-k="injlab">${head}<div class="note">Opening…</div></details>`;
   const btn = (v, l) => `<button class="${INJM === v ? 'on' : ''}" onclick="labSet('${v}')">${l}</button>`;
-  let h = `<details data-k="injlab" open>${head}<div class="note" style="text-align:left">Test whether hurt starters change the pick. <b>Model</b> subtracts them from the app's own margin (only ~10% of the pick). <b>Model + line</b> also treats the betting line as if it had not priced them in. Off = current picks.</div>
-    <div class="lkbar">${btn('off', 'Off')}${btn('model', 'Model')}${btn('line', 'Model + line')}</div>
+  let h = `<details data-k="injlab" open>${head}<div class="note" style="text-align:left"><b>QB spread</b> (default): when a team's starting QB is Out or Doubtful, its margin drops by the QB penalty, so the <i>spread</i> pick moves; win picks do not. In 4 seasons (286 QB-out games) that took spread picks from 52% to 65%. <b>Off</b> ignores injuries. <b>Model</b> and <b>Model + line</b> are tests that subtract all hurt starters and also move the win pick (they did not help).</div>
+    <div class="lkbar">${btn('off', 'Off')}${btn('qb', 'QB spread')}${btn('model', 'Model')}${btn('line', 'Model + line')}</div>
     <div class="note" style="text-align:left">QB-out penalty (points): <select onchange="labSet(null,this.value)">${[0, 2, 3, 4, 5.5, 7, 9].map((q) => `<option ${q === QBP ? 'selected' : ''}>${q}</option>`).join('')}</select></div>`;
   // 1) this week: which picks flip
   const wk = games.filter((g) => g.state === 'pre' && g.line !== null && g.week === CUR);
-  const rows = wk.map((g) => { const p0 = pred(g, { mode: 'off' }); const p = pred(g, { mode: 'line' }), pm = pred(g, { mode: 'model' }); return { g, p0, p, pm }; }).filter((x) => x.p.dInj);
+  const rows = wk.map((g) => { const p0 = pred(g, { mode: 'off' }); const p = pred(g, { mode: 'qb' }), pm = pred(g, { mode: 'model' }); return { g, p0, p, pm }; }).filter((x) => x.pm.dInj);
   h += `<div class="gh">This week: who is hurt</div>` + (rows.length ? rows.map(({ g, p0, p, pm }) => { const ch = p0.su !== p.su, cm = p0.su !== pm.su, ca = p0.ats && p.ats && p0.ats.side !== p.ats.side; const inj = g.state ? pred(g).inj : null;
-    return `<div class="lkrow"><div><b>${g.away.abbr} @ ${g.home.abbr}</b> <small class="sub">${inj ? [['a', g.away], ['h', g.home]].filter(([k]) => inj[k].pts).map(([k, t]) => t.abbr + ' −' + inj[k].pts.toFixed(1) + ' (' + inj[k].list.join(', ') + ')').join(' · ') : ''}</small><div class="sub">Win: ${p0.su.abbr} ${pct(p0.conf)} → <b>${p.su.abbr} ${pct(p.conf)}</b> ${ch ? '⚠️ flips (+line)' : cm ? '⚠️ flips (model)' : 'same'}${p0.ats && p.ats ? ` · Spread: ${p0.ats.side.abbr} → <b>${p.ats.side.abbr}</b> ${ca ? '⚠️ flips' : 'same'}` : ''}</div></div></div>`; }).join('') : '<div class="note">No hurt starters on the list right now.</div>');
+    return `<div class="lkrow"><div><b>${g.away.abbr} @ ${g.home.abbr}</b> <small class="sub">${inj ? [['a', g.away], ['h', g.home]].filter(([k]) => inj[k].pts).map(([k, t]) => t.abbr + ' −' + inj[k].pts.toFixed(1) + ' (' + inj[k].list.join(', ') + ')').join(' · ') : ''}</small><div class="sub">${p.dInj ? 'QB rule: ' : 'No QB out (QB rule unchanged) · '}${p0.ats && p.ats ? `Spread: ${p0.ats.side.abbr} → <b>${p.ats.side.abbr}</b> ${ca ? '⚠️ flips' : 'same'}` : 'no line yet'} · All-players test: win ${p0.su.abbr} → <b>${pm.su.abbr}</b>${cm ? ' ⚠️' : ''}</div></div></div>`; }).join('') : '<div class="note">No hurt starters on the list right now.</div>');
   // 2) what-if tester
   const opts = wk.length ? wk : games.filter((g) => g.state === 'pre');
   if (opts.length) {
@@ -1657,7 +1660,7 @@ function lockSnap(g) {
   if (g.state !== 'pre' || g.start <= Date.now() || g.start - Date.now() > 8 * 864e5) return;
   const p = pred(g);
   const p0 = INJM !== 'off' && p.dInj ? pred(g, { mode: 'off' }) : null;
-  const snap = { ...(p0 ? { su0: p0.su.abbr, dInj: +p.dInj.toFixed(2), im: INJM } : {}), su: p.su.abbr, conf: +p.conf.toFixed(4), L: g.line, ats: p.ats ? { side: p.ats.side.abbr, cover: +p.ats.cover.toFixed(4) } : null };
+  const snap = { ...(p0 ? { su0: p0.su.abbr, ats0: p0.ats ? p0.ats.side.abbr : null, dInj: +p.dInj.toFixed(2), im: INJM } : {}), su: p.su.abbr, conf: +p.conf.toFixed(4), L: g.line, ats: p.ats ? { side: p.ats.side.abbr, cover: +p.ats.cover.toFixed(4) } : null };
   const str = JSON.stringify(snap);
   try { if (localStorage.getItem(lkKey(g.id) + '-s') !== str) { localStorage.setItem(lkKey(g.id), JSON.stringify({ ...snap, t: Date.now() })); localStorage.setItem(lkKey(g.id) + '-s', str); } } catch (e) {}
 }
@@ -1748,7 +1751,7 @@ function card(g) {
     <div class="bar"><i style="width:${p.pa * 100}%"></i></div>
     <div class="row"><b>${rk(g.home)}${nm(g.home.abbr)} <small>${g.home.record} · home</small></b><b>${pct(p.ph)}</b></div>
     <div class="pick">${predPanel(g)}<div class="sub" style="margin-top:4px">${p.mkt ? 'Win % blends our model with the line' : 'Win % is our model only (no line yet)'} · model ${byText(g, p.mh)}${g.line !== null ? ' · line ' + byText(g, g.line) : ''}</div></div>
-    ${p.inj ? `<div class="sub">🩹 Starters hurt${INJM === 'off' ? ' (info only)' : ' (in test: ' + (p.dInj ? 'moves margin ' + (p.dInj > 0 ? '+' : '') + p.dInj.toFixed(1) : 'no change') + ')'}: ${[['a', g.away], ['h', g.home]].filter(([k]) => p.inj[k].pts).map(([k, t]) => `${t.abbr} −${p.inj[k].pts.toFixed(1)} (${p.inj[k].list.join(', ')})`).join(' · ')}</div>` : ''}
+    ${p.inj ? `<div class="sub">🩹 Starters hurt${INJM === 'off' ? ' (info only)' : INJM === 'qb' ? (p.dInj ? ' (QB out: spread pick adjusted ' + (p.dInj > 0 ? '+' : '') + p.dInj.toFixed(1) + ')' : ' (info only)') : ' (in test: ' + (p.dInj ? 'moves margin ' + (p.dInj > 0 ? '+' : '') + p.dInj.toFixed(1) : 'no change') + ')'}: ${[['a', g.away], ['h', g.home]].filter(([k]) => p.inj[k].pts).map(([k, t]) => `${t.abbr} −${p.inj[k].pts.toFixed(1)} (${p.inj[k].list.join(', ')})`).join(' · ')}</div>` : ''}
     <button class="addtb" onclick="event.stopPropagation();betFromGame('${g.id}')">＋ Add to My Bets</button>
     ${lmBlock(g)}
   </div>`;

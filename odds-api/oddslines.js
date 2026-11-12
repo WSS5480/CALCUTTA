@@ -4,9 +4,11 @@
 const SPORTS = { nfl: 'americanfootball_nfl', cfb: 'americanfootball_ncaaf', nba: 'basketball_nba', nhl: 'icehockey_nhl', mlb: 'baseball_mlb', ncaab: 'basketball_ncaab' };
 const KEYNAME = Object.keys(process.env).find((k) => /^odds_?api(_?key)?$/i.test(k));
 const KEY = () => (KEYNAME ? process.env[KEYNAME].trim() : '');
-const TTL = (+process.env.LINES_TTL_MIN || 300) * 60e3;            // 5 h per league
+const ON = (process.env.LINES_LEAGUES || 'nfl,cfb').split(',').map((x) => x.trim()); // football only for now (set LINES_LEAGUES=nfl,cfb,nba,nhl,... to turn more on)
+const TTLH = { nfl: 6, cfb: 8 };                                  // hours between fetches per league (others 5 h)
+const ttlOf = (lg) => (+process.env.LINES_TTL_MIN ? +process.env.LINES_TTL_MIN / 60 : TTLH[lg] || 5) * 3600e3;
 const IDLE_TTL = 24 * 60 * 60e3;                                    // no games within 2 days -> once a day
-const DAILY = +process.env.LINES_DAILY_CREDITS || 12;               // 6 calls a day ~ 360/month
+const DAILY = +process.env.LINES_DAILY_CREDITS || 10;               // 5 calls a day ~ 300/month
 const FLOOR = +process.env.LINES_FLOOR || 60;                       // never spend below this many remaining credits
 const CACHE = {}; let day = '', spent = 0, remaining = null;
 const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
@@ -21,11 +23,12 @@ function shape(ev) {
 }
 async function get(lg) {
   const sport = SPORTS[lg]; if (!sport) return { error: 'unknown league' };
+  if (!ON.includes(lg)) return { games: [], disabled: true };
   if (!KEY()) return { error: 'ODDS_API_KEY not set' };
   const t = today(); if (t !== day) { day = t; spent = 0; }
   const c = CACHE[lg], now = Date.now();
   const soon = c && c.games.some((g) => g.start > now - 4 * 3600e3 && g.start < now + 48 * 3600e3);
-  const ttl = c ? (soon ? TTL : IDLE_TTL) : 0;
+  const ttl = c ? (soon ? ttlOf(lg) : IDLE_TTL) : 0;
   if (c && now - c.at < ttl) return { ...c, budget: { spentToday: spent, daily: DAILY, remaining } };
   if (spent + 2 > DAILY || (remaining !== null && remaining < FLOOR)) return c ? { ...c, stale: true, budget: { spentToday: spent, daily: DAILY, remaining } } : { games: [], skipped: 'budget', budget: { spentToday: spent, daily: DAILY, remaining } };
   const r = await fetch('https://api.the-odds-api.com/v4/sports/' + sport + '/odds/?regions=us&markets=h2h,spreads&oddsFormat=american&apiKey=' + KEY(), { signal: AbortSignal.timeout(20000) });

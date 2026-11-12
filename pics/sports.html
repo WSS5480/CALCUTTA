@@ -121,7 +121,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div class="sub" id="upd">Loading…</div>
   <div class="sub" id="mc" style="margin-top:2px;cursor:pointer" onclick="mcToggle()"></div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v139 (one look · sports model v4)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v140 (one look · sports model v4)</div>
   <div class="sub" style="font-size:11px"><a style="color:inherit;text-decoration:underline;cursor:pointer" onclick="themeSet(document.documentElement.classList.contains('cb') ? 'violet' : 'cowboys')">Switch colors: Cowboys / original violet</a></div>
   </details>
 </header>
@@ -434,14 +434,14 @@ function draw() {
   const uo = (g) => { const p = pred(g); if (p.pMkt === null || p.pMkt === undefined) return null; const dh = p.pMkt < 0.5, pm = dh ? p.pMkt : 1 - p.pMkt, pmod = p.pModel === null || p.pModel === undefined ? pm : dh ? p.pModel : 1 - p.pModel, pb = dh ? p.ph : p.pa, ml = dh ? g.mlH : g.mlA, real = ml !== null && ml !== undefined && !!+ml, dec = real ? (+ml > 0 ? 1 + ml / 100 : 1 + 100 / -ml) : 1 / (pm + 0.024); return { g, t: dh ? g.home : g.away, pm, pmod, pb, dec, real, gap: pmod - pm, am: real ? +ml : Math.round((dec - 1) * 100) }; };
   const ucand = FILTER === 'watch' ? [] : GAMES.filter((g) => g.state !== 'post').map(uo).filter((x) => x && x.pm < 0.45), ur = ucand.filter((x) => x.gap > 0).sort((a, c) => c.gap - a.gap)[0] || ucand.sort((a, c) => c.pb - a.pb)[0];
   const upset = ur && !(bp && ur.g === bp.g) ? `<div class="upset"><div class="bh2">🏆🏆 Biggest Upset Pick<small>${esc(ur.t.abbr)} to win outright · the books give them ${pct(ur.pm)}, the model says ${pct(ur.pmod)}</small></div><div class="bmoney"><b>$100 bet → $${(100 * ur.dec).toFixed(0)} back</b> <span>(+$${(100 * (ur.dec - 1)).toFixed(0)} profit) · ${ur.dec.toFixed(2)}x · ${ur.am > 0 ? '+' : ''}${ur.am}${ur.real ? '' : ' (estimated)'}</span></div><div class="pick rec" style="margin:2px 4px 6px">Long shot: expect to lose most of the time. Check your book for the exact price.</div>${card(ur.g)}</div>` : '';
-  setH($('#list'), botd + upset + (FILTER === 'watch' ? (pins.map(card).join('') || '<div class="note">Nothing watched yet. Tap 📍 Watch on any game.</div>') : '') + (FILTER === 'watch' ? '' : (list.filter((g) => !((bp && g === bp.g) || (ur && g === ur.g))).map(card).join('') || `<div class="note">No ${CFG.name} games ${OFF === 0 ? 'today' : 'this day'}.${LG === 'mlb' ? ' MLB is in its offseason.' : ''}</div>`)));
+  const uc = `<div class="note" style="border:1px dashed #f5c542;border-radius:12px;padding:8px 12px;margin:6px 0">🚧 <b>Live lines: under construction for ${CFG.name}.</b> Real moneylines are on for football only for now. Prices here are ESPN's snapshot, or marked estimated. Check your book.</div>`;
+  setH($('#list'), uc + botd + upset + (FILTER === 'watch' ? (pins.map(card).join('') || '<div class="note">Nothing watched yet. Tap 📍 Watch on any game.</div>') : '') + (FILTER === 'watch' ? '' : (list.filter((g) => !((bp && g === bp.g) || (ur && g === ur.g))).map(card).join('') || `<div class="note">No ${CFG.name} games ${OFF === 0 ? 'today' : 'this day'}.${LG === 'mlb' ? ' MLB is in its offseason.' : ''}</div>`)));
 }
 async function load() {
   try { GAMES = parseEvents(await getJson(SB + '?dates=' + ymd(dayDate()) + '&limit=400' + CFG.q)).sort((a, b) => a.start - b.start); LASTAT = Date.now(); $('#upd').textContent = upText(); }
   catch (e) { $('#upd').textContent = 'Could not load ' + CFG.name + ' games. Pull to refresh.'; }
   draw();
 }
-oddsRefresh(LG, () => load()); setInterval(() => oddsRefresh(LG, () => { if (!OPEN) load(); }), 25 * 60e3);
 (async () => { await load(); await loadRatings(); if (GV === 'up') upLoad(); draw(); $('#upd').textContent = upText(); mcDraw(); })();
 setInterval(() => { if (!document.hidden && OFF === 0 && !OPEN && (GAMES.some((g) => g.state === 'in') || Date.now() - LASTAT > 120000)) load(); }, 30000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !OPEN) load(); });

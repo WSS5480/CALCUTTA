@@ -42,7 +42,7 @@ async function getOdds() {
   if (cache && Date.now() - cache.at < ttl) return cache;
   if (!KEY && !process.env.ODDS_UPSTREAM) throw new Error('ODDS_API_KEY is not set');
   const url = UPSTREAM + '?regions=us&oddsFormat=american' + (KEY ? '&apiKey=' + KEY : '');
-  const r = await fetch(url);
+  const r = await fetch(url, { signal: AbortSignal.timeout(20000) });
   if (!r.ok) { if (cache) cache.at = Date.now() - ttl + 15 * 60 * 1000; throw new Error('upstream HTTP ' + r.status); }
   const remaining = r.headers.get('x-requests-remaining');
   const p = parse(await r.json());

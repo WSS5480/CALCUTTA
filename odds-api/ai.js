@@ -12,6 +12,7 @@ async function claude(system, content, max) {
   const t = (j.content || []).map((x) => x.text || '').join('').trim(); if (!t) throw new Error('Empty answer (' + (j.stop_reason || '?') + '), try again'); return t;
 }
 const SLIPJ = 'You read a screenshot of a sports bet slip (Kalshi, Underdog, DraftKings, FanDuel, PrizePicks, etc.). Reply with ONLY one JSON object, no markdown, no commentary: {"kind":"single" or "parlay","status":"open"|"won"|"lost"|"push","stake":number or null (what was risked / cost),"payout":number or null (total payout or to-win),"multiplier":number or null (e.g. 3.5 for 3.5x),"american_odds":number or null,"legs":[{"team":"the team/side picked, as written","opponent":"the other team in that game or null","type":"ml" (to win) | "spread" | "total" | "prop","line":number or null (for spread: the line for the picked team, negative if favored, positive if underdog; for total: the number),"text":"the leg exactly as written on the slip"}]}. One entry in legs per pick. Never invent anything not on the slip; use null when unsure.';
+const SURV = 'You read a screenshot from a Survivor / Survival pool (Yahoo Sports, ESPN, etc.) showing which NFL teams the user has already picked, week by week. Reply with ONLY one JSON object, no markdown, no commentary: {"picks":[{"team":"full NFL team name like Kansas City Chiefs","week":number or null,"result":"won"|"lost"|"pending"|null}]}. Include only the USER\'S OWN picks, one per week, never the opponents or other players. If a week number is not shown, use null. If you cannot find any picks return {"picks":[]}.';
 const SLIP = 'You read screenshots of sports bet slips (Kalshi, Underdog, sportsbooks). Transcribe the slip as plain text, one line per item, keeping the exact wording and numbers you see: teams, the pick/side, bet type (moneyline/spread/total/parlay with each leg), line, odds or chance %, cost/stake, payout. Do not guess missing numbers. Output only the text, no commentary.';
 const CHAT = 'You are the assistant inside Oddable, a personal sports pick and bet-tracking app. Be terse and practical. Plain text, short lines, at most 12 lines total; use ** only for headings. Use only the data given (model win %, lines, user bets); say when something is not in the data. Model numbers are estimates, not guarantees. Give reasoning in a few short lines. Not licensed financial advice; no guarantees.';
 async function handle(req, res) {
@@ -35,6 +36,13 @@ async function handle(req, res) {
       const text = await claude(SLIPJ, [{ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } }, { type: 'text', text: 'Return the JSON for this bet slip.' }], 3000);
       const mm = /\{[\s\S]*\}/.exec(text || ''); let data = null; try { data = JSON.parse(mm ? mm[0] : ''); } catch (e) {}
       if (!data || !Array.isArray(data.legs)) { send(res, 502, { error: 'Could not read that slip', text }); return true; }
+      send(res, 200, { data }); return true;
+    }
+    if (path === '/ai/survivor') {
+      const m = /^data:(image\/(?:png|jpeg|webp|gif));base64,(.+)$/s.exec(b.image || ''); if (!m) { send(res, 400, { error: 'image required' }); return true; }
+      const text = await claude(SURV, [{ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } }, { type: 'text', text: 'Return the JSON of my picks.' }], 2000);
+      const mm = /\{[\s\S]*\}/.exec(text || ''); let data = null; try { data = JSON.parse(mm ? mm[0] : ''); } catch (e) {}
+      if (!data || !Array.isArray(data.picks)) { send(res, 502, { error: 'Could not read that screenshot', text }); return true; }
       send(res, 200, { data }); return true;
     }
     if (path === '/ai/chat') {

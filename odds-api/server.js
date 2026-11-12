@@ -5,7 +5,7 @@ const http = require('http');
 // Accept the key under any spelling of ODDS_API / ODDS_API_KEY (env names are case-sensitive on Linux)
 const KEYNAME = Object.keys(process.env).find((k) => /^odds_?api(_?key)?$/i.test(k));
 const KEY = KEYNAME ? process.env[KEYNAME].trim() : '';
-const TTL = (+process.env.CACHE_MINUTES || 360) * 60 * 1000;
+const TTL = (+process.env.CACHE_MINUTES || 1440) * 60 * 1000;
 const UPSTREAM = process.env.ODDS_UPSTREAM ||
   'https://api.the-odds-api.com/v4/sports/americanfootball_nfl_super_bowl_winner/odds/';
 
@@ -65,6 +65,7 @@ if (process.env.RENDER_EXTERNAL_URL && process.env.KEEP_AWAKE !== '0') {
 const kalshi = require('../kalshi-sync/server.js'); const BT = {};
 http.createServer(async (req, res) => {
   if (req.url.startsWith('/acct')) { try { if (await require('./acct.js').handle(req, res)) return; } catch (e) { res.statusCode = 500; return res.end('{"error":"acct"}'); } }
+  if (req.url.startsWith('/oddsline')) { try { if (await require('./oddslines.js').handle(req, res)) return; } catch (e) { res.statusCode = 500; return res.end('{"error":"oddsline"}'); } }
   if (req.url.startsWith('/ai')) { try { if (await require('./ai.js').handle(req, res)) return; } catch (e) { res.statusCode = 500; return res.end('{"error":"ai"}'); } }
   if (req.url.startsWith('/sync')) { try { if (await require('./sync.js').handle(req, res)) return; } catch (e) { res.statusCode = 500; return res.end('{"error":"sync"}'); } }
   if (req.url.startsWith('/kalshi')) { try { if (await kalshi.handle(req, res)) return; } catch (e) { res.statusCode = 500; return res.end('{"error":"kalshi"}'); } }

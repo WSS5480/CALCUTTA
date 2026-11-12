@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script src="lines.js"></script>
 <script>try{if(localStorage.getItem('pics-theme')!=='violet')document.documentElement.classList.add('cb')}catch(e){document.documentElement.classList.add('cb')}function themeSet(v){try{localStorage.setItem('pics-theme',v)}catch(e){}location.reload()}document.addEventListener('DOMContentLoaded',()=>{if(document.documentElement.classList.contains('cb')){const m=document.querySelector('meta[name=theme-color]');if(m)m.content='#041e42'}})</script>
 
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -120,7 +121,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div class="sub" id="upd">Loading…</div>
   <div class="sub" id="mc" style="margin-top:2px;cursor:pointer" onclick="mcToggle()"></div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v138 (one look · sports model v4)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v139 (one look · sports model v4)</div>
   <div class="sub" style="font-size:11px"><a style="color:inherit;text-decoration:underline;cursor:pointer" onclick="themeSet(document.documentElement.classList.contains('cb') ? 'violet' : 'cowboys')">Switch colors: Cowboys / original violet</a></div>
   </details>
 </header>
@@ -188,7 +189,7 @@ function parseEvents(j) {
       if (o.spread != null && !isNaN(+o.spread) && o.homeTeamOdds && o.homeTeamOdds.favorite != null) { const s = Math.abs(+o.spread); line = o.homeTeamOdds.favorite ? s : -s; }
       else if (o.details) { const m = /^([A-Z]{2,4})\s+(-\d+(?:\.\d+)?)$/.exec(o.details.trim()); if (m && SPREADY) { const s = Math.abs(+m[2]); line = m[1] === cs[1].abbr ? s : m[1] === cs[0].abbr ? -s : null; } }
     }
-    return { id: e.id, start: +new Date(e.date), state: t.state, detail: t.shortDetail || '', away: cs[0], home: cs[1], line, total, mlA, mlH, completed: t.completed };
+    return window.oddsFill({ id: e.id, start: +new Date(e.date), state: t.state, detail: t.shortDetail || '', away: cs[0], home: cs[1], line, total, mlA, mlH, completed: t.completed });
   });
 }
 
@@ -440,6 +441,7 @@ async function load() {
   catch (e) { $('#upd').textContent = 'Could not load ' + CFG.name + ' games. Pull to refresh.'; }
   draw();
 }
+oddsRefresh(LG, () => load()); setInterval(() => oddsRefresh(LG, () => { if (!OPEN) load(); }), 25 * 60e3);
 (async () => { await load(); await loadRatings(); if (GV === 'up') upLoad(); draw(); $('#upd').textContent = upText(); mcDraw(); })();
 setInterval(() => { if (!document.hidden && OFF === 0 && !OPEN && (GAMES.some((g) => g.state === 'in') || Date.now() - LASTAT > 120000)) load(); }, 30000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !OPEN) load(); });

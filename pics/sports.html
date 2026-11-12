@@ -18,7 +18,7 @@
 html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
 body{background:var(--bg);color:var(--ink);font:15px/1.35 system-ui,-apple-system,sans-serif}
 #sc{position:fixed;top:0;left:0;right:0;bottom:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding-bottom:84px}
-#plb{transform:translate3d(0,0,0);will-change:transform}
+#plb{transform:translate3d(0,0,0);will-change:transform;transition:opacity .2s,transform .2s}#plb.away{opacity:0;transform:translate3d(0,-130%,0)!important;-webkit-transform:translate3d(0,-130%,0)!important;pointer-events:none}
 header{padding:max(16px,env(safe-area-inset-top)) max(16px,calc((100% - 688px)/2)) 14px;background:linear-gradient(135deg,#7c3aed 0%,#4c1d95 55%,#1b1f29 100%);border-radius:0 0 26px 26px;color:#fff}
 h1{margin:0 0 6px;font-size:26px}
 .lg{display:flex;gap:8px;margin:6px 0;flex-wrap:wrap}.lg a,.lg button{border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.12);color:#fff;border-radius:999px;padding:6px 16px;font:700 14px inherit;cursor:pointer;text-decoration:none}.lg .on{background:#fff;color:#4c1d95}
@@ -138,6 +138,8 @@ const NAVI = [['all', '🏠', 'Games'], ['livepg', '📡', 'Live'], ['bets', '�
 function navGo(k) { if (k === 'all') { document.getElementById('sc').scrollTo({ top: 0, behavior: 'smooth' }); return; } try { localStorage.setItem('pics-view', k === 'livepg' ? 'live' : k === 'bets' ? 'bets' : 'main'); if (k === 'win' || k === 'lose') localStorage.setItem('pics-filt', k); } catch (e) {} location.href = './'; }
 document.getElementById('bn').innerHTML = NAVI.map(([k, i, l]) => `<button class="${k === 'all' ? 'on' : ''}" onclick="navGo('${k}')"><span>${i}</span>${l}</button>`).join('');
 const $ = (s) => document.querySelector(s);
+function plbFit() { const pb = $('#plb'), lg = document.querySelector('header .lg'); if (!pb || !lg || pb.hidden) return; const under = lg.getBoundingClientRect().top < pb.offsetTop + pb.offsetHeight + 6; pb.classList.toggle('away', under); if (under && window.__plbo) { window.__plbo = false; const d = $('#plbd'); if (d) d.hidden = true; } }
+document.getElementById('sc').addEventListener('scroll', () => { if (window.__plbf) return; window.__plbf = requestAnimationFrame(() => { window.__plbf = 0; plbFit(); }); }, { passive: true });
 const LGS = {
   nba: { path: 'basketball/nba', name: 'NBA', sd: 12, hfa: 2.5, w: 0.8, back: 45, minG: 120, unit: 'pts', q: '' },
   mlb: { path: 'baseball/mlb', name: 'MLB', sd: 4.4, hfa: 0.25, w: 0.8, back: 40, minG: 400, unit: 'runs', q: '' },

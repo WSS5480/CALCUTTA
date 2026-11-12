@@ -58,7 +58,7 @@ input#tsearch{width:100%;max-width:320px;margin:2px 0 4px;padding:9px 12px;borde
 .botd .bmoney{margin:0 4px;font-size:17px}.botd .bmoney span{font-size:12px;opacity:.85}.botd .gc{border-color:#f5c542!important}.gc{position:relative}.gpin{position:absolute;top:6px;right:8px;z-index:2;border:1px solid rgba(124,58,237,.5);background:rgba(124,58,237,.12);color:inherit;border-radius:999px;font:600 11px inherit;padding:3px 9px}.gpin.on{background:#7c3aed;color:#fff}.pinhd{font:700 12px inherit;letter-spacing:.08em;text-transform:uppercase;opacity:.75;margin:12px 4px 6px}
 .ldate{display:inline-block;font:700 11px inherit;padding:2px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted);vertical-align:middle}.ldate.diff{background:#facc15;border-color:#facc15;color:#1b1400}.also{margin:8px 4px 0}
 .lkrow{padding:8px 4px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:8px}.lkbar{display:flex;gap:8px;margin:8px 0}.lkbar button{flex:1;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:12px;padding:8px 6px;font:700 13px inherit}.lkbar button.on{border-color:var(--blue);color:var(--blue)}
-.sum{position:relative}.ibtn{position:absolute;top:8px;right:10px;font:700 15px/1 system-ui;color:var(--blue);font-style:normal;cursor:pointer;padding:4px}.ibtn.inl{position:static;margin-left:6px}
+.swk{grid-column:1/-1;display:flex;align-items:center;gap:8px;flex-wrap:wrap}.swk label{color:var(--muted);font-size:13px}.swk select{flex:1;min-width:0;padding:9px 10px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);font:600 15px system-ui}.swk button{border:1px solid var(--blue);background:var(--panel2);color:var(--ink);border-radius:999px;padding:8px 12px;font:700 13px system-ui;cursor:pointer}.sum{position:relative}.ibtn{position:absolute;top:8px;right:10px;font:700 15px/1 system-ui;color:var(--blue);font-style:normal;cursor:pointer;padding:4px}.ibtn.inl{position:static;margin-left:6px}
 #infosheet{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.6);display:flex;align-items:flex-end}#infosheet[hidden]{display:none}.isb{background:var(--panel);color:var(--ink);width:100%;max-height:80vh;overflow:auto;border-radius:22px 22px 0 0;padding:16px 18px calc(24px + env(safe-area-inset-bottom));line-height:1.45}.isb p{margin:10px 0}.ish{display:flex;justify-content:space-between;align-items:center;font-size:18px}.ish button{border:0;background:var(--panel2);color:var(--ink);border-radius:999px;width:34px;height:34px;font-size:16px}
 header .lg{margin-top:86px;flex-wrap:wrap}
 select#team{width:100%;max-width:320px;margin:2px 0 6px;padding:9px 12px;border:1px solid var(--blue);border-radius:12px;background:#fff;color:var(--ink);font:600 15px inherit}
@@ -110,7 +110,7 @@ body{padding-bottom:84px}
 #bform label,.kf label{display:block;margin:8px 0;font-size:13px;color:var(--muted)}#bform input,#bform select,.kf input,.kf textarea{display:block;width:100%;margin-top:4px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);font:600 16px inherit}
 .bcard{border:1px solid var(--line);border-radius:28px;padding:12px 10px 10px;margin:14px 0;background:var(--panel)}.bcard.bw{border-color:var(--green)}.bcard.bl{border-color:var(--red)}.bcard .gc{margin:8px 0 0}.bhd{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:0 6px}.bcard .bbtn{padding:0 6px}
 #plb{position:fixed;top:max(10px,env(safe-area-inset-top));right:12px;z-index:40;padding:8px 16px;border-radius:16px;min-width:116px;font:800 17px/1.1 system-ui;text-align:center;border:1.5px solid;backdrop-filter:blur(8px);box-shadow:0 4px 18px #0008}#plb small.lbl{font-size:9px;letter-spacing:.14em;opacity:.7;margin:0 0 2px}#plb small{display:block;font-size:10px;font-weight:700;opacity:.85;margin-top:1px}
-#plbd{text-align:left;margin-top:8px;border-top:1px solid #fff3;padding-top:6px;width:min(260px,72vw);font:600 12px/1.3 system-ui;color:#eee}#plbd .bk{display:flex;justify-content:space-between;gap:10px;padding:3px 0}#plbd .bk i{display:block;font-style:normal;opacity:.65;font-size:10px}#plbd .bk b.p{color:#4fd18b}#plbd .bk b.n{color:#ff5a4d}#plbd .tot{border-top:1px solid #fff3;margin-top:4px;padding-top:5px;font-weight:800}#plbd .tot2{font-weight:800}[hidden]{display:none!important}#plb{cursor:pointer}#plb{color:#fff;background:linear-gradient(135deg,#6d35e0f0,#3b1a8cf0);border-color:#ffffff59}#plb .amt{display:block;font-size:22px;letter-spacing:-.01em;margin:1px 0 2px}#plb.pos .amt{color:#8dffbd}#plb.neg .amt{color:#ff9a90}body.bets .thm{display:none}
+#plbd{text-align:left;margin-top:8px;border-top:1px solid #fff3;padding-top:6px;width:min(260px,72vw);font:600 12px/1.3 system-ui;color:#eee}#plbd .bk{display:flex;justify-content:space-between;gap:10px;padding:3px 0}#plbd .bk i{display:block;font-style:normal;opacity:.65;font-size:10px}#plbd .bk b.p{color:#4fd18b}#plbd .bk b.n{color:#ff5a4d}#plbd .tot{border-top:1px solid #fff3;margin-top:4px;padding-top:5px;font-weight:800}#plbd .tot2{font-weight:800}[hidden]{display:none!important}#plb{cursor:pointer;transition:opacity .18s,transform .18s}#plb.away{opacity:0;transform:translate3d(0,-130%,0)!important;-webkit-transform:translate3d(0,-130%,0)!important;pointer-events:none}#plb{color:#fff;background:linear-gradient(135deg,#6d35e0f0,#3b1a8cf0);border-color:#ffffff59}#plb .amt{display:block;font-size:22px;letter-spacing:-.01em;margin:1px 0 2px}#plb.pos .amt{color:#8dffbd}#plb.neg .amt{color:#ff9a90}body.bets .thm{display:none}
 html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
 #sc{position:fixed;top:0;left:0;right:0;bottom:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding-bottom:calc(92px + env(safe-area-inset-bottom))}
 .bn,#plb,#ptr{transform:translate3d(0,0,0);-webkit-transform:translate3d(0,0,0);will-change:transform}
@@ -202,16 +202,16 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v141 -->
+<!-- Pics v142 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v141</span></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v142</span></div></div>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">NCAA</button><button data-sp="nba">NBA</button><button data-sp="mlb">MLB</button><button data-sp="nhl">NHL</button><button data-sp="ncaab">NCAAB</button></div>
   <input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team">
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v141 (one look)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v142 (one look)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -580,6 +580,11 @@ setInterval(() => { if (!document.hidden) xlSports(); }, 60000); setTimeout(xlSp
 document.addEventListener('visibilitychange', () => { if (!document.hidden) xlSports(); });
 // Never rebuild the page while a finger is on it or it is still scrolling (iOS lets fixed bars drift when the page changes under a scroll)
 SC.addEventListener('scroll', () => { window.__scrollAt = Date.now(); }, { passive: true });
+// The TODAY banner floats top-right. It stays in the header's empty corner; once the page scrolls far enough that the
+// sport chips (and everything under them) would slide beneath it, it tucks away, and comes back when you scroll to the top.
+function plbFit() { const pb = $('#plb'), lg = document.querySelector('header .lg'); if (!pb || !lg || pb.hidden) return; const under = lg.getBoundingClientRect().top < pb.offsetTop + pb.offsetHeight + 6; pb.classList.toggle('away', under); if (under && window.__plbo) plbClose(); }
+SC.addEventListener('scroll', () => { if (window.__plbf) return; window.__plbf = requestAnimationFrame(() => { window.__plbf = 0; plbFit(); }); }, { passive: true });
+window.addEventListener('resize', () => plbFit());
 window.__scrollAt = 0; ['scroll', 'touchstart', 'touchmove', 'touchend'].forEach((ev) => window.addEventListener(ev, () => { window.__scrollAt = Date.now(); }, { passive: true }));
 // Write HTML only when it changed, and never while a finger is down: stops taps being eaten by background re-renders
 const usd = (n) => { const r = Math.round((Number(n) || 0) * 100) / 100; return '$' + (Number.isInteger(r) ? r : r.toFixed(2)); };
@@ -628,7 +633,7 @@ function betsRender(force) {
   const pb = $('#plb'); if (pb) {
     pb.className = net >= 0 ? 'pos' : 'neg';
     pb.innerHTML = `<small class="lbl">TODAY</small><span class="amt">${money(net)}</span><small>risked ${riskTxt(td.risk)} · ${td.w}-${td.l}${td.p ? '-' + td.p : ''}</small>${td.live || td.settled ? `<small>settled ${money(td.settled)} · live ${money(td.live)}</small>` : ''}<small>tap for each bet ▾</small><div id="plbd" ${window.__plbo ? '' : 'hidden'}>${brk || '<div class="bk"><span>No bets today</span></div>'}<div class="bk tot"><span>Total wagered</span><b>${riskTxt(td.risk)}</b></div><div class="bk tot2"><span>Net today</span><b>${money(net)}</b></div></div>`;
-    try { localStorage.setItem('plbhtml26', pb.innerHTML); } catch (e) {} pb.onclick = () => { window.__plbo = !window.__plbo; const d = $('#plbd'); if (d) d.hidden = !window.__plbo; clearTimeout(window.__plbt); if (window.__plbo) window.__plbt = setTimeout(plbClose, 7000); };
+    try { localStorage.setItem('plbhtml26', pb.innerHTML); } catch (e) {} setTimeout(plbFit, 0); pb.onclick = () => { window.__plbo = !window.__plbo; const d = $('#plbd'); if (d) d.hidden = !window.__plbo; clearTimeout(window.__plbt); if (window.__plbo) window.__plbt = setTimeout(plbClose, 7000); };
   }
   const allDays = { ...snap, ...days };
   // a parlay with legs on several days also shows up in each earlier day's log (its result still counts once, on its main day)
@@ -1538,6 +1543,11 @@ function infoOpen(k) {
   o.innerHTML = '<div class="isb"><div class="ish"><b>' + d[0] + '</b><button onclick="document.getElementById(\'infosheet\').hidden=true">✕</button></div>' + d[1] + '</div>'; o.hidden = false;
 }
 let LKV = 'win', LKF = 'all';
+// Stat tiles follow the week picked: the Results week you open, or the week dropdown above the tiles. 'all' = whole season.
+let SWK = 'all';
+function swkSet(v) { SWK = v === 'all' ? 'all' : +v; render(); }
+// Called from a Results week header tap: opening a week points the tiles at it; closing that same week goes back to the season
+function swkTap(n, sm) { const d = sm && sm.parentNode, opening = d && !d.open; if (opening) SWK = n; else if (SWK === n) SWK = 'all'; setTimeout(() => render(), 0); }
 function lkSet(v, f) { if (v) LKV = v; if (f) LKF = f; render(); }
 function lockedHtml(LK) {
   if (!LK.length) return '';
@@ -1725,34 +1735,40 @@ function renderInner() {
   const byWeek = {};
   post.forEach((g) => (byWeek[g.week] = byWeek[g.week] || []).push(g));
   const weeks = Object.keys(byWeek).map(Number).sort((a, b) => b - a).map((n) => {
-    let h = 0, t = 0, ah = 0, am = 0, ap = 0;
+    let h = 0, t = 0, ah = 0, am = 0, ap = 0, hh = 0, ht = 0, lsh = 0, lst = 0, lah = 0, lam = 0; const lk = [];
     const rows = byWeek[n].map((g) => {
       const r = grade(g); if (!r) return '';
       t++; ST++; if (r.suHit) { h++; SH++; }
-      if (r.p.conf >= 0.65) { HT++; if (r.suHit) HH++; }
-      if (r.lk) { LK.push({ g, r }); LST++; if (r.lsu) LSH++; if (r.lats === 'hit') LAH++; else if (r.lats === 'miss') LAM++; }
+      if (r.p.conf >= 0.65) { HT++; ht++; if (r.suHit) { HH++; hh++; } }
+      if (r.lk) { LK.push({ g, r }); lk.push({ g, r }); LST++; lst++; if (r.lsu) { LSH++; lsh++; } if (r.lats === 'hit') { LAH++; lah++; } else if (r.lats === 'miss') { LAM++; lam++; } }
       if (r.atsRes === 'hit') { ah++; AH++; } else if (r.atsRes === 'miss') { am++; AM++; } else if (r.atsRes === 'push') { ap++; AP++; }
       const bad = (cls, txt) => `<span class="b ${cls}">${txt}</span>`;
       const b1 = bad(r.suHit ? 'hit' : 'miss', r.suHit ? '✓ Win pick' : '✗ Win pick');
       const b2 = r.atsRes ? bad(r.atsRes, (r.atsRes === 'hit' ? '✓' : r.atsRes === 'miss' ? '✗' : '–') + ' Spread') : '';
       return `<details data-k="g${g.id}" ${isOpen('g' + g.id, false) ? 'open' : ''} class="res ${r.suHit ? 'hit' : 'miss'}"><summary><div class="rtop"><div><b>${g.away.abbr} ${g.away.score} – ${g.home.abbr} ${g.home.score}</b><small>Pick ${r.p.su.abbr} ${pct(r.p.conf)}${r.p.ats ? ` · lean ${r.p.ats.side.abbr} ${sp(r.p.ats.line)}` : ''}</small></div><div class="badges">${b1}${b2}${r.lk ? `<span class="b ${r.lsu ? 'hit' : 'miss'}">🔒 ${r.lsu ? '✓' : '✗'}${r.lats ? ' / ' + (r.lats === 'hit' ? '✓' : r.lats === 'miss' ? '✗' : '–') : ''} Locked</span>` : ''}</div></div></summary>${resDetail(g, r)}${lmBlock(g)}</details>`;
     }).join('');
-    return { n, h, t, ah, am, ap, rows };
+    return { n, h, t, ah, am, ap, hh, ht, lsh, lst, lah, lam, lk, rows };
   });
-  const atsN = AH + AM;
-  $('#sums').innerHTML = `
-    <div class="sum"><i class="ibtn" onclick="event.stopPropagation();infoOpen('picks')">ⓘ</i><b>${ST ? pct(SH / ST, 1) : '–'}</b><span>Win picks (backtest)</span><small>${SH}-${ST - SH}${HT ? ` · 65%+ picks ${HH}-${HT - HH}` : ''}</small></div>
-    <div class="sum"><i class="ibtn" onclick="event.stopPropagation();infoOpen('spread')">ⓘ</i><b>${atsN ? pct(AH / atsN, 1) : '–'}</b><span>Spread (backtest)</span><small>${AH}-${AM}${AP ? '-' + AP : ''}${atsN ? '' : ' (loading lines…)'}</small></div>`;
+  // Tiles show the season, or just the picked week (SWK). Drop a picked week that isn't in this league's results.
+  if (SWK !== 'all' && !weeks.some((w) => w.n === SWK)) SWK = 'all';
+  const SW = SWK === 'all' ? null : weeks.find((w) => w.n === SWK);
+  const T = SW ? { SH: SW.h, ST: SW.t, AH: SW.ah, AM: SW.am, AP: SW.ap, HH: SW.hh, HT: SW.ht, LSH: SW.lsh, LST: SW.lst, LAH: SW.lah, LAM: SW.lam, LK: SW.lk } : { SH, ST, AH, AM, AP, HH, HT, LSH, LST, LAH, LAM, LK };
+  const wl = SW ? 'Wk ' + SW.n + ' ' : '';
+  const atsN = AH + AM, tAts = T.AH + T.AM;
+  const wkPick = weeks.length ? `<div class="swk"><label for="swksel">Showing</label><select id="swksel" onchange="swkSet(this.value)"><option value="all" ${SW ? '' : 'selected'}>Whole season · ${SH}-${ST - SH}</option>${weeks.map((w) => `<option value="${w.n}" ${SW && SW.n === w.n ? 'selected' : ''}>Week ${w.n} · ${w.h}-${w.t - w.h} picks</option>`).join('')}</select>${SW ? `<button onclick="swkSet('all')">Season</button>` : ''}</div>` : '';
+  $('#sums').innerHTML = wkPick + `
+    <div class="sum"><i class="ibtn" onclick="event.stopPropagation();infoOpen('picks')">ⓘ</i><b>${T.ST ? pct(T.SH / T.ST, 1) : '–'}</b><span>${wl}Win picks (backtest)</span><small>${T.SH}-${T.ST - T.SH}${T.HT ? ` · 65%+ picks ${T.HH}-${T.HT - T.HH}` : ''}</small></div>
+    <div class="sum"><i class="ibtn" onclick="event.stopPropagation();infoOpen('spread')">ⓘ</i><b>${tAts ? pct(T.AH / tAts, 1) : '–'}</b><span>${wl}Spread (backtest)</span><small>${T.AH}-${T.AM}${T.AP ? '-' + T.AP : ''}${tAts || SW ? '' : ' (loading lines…)'}</small></div>`;
 
   $('#sums').innerHTML += `
-    <div class="sum lock" onclick="lockOpen('win')" style="cursor:pointer"><i class="ibtn" onclick="event.stopPropagation();infoOpen('lock')">ⓘ</i><b>${LST ? pct(LSH / LST, 1) : '–'}</b><span>🔒 Locked win picks</span><small>${LST ? LSH + '-' + (LST - LSH) : 'counts games picked before kickoff'}</small></div>
-    <div class="sum lock" onclick="lockOpen('spread')" style="cursor:pointer"><i class="ibtn" onclick="event.stopPropagation();infoOpen('lock')">ⓘ</i><b>${LAH + LAM ? pct(LAH / (LAH + LAM), 1) : '–'}</b><span>🔒 Locked spread</span><small>${LAH + LAM ? LAH + '-' + LAM : 'starts with the next finished game'} · tap to see</small></div>`;
+    <div class="sum lock" onclick="lockOpen('win')" style="cursor:pointer"><i class="ibtn" onclick="event.stopPropagation();infoOpen('lock')">ⓘ</i><b>${T.LST ? pct(T.LSH / T.LST, 1) : '–'}</b><span>🔒 ${wl}Locked win picks</span><small>${T.LST ? T.LSH + '-' + (T.LST - T.LSH) : SW ? 'no locked picks this week' : 'counts games picked before kickoff'}</small></div>
+    <div class="sum lock" onclick="lockOpen('spread')" style="cursor:pointer"><i class="ibtn" onclick="event.stopPropagation();infoOpen('lock')">ⓘ</i><b>${T.LAH + T.LAM ? pct(T.LAH / (T.LAH + T.LAM), 1) : '–'}</b><span>🔒 ${wl}Locked spread</span><small>${T.LAH + T.LAM ? T.LAH + '-' + T.LAM : SW ? 'none this week' : 'starts with the next finished game'} · tap to see</small></div>`;
   railRender(games, thisWeek); livePageRender(games); navRender();
-  const lockedBox = lockedHtml(LK);
+  const lockedBox = lockedHtml(T.LK); // the locked list matches the tiles (same week)
   { const f = (h, t) => (t ? Math.round(h / t * 100) + '%' : '–'); NST = `<div class="nst">Win <b>${f(SH, ST)}</b> · Spread <b>${f(AH, atsN)}</b><br>🔒 Win <b>${f(LSH, LST)}</b> · 🔒 Spread <b>${f(LAH, LAH + LAM)}</b></div>`; }
   const bestHtml = TEAM ? '' : weekBoard([...thisWeek, ...post.filter((g) => g.week === CUR)]) + titleBoard();
   const restHtml = Object.keys(future).length ? '<div class="gh">Rest of season</div>' + Object.keys(future).map(Number).sort((a, b) => a - b).map((n) => `<details data-k="f${n}" ${isOpen('f' + n, n === CUR + 1) ? 'open' : ''}><summary>Week ${n}: ${future[n].length} games · exp ${projText(future[n])}</summary>${future[n].map(card).join('')}</details>`).join('') : '';
-  const resHtml = weeks.length ? '<div class="gh">Results</div>' + weeks.map((w) => `<details data-k="r${w.n}" ${isOpen('r' + w.n, w.n === CUR) ? 'open' : ''}><summary>Week ${w.n}: ${w.h}-${w.t - w.h} picks · spread ${w.ah}-${w.am}${w.ap ? '-' + w.ap : ''}</summary>${w.rows}</details>`).join('') : '';
+  const resHtml = weeks.length ? '<div class="gh">Results</div>' + weeks.map((w) => `<details data-k="r${w.n}" ${isOpen('r' + w.n, w.n === CUR) ? 'open' : ''}><summary onclick="swkTap(${w.n},this)">Week ${w.n}${SW && SW.n === w.n ? ' 📊' : ''}: ${w.h}-${w.t - w.h} picks · spread ${w.ah}-${w.am}${w.ap ? '-' + w.ap : ''}</summary>${w.rows}</details>`).join('') : '';
   if (STYLE === 'new') {
     setH($('#gvbar'), GVS.map(([k, l]) => `<button class="${GV === k ? 'on' : ''}" onclick="gvSet('${k}')">${l}</button>`).join(''));
     setH($('#nb'), teamBox(games) + newBoard(games));

@@ -35,7 +35,7 @@ const CACHE = new Map();
 async function entitlement(email, fresh) {
   const c = CACHE.get(email); if (!fresh && c && Date.now() - c.t < 120e3) return c.v;
   const r = await ma('/api/v1/account', { email });
-  if (!r.ok && (r.status >= 500 || r.status === 401 || r.status === 429)) throw new Error('Account service unavailable'); // asleep or misconfigured: never treat as "no account", never cache
+  if (!r.ok && r.status !== 404 && r.status !== 403) throw new Error('Account service unavailable'); // asleep or misconfigured: never treat as "no account", never cache
   const v = r.ok ? r.j : null; CACHE.set(email, { t: Date.now(), v }); return v;
 }
 async function shape(email, fresh) {

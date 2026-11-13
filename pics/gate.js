@@ -36,7 +36,7 @@
       return;
     }
     const m = me, dl = m.expires_on ? Math.ceil((new Date(m.expires_on + 'T23:59:59') - Date.now()) / 864e5) : 0;
-    el.innerHTML = '<div class="gb"><h1>Subscribe to Oddable</h1><p>' + (m.plan === 'pro' ? 'Your access ended ' + m.expires_on + '.' : (m.source === 'trial' || !m.expires_on ? 'Your free trial has ended.' : 'Your subscription has ended.')) + ' $' + m.price + ' per month unlocks everything.</p>' +
+    el.innerHTML = '<div class="gb"><h1>Subscribe to Oddable</h1><p>' + (m.plan === 'pro' ? 'Your access ended ' + m.expires_on + '.' : (m.source === 'trial' ? 'Your free trial has ended.' : 'Your access has ended.')) + ' $' + m.price + ' per month unlocks everything.</p>' +
       (m.pending ? '<div class="box ok">Payment request received. You will be unlocked as soon as it is confirmed. Tap Check again in a minute.</div>' : '') +
       '<div class="box"><b>Step 1.</b> Send $' + m.price + ' on Cash App' + (m.tag ? ' to <b>' + m.tag + '</b>' : '') + '.' +
       (m.link ? '<button id="gcash">Pay $' + m.price + ' with Cash App</button>' : '<p class="er">Payment is not set up yet. Contact the owner.</p>') +
@@ -109,8 +109,8 @@
   const of = window.fetch; window.fetch = function (u, o) { try { if (String(u).indexOf('/ai/') > -1 && g('odd-tok')) { o = Object.assign({}, o); o.headers = Object.assign({}, o.headers, { 'x-token': g('odd-tok') }); } } catch (e) {} return of.call(this, u, o); };
   async function boot() {
     let on = false;
-    try { const r = await fetch(API + '/status', { cache: 'no-store' }); on = (await r.json()).gate === true; s('odd-gate', on ? '1' : '0'); }
-    catch (e) { on = g('odd-gate') === '1'; }
+    try { const r = await fetch(API + '/status', { cache: 'no-store', signal: AbortSignal.timeout(12000) }); on = (await r.json()).gate === true; s('odd-gate', on ? '1' : '0'); }
+    catch (e) { const k = g('odd-gate'); if (k === null) { show(); if (el) { el.innerHTML = '<div class="gb"><h1>Oddable</h1><p class="er">Could not reach the server. It may be waking up.</p><button id="gretry">Try again</button></div>'; const rb = $('gretry'); if (rb) rb.onclick = () => location.reload(); } return; } on = k === '1'; }
     if (!on) return;
     if (!g('odd-tok')) { if (g('sync-phone') && g('sync-pin') && !g('odd-noauto')) { show(); $('gate').innerHTML = '<div class="gb"><h1>Oddable</h1><p>Signing you in…</p></div>'; if (await autoPhone()) return; } show(); return; }
     // Offline / server asleep: keep working for 72h after the last successful check.

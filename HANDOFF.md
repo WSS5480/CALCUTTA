@@ -80,3 +80,6 @@ Start here if you are a new AI session picking up this repo. Update this file in
 
 ## My Apps .15 (2026-11-12) — Oddable "0 customers" explained
 - User: "Oddable still 0". Real users exist (4 phone+PIN accounts, seen live in the bets view) but they only become My Apps customers when they next open the new Oddable login (auto sign-in creates the account + 7-day trial). Home tile and the Oddable page now also show "N using it" from the Oddable server (cached 5 min, fetched in the background so pages never wait).
+
+## My Apps .16 (2026-11-13) — give free days to Oddable players who haven't signed in yet
+- User couldn't give free time: players only exist in My Apps after their phone signs in. /sync/admin now returns each user's derived account email (`acct`, via acct.js phoneEmail); My Apps Bets & win % → tap a user → "Give free days" creates/extends their subscription (extendSub). grantTrial uses ON CONFLICT DO NOTHING so the pre-made access survives their first sign-in. Tested locally (+7 shows "7 days" on the Oddable page).

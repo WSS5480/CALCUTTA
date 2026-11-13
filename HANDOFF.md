@@ -88,3 +88,5 @@ Start here if you are a new AI session picking up this repo. Update this file in
 - User circled "4 using it" on the Oddable tile: "Nothing behind it". Tapping the Oddable tile (or ?app=oddable) now opens the players list (tiles + a card per player: bets, record, win %, last active, access days left or "no access yet"); tap a player for the by-day record and "Give free days". Back goes to home.
 
 - My Apps .18 (2026-11-13): version ("v18") shown top left next to the My Apps title, per user.
+
+- My Apps .19 (2026-11-13): reviewer fixes — Oddable fetch timeout 40s + friendly 'waking up' with Reload; summary tiles on the players page drill to the list; access status (days left) on the player detail page; encoded ids in links. Not fixed: /days/add still gives no error message; limit=2000 users.

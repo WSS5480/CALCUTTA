@@ -47,3 +47,6 @@ Start here if you are a new AI session picking up this repo. Update this file in
 ## v152 (2026-11-12) — bigger tap targets
 - User: "Buttons hard to hit". Chips, tags, leg buttons, nav bars, ⓘ, pills, week/game bars now min 44px high (ⓘ 44px box). Closes the "ⓘ ~23px" open item.
 - My Apps: Oddable added to console ($99/mo, Cash App, 7-day trial). Console deploys from branch `karaoke-bars` (not main). Env vars still to set: My Apps CASHAPP_TAG + APP_SECRET_ODDABLE; calcutta-odds MYAPPS_URL + MYAPPS_SECRET.
+
+## v153 (2026-11-12) — Kalshi connect card never reopens on load
+- User: "the Kalshi still there". Card no longer restores from `kal-formopen` at startup (still opens when tapping Connect Kalshi or after a failed connect; draft kept for retry). Decision: an open card must never survive a reload.

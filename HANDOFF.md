@@ -70,3 +70,6 @@ Start here if you are a new AI session picking up this repo. Update this file in
 - odds-api/sync.js `/sync/admin` (POST {secret}=MYAPPS_SECRET): per-user bets, record, win %, risk, settled P/L, per-day rows from the synced `log` (finished days only). No phones (only hashes).
 - My Apps build .12: `/?show=bets` (+ `&bu=id` drill, back button); link on the Oddable app page. Needs APP_SECRET_ODDABLE (already set); optional ODDABLE_API.
 - Also in this batch: code-review fixes (entitlement errors not cached, XFF last entry, TRY cap) and My Apps .11 fixes.
+
+## My Apps .13 (2026-11-12) — identify by PIN id, then Cash App name
+- User: no name at signup. Phone-account users show as "User ····<id>"; the Confirm payment form has a "Cash App name" box (phone accounts only) that saves ma_users.name and replaces the label. Labels come from SQL `label` in listSubscriptions/listPayments.

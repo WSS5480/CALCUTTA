@@ -99,3 +99,10 @@ Start here if you are a new AI session picking up this repo. Update this file in
 - acct.js entitlement: only 404 (no account) / 403 (suspended) mean "no account"; any other My Apps error (400 config/DB, etc.) is "unavailable" and never cached, so a My Apps hiccup can't sign everyone out.
 - gate.js: fresh phone with no cached gate state and an unreachable server now shows "Could not reach the server / Try again" instead of opening the app (12 s timeout on /status). Expired message: "Your free trial has ended" only for trial source, else "Your access has ended."
 - Not fixed (open): push reminders are lost if My Apps sleeps through a day bucket (needs a cron/keepalive hitting /push/run); client counts local end-of-day while server expires on UTC date (Texas users lose access ~6–7pm on the last day; 7-day trial ≈ 8 days); payConfirm not atomic; extendSub keeps old `source`; sign-out leaves the push subscription on the old account.
+
+## v159 / My Apps .21 (2026-11-13) — the "not fixed" list
+- User: "Not fixed. You know the answers." and "Code is a generator… was already built" → the free-code generator/signature is left exactly as it was (I tried a stronger signature, reverted). Codes stay protected by the redeem throttle added earlier.
+- Expiry now ends at end of the Central-time day (store.js `chiToday`, My Apps daysLeft, push SQL use America/Chicago) — Texas users no longer lose access in the evening of the last day.
+- Push reminders catch up: any subscription 0–5 days out gets the nearest bucket once (smallest bucket ≥ days left), so a missed day is sent late instead of lost.
+- New Oddable accounts need a PIN of 6–10 digits (existing 4-digit PINs still work).
+- Still open: trial farming (phone numbers unverified; capped by 6 new accounts / IP / 15 min), token key derives from MYAPPS_SECRET unless GATE_KEY is set, adminSetPassword by any app secret, no CSRF token, payConfirm not atomic, extendSub keeps old `source`.

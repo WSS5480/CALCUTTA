@@ -77,6 +77,7 @@ async function handle(req, res) {
     if (blocked(id) || blocked('ip:' + ip)) { send(res, 429, { error: 'Too many wrong PINs. Try again in 15 minutes.' }); return true; }
     const row = await dbGet(id);
     if (path === '/sync/signup') {
+      if (!row && !/^\d{6,10}$/.test(pin)) { send(res, 400, { error: 'New accounts need a PIN of 6 to 10 digits' }); return true; }
       if (!row && blocked('mk:' + ip)) { send(res, 429, { error: 'Too many new accounts from here. Try later.' }); return true; }
       if (!row) fail('mk:' + ip);
       if (row) { send(res, 409, { error: 'That number already has an account. Use Sign in.' }); return true; }
@@ -120,6 +121,7 @@ async function verifyLogin(phone, pin, ip, create) {
   if (blocked(id) || blocked('ip:' + ip)) throw bad(429, 'Too many wrong PINs. Try again in 15 minutes.');
   const row = await dbGet(id);
   if (!row) {
+    if (create && !/^\d{6,10}$/.test(pin)) throw bad(400, 'New accounts need a PIN of 6 to 10 digits');
     if (create && blocked('mk:' + ip)) throw bad(429, 'Too many new accounts from here. Try later.');
     if (!create) { fail('ip:' + ip); throw bad(401, 'No account for that number. Use Create account.'); }
     fail('mk:' + ip); const salt = crypto.randomBytes(16).toString('hex');

@@ -24,7 +24,7 @@
         '<div class="tabs"><button class="' + (!up ? 'on' : 'alt') + '" id="gt-in">Sign in</button><button class="' + (up ? 'on' : 'alt') + '" id="gt-up">Create account</button></div>' +
         (em ? (up ? '<input id="gname" placeholder="Name" autocomplete="name">' : '') +
           '<input id="gemail" type="email" placeholder="Email" autocomplete="email" autocapitalize="none"><input id="gpw" type="password" placeholder="Password (8+ characters)" autocomplete="' + (up ? 'new-password' : 'current-password') + '">'
-          : '<input id="gph" type="tel" inputmode="numeric" placeholder="Cell number" autocomplete="tel"><input id="gpn" type="password" inputmode="numeric" placeholder="PIN (4-10 digits)" autocomplete="off">') +
+          : '<input id="gph" type="tel" inputmode="numeric" placeholder="Cell number" autocomplete="tel"><input id="gpn" type="password" inputmode="numeric" placeholder="PIN (new accounts: 6-10 digits)" autocomplete="off">') +
         '<div class="er" id="gerr"></div><button id="gdo">' + (up ? 'Start free trial' : 'Sign in') + '</button>' +
         '<button id="gsw" class="alt">' + (em ? 'Use cell number + PIN instead' : 'Use email + password instead') + '</button>' +
         '<p style="font-size:13px;color:#8fa0bf;margin:14px 0 0">This app is in development. Credit card payments are coming soon.</p>' +

@@ -90,6 +90,7 @@ async function handle(req, res) {
       const salt = crypto.randomBytes(16).toString('hex');
       const data = merge({}, b.data || {});
       await dbPut({ id, salt, pinhash: hashPin(pin, salt), data, updated: Date.now() }, true);
+      const mine = await dbGet(id); if (!mine || !same(hashPin(pin, mine.salt), mine.pinhash)) { send(res, 409, { error: 'That number already has an account. Use Sign in.' }); return true; }
       send(res, 200, { ok: true, data, updated: Date.now() }); return true;
     }
     if (!row || !same(hashPin(pin, row.salt), row.pinhash)) { fail(id); fail('ip:' + ip); send(res, 401, { error: row ? 'Wrong PIN' : 'No account for that number. Use Create account.' }); return true; }
@@ -136,6 +137,7 @@ async function verifyLogin(phone, pin, ip, create) {
     if (!create) { fail('ip:' + ip); throw bad(401, 'No account for that number. Use Create account.'); }
     fail('mk:' + ip); const salt = crypto.randomBytes(16).toString('hex');
     await dbPut({ id, salt, pinhash: hashPin(pin, salt), data: {}, updated: Date.now() }, true);
+    const mine = await dbGet(id); if (!mine || !same(hashPin(pin, mine.salt), mine.pinhash)) throw bad(409, 'That number already has an account. Use Sign in.'); // lost a simultaneous sign-up
     return { id, created: true };
   }
   if (create) throw bad(409, 'That number already has an account. Use Sign in.');

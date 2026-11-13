@@ -83,3 +83,6 @@ Start here if you are a new AI session picking up this repo. Update this file in
 
 ## My Apps .16 (2026-11-13) — give free days to Oddable players who haven't signed in yet
 - User couldn't give free time: players only exist in My Apps after their phone signs in. /sync/admin now returns each user's derived account email (`acct`, via acct.js phoneEmail); My Apps Bets & win % → tap a user → "Give free days" creates/extends their subscription (extendSub). grantTrial uses ON CONFLICT DO NOTHING so the pre-made access survives their first sign-in. Tested locally (+7 shows "7 days" on the Oddable page).
+
+## My Apps .17 (2026-11-13) — Oddable tile/page shows the real players
+- User circled "4 using it" on the Oddable tile: "Nothing behind it". Tapping the Oddable tile (or ?app=oddable) now opens the players list (tiles + a card per player: bets, record, win %, last active, access days left or "no access yet"); tap a player for the by-day record and "Give free days". Back goes to home.

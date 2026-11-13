@@ -43,3 +43,7 @@ Start here if you are a new AI session picking up this repo. Update this file in
 ## Open items
 - Upgrade The Odds API plan once Oddable sells.
 - `classic.html` does not have the week filter or the banner tuck-away (only `index.html`, the live look).
+
+## v152 (2026-11-12) — bigger tap targets
+- User: "Buttons hard to hit". Chips, tags, leg buttons, nav bars, ⓘ, pills, week/game bars now min 44px high (ⓘ 44px box). Closes the "ⓘ ~23px" open item.
+- My Apps: Oddable added to console ($99/mo, Cash App, 7-day trial). Console deploys from branch `karaoke-bars` (not main). Env vars still to set: My Apps CASHAPP_TAG + APP_SECRET_ODDABLE; calcutta-odds MYAPPS_URL + MYAPPS_SECRET.

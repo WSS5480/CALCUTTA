@@ -77,6 +77,8 @@ async function handle(req, res) {
     if (blocked(id) || blocked('ip:' + ip)) { send(res, 429, { error: 'Too many wrong PINs. Try again in 15 minutes.' }); return true; }
     const row = await dbGet(id);
     if (path === '/sync/signup') {
+      if (!row && blocked('mk:' + ip)) { send(res, 429, { error: 'Too many new accounts from here. Try later.' }); return true; }
+      if (!row) fail('mk:' + ip);
       if (row) { send(res, 409, { error: 'That number already has an account. Use Sign in.' }); return true; }
       const salt = crypto.randomBytes(16).toString('hex');
       const data = merge({}, b.data || {});

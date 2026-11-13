@@ -107,6 +107,7 @@ async function handle(req, res) {
       CACHE.delete(e); send(res, 200, { ok: true, ref: r.j.ref, link: r.j.link, amount: r.j.amount }); return true;
     }
     if (path === '/acct/redeem') {
+      if (throttled(ip + '|redeem') || throttled(e + '|redeem')) { send(res, 429, { error: 'Too many tries, wait a few minutes' }); return true; }
       const r = await ma('/api/v1/redeem', { account: e, code: String(b.code || '').trim() });
       if (!r.ok) { send(res, 400, { error: r.j.error || 'Code not valid' }); return true; }
       CACHE.delete(e); send(res, 200, { me: await shape(e, true) }); return true;

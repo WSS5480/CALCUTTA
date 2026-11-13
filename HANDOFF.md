@@ -90,3 +90,7 @@ Start here if you are a new AI session picking up this repo. Update this file in
 - My Apps .18 (2026-11-13): version ("v18") shown top left next to the My Apps title, per user.
 
 - My Apps .19 (2026-11-13): reviewer fixes — Oddable fetch timeout 40s + friendly 'waking up' with Reload; summary tiles on the players page drill to the list; access status (days left) on the player detail page; encoded ids in links. Not fixed: /days/add still gives no error message; limit=2000 users.
+
+## Three-review pass (2026-11-13) — My Apps .20
+- Reviews: phone UI, security, end-to-end flow. Fixed now: console login throttle (8 wrong/10 min per IP) + `password=%` crash (try/catch + process-level handlers); `back` redirect rejects backslash; confirm prompts on reject payment / revoke code / remove own account; Oddable "Active" tile filters to active players (`&f=active`); Oddable server: throttle on /acct/redeem (per ip + account) and on /sync/signup creates.
+- Known/not fixed (decisions needed): redeem code signature is 6 hex (24-bit) and days uncapped — fixing breaks codes already handed out; trial farming (phone numbers not verified); 4-digit PINs are brute-forceable slowly and in-memory throttle resets on restart; token key derives from MYAPPS_SECRET unless GATE_KEY is set; any app secret can reset any central password (store.js adminSetPassword); no CSRF token (SameSite=Lax only); Customers tab vs home counts differ; Dose payments table on phones.

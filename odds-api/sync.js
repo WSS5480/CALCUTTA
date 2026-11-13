@@ -116,6 +116,9 @@ async function adminUsers(emailOf) {
     const d = x.data || {}, bets = arr(d.bets), log = d.log || {}, days = {}, N = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
     let w = 0, l = 0, p = 0, risk = 0, pl = 0;
     Object.keys(log).forEach((k) => { const o = log[k] || {}; w += N(o.w); l += N(o.l); p += N(o.p); risk += N(o.risk); pl += N(o.settled); days[k] = { n: N(o.n), w: N(o.w), l: N(o.l), p: N(o.p), risk: Math.round(N(o.risk) * 100) / 100, pl: Math.round(N(o.settled) * 100) / 100 }; });
+    // Per-bet remembered results (fin/finPL, v163+) are the most complete; use them when they cover at least as many bets as the frozen daily log.
+    let bw = 0, bl = 0, bp = 0, bpl = 0; bets.forEach((b) => { if (b && b.fin) { if (b.fin === 'won') bw++; else if (b.fin === 'lost') bl++; else if (b.fin === 'push') bp++; bpl += N(b.finPL); } });
+    if (bw + bl + bp > w + l + p) { w = bw; l = bl; p = bp; pl = bpl; }
     const dayKeys = Object.keys(days).filter((k) => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
     return { id: String(x.id).slice(0, 20), acct: emailOf ? emailOf(String(x.id)) : null, tag: String(x.id).slice(0, 4), updated: x.updated || 0, bets: bets.length, picks: Object.keys(d.locks || {}).length, w, l, p, pct: w + l ? Math.round((w / (w + l)) * 1000) / 10 : null, risk: Math.round(risk * 100) / 100, pl: Math.round(pl * 100) / 100, first: dayKeys[0] || null, last: dayKeys[dayKeys.length - 1] || null, days: dayKeys.slice(-400).reverse().map((k) => Object.assign({ day: k }, days[k])) };
   }).sort((a, b) => b.updated - a.updated);

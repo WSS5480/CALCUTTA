@@ -133,3 +133,7 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 - Sign-up race: after an ignore-duplicates insert the server re-reads the row and returns 409 if the stored PIN isn't the caller's (no false success for the loser). Removed a duplicate banner click listener. Note: first deploy signs the owner out once (tokens now carry a PIN version) — re-enter the owner PIN. Set PUBLIC_URL (or rely on Render's RENDER_EXTERNAL_URL) for password-reset links. Optional: set SESSION_SECRET on My Apps.
 
 - My Apps .24 (2026-11-13): Oddable players page tiles say 'all time' (bets placed, win %); By-day list shows every finished day (was last 45). Active-this-week tile moved last.
+
+## v163 (2026-11-13) — player bets / win $ were wrong
+- Cause: results are graded live from the loaded scoreboard, and the daily log snapshot overwrote a day with whatever could be graded NOW. Once old games dropped out of the scoreboard, bets went back to "pending" and the frozen day lost settled results (e.g. a day with 4 bets showed 0-1).
+- Fix: each bet remembers its first final result (`fin`, `finPL`) and uses it when the game isn't loaded; editing a bet or changing a prop/leg result clears it; the day snapshot never regresses (only overwritten by an equal-or-more-settled count); /sync/admin uses per-bet results when they cover more bets than the log. Old days already damaged can't be recovered server-side; they repair as each player's phone re-grades (games still loadable). Tested: result survives the game leaving the scoreboard.

@@ -137,3 +137,7 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 ## v163 (2026-11-13) — player bets / win $ were wrong
 - Cause: results are graded live from the loaded scoreboard, and the daily log snapshot overwrote a day with whatever could be graded NOW. Once old games dropped out of the scoreboard, bets went back to "pending" and the frozen day lost settled results (e.g. a day with 4 bets showed 0-1).
 - Fix: each bet remembers its first final result (`fin`, `finPL`) and uses it when the game isn't loaded; editing a bet or changing a prop/leg result clears it; the day snapshot never regresses (only overwritten by an equal-or-more-settled count); /sync/admin uses per-bet results when they cover more bets than the log. Old days already damaged can't be recovered server-side; they repair as each player's phone re-grades (games still loadable). Tested: result survives the game leaving the scoreboard.
+
+## 2026-11-13 — My Apps build .25: one shared Cash App tag
+- Cash App tag is entered once on the My Apps console home (ma_settings key `cashtag`); every app's pay link uses it. Dose Guide's box writes the same value. CASHAPP_TAG env is only a fallback. Reason: Steve wants every app to ask for it the same way he just did in the Dose Guide.
+- Owner phone alerts (web push) are NOT shipped: branch `owner-push-wip` in MY_APPS_MANAGEMENT, subscribe route still failing locally.

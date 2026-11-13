@@ -50,3 +50,7 @@ Start here if you are a new AI session picking up this repo. Update this file in
 
 ## v153 (2026-11-12) — Kalshi connect card never reopens on load
 - User: "the Kalshi still there". Card no longer restores from `kal-formopen` at startup (still opens when tapping Connect Kalshi or after a failed connect; draft kept for retry). Decision: an open card must never survive a reload.
+
+## v154 (2026-11-12) — Owner PIN on Oddable sign-in
+- User asked for PIN login (4-digit, set in Render as OWNER_PIN on calcutta-odds) so the owner gets in free without paying, like the Dive app. Sign-in screen has an "Owner?" box; server mints an owner token; 8 tries/10 min throttle per IP.
+- Decision: owner access by PIN, not by a My Apps free account. Same PIN also set as the My Apps console password (APP_PASSWORD) at his request.

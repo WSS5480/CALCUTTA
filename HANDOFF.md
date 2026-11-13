@@ -131,3 +131,5 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v162 (2026-11-13) — review of the fixes
 - Sign-up race: after an ignore-duplicates insert the server re-reads the row and returns 409 if the stored PIN isn't the caller's (no false success for the loser). Removed a duplicate banner click listener. Note: first deploy signs the owner out once (tokens now carry a PIN version) — re-enter the owner PIN. Set PUBLIC_URL (or rely on Render's RENDER_EXTERNAL_URL) for password-reset links. Optional: set SESSION_SECRET on My Apps.
+
+- My Apps .24 (2026-11-13): Oddable players page tiles say 'all time' (bets placed, win %); By-day list shows every finished day (was last 45). Active-this-week tile moved last.

@@ -117,7 +117,7 @@ async function adminUsers(emailOf) {
     let w = 0, l = 0, p = 0, risk = 0, pl = 0;
     Object.keys(log).forEach((k) => { const o = log[k] || {}; w += N(o.w); l += N(o.l); p += N(o.p); risk += N(o.risk); pl += N(o.settled); days[k] = { n: N(o.n), w: N(o.w), l: N(o.l), p: N(o.p), risk: Math.round(N(o.risk) * 100) / 100, pl: Math.round(N(o.settled) * 100) / 100 }; });
     const dayKeys = Object.keys(days).filter((k) => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
-    return { id: String(x.id).slice(0, 20), acct: emailOf ? emailOf(String(x.id)) : null, tag: String(x.id).slice(0, 4), updated: x.updated || 0, bets: bets.length, picks: Object.keys(d.locks || {}).length, w, l, p, pct: w + l ? Math.round((w / (w + l)) * 1000) / 10 : null, risk: Math.round(risk * 100) / 100, pl: Math.round(pl * 100) / 100, first: dayKeys[0] || null, last: dayKeys[dayKeys.length - 1] || null, days: dayKeys.slice(-45).reverse().map((k) => Object.assign({ day: k }, days[k])) };
+    return { id: String(x.id).slice(0, 20), acct: emailOf ? emailOf(String(x.id)) : null, tag: String(x.id).slice(0, 4), updated: x.updated || 0, bets: bets.length, picks: Object.keys(d.locks || {}).length, w, l, p, pct: w + l ? Math.round((w / (w + l)) * 1000) / 10 : null, risk: Math.round(risk * 100) / 100, pl: Math.round(pl * 100) / 100, first: dayKeys[0] || null, last: dayKeys[dayKeys.length - 1] || null, days: dayKeys.slice(-400).reverse().map((k) => Object.assign({ day: k }, days[k])) };
   }).sort((a, b) => b.updated - a.updated);
 }
 

@@ -62,3 +62,11 @@ Start here if you are a new AI session picking up this repo. Update this file in
 
 ## v155 (2026-11-12) — in-development notice
 - User: show "This app is in development. Credit card payments are coming soon." on Oddable sign-in and subscribe screens. Add the same line to Dose Guide and TX Case Desk when their pay screens are wired. Card payments are a later build.
+
+## v156/v157 (2026-11-12) — phone + PIN is the Oddable login; owner bets dashboard; code-review fixes
+- User chose: existing Oddable users keep logging in with cell number + PIN (Supabase `oddable_sync`). The live gate had been forcing them to make new My Apps accounts.
+- odds-api/acct.js `/acct/phone` ({phone,pin,create}) verifies via sync.js `verifyLogin`, then maps to a My Apps account `<first 20 hex of phone-hash>@phone.oddable` (password = HMAC(GATE_KEY, id); register, else login). New My Apps accounts get the 7-day trial, then Cash App renewal. Rotating GATE_KEY / MYAPPS_SECRET breaks these derived passwords, so don't.
+- pics/gate.js: sign-in screen is phone + PIN first (email is a secondary link). Phones with saved sync creds sign in automatically (no typing); Sign out sets `odd-noauto` so it doesn't re-sign-in until a manual login.
+- odds-api/sync.js `/sync/admin` (POST {secret}=MYAPPS_SECRET): per-user bets, record, win %, risk, settled P/L, per-day rows from the synced `log` (finished days only). No phones (only hashes).
+- My Apps build .12: `/?show=bets` (+ `&bu=id` drill, back button); link on the Oddable app page. Needs APP_SECRET_ODDABLE (already set); optional ODDABLE_API.
+- Also in this batch: code-review fixes (entitlement errors not cached, XFF last entry, TRY cap) and My Apps .11 fixes.

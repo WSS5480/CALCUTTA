@@ -19,15 +19,19 @@
   function draw() {
     if (!el) return;
     if (!g('odd-tok') || !me) {
+      const em = mode === 'ein' || mode === 'eup', up = mode === 'up' || mode === 'eup';
       el.innerHTML = '<div class="gb"><h1>Oddable</h1><p>Sign in to see picks, locked records and your bets. New accounts get a 7-day free trial.</p>' +
-        '<div class="tabs"><button class="' + (mode === 'in' ? 'on' : 'alt') + '" id="gt-in">Sign in</button><button class="' + (mode === 'up' ? 'on' : 'alt') + '" id="gt-up">Create account</button></div>' +
-        (mode === 'up' ? '<input id="gname" placeholder="Name" autocomplete="name">' : '') +
-        '<input id="gemail" type="email" placeholder="Email" autocomplete="email" autocapitalize="none"><input id="gpw" type="password" placeholder="Password (8+ characters)" autocomplete="' + (mode === 'up' ? 'new-password' : 'current-password') + '">' +
-        '<div class="er" id="gerr"></div><button id="gdo">' + (mode === 'up' ? 'Start free trial' : 'Sign in') + '</button>' +
+        '<div class="tabs"><button class="' + (!up ? 'on' : 'alt') + '" id="gt-in">Sign in</button><button class="' + (up ? 'on' : 'alt') + '" id="gt-up">Create account</button></div>' +
+        (em ? (up ? '<input id="gname" placeholder="Name" autocomplete="name">' : '') +
+          '<input id="gemail" type="email" placeholder="Email" autocomplete="email" autocapitalize="none"><input id="gpw" type="password" placeholder="Password (8+ characters)" autocomplete="' + (up ? 'new-password' : 'current-password') + '">'
+          : '<input id="gph" type="tel" inputmode="numeric" placeholder="Cell number" autocomplete="tel"><input id="gpn" type="password" inputmode="numeric" placeholder="PIN (4-10 digits)" autocomplete="off">') +
+        '<div class="er" id="gerr"></div><button id="gdo">' + (up ? 'Start free trial' : 'Sign in') + '</button>' +
+        '<button id="gsw" class="alt">' + (em ? 'Use cell number + PIN instead' : 'Use email + password instead') + '</button>' +
         '<p style="font-size:13px;color:#8fa0bf;margin:14px 0 0">This app is in development. Credit card payments are coming soon.</p>' +
         '<div class="box"><b>Owner?</b><input id="gpin" type="password" inputmode="numeric" placeholder="Owner PIN" autocomplete="off"><button id="gown" class="alt">Enter with PIN</button></div></div>';
-      $('gt-in').onclick = () => { mode = 'in'; draw(); }; $('gt-up').onclick = () => { mode = 'up'; draw(); }; $('gdo').onclick = auth;
-      $('gpw').onkeydown = (e) => { if (e.key === 'Enter') auth(); };
+      $('gt-in').onclick = () => { mode = em ? 'ein' : 'in'; draw(); }; $('gt-up').onclick = () => { mode = em ? 'eup' : 'up'; draw(); }; $('gdo').onclick = auth;
+      $('gsw').onclick = () => { mode = em ? (up ? 'up' : 'in') : (up ? 'eup' : 'ein'); draw(); };
+      const pf = $(em ? 'gpw' : 'gpn'); pf.onkeydown = (e) => { if (e.key === 'Enter') auth(); };
       $('gown').onclick = ownerIn; $('gpin').onkeydown = (e) => { if (e.key === 'Enter') ownerIn(); };
       return;
     }
@@ -50,10 +54,22 @@
     busy = false;
   }
   async function auth() {
-    if (busy) return; busy = true; const b = $('gdo'); if (b) b.textContent = 'Please wait…';
-    try { const j = await call('/' + (mode === 'up' ? 'register' : 'login'), { email: $('gemail').value, password: $('gpw').value, name: mode === 'up' && $('gname') ? $('gname').value : '' }); s('odd-tok', j.token); setMe(j.me); }
-    catch (e) { err(e.message); if (b) b.textContent = mode === 'up' ? 'Start free trial' : 'Sign in'; }
+    if (busy) return; busy = true; const b = $('gdo'), up = mode === 'up' || mode === 'eup'; if (b) b.textContent = 'Please wait…';
+    try {
+      let j;
+      if (mode === 'in' || mode === 'up') {
+        const ph = $('gph').value, pn = $('gpn').value;
+        j = await call('/phone', { phone: ph, pin: pn, create: up });
+        s('sync-phone', ph.replace(/\D/g, '').replace(/^1(\d{10})$/, '$1')); s('sync-pin', pn);
+      } else j = await call('/' + (up ? 'register' : 'login'), { email: $('gemail').value, password: $('gpw').value, name: up && $('gname') ? $('gname').value : '' });
+      s('odd-tok', j.token); s('odd-noauto', null); setMe(j.me);
+    } catch (e) { err(e.message); if (b) b.textContent = up ? 'Start free trial' : 'Sign in'; }
     busy = false;
+  }
+  // People who already use Oddable have their number + PIN saved on this phone: sign them in without typing.
+  async function autoPhone() {
+    const ph = g('sync-phone'), pn = g('sync-pin'); if (!ph || !pn || g('odd-noauto')) return false;
+    try { const j = await call('/phone', { phone: ph, pin: pn }); s('odd-tok', j.token); setMe(j.me); return true; } catch (e) { return false; }
   }
   function setMe(m) {
     me = m; if (!m) return; setTimeout(drawAcct, 0);
@@ -63,7 +79,7 @@
     if (m.role === 'owner' || !m.expires_on) return; const d = Math.ceil((new Date(m.expires_on + 'T23:59:59') - Date.now()) / 864e5);
     if (d <= 3 && d >= 0 && !document.getElementById('gtoast')) { const t = document.createElement('div'); t.id = 'gtoast'; t.textContent = (m.source === 'trial' ? 'Free trial' : 'Subscription') + ' ends ' + (d === 0 ? 'today' : 'in ' + d + ' day' + (d > 1 ? 's' : '')) + ' — tap to renew'; t.onclick = () => { me = Object.assign({}, m, { allowed: false }); show(); t.remove(); }; document.body.appendChild(t); setTimeout(() => t.remove(), 9000); }
   }
-  function out() { s('odd-tok', null); s('odd-ok', null); me = null; mode = 'in'; show(); }
+  function out() { s('odd-noauto', '1'); s('odd-tok', null); s('odd-ok', null); s('odd-push', null); me = null; mode = 'in'; show(); }
   async function refresh(force) {
     const j = await call('/me'); setMe(j.me); return j.me;
   }
@@ -83,10 +99,10 @@
   function drawAcct() {
     const box = $('acct'); if (!box) return; if (!g('odd-tok') || !me) { box.innerHTML = ''; return; }
     const owner = me.role === 'owner' && me.source === 'owner';
-    box.innerHTML = '<div class="sub"><b>Account</b>: ' + (me.email || '') + '</div>' +
+    box.innerHTML = '<div class="sub"><b>Account</b>: <span id="acct-em"></span></div>' +
       (owner ? '' : (g('odd-push') === '1' ? '<div class="sub">Renewal reminders are on.</div>' : '<button id="acct-push" style="min-height:44px;padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);font:700 14px inherit">Turn on renewal reminders</button>')) +
       '<div class="sub" id="acct-st"></div><button id="acct-out" style="min-height:44px;margin-top:6px;padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);font:700 14px inherit">Sign out</button>';
-    const pb = $('acct-push'); if (pb) pb.onclick = pushOn; $('acct-out').onclick = out;
+    const em = $('acct-em'); if (em) em.textContent = me.email || ''; const pb = $('acct-push'); if (pb) pb.onclick = pushOn; $('acct-out').onclick = out;
   }
   window.gateAcct = drawAcct;
   // Header fetch hook: attach the token to AI calls.
@@ -96,7 +112,7 @@
     try { const r = await fetch(API + '/status', { cache: 'no-store' }); on = (await r.json()).gate === true; s('odd-gate', on ? '1' : '0'); }
     catch (e) { on = g('odd-gate') === '1'; }
     if (!on) return;
-    if (!g('odd-tok')) { show(); return; }
+    if (!g('odd-tok')) { if (g('sync-phone') && g('sync-pin') && !g('odd-noauto')) { show(); $('gate').innerHTML = '<div class="gb"><h1>Oddable</h1><p>Signing you in…</p></div>'; if (await autoPhone()) return; } show(); return; }
     // Offline / server asleep: keep working for 72h after the last successful check.
     const lastOk = Number(g('odd-ok') || 0);
     if (lastOk && Date.now() - lastOk < GRACE) { refresh().catch((e) => { if (e.status === 401) out(); }); return; }

@@ -3,6 +3,7 @@
 // With MYAPPS_URL or MYAPPS_SECRET missing the gate is OFF and the app stays open (fail-open until configured).
 const crypto = require('crypto');
 const SLUG = 'oddable';
+const syncMod = require('./sync');
 const URL_ = () => (process.env.MYAPPS_URL || '').trim().replace(/\/$/, '');
 const SECRET = () => (process.env.MYAPPS_SECRET || '').trim();
 const KEY = () => process.env.GATE_KEY || crypto.createHash('sha256').update('oddable-gate|' + SECRET()).digest('hex');
@@ -25,7 +26,7 @@ async function ma(path, data) {
 }
 // Slow-down for password guessing: 8 tries / 10 min per ip+email.
 const TRY = new Map();
-function throttled(k) { const t = Date.now(), a = (TRY.get(k) || []).filter((x) => t - x < 600e3); if (a.length >= 8) { TRY.set(k, a); return true; } a.push(t); TRY.set(k, a); return false; }
+function throttled(k) { if (TRY.size > 5000) TRY.clear(); const t = Date.now(), a = (TRY.get(k) || []).filter((x) => t - x < 600e3); if (a.length >= 8) { TRY.set(k, a); return true; } a.push(t); TRY.set(k, a); return false; }
 const OWNER_PIN = () => String(process.env.OWNER_PIN || '').trim();
 const OWNER_ME = { email: 'owner', role: 'owner', plan: 'pro', expires_on: null, source: 'owner', allowed: true, pending: false, price: 99, link: null, tag: null, payReady: true };
 const allowed = (a) => a && (a.role === 'owner' || a.plan === 'pro');
@@ -33,8 +34,9 @@ const allowed = (a) => a && (a.role === 'owner' || a.plan === 'pro');
 const CACHE = new Map();
 async function entitlement(email, fresh) {
   const c = CACHE.get(email); if (!fresh && c && Date.now() - c.t < 120e3) return c.v;
-  const { ok, j } = await ma('/api/v1/account', { email });
-  const v = ok ? j : null; CACHE.set(email, { t: Date.now(), v }); return v;
+  const r = await ma('/api/v1/account', { email });
+  if (!r.ok && (r.status >= 500 || r.status === 401 || r.status === 429)) throw new Error('Account service unavailable'); // asleep or misconfigured: never treat as "no account", never cache
+  const v = r.ok ? r.j : null; CACHE.set(email, { t: Date.now(), v }); return v;
 }
 async function shape(email, fresh) {
   const a = await entitlement(email, fresh); if (!a) return null;
@@ -56,7 +58,7 @@ async function handle(req, res) {
   if (path === '/acct/status') { send(res, 200, { gate: on() }); return true; }
   if (req.method !== 'POST') return false;
   if (!on()) { send(res, 200, { gate: false }); return true; }
-  const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',').pop().trim(); // Render appends the real client address last
   let b; try { b = await body(req); } catch (e) { send(res, 400, { error: 'bad request' }); return true; }
   const email = String(b.email || '').trim().toLowerCase();
   try {
@@ -66,6 +68,16 @@ async function handle(req, res) {
       const a = Buffer.from(String(b.pin || '')), w = Buffer.from(OWNER_PIN());
       if (a.length !== w.length || !crypto.timingSafeEqual(a, w)) { send(res, 401, { error: 'Wrong PIN' }); return true; }
       send(res, 200, { token: mint('owner'), me: OWNER_ME }); return true;
+    }
+    if (path === '/acct/phone') {
+      // Existing Oddable users keep their cell number + PIN. It maps to a My Apps account (7-day trial, then Cash App renewal).
+      let v; try { v = await syncMod.verifyLogin(b.phone, b.pin, ip, !!b.create); } catch (er) { send(res, er.status || 500, { error: er.message }); return true; }
+      const pe = v.id.slice(0, 20) + '@phone.oddable', pw = crypto.createHmac('sha256', KEY()).update('phone|' + v.id).digest('hex').slice(0, 32);
+      let r = await ma('/api/v1/auth/register', { email: pe, password: pw, name: 'Phone ' + v.id.slice(0, 4) });
+      if (!r.ok && r.status === 409) r = await ma('/api/v1/auth/login', { email: pe, password: pw });
+      if (!r.ok) { send(res, 502, { error: r.j.error || 'Could not open your account' }); return true; }
+      CACHE.delete(pe);
+      send(res, 200, { token: mint(pe), me: await shape(pe, true) }); return true;
     }
     if (path === '/acct/login' || path === '/acct/register') {
       if (throttled(ip + '|' + email)) { send(res, 429, { error: 'Too many tries, wait a few minutes' }); return true; }

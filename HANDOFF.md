@@ -77,3 +77,6 @@ Start here if you are a new AI session picking up this repo. Update this file in
 ## Review fixes after v157 / My Apps .14 (2026-11-12)
 - Reviewer found: stored XSS via synced `log` numbers into the owner console (now coerced to numbers in sync.js adminUsers AND escaped in the bets view); phone-account squatting via public /acct/register (now `@phone.oddable` is refused there and the local part is HMAC'd with GATE_KEY, so it isn't guessable); /sync now uses the last X-Forwarded-For entry (same as acct.js); account creation throttled per IP; My Apps' Oddable fetch timeout 30s→10s.
 - Known/accepted: per-phone PIN lock can be triggered by anyone who knows a number; concurrent guesses can slip past the check by a few. Bets-view user id (phone hash) differs from the My Apps account label id.
+
+## My Apps .15 (2026-11-12) — Oddable "0 customers" explained
+- User: "Oddable still 0". Real users exist (4 phone+PIN accounts, seen live in the bets view) but they only become My Apps customers when they next open the new Oddable login (auto sign-in creates the account + 7-day trial). Home tile and the Oddable page now also show "N using it" from the Oddable server (cached 5 min, fetched in the background so pages never wait).

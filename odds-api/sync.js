@@ -73,7 +73,7 @@ async function handle(req, res) {
     const phone = normPhone(b.phone), pin = String(b.pin || '');
     if (phone.length !== 10) { send(res, 400, { error: 'Enter a 10-digit cell number' }); return true; }
     if (!/^\d{4,10}$/.test(pin)) { send(res, 400, { error: 'PIN must be 4 to 10 digits' }); return true; }
-    const id = idOf(phone), ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+    const id = idOf(phone), ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',').pop().trim();
     if (blocked(id) || blocked('ip:' + ip)) { send(res, 429, { error: 'Too many wrong PINs. Try again in 15 minutes.' }); return true; }
     const row = await dbGet(id);
     if (path === '/sync/signup') {
@@ -99,10 +99,10 @@ async function adminUsers() {
   if (!r.ok) throw new Error('db read ' + r.status);
   const rows = await r.json();
   return rows.map((x) => {
-    const d = x.data || {}, bets = arr(d.bets), log = d.log || {}, days = {};
+    const d = x.data || {}, bets = arr(d.bets), log = d.log || {}, days = {}, N = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
     let w = 0, l = 0, p = 0, risk = 0, pl = 0;
-    Object.keys(log).forEach((k) => { const o = log[k] || {}; w += o.w || 0; l += o.l || 0; p += o.p || 0; risk += o.risk || 0; pl += o.settled || 0; days[k] = { n: o.n || 0, w: o.w || 0, l: o.l || 0, p: o.p || 0, risk: Math.round((o.risk || 0) * 100) / 100, pl: Math.round((o.settled || 0) * 100) / 100 }; });
-    const dayKeys = Object.keys(days).sort();
+    Object.keys(log).forEach((k) => { const o = log[k] || {}; w += N(o.w); l += N(o.l); p += N(o.p); risk += N(o.risk); pl += N(o.settled); days[k] = { n: N(o.n), w: N(o.w), l: N(o.l), p: N(o.p), risk: Math.round(N(o.risk) * 100) / 100, pl: Math.round(N(o.settled) * 100) / 100 }; });
+    const dayKeys = Object.keys(days).filter((k) => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
     return { id: String(x.id).slice(0, 20), tag: String(x.id).slice(0, 4), updated: x.updated || 0, bets: bets.length, picks: Object.keys(d.locks || {}).length, w, l, p, pct: w + l ? Math.round((w / (w + l)) * 1000) / 10 : null, risk: Math.round(risk * 100) / 100, pl: Math.round(pl * 100) / 100, first: dayKeys[0] || null, last: dayKeys[dayKeys.length - 1] || null, days: dayKeys.slice(-45).reverse().map((k) => Object.assign({ day: k }, days[k])) };
   }).sort((a, b) => b.updated - a.updated);
 }
@@ -118,8 +118,9 @@ async function verifyLogin(phone, pin, ip, create) {
   if (blocked(id) || blocked('ip:' + ip)) throw bad(429, 'Too many wrong PINs. Try again in 15 minutes.');
   const row = await dbGet(id);
   if (!row) {
+    if (create && blocked('mk:' + ip)) throw bad(429, 'Too many new accounts from here. Try later.');
     if (!create) { fail('ip:' + ip); throw bad(401, 'No account for that number. Use Create account.'); }
-    const salt = crypto.randomBytes(16).toString('hex');
+    fail('mk:' + ip); const salt = crypto.randomBytes(16).toString('hex');
     await dbPut({ id, salt, pinhash: hashPin(pin, salt), data: {}, updated: Date.now() });
     return { id, created: true };
   }

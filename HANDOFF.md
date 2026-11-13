@@ -73,3 +73,7 @@ Start here if you are a new AI session picking up this repo. Update this file in
 
 ## My Apps .13 (2026-11-12) — identify by PIN id, then Cash App name
 - User: no name at signup. Phone-account users show as "User ····<id>"; the Confirm payment form has a "Cash App name" box (phone accounts only) that saves ma_users.name and replaces the label. Labels come from SQL `label` in listSubscriptions/listPayments.
+
+## Review fixes after v157 / My Apps .14 (2026-11-12)
+- Reviewer found: stored XSS via synced `log` numbers into the owner console (now coerced to numbers in sync.js adminUsers AND escaped in the bets view); phone-account squatting via public /acct/register (now `@phone.oddable` is refused there and the local part is HMAC'd with GATE_KEY, so it isn't guessable); /sync now uses the last X-Forwarded-For entry (same as acct.js); account creation throttled per IP; My Apps' Oddable fetch timeout 30s→10s.
+- Known/accepted: per-phone PIN lock can be triggered by anyone who knows a number; concurrent guesses can slip past the check by a few. Bets-view user id (phone hash) differs from the My Apps account label id.

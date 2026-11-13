@@ -72,7 +72,7 @@ async function handle(req, res) {
     if (path === '/acct/phone') {
       // Existing Oddable users keep their cell number + PIN. It maps to a My Apps account (7-day trial, then Cash App renewal).
       let v; try { v = await syncMod.verifyLogin(b.phone, b.pin, ip, !!b.create); } catch (er) { send(res, er.status || 500, { error: er.message }); return true; }
-      const pe = v.id.slice(0, 20) + '@phone.oddable', pw = crypto.createHmac('sha256', KEY()).update('phone|' + v.id).digest('hex').slice(0, 32);
+      const pe = crypto.createHmac('sha256', KEY()).update('phoneid|' + v.id).digest('hex').slice(0, 20) + '@phone.oddable', pw = crypto.createHmac('sha256', KEY()).update('phone|' + v.id).digest('hex').slice(0, 32);
       let r = await ma('/api/v1/auth/register', { email: pe, password: pw, name: 'Phone ' + v.id.slice(0, 4) });
       if (!r.ok && r.status === 409) r = await ma('/api/v1/auth/login', { email: pe, password: pw });
       if (!r.ok) { send(res, 502, { error: r.j.error || 'Could not open your account' }); return true; }
@@ -80,6 +80,7 @@ async function handle(req, res) {
       send(res, 200, { token: mint(pe), me: await shape(pe, true) }); return true;
     }
     if (path === '/acct/login' || path === '/acct/register') {
+      if (/@phone\.oddable$/.test(email)) { send(res, 400, { error: 'Use your cell number and PIN to sign in' }); return true; }
       if (throttled(ip + '|' + email)) { send(res, 429, { error: 'Too many tries, wait a few minutes' }); return true; }
       const r = await ma(path === '/acct/login' ? '/api/v1/auth/login' : '/api/v1/auth/register', { email, password: b.password, name: b.name });
       if (!r.ok) { send(res, r.status === 401 || r.status === 409 || r.status === 400 ? r.status : 502, { error: r.j.error || 'Could not sign in' }); return true; }

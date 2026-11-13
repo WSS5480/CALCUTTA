@@ -68,7 +68,7 @@ async function handle(req, res) {
     if (path === '/sync/admin') { // owner dashboard feed: called by My Apps with the shared app secret. Phones are never returned (only hashes exist).
       const want = String(process.env.MYAPPS_SECRET || '').trim(), got = String(b.secret || '');
       if (!want || got.length !== want.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(want))) { send(res, 401, { error: 'no' }); return true; }
-      send(res, 200, { users: await adminUsers() }); return true;
+      send(res, 200, { users: await adminUsers(require('./acct').phoneEmail) }); return true;
     }
     const phone = normPhone(b.phone), pin = String(b.pin || '');
     if (phone.length !== 10) { send(res, 400, { error: 'Enter a 10-digit cell number' }); return true; }
@@ -93,7 +93,7 @@ async function handle(req, res) {
     send(res, 404, { error: 'not found' }); return true;
   } catch (e) { send(res, 500, { error: 'Sync error: ' + e.message }); return true; }
 }
-async function adminUsers() {
+async function adminUsers(emailOf) {
   const { url, key } = cfg();
   const r = await fetch(`${url}/rest/v1/oddable_sync?select=id,updated,data&limit=2000`, { headers: hdr(key) });
   if (!r.ok) throw new Error('db read ' + r.status);
@@ -103,7 +103,7 @@ async function adminUsers() {
     let w = 0, l = 0, p = 0, risk = 0, pl = 0;
     Object.keys(log).forEach((k) => { const o = log[k] || {}; w += N(o.w); l += N(o.l); p += N(o.p); risk += N(o.risk); pl += N(o.settled); days[k] = { n: N(o.n), w: N(o.w), l: N(o.l), p: N(o.p), risk: Math.round(N(o.risk) * 100) / 100, pl: Math.round(N(o.settled) * 100) / 100 }; });
     const dayKeys = Object.keys(days).filter((k) => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
-    return { id: String(x.id).slice(0, 20), tag: String(x.id).slice(0, 4), updated: x.updated || 0, bets: bets.length, picks: Object.keys(d.locks || {}).length, w, l, p, pct: w + l ? Math.round((w / (w + l)) * 1000) / 10 : null, risk: Math.round(risk * 100) / 100, pl: Math.round(pl * 100) / 100, first: dayKeys[0] || null, last: dayKeys[dayKeys.length - 1] || null, days: dayKeys.slice(-45).reverse().map((k) => Object.assign({ day: k }, days[k])) };
+    return { id: String(x.id).slice(0, 20), acct: emailOf ? emailOf(String(x.id)) : null, tag: String(x.id).slice(0, 4), updated: x.updated || 0, bets: bets.length, picks: Object.keys(d.locks || {}).length, w, l, p, pct: w + l ? Math.round((w / (w + l)) * 1000) / 10 : null, risk: Math.round(risk * 100) / 100, pl: Math.round(pl * 100) / 100, first: dayKeys[0] || null, last: dayKeys[dayKeys.length - 1] || null, days: dayKeys.slice(-45).reverse().map((k) => Object.assign({ day: k }, days[k])) };
   }).sort((a, b) => b.updated - a.updated);
 }
 

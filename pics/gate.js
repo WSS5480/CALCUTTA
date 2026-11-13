@@ -23,9 +23,11 @@
         '<div class="tabs"><button class="' + (mode === 'in' ? 'on' : 'alt') + '" id="gt-in">Sign in</button><button class="' + (mode === 'up' ? 'on' : 'alt') + '" id="gt-up">Create account</button></div>' +
         (mode === 'up' ? '<input id="gname" placeholder="Name" autocomplete="name">' : '') +
         '<input id="gemail" type="email" placeholder="Email" autocomplete="email" autocapitalize="none"><input id="gpw" type="password" placeholder="Password (8+ characters)" autocomplete="' + (mode === 'up' ? 'new-password' : 'current-password') + '">' +
-        '<div class="er" id="gerr"></div><button id="gdo">' + (mode === 'up' ? 'Start free trial' : 'Sign in') + '</button></div>';
+        '<div class="er" id="gerr"></div><button id="gdo">' + (mode === 'up' ? 'Start free trial' : 'Sign in') + '</button>' +
+        '<div class="box"><b>Owner?</b><input id="gpin" type="password" inputmode="numeric" placeholder="Owner PIN" autocomplete="off"><button id="gown" class="alt">Enter with PIN</button></div></div>';
       $('gt-in').onclick = () => { mode = 'in'; draw(); }; $('gt-up').onclick = () => { mode = 'up'; draw(); }; $('gdo').onclick = auth;
       $('gpw').onkeydown = (e) => { if (e.key === 'Enter') auth(); };
+      $('gown').onclick = ownerIn; $('gpin').onkeydown = (e) => { if (e.key === 'Enter') ownerIn(); };
       return;
     }
     const m = me, dl = m.expires_on ? Math.ceil((new Date(m.expires_on + 'T23:59:59') - Date.now()) / 864e5) : 0;
@@ -40,6 +42,11 @@
     $('gpaid').onclick = async () => { if (busy) return; busy = true; try { await call('/pay'); await refresh(true); err(''); } catch (e) { err(e.message); } busy = false; draw(); };
     $('gred').onclick = async () => { if (busy) return; busy = true; try { const j = await call('/redeem', { code: $('gcode').value }); setMe(j.me); } catch (e) { err(e.message); } busy = false; if (el) draw(); };
     $('gchk').onclick = () => refresh(true).catch((e) => err(e.message)); $('gout').onclick = out;
+  }
+  async function ownerIn() {
+    if (busy) return; busy = true;
+    try { const j = await call('/owner', { pin: $('gpin').value }); s('odd-tok', j.token); setMe(j.me); } catch (e) { err(e.message); }
+    busy = false;
   }
   async function auth() {
     if (busy) return; busy = true; const b = $('gdo'); if (b) b.textContent = 'Please wait…';

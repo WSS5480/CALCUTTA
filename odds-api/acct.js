@@ -1,5 +1,5 @@
 // Oddable accounts + paywall. Talks to My Apps (MY_APPS_MANAGEMENT) with Oddable's app secret; the browser never sees it.
-// Env: MYAPPS_URL (e.g. https://my-apps.onrender.com), MYAPPS_SECRET (= APP_SECRET_ODDABLE on My Apps). Optional: GATE_KEY (token signing), GATE_OFF=1.
+// Env: MYAPPS_URL (e.g. https://my-apps.onrender.com), MYAPPS_SECRET (= APP_SECRET_ODDABLE on My Apps). Optional: GATE_KEY (token signing), GATE_OFF=1, OWNER_PIN (owner enters it on the sign-in screen: free access, no payment).
 // With MYAPPS_URL or MYAPPS_SECRET missing the gate is OFF and the app stays open (fail-open until configured).
 const crypto = require('crypto');
 const SLUG = 'oddable';
@@ -26,6 +26,8 @@ async function ma(path, data) {
 // Slow-down for password guessing: 8 tries / 10 min per ip+email.
 const TRY = new Map();
 function throttled(k) { const t = Date.now(), a = (TRY.get(k) || []).filter((x) => t - x < 600e3); if (a.length >= 8) { TRY.set(k, a); return true; } a.push(t); TRY.set(k, a); return false; }
+const OWNER_PIN = () => String(process.env.OWNER_PIN || '').trim();
+const OWNER_ME = { email: 'owner', role: 'owner', plan: 'pro', expires_on: null, source: 'owner', allowed: true, pending: false, price: 99, link: null, tag: null, payReady: true };
 const allowed = (a) => a && (a.role === 'owner' || a.plan === 'pro');
 // Entitlement cache so every AI call does not hit My Apps.
 const CACHE = new Map();
@@ -45,6 +47,7 @@ async function shape(email, fresh) {
 async function check(req) {
   if (!on()) return true;
   const e = verify(req.headers['x-token']); if (!e) return false;
+  if (e === 'owner') return !!OWNER_PIN();
   try { return !!allowed(await entitlement(e, false)); } catch (er) { return false; }
 }
 async function handle(req, res) {
@@ -57,6 +60,13 @@ async function handle(req, res) {
   let b; try { b = await body(req); } catch (e) { send(res, 400, { error: 'bad request' }); return true; }
   const email = String(b.email || '').trim().toLowerCase();
   try {
+    if (path === '/acct/owner') {
+      if (!OWNER_PIN()) { send(res, 400, { error: 'Owner PIN is not set on the server' }); return true; }
+      if (throttled(ip + '|owner')) { send(res, 429, { error: 'Too many tries, wait a few minutes' }); return true; }
+      const a = Buffer.from(String(b.pin || '')), w = Buffer.from(OWNER_PIN());
+      if (a.length !== w.length || !crypto.timingSafeEqual(a, w)) { send(res, 401, { error: 'Wrong PIN' }); return true; }
+      send(res, 200, { token: mint('owner'), me: OWNER_ME }); return true;
+    }
     if (path === '/acct/login' || path === '/acct/register') {
       if (throttled(ip + '|' + email)) { send(res, 429, { error: 'Too many tries, wait a few minutes' }); return true; }
       const r = await ma(path === '/acct/login' ? '/api/v1/auth/login' : '/api/v1/auth/register', { email, password: b.password, name: b.name });
@@ -67,6 +77,7 @@ async function handle(req, res) {
     }
     const e = verify(b.token || req.headers['x-token']);
     if (!e) { send(res, 401, { error: 'Sign in again' }); return true; }
+    if (e === 'owner') { if (!OWNER_PIN()) { send(res, 401, { error: 'Sign in again' }); return true; } if (path === '/acct/me') { send(res, 200, { me: OWNER_ME }); return true; } send(res, 400, { error: 'Owner has full access' }); return true; }
     if (path === '/acct/me') { const me = await shape(e, true); if (!me) { send(res, 401, { error: 'Account not found or suspended' }); return true; } send(res, 200, { me }); return true; }
     if (path === '/acct/pay') {
       const r = await ma('/api/v1/pay/request', { account: e });

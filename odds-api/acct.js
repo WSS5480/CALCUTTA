@@ -79,6 +79,15 @@ async function handle(req, res) {
     if (!e) { send(res, 401, { error: 'Sign in again' }); return true; }
     if (e === 'owner') { if (!OWNER_PIN()) { send(res, 401, { error: 'Sign in again' }); return true; } if (path === '/acct/me') { send(res, 200, { me: OWNER_ME }); return true; } send(res, 400, { error: 'Owner has full access' }); return true; }
     if (path === '/acct/me') { const me = await shape(e, true); if (!me) { send(res, 401, { error: 'Account not found or suspended' }); return true; } send(res, 200, { me }); return true; }
+    if (path === '/acct/push-key') {
+      if (e === 'owner') { send(res, 400, { error: 'Owner has no renewals' }); return true; }
+      const r = await ma('/api/v1/push/key', {}); send(res, r.ok ? 200 : (r.status || 502), r.ok ? { key: r.j.key } : { error: r.j.error || 'Reminders are not set up yet' }); return true;
+    }
+    if (path === '/acct/push') {
+      if (e === 'owner') { send(res, 400, { error: 'Owner has no renewals' }); return true; }
+      const r = await ma('/api/v1/push/subscribe', { account: e, subscription: b.subscription });
+      send(res, r.ok ? 200 : (r.status || 502), r.ok ? { ok: true } : { error: r.j.error || 'Could not turn reminders on' }); return true;
+    }
     if (path === '/acct/pay') {
       const r = await ma('/api/v1/pay/request', { account: e });
       if (!r.ok) { send(res, 502, { error: r.j.error || 'Could not record your payment' }); return true; }

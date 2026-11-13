@@ -55,7 +55,7 @@
     busy = false;
   }
   function setMe(m) {
-    me = m; if (!m) return;
+    me = m; if (!m) return; setTimeout(drawAcct, 0);
     if (m.allowed) { s('odd-ok', String(Date.now())); hide(); soon(m); } else show();
   }
   function soon(m) {
@@ -67,6 +67,27 @@
     const j = await call('/me'); setMe(j.me); return j.me;
   }
   window.gateOut = out;
+  // Renewal reminders (phone push). Works from the Account box under Disclosures.
+  const b64u = (k) => { const p = '='.repeat((4 - k.length % 4) % 4), r = atob((k + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from([...r].map((c) => c.charCodeAt(0))); };
+  async function pushOn() {
+    const st = $('acct-st'); const say = (t) => { if (st) st.textContent = t; };
+    try {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) { say('This browser cannot get reminders. On iPhone, add Oddable to your Home Screen first, then open it from there.'); return; }
+      const perm = await Notification.requestPermission(); if (perm !== 'granted') { say('Notifications are blocked. Allow them in your phone settings for Oddable.'); return; }
+      const key = (await call('/push-key')).key; const reg = await navigator.serviceWorker.ready;
+      const sub = (await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(key) }));
+      await call('/push', { subscription: sub.toJSON() }); s('odd-push', '1'); say('Reminders are on for this phone.'); drawAcct();
+    } catch (e) { say(e.message || 'Could not turn reminders on'); }
+  }
+  function drawAcct() {
+    const box = $('acct'); if (!box) return; if (!g('odd-tok') || !me) { box.innerHTML = ''; return; }
+    const owner = me.role === 'owner' && me.source === 'owner';
+    box.innerHTML = '<div class="sub"><b>Account</b>: ' + (me.email || '') + '</div>' +
+      (owner ? '' : (g('odd-push') === '1' ? '<div class="sub">Renewal reminders are on.</div>' : '<button id="acct-push" style="min-height:44px;padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);font:700 14px inherit">Turn on renewal reminders</button>')) +
+      '<div class="sub" id="acct-st"></div><button id="acct-out" style="min-height:44px;margin-top:6px;padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);font:700 14px inherit">Sign out</button>';
+    const pb = $('acct-push'); if (pb) pb.onclick = pushOn; $('acct-out').onclick = out;
+  }
+  window.gateAcct = drawAcct;
   // Header fetch hook: attach the token to AI calls.
   const of = window.fetch; window.fetch = function (u, o) { try { if (String(u).indexOf('/ai/') > -1 && g('odd-tok')) { o = Object.assign({}, o); o.headers = Object.assign({}, o.headers, { 'x-token': g('odd-tok') }); } } catch (e) {} return of.call(this, u, o); };
   async function boot() {

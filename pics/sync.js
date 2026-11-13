@@ -20,10 +20,12 @@
   const gatherFrom = (d) => d;
   const hashOf = (d) => stable({ b: [...d.bets].sort((a, b) => String(a.id).localeCompare(String(b.id))), p: [...d.pins].map(String).sort(), l: d.log, k: [...d.kdel].map(String).sort(), lk: d.locks, sp: d.splk });
   function apply(d) {
+    const reloadMem = () => { try { if (typeof BETS !== 'undefined') BETS = JSON.parse(g('bets26')) || []; } catch (e) {} }; // keep the in-memory list in step so the next save can't overwrite what just synced
     s('bets26', JSON.stringify(d.bets || [])); s('pinned26', JSON.stringify(d.pins || [])); s('betlog26', JSON.stringify(d.log || {})); s('kdel26', JSON.stringify(d.kdel || []));
     Object.keys(d.locks || {}).forEach((k) => { if (d.locks[k]) s(k, JSON.stringify(d.locks[k])); });
     Object.keys(d.splk || {}).forEach((lg) => s('splk-' + lg, JSON.stringify(d.splk[lg])));
     s('sync-ids', JSON.stringify((d.bets || []).map((b) => String(b.id)))); s('sync-tomb', JSON.stringify(d.tomb || []));
+    reloadMem();
   }
   async function call(path, body) {
     const r = await fetch(API + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

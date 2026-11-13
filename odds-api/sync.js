@@ -13,7 +13,7 @@ const same = (a, b) => { const x = Buffer.from(a), y = Buffer.from(b); return x.
 
 async function dbGet(id) {
   const { url, key } = cfg();
-  const r = await fetch(`${url}/rest/v1/oddable_sync?id=eq.${id}&select=*`, { headers: hdr(key) });
+  const r = await fetch(`${url}/rest/v1/oddable_sync?id=eq.${id}&select=*`, { headers: hdr(key), signal: AbortSignal.timeout(15000) });
   if (!r.ok) throw new Error('db read ' + r.status + ' ' + (await r.text()).slice(0, 200));
   const j = await r.json(); return j[0] || null;
 }
@@ -23,16 +23,22 @@ async function dbPut(row) {
   if (!r.ok) throw new Error('db write ' + r.status + ' ' + (await r.text()).slice(0, 200));
 }
 
+async function dbPatchIf(id, was, data, upd) {
+  const { url, key } = cfg();
+  const r = await fetch(`${url}/rest/v1/oddable_sync?id=eq.${id}&updated=eq.${Number(was || 0)}`, { method: 'PATCH', headers: { ...hdr(key), Prefer: 'return=representation' }, body: JSON.stringify({ data, updated: upd }), signal: AbortSignal.timeout(15000) });
+  if (!r.ok) throw new Error('db write ' + r.status + ' ' + (await r.text()).slice(0, 200));
+  return (await r.json()).length > 0;
+}
 const arr = (x) => (Array.isArray(x) ? x : []);
 function merge(a, b) { // a = stored, b = incoming
   const tomb = [...new Set([...arr(a.tomb), ...arr(b.tomb)].map(String))].slice(-3000), T = new Set(tomb);
   const by = new Map();
   [...arr(a.bets), ...arr(b.bets)].forEach((x) => {
     if (!x || x.id == null || T.has(String(x.id))) return;
-    const o = by.get(x.id);
-    if (!o) by.set(x.id, x);
-    else if ((o.res == null) !== (x.res == null)) by.set(x.id, x.res != null ? x : o);
-    else by.set(x.id, (x.t || 0) >= (o.t || 0) ? x : o);
+    const o = by.get(String(x.id));
+    if (!o) by.set(String(x.id), x);
+    else if ((o.res == null) !== (x.res == null)) by.set(String(x.id), x.res != null ? x : o);
+    else by.set(String(x.id), (x.t || 0) >= (o.t || 0) ? x : o);
   });
   const log = { ...(a.log || {}) };
   Object.keys(b.log || {}).forEach((k) => { if (!log[k] || JSON.stringify(b.log[k]).length >= JSON.stringify(log[k]).length) log[k] = b.log[k]; });
@@ -49,7 +55,7 @@ function merge(a, b) { // a = stored, b = incoming
 }
 
 function body(req) {
-  return new Promise((ok, no) => { let s = ''; req.on('data', (c) => { s += c; if (s.length > MAX_BODY) { no(new Error('too big')); req.destroy(); } }); req.on('end', () => { try { ok(JSON.parse(s || '{}')); } catch (e) { no(e); } }); req.on('error', no); });
+  return new Promise((ok, no) => { let n = 0; const ch = []; req.on('data', (c) => { n += c.length; if (n > MAX_BODY) { no(new Error('too big')); req.destroy(); } else ch.push(c); }); req.on('end', () => { try { ok(JSON.parse(Buffer.concat(ch).toString() || '{}')); } catch (e) { no(e); } }); req.on('error', no); });
 }
 const send = (res, code, o) => { res.statusCode = code; res.setHeader('Content-Type', 'application/json'); res.setHeader('Access-Control-Allow-Origin', '*'); res.end(JSON.stringify(o)); };
 function blocked(k) { const t = (FAILS.get(k) || []).filter((x) => Date.now() - x < 15 * 60e3); FAILS.set(k, t); return t.length >= 6; }
@@ -89,9 +95,13 @@ async function handle(req, res) {
     if (!row || !same(hashPin(pin, row.salt), row.pinhash)) { fail(id); fail('ip:' + ip); send(res, 401, { error: row ? 'Wrong PIN' : 'No account for that number. Use Create account.' }); return true; }
     if (path === '/sync/login' || path === '/sync/pull') { send(res, 200, { ok: true, data: row.data || {}, updated: row.updated }); return true; }
     if (path === '/sync/push') {
-      const data = merge(row.data || {}, b.data || {});
-      await dbPut({ id, salt: row.salt, pinhash: row.pinhash, data, updated: Date.now() });
-      send(res, 200, { ok: true, data, updated: Date.now() }); return true;
+      let cur = row;
+      for (let i = 0; i < 4; i++) { // never overwrite a write that landed since we read: patch only if `updated` is unchanged, else re-read and merge again
+        const data = merge(cur.data || {}, b.data || {}), upd = Math.max(Date.now(), Number(cur.updated || 0) + 1);
+        if (await dbPatchIf(id, cur.updated, data, upd)) { send(res, 200, { ok: true, data, updated: upd }); return true; }
+        cur = await dbGet(id) || cur;
+      }
+      send(res, 409, { error: 'Busy, try again' }); return true;
     }
     send(res, 404, { error: 'not found' }); return true;
   } catch (e) { send(res, 500, { error: 'Sync error: ' + e.message }); return true; }

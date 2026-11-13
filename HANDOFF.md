@@ -59,3 +59,6 @@ Start here if you are a new AI session picking up this repo. Update this file in
 - User wants Cash App renewal + phone push reminders on Oddable, Dose Guide, TX Case Desk; price per app set from My Apps (done: Setup tab). Oddable is first; Dose Guide and TX Case Desk still to wire (each needs: sw.js push + notificationclick handlers, a "turn on reminders" button, and server routes calling My Apps /api/v1/push/key + /push/subscribe).
 - Oddable: sw.js push handlers, gate.js Account box under Disclosures (turn on reminders, sign out), acct.js /acct/push-key and /acct/push. iPhone needs Home Screen install.
 - Needs VAPID_PUBLIC/VAPID_PRIVATE on My Apps (set in Render).
+
+## v155 (2026-11-12) — in-development notice
+- User: show "This app is in development. Credit card payments are coming soon." on Oddable sign-in and subscribe screens. Add the same line to Dose Guide and TX Case Desk when their pay screens are wired. Card payments are a later build.

@@ -24,6 +24,7 @@
         (mode === 'up' ? '<input id="gname" placeholder="Name" autocomplete="name">' : '') +
         '<input id="gemail" type="email" placeholder="Email" autocomplete="email" autocapitalize="none"><input id="gpw" type="password" placeholder="Password (8+ characters)" autocomplete="' + (mode === 'up' ? 'new-password' : 'current-password') + '">' +
         '<div class="er" id="gerr"></div><button id="gdo">' + (mode === 'up' ? 'Start free trial' : 'Sign in') + '</button>' +
+        '<p style="font-size:13px;color:#8fa0bf;margin:14px 0 0">This app is in development. Credit card payments are coming soon.</p>' +
         '<div class="box"><b>Owner?</b><input id="gpin" type="password" inputmode="numeric" placeholder="Owner PIN" autocomplete="off"><button id="gown" class="alt">Enter with PIN</button></div></div>';
       $('gt-in').onclick = () => { mode = 'in'; draw(); }; $('gt-up').onclick = () => { mode = 'up'; draw(); }; $('gdo').onclick = auth;
       $('gpw').onkeydown = (e) => { if (e.key === 'Enter') auth(); };
@@ -37,7 +38,7 @@
       (m.link ? '<button id="gcash">Pay $' + m.price + ' with Cash App</button>' : '<p class="er">Payment is not set up yet. Contact the owner.</p>') +
       '<b>Step 2.</b> Come back and tap below.<button id="gpaid" class="alt">I paid — unlock me</button></div>' +
       '<div class="box"><b>Have a code?</b><input id="gcode" placeholder="Access code" autocapitalize="characters"><button id="gred" class="alt">Redeem code</button></div>' +
-      '<div class="er" id="gerr"></div><button id="gchk" class="alt">Check again</button><button id="gout" class="alt">Sign out</button></div>';
+      '<div class="er" id="gerr"></div><button id="gchk" class="alt">Check again</button><button id="gout" class="alt">Sign out</button>' + '<p style="font-size:13px;color:#8fa0bf;margin:14px 0 0">This app is in development. Credit card payments are coming soon.</p>' + '</div>';
     if ($('gcash')) $('gcash').onclick = () => { window.open(m.link, '_blank'); };
     $('gpaid').onclick = async () => { if (busy) return; busy = true; try { await call('/pay'); await refresh(true); err(''); } catch (e) { err(e.message); } busy = false; draw(); };
     $('gred').onclick = async () => { if (busy) return; busy = true; try { const j = await call('/redeem', { code: $('gcode').value }); setMe(j.me); } catch (e) { err(e.message); } busy = false; if (el) draw(); };

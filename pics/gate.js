@@ -13,6 +13,7 @@
     const j = await r.json().catch(() => ({})); if (!r.ok) { const e = new Error(j.error || 'Error ' + r.status); e.status = r.status; throw e; } return j;
   }
   const $ = (id) => document.getElementById(id);
+  const esc = (x) => String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   function show() { if (!el) { el = document.createElement('div'); el.id = 'gate'; document.body.appendChild(el); document.documentElement.style.overflow = 'hidden'; } draw(); }
   function hide() { if (el) { el.remove(); el = null; document.documentElement.style.overflow = ''; } }
   function err(t) { const e = $('gerr'); if (e) { e.className = 'er'; e.textContent = t || ''; } }
@@ -36,14 +37,14 @@
       return;
     }
     const m = me, dl = m.expires_on ? Math.ceil((new Date(m.expires_on + 'T23:59:59') - Date.now()) / 864e5) : 0;
-    el.innerHTML = '<div class="gb"><h1>Subscribe to Oddable</h1><p>' + (m.plan === 'pro' ? 'Your access ended ' + m.expires_on + '.' : (m.source === 'trial' ? 'Your free trial has ended.' : 'Your access has ended.')) + ' $' + m.price + ' per month unlocks everything.</p>' +
+    el.innerHTML = '<div class="gb"><h1>Subscribe to Oddable</h1><p>' + (m.plan === 'pro' ? 'Your access ended ' + esc(m.expires_on) + '.' : (m.source === 'trial' ? 'Your free trial has ended.' : 'Your access has ended.')) + ' $' + esc(m.price) + ' per month unlocks everything.</p>' +
       (m.pending ? '<div class="box ok">Payment request received. You will be unlocked as soon as it is confirmed. Tap Check again in a minute.</div>' : '') +
-      '<div class="box"><b>Step 1.</b> Send $' + m.price + ' on Cash App' + (m.tag ? ' to <b>' + m.tag + '</b>' : '') + '.' +
-      (m.link ? '<button id="gcash">Pay $' + m.price + ' with Cash App</button>' : '<p class="er">Payment is not set up yet. Contact the owner.</p>') +
+      '<div class="box"><b>Step 1.</b> Send $' + m.price + ' on Cash App' + (m.tag ? ' to <b>' + esc(m.tag) + '</b>' : '') + '.' +
+      (/^https:\/\//.test(m.link || '') ? '<button id="gcash">Pay $' + m.price + ' with Cash App</button>' : '<p class="er">Payment is not set up yet. Contact the owner.</p>') +
       '<b>Step 2.</b> Come back and tap below.<button id="gpaid" class="alt">I paid — unlock me</button></div>' +
       '<div class="box"><b>Have a code?</b><input id="gcode" placeholder="Access code" autocapitalize="characters"><button id="gred" class="alt">Redeem code</button></div>' +
       '<div class="er" id="gerr"></div><button id="gchk" class="alt">Check again</button><button id="gout" class="alt">Sign out</button>' + '<p style="font-size:13px;color:#8fa0bf;margin:14px 0 0">This app is in development. Credit card payments are coming soon.</p>' + '</div>';
-    if ($('gcash')) $('gcash').onclick = () => { window.open(m.link, '_blank'); };
+    if ($('gcash')) $('gcash').onclick = () => { window.open(m.link, '_blank', 'noopener'); };
     $('gpaid').onclick = async () => { if (busy) return; busy = true; try { await call('/pay'); await refresh(true); err(''); } catch (e) { err(e.message); } busy = false; draw(); };
     $('gred').onclick = async () => { if (busy) return; busy = true; try { const j = await call('/redeem', { code: $('gcode').value }); setMe(j.me); } catch (e) { err(e.message); } busy = false; if (el) draw(); };
     $('gchk').onclick = () => refresh(true).catch((e) => err(e.message)); $('gout').onclick = out;

@@ -4,6 +4,7 @@
   const API = 'https://calcutta-odds.onrender.com/sync';
   const g = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const s = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+  const escH = (x) => String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const J = (k, d) => { try { const v = JSON.parse(g(k)); return v == null ? d : v; } catch (e) { return d; } };
   const stable = (o) => JSON.stringify(o, (k, v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.keys(v).sort().reduce((a, x) => ((a[x] = v[x]), a), {}) : v));
   const creds = () => { const p = g('sync-phone'), n = g('sync-pin'); return p && n ? { phone: p, pin: n } : null; };
@@ -70,8 +71,8 @@
   const mask = (p) => '(•••) •••-' + String(p || '').slice(-4);
   function box() {
     const c = creds(), err = g('sync-err');
-    if (c) return `<p style="margin:0 0 8px">Signed in as <b>${mask(c.phone)}</b>. Last sync ${last()}.</p>${err ? `<p style="color:#ff9a90;margin:0 0 8px">${err}</p>` : ''}<div style="display:flex;gap:8px"><button class="sbtn" onclick="OddSync.now()">Sync now</button><button class="sbtn x" onclick="OddSync.out()">Sign out</button></div><p class="sn">Your bets, watch list, daily logs and locked picks sync across every device you sign in on. Kalshi keys stay on each device.</p>`;
-    return `<label>Cell number<input id="sph" type="tel" inputmode="tel" autocomplete="tel" placeholder="(956) 555-1234"></label><label>PIN (4–10 digits)<input id="spn" type="password" inputmode="numeric" autocomplete="off" placeholder="PIN"></label>${err ? `<p style="color:#ff9a90;margin:0 0 8px">${err}</p>` : ''}<div style="display:flex;gap:8px"><button class="sbtn" onclick="OddSync.go('/login')">Sign in</button><button class="sbtn x" onclick="OddSync.go('/signup')">Create account</button></div><p class="sn">First time? Use <b>Create account</b> on the device that has your bets. On your other devices use <b>Sign in</b>. Pick a PIN you don't use anywhere else.</p>`;
+    if (c) return `<p style="margin:0 0 8px">Signed in as <b>${mask(c.phone)}</b>. Last sync ${last()}.</p>${err ? `<p style="color:#ff9a90;margin:0 0 8px">${escH(err)}</p>` : ''}<div style="display:flex;gap:8px"><button class="sbtn" onclick="OddSync.now()">Sync now</button><button class="sbtn x" onclick="OddSync.out()">Sign out</button></div><p class="sn">Your bets, watch list, daily logs and locked picks sync across every device you sign in on. Kalshi keys stay on each device.</p>`;
+    return `<label>Cell number<input id="sph" type="tel" inputmode="tel" autocomplete="tel" placeholder="(956) 555-1234"></label><label>PIN (4–10 digits)<input id="spn" type="password" inputmode="numeric" autocomplete="off" placeholder="PIN"></label>${err ? `<p style="color:#ff9a90;margin:0 0 8px">${escH(err)}</p>` : ''}<div style="display:flex;gap:8px"><button class="sbtn" onclick="OddSync.go('/login')">Sign in</button><button class="sbtn x" onclick="OddSync.go('/signup')">Create account</button></div><p class="sn">First time? Use <b>Create account</b> on the device that has your bets. On your other devices use <b>Sign in</b>. Pick a PIN you don't use anywhere else.</p>`;
   }
   function open() {
     let o = document.getElementById('syncsheet');

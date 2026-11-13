@@ -7,7 +7,7 @@ const send = (res, code, o) => { res.statusCode = code; res.setHeader('Access-Co
 function limited(ip) { const t = Date.now(), a = (HITS.get(ip) || []).filter((x) => t - x < 3600e3); if (a.length >= 40) { HITS.set(ip, a); return true; } a.push(t); HITS.set(ip, a); return false; }
 async function claude(system, content, max) {
   const key = (process.env.ANTHROPIC_API_KEY || '').trim();
-  const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, body: JSON.stringify({ model: MODEL(), max_tokens: max, system, messages: [{ role: 'user', content }] }) });
+  const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, body: JSON.stringify({ model: MODEL(), max_tokens: max, system, messages: [{ role: 'user', content }] }), signal: AbortSignal.timeout(90000) });
   const j = await r.json(); if (!r.ok) throw new Error((j.error && j.error.message) || 'api ' + r.status);
   const t = (j.content || []).map((x) => x.text || '').join('').trim(); if (!t) throw new Error('Empty answer (' + (j.stop_reason || '?') + '), try again'); return t;
 }

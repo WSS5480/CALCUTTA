@@ -11,11 +11,13 @@ const on = () => !!(URL_() && SECRET()) && process.env.GATE_OFF !== '1';
 const TOK_DAYS = 30;
 const b64 = (s) => Buffer.from(s).toString('base64url');
 const sig = (p) => crypto.createHmac('sha256', KEY()).update(p).digest('base64url');
-function mint(email) { const p = b64(JSON.stringify({ e: email, x: Date.now() + TOK_DAYS * 864e5 })); return p + '.' + sig(p); }
+const pinVer = () => crypto.createHash('sha256').update('pin|' + String(process.env.OWNER_PIN || '')).digest('hex').slice(0, 8);
+function mint(email) { const p = b64(JSON.stringify(email === 'owner' ? { e: email, v: pinVer(), x: Date.now() + TOK_DAYS * 864e5 } : { e: email, x: Date.now() + TOK_DAYS * 864e5 })); return p + '.' + sig(p); }
 function verify(t) {
   const [p, s] = String(t || '').split('.'); if (!p || !s) return null;
   const want = sig(p); if (s.length !== want.length || !crypto.timingSafeEqual(Buffer.from(s), Buffer.from(want))) return null;
-  try { const o = JSON.parse(Buffer.from(p, 'base64url').toString()); return o.x > Date.now() ? o.e : null; } catch (e) { return null; }
+  try { const o = JSON.parse(Buffer.from(p, 'base64url').toString()); if (o.e === 'owner' && o.v !== pinVer()) return null; // changing OWNER_PIN signs the old owner tokens out
+    return o.x > Date.now() ? o.e : null; } catch (e) { return null; }
 }
 const MAX = 20000;
 const body = (req) => new Promise((res, rej) => { let n = 0; const c = []; req.on('data', (d) => { n += d.length; if (n > MAX) { rej(new Error('too big')); req.destroy(); } else c.push(d); }); req.on('end', () => { try { res(JSON.parse(Buffer.concat(c).toString() || '{}')); } catch (e) { rej(e); } }); req.on('error', rej); });

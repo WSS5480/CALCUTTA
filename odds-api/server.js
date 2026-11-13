@@ -63,6 +63,7 @@ if (process.env.RENDER_EXTERNAL_URL && process.env.KEEP_AWAKE !== '0') {
 }
 
 const kalshi = require('../kalshi-sync/server.js'); const BT = {};
+process.on('uncaughtException', (e) => console.error('uncaught:', e && e.message)); process.on('unhandledRejection', (e) => console.error('unhandled:', e && e.message));
 http.createServer(async (req, res) => {
   if (req.url.startsWith('/acct')) { try { if (await require('./acct.js').handle(req, res)) return; } catch (e) { res.statusCode = 500; return res.end('{"error":"acct"}'); } }
   if (req.url.startsWith('/oddsline')) { try { if (await require('./oddslines.js').handle(req, res)) return; } catch (e) { res.statusCode = 500; return res.end('{"error":"oddsline"}'); } }
@@ -72,7 +73,7 @@ http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Content-Type', 'application/json');
   if (req.url.startsWith('/health')) return res.end('{"ok":true}');
-  if (req.url.startsWith('/backtest')) { try { const q = new URL(req.url, 'http://x').searchParams; const lg = q.get('lg') || 'nba'; const key = req.url; BT[key] = BT[key] && Date.now() - BT[key].t < 3600e3 ? BT[key] : { t: Date.now(), v: await require('./backtest.js').run(lg, Math.min(+q.get('days') || 45, 200), Math.min(+q.get('bt') || 14, 60), q.get('to') || '') }; return res.end(JSON.stringify(BT[key].v, null, 1)); } catch (e) { res.statusCode = 500; return res.end(JSON.stringify({ error: e.message })); } }
+  if (req.url.startsWith('/backtest')) { try { const q = new URL(req.url, 'http://x').searchParams; const lg = ['nba','nhl','ncaab','mlb'].includes(q.get('lg')) ? q.get('lg') : 'nba'; const key = [lg, Math.min(+q.get('days') || 45, 200), Math.min(+q.get('bt') || 14, 60), String(q.get('to') || '').slice(0, 12)].join('|'); const ks = Object.keys(BT); if (ks.length > 30) delete BT[ks[0]]; BT[key] = BT[key] && Date.now() - BT[key].t < 3600e3 ? BT[key] : { t: Date.now(), v: await require('./backtest.js').run(lg, Math.min(+q.get('days') || 45, 200), Math.min(+q.get('bt') || 14, 60), q.get('to') || '') }; return res.end(JSON.stringify(BT[key].v, null, 1)); } catch (e) { res.statusCode = 500; return res.end(JSON.stringify({ error: e.message })); } }
   if (req.url.startsWith('/lines')) { res.setHeader('Cache-Control', 'public, max-age=60'); return res.end(JSON.stringify(LINES)); }
   if (!req.url.startsWith('/odds')) { res.statusCode = 404; return res.end('{"error":"not found"}'); }
   try {

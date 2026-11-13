@@ -17,9 +17,9 @@ async function dbGet(id) {
   if (!r.ok) throw new Error('db read ' + r.status + ' ' + (await r.text()).slice(0, 200));
   const j = await r.json(); return j[0] || null;
 }
-async function dbPut(row) {
+async function dbPut(row, ignoreDup) {
   const { url, key } = cfg();
-  const r = await fetch(`${url}/rest/v1/oddable_sync`, { method: 'POST', headers: { ...hdr(key), Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(row) });
+  const r = await fetch(`${url}/rest/v1/oddable_sync`, { method: 'POST', headers: { ...hdr(key), Prefer: (ignoreDup ? 'resolution=ignore-duplicates' : 'resolution=merge-duplicates') + ',return=minimal' }, body: JSON.stringify(row) });
   if (!r.ok) throw new Error('db write ' + r.status + ' ' + (await r.text()).slice(0, 200));
 }
 
@@ -89,7 +89,7 @@ async function handle(req, res) {
       if (row) { send(res, 409, { error: 'That number already has an account. Use Sign in.' }); return true; }
       const salt = crypto.randomBytes(16).toString('hex');
       const data = merge({}, b.data || {});
-      await dbPut({ id, salt, pinhash: hashPin(pin, salt), data, updated: Date.now() });
+      await dbPut({ id, salt, pinhash: hashPin(pin, salt), data, updated: Date.now() }, true);
       send(res, 200, { ok: true, data, updated: Date.now() }); return true;
     }
     if (!row || !same(hashPin(pin, row.salt), row.pinhash)) { fail(id); fail('ip:' + ip); send(res, 401, { error: row ? 'Wrong PIN' : 'No account for that number. Use Create account.' }); return true; }
@@ -135,7 +135,7 @@ async function verifyLogin(phone, pin, ip, create) {
     if (create && blocked('mk:' + ip)) throw bad(429, 'Too many new accounts from here. Try later.');
     if (!create) { fail('ip:' + ip); throw bad(401, 'No account for that number. Use Create account.'); }
     fail('mk:' + ip); const salt = crypto.randomBytes(16).toString('hex');
-    await dbPut({ id, salt, pinhash: hashPin(pin, salt), data: {}, updated: Date.now() });
+    await dbPut({ id, salt, pinhash: hashPin(pin, salt), data: {}, updated: Date.now() }, true);
     return { id, created: true };
   }
   if (create) throw bad(409, 'That number already has an account. Use Sign in.');

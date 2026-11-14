@@ -208,3 +208,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v174 — 2026-11-13 — a lock with a line is never replaced by a line-less one
 - Found on ILL@UCLA (live): ESPN removes the odds from the scoreboard just before kickoff, so the last pre-kickoff snapshot had L=null and overwrote the earlier lock that had the line (no spread pick on the lock). `lockSnap` (index.html) and the server (`locks.js`) now refuse to replace a lock that has a line with one that doesn't. Games already started keep what they have.
+
+## v175 — 2026-11-13 — 🔒 on the green TAKE line for live games
+- The new-style game card's green/amber TAKE lines (`takeHtml`, index.html) recomputed the pick live; for games in progress they now show the LOCKED pregame pick (lock from `lkLoad`, shared via /locks) with a 🔒 on each line. Pregame and final cards are unchanged (finals have no TAKE line). Before this, the lock mark only appeared in the small panel text and the results list.

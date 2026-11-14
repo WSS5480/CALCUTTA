@@ -61,7 +61,7 @@ async function handle(req, res) {
   if (path === '/acct/status') { send(res, 200, { gate: on() }); return true; }
   if (req.method !== 'POST') return false;
   if (!on()) { send(res, 200, { gate: false }); return true; }
-  const ip = require('./ip').clientIp(req); // Render appends the real client address last
+  const ip = require('./ip').clientIp(req); // third from the end of X-Forwarded-For (see ip.js)
   let b; try { b = await body(req); } catch (e) { send(res, 400, { error: 'bad request' }); return true; }
   const email = String(b.email || '').trim().toLowerCase();
   try {
@@ -74,6 +74,7 @@ async function handle(req, res) {
     }
     if (path === '/acct/phone') {
       // Existing Oddable users keep their cell number + PIN. It maps to a My Apps account (7-day trial, then Cash App renewal).
+      if (b.create && OWNER_PHONES().includes(syncMod.normPhone(b.phone))) { send(res, 403, { error: 'This number cannot be created here' }); return true; } // an owner phone is never created by a stranger
       let v; try { v = await syncMod.verifyLogin(b.phone, b.pin, ip, !!b.create); } catch (er) { send(res, er.status || 500, { error: er.message }); return true; }
       const pe = phoneEmail(v.id), pw = crypto.createHmac('sha256', KEY()).update('phone|' + v.id).digest('hex').slice(0, 32);
       let r = await ma('/api/v1/auth/register', { email: pe, password: pw, name: 'Phone ' + v.id.slice(0, 4) });

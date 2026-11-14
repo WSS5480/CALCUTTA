@@ -125,7 +125,7 @@ async function adminUsers(emailOf) {
     if (bw + bl + bp > w + l + p) { w = bw; l = bl; p = bp; pl = bpl; }
     const dayKeys = Object.keys(days).filter((k) => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
     const lbl = (b) => String(b.text || ((b.side || '?') + ' ' + (b.line ? (b.line > 0 ? '+' : '') + b.line : 'ML') + (b.away && b.home ? ' (' + b.away + '@' + b.home + ')' : ''))).slice(0, 90);
-    const open = bets.filter((b) => b && !b.fin).sort((a, c) => N(c.t) - N(a.t)).slice(0, 60).map((b) => ({ day: String(b.day || '').slice(0, 10), what: lbl(b), stake: N(b.stake), odds: N(b.odds) || null }));
+    const open = bets.filter((b) => b && !b.fin && !b.res).sort((a, c) => N(c.t) - N(a.t)).slice(0, 60).map((b) => ({ day: String(b.day || '').slice(0, 10), what: lbl(b), stake: N(b.stake), odds: N(b.odds) || null }));
     const placed = {}; bets.forEach((b) => { if (!b || !/^\d{4}-\d{2}-\d{2}$/.test(String(b.day || '').slice(0, 10))) return; if (!N(b.stake) && !b.text && !b.side) return; const k = String(b.day).slice(0, 10), o = placed[k] || (placed[k] = { n: 0, w: 0, l: 0, p: 0, risk: 0, pl: 0, o: 0 }); o.n++; o.risk += N(b.stake); if (b.fin === 'won') { o.w++; o.pl += N(b.finPL); } else if (b.fin === 'lost') { o.l++; o.pl += N(b.finPL); } else if (b.fin === 'push') { o.p++; } else o.o++; });
     Object.keys(placed).forEach((k) => { placed[k].risk = Math.round(placed[k].risk * 100) / 100; placed[k].pl = Math.round(placed[k].pl * 100) / 100; });
     const openC = open.filter((b) => b.stake || !/^ \?/.test(b.what));

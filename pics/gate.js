@@ -86,7 +86,7 @@
     try { const j = await call('/phone', { phone: ph, pin: pn }); s('odd-tok', j.token); setMe(j.me); return true; } catch (e) { return false; }
   }
   function setMe(m) {
-    me = m; if (!m) return; setTimeout(drawAcct, 0); try { const dg = document.getElementById('odiag'); if (dg) dg.textContent = ' · acct ' + (m.role || '?') + (m.ownerDash ? '+dash' : '') + ' ' + String(m.email || '').slice(-8); s('odd-dash', (m.role === 'owner' && m.source === 'owner') || m.ownerDash ? '1' : null); if (window.navRender) setTimeout(window.navRender, 0); } catch (e) {}
+    me = m; if (!m) return; setTimeout(drawAcct, 0); try { const dg = document.getElementById('odiag'); if (dg) dg.textContent = (m.ownerDash || (m.role === 'owner' && m.source === 'owner')) ? ' · acct ' + (m.role || '?') + (m.ownerDash ? '+dash' : '') + ' ' + String(m.email || '').slice(-8) : ''; s('odd-dash', (m.role === 'owner' && m.source === 'owner') || m.ownerDash ? '1' : null); if (window.navRender) setTimeout(window.navRender, 0); } catch (e) {}
     if (m.allowed) { s('odd-ok', String(Date.now())); hide(); soon(m); } else show();
   }
   function soon(m) {
@@ -95,7 +95,7 @@
   }
   function out() { s('odd-noauto', '1'); s('odd-tok', null); s('odd-ok', null); s('odd-push', null); s('sync-phone', null); s('sync-pin', null); s('sync-owner', null); window.oddWipe(); me = null; mode = 'in'; location.reload(); }
   async function refresh(force) {
-    let j; try { j = await call('/me'); } catch (e) { const dg = document.getElementById('odiag'); if (dg) dg.textContent = ' · acct check failed: ' + (e.message || e.status); throw e; } setMe(j.me); return j.me;
+    let j; try { j = await call('/me'); } catch (e) { const dg = document.getElementById('odiag'); if (dg && g('odd-dash') === '1') dg.textContent = ' · acct check failed: ' + (e.message || e.status); throw e; } setMe(j.me); return j.me;
   }
   window.gateOut = out;
   // Renewal reminders (phone push). Works from the Account box under Disclosures.

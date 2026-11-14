@@ -185,3 +185,9 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## 2026-11-13 — owner dashboard feed: open bets (Oddable v170, odds-server only)
 - odds-api/sync.js `adminUsers` now also returns `open` per user (bets with no result yet: day, label, stake, odds; newest first, max 60). Phones still never returned. My Apps (.29) shows them with WTD/MTD/YTD/Lifetime filters.
+
+## v171 — 2026-11-13 — owner-only dashboard inside Oddable
+- Sign in with the OWNER PIN (sign-in screen) -> Account box shows "📊 Owner dashboard" (pics/dash.js, full-screen overlay above the My Bets banner). Normal players never see it, and the server enforces it: POST `/acct/dash` only answers an owner token (acct.js), data from sync.js `adminUsers` (short ids, no phones/names).
+- Chips WTD/MTD/YTD/Lifetime. Tiles + graphs all drill down with a Back button: P/L by day (tap bar -> that day's players), running total (tap -> day), bets per day, win % by player (tap -> player page: tiles, P/L by day, current bets, by-day list), Open bets tile -> all open bets.
+- His own phone account is NOT owner (decided with him: owner PIN only). To use it he signs out and signs in with the owner PIN; sign back in as himself for his own bets.
+- Tested with a mocked feed in Chromium (390px, no overflow/errors); not yet reviewed by an independent reviewer.

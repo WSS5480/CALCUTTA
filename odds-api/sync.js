@@ -151,4 +151,4 @@ async function verifyLogin(phone, pin, ip, create) {
   if (!same(hashPin(pin, row.salt), row.pinhash)) { fail(id); fail('ip:' + ip); throw bad(401, 'Wrong PIN'); }
   return { id, created: false };
 }
-module.exports = { handle, merge, normPhone, verifyLogin };
+module.exports = { handle, merge, normPhone, verifyLogin, adminUsers };

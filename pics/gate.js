@@ -114,9 +114,9 @@
     const box = $('acct'); if (!box) return; if (!g('odd-tok') || !me) { box.innerHTML = ''; return; }
     const owner = me.role === 'owner' && me.source === 'owner';
     box.innerHTML = '<div class="sub"><b>Account</b>: <span id="acct-em"></span></div>' +
-      (owner ? '' : (g('odd-push') === '1' ? '<div class="sub">Renewal reminders are on.</div>' : '<button id="acct-push" style="min-height:44px;padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);font:700 14px inherit">Turn on renewal reminders</button>')) +
+      (owner ? '<button id="acct-dash" style="min-height:44px;margin:4px 0;padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:#0b3d91;color:#fff;font:700 14px inherit">📊 Owner dashboard</button>' : (g('odd-push') === '1' ? '<div class="sub">Renewal reminders are on.</div>' : '<button id="acct-push" style="min-height:44px;padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);font:700 14px inherit">Turn on renewal reminders</button>')) +
       '<div class="sub" id="acct-st"></div><button id="acct-out" style="min-height:44px;margin-top:6px;padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);font:700 14px inherit">Sign out</button>';
-    const em = $('acct-em'); if (em) em.textContent = me.email || ''; const pb = $('acct-push'); if (pb) pb.onclick = pushOn; $('acct-out').onclick = out;
+    const em = $('acct-em'); if (em) em.textContent = me.email || ''; const pb = $('acct-push'); if (pb) pb.onclick = pushOn; const db = $('acct-dash'); if (db) db.onclick = () => { if (window.oddDash) window.oddDash(); }; $('acct-out').onclick = out;
   }
   window.gateAcct = drawAcct;
   // Header fetch hook: attach the token to AI calls.

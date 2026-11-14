@@ -93,7 +93,9 @@ async function handle(req, res) {
     }
     const e = verify(b.token || req.headers['x-token']);
     if (!e) { send(res, 401, { error: 'Sign in again' }); return true; }
-    if (e === 'owner') { if (!OWNER_PIN()) { send(res, 401, { error: 'Sign in again' }); return true; } if (path === '/acct/me') { send(res, 200, { me: OWNER_ME }); return true; } send(res, 400, { error: 'Owner has full access' }); return true; }
+    if (e === 'owner') { if (!OWNER_PIN()) { send(res, 401, { error: 'Sign in again' }); return true; }
+      if (path === '/acct/dash') { try { const us = await require('./sync').adminUsers(null); send(res, 200, { users: us.map((u) => ({ k: String(u.id).slice(0, 8), tag: u.tag, updated: u.updated, bets: u.bets, w: u.w, l: u.l, p: u.p, risk: u.risk, pl: u.pl, open: u.open, days: u.days })) }); } catch (er) { send(res, 502, { error: 'Could not read players: ' + er.message }); } return true; }
+      if (path === '/acct/me') { send(res, 200, { me: OWNER_ME }); return true; } send(res, 400, { error: 'Owner has full access' }); return true; }
     if (path === '/acct/me') { const me = await shape(e, true); if (!me) { send(res, 401, { error: 'Account not found or suspended' }); return true; } send(res, 200, { me }); return true; }
     if (path === '/acct/push-key') {
       if (e === 'owner') { send(res, 400, { error: 'Owner has no renewals' }); return true; }

@@ -80,7 +80,7 @@ async function handle(req, res) {
       if (!r.ok && r.status === 409) r = await ma('/api/v1/auth/login', { email: pe, password: pw });
       if (!r.ok) { send(res, 502, { error: r.j.error || 'Could not open your account' }); return true; }
       CACHE.delete(pe);
-      send(res, 200, { token: mint(pe), me: await shape(pe, true) }); return true;
+      const me = await shape(pe, true); if (me && isOwnerPhone(pe)) me.ownerDash = true; send(res, 200, { token: mint(pe), me }); return true;
     }
     if (path === '/acct/login' || path === '/acct/register') {
       if (/@phone\.oddable$/.test(email)) { send(res, 400, { error: 'Use your cell number and PIN to sign in' }); return true; }
@@ -93,10 +93,12 @@ async function handle(req, res) {
     }
     const e = verify(b.token || req.headers['x-token']);
     if (!e) { send(res, 401, { error: 'Sign in again' }); return true; }
+    if (path === '/acct/dash' && ((e === 'owner' && OWNER_PIN()) || isOwnerPhone(e))) {
+  { try { const us = await require('./sync').adminUsers(null); send(res, 200, { users: us.map((u) => ({ k: String(u.id).slice(0, 8), tag: u.tag, updated: u.updated, bets: u.bets, w: u.w, l: u.l, p: u.p, risk: u.risk, pl: u.pl, open: u.open, days: u.days })) }); } catch (er) { send(res, 502, { error: 'Could not read players: ' + er.message }); } return true; }
+    }
     if (e === 'owner') { if (!OWNER_PIN()) { send(res, 401, { error: 'Sign in again' }); return true; }
-      if (path === '/acct/dash') { try { const us = await require('./sync').adminUsers(null); send(res, 200, { users: us.map((u) => ({ k: String(u.id).slice(0, 8), tag: u.tag, updated: u.updated, bets: u.bets, w: u.w, l: u.l, p: u.p, risk: u.risk, pl: u.pl, open: u.open, days: u.days })) }); } catch (er) { send(res, 502, { error: 'Could not read players: ' + er.message }); } return true; }
       if (path === '/acct/me') { send(res, 200, { me: OWNER_ME }); return true; } send(res, 400, { error: 'Owner has full access' }); return true; }
-    if (path === '/acct/me') { const me = await shape(e, true); if (!me) { send(res, 401, { error: 'Account not found or suspended' }); return true; } send(res, 200, { me }); return true; }
+    if (path === '/acct/me') { const me = await shape(e, true); if (!me) { send(res, 401, { error: 'Account not found or suspended' }); return true; } if (isOwnerPhone(e)) me.ownerDash = true; send(res, 200, { me }); return true; }
     if (path === '/acct/push-key') {
       if (e === 'owner') { send(res, 400, { error: 'Owner has no renewals' }); return true; }
       const r = await ma('/api/v1/push/key', {}); send(res, r.ok ? 200 : (r.status || 502), r.ok ? { key: r.j.key } : { error: r.j.error || 'Reminders are not set up yet' }); return true;
@@ -120,5 +122,7 @@ async function handle(req, res) {
   } catch (er) { send(res, 502, { error: 'Account service is waking up, try again in a moment' }); return true; }
   return false;
 }
+const OWNER_PHONES = () => String(process.env.OWNER_PHONE || '').split(',').map((x) => syncMod.normPhone(x)).filter((x) => x.length === 10);
+const isOwnerPhone = (e) => /@phone\.oddable$/.test(String(e)) && OWNER_PHONES().some((p) => phoneEmail(crypto.createHash('sha256').update('oddable|' + p).digest('hex')) === e);
 const phoneEmail = (id) => crypto.createHmac('sha256', KEY()).update('phoneid|' + id).digest('hex').slice(0, 20) + '@phone.oddable';
 module.exports = { handle, check, on, phoneEmail };

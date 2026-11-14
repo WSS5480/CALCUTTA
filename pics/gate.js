@@ -6,7 +6,7 @@
   // One person's data per phone. wipeData() clears everything that belongs to the signed-in person (bets, daily log, pins, locked picks, caches of them);
   // ownerSwitch(id) wipes it when a DIFFERENT person signs in on this phone, so nobody ever sees the previous user's data or uploads it into their own account.
   window.oddWipe = function () {
-    try { const ks = []; for (let i = 0; i < localStorage.length; i++) ks.push(localStorage.key(i)); ks.forEach((k) => { if (/^(bets26|betlog26|logat26|pinsat26|pinned26|kdel26|plbhtml26|surv26|sync-ids|sync-tomb|sync-last|sync-err|sync-rl|odd-ok|odd-push|odd-me|kal-id|kal-pem)$/.test(k) || /^(lk26-|splk-)/.test(k)) localStorage.removeItem(k); }); } catch (e) {}
+    try { const ks = []; for (let i = 0; i < localStorage.length; i++) ks.push(localStorage.key(i)); ks.forEach((k) => { if (/^(bets26|betlog26|logat26|pinsat26|pinned26|kdel26|plbhtml26|surv26|sync-ids|sync-tomb|sync-last|sync-err|sync-rl|odd-ok|odd-dash|odd-push|odd-me|kal-id|kal-pem)$/.test(k) || /^(lk26-|splk-)/.test(k)) localStorage.removeItem(k); }); } catch (e) {}
   };
   window.oddOwner = function (id) { // call right before saving a new sign-in; returns true if the previous person's data was cleared
     const k = String(id || '').toLowerCase().replace(/\s/g, ''); if (!k) return false; const prev = g('sync-owner'); s('sync-owner', k);
@@ -86,7 +86,7 @@
     try { const j = await call('/phone', { phone: ph, pin: pn }); s('odd-tok', j.token); setMe(j.me); return true; } catch (e) { return false; }
   }
   function setMe(m) {
-    me = m; if (!m) return; setTimeout(drawAcct, 0);
+    me = m; if (!m) return; setTimeout(drawAcct, 0); try { s('odd-dash', (m.role === 'owner' && m.source === 'owner') || m.ownerDash ? '1' : null); if (window.navRender) setTimeout(window.navRender, 0); } catch (e) {}
     if (m.allowed) { s('odd-ok', String(Date.now())); hide(); soon(m); } else show();
   }
   function soon(m) {
@@ -112,7 +112,7 @@
   }
   function drawAcct() {
     const box = $('acct'); if (!box) return; if (!g('odd-tok') || !me) { box.innerHTML = ''; return; }
-    const owner = me.role === 'owner' && me.source === 'owner';
+    const owner = (me.role === 'owner' && me.source === 'owner') || !!me.ownerDash;
     box.innerHTML = '<div class="sub"><b>Account</b>: <span id="acct-em"></span></div>' +
       (owner ? '<button id="acct-dash" style="min-height:44px;margin:4px 0;padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:#0b3d91;color:#fff;font:700 14px inherit">📊 Owner dashboard</button>' : (g('odd-push') === '1' ? '<div class="sub">Renewal reminders are on.</div>' : '<button id="acct-push" style="min-height:44px;padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);font:700 14px inherit">Turn on renewal reminders</button>')) +
       '<div class="sub" id="acct-st"></div><button id="acct-out" style="min-height:44px;margin-top:6px;padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);font:700 14px inherit">Sign out</button>';

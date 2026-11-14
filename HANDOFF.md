@@ -278,3 +278,8 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v199
 - Phone (<=700px): TODAY banner (#plb) is now a slim full-width strip at the very top, content pushed down (#sc padding-top) so it can never cover the header buttons, Kalshi light or game cards. Tap still expands the bet list (full width). Wide screens unchanged. Verified by local screenshot at 390px.
+
+## v200
+- Reverted v199 top-strip banner (Steve wanted the old floating TODAY box back in the corner). Instead the version badge, Kalshi light and acct text moved to their own row under the Add bet / Ask AI buttons (flex-basis 100
+## v200
+- Reverted the v199 top-strip banner (Steve wanted the old floating TODAY box back in its corner). The version badge, Kalshi light and acct text moved to their own row under the Add bet / Ask AI buttons (full-width wrapper in header .hbt) so the banner cannot cover them. Verified by local screenshot at 390px.

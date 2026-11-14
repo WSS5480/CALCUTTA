@@ -66,7 +66,7 @@ const kalshi = require('../kalshi-sync/server.js'); const BT = {};
 process.on('uncaughtException', (e) => console.error('uncaught:', e && e.message)); process.on('unhandledRejection', (e) => console.error('unhandled:', e && e.message));
 http.createServer(async (req, res) => {
   // CORS preflight for every route (the sign-in/sign-up calls send JSON + an x-token header, so the browser asks first; without this answer they fail with "Failed to fetch")
-  if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'content-type,x-token', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Max-Age': '86400' }); return res.end(); }
+  if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'content-type,x-token,x-dash', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Max-Age': '86400' }); return res.end(); }
   if (req.url.startsWith('/acct')) { try { if (await require('./acct.js').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"acct"}'); } }
   if (req.url.startsWith('/oddsline')) { try { if (await require('./oddslines.js').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"oddsline"}'); } }
   if (req.url.startsWith('/ai')) { try { if (await require('./ai.js').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"ai"}'); } }

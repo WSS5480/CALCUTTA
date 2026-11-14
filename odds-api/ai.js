@@ -16,7 +16,7 @@ const SURV = 'You read a screenshot from a Survivor / Survival pool (Yahoo Sport
 const SLIP = 'You read screenshots of sports bet slips (Kalshi, Underdog, sportsbooks). Transcribe the slip as plain text, one line per item, keeping the exact wording and numbers you see: teams, the pick/side, bet type (moneyline/spread/total/parlay with each leg), line, odds or chance %, cost/stake, payout. Do not guess missing numbers. Output only the text, no commentary.';
 const CHAT = 'You are the assistant inside Oddable, a personal sports pick and bet-tracking app. Be terse and practical. Plain text, short lines, at most 12 lines total; use ** only for headings. Use only the data given (model win %, lines, user bets); say when something is not in the data. Model numbers are estimates, not guarantees. Give reasoning in a few short lines. Not licensed financial advice; no guarantees.';
 async function handle(req, res) {
-  if (req.method === 'OPTIONS') { res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Access-Control-Allow-Headers', 'content-type,x-token'); res.setHeader('Access-Control-Allow-Methods', 'POST,GET,OPTIONS'); res.statusCode = 204; res.end(); return true; }
+  if (req.method === 'OPTIONS') { res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Access-Control-Allow-Headers', 'content-type,x-token,x-dash'); res.setHeader('Access-Control-Allow-Methods', 'POST,GET,OPTIONS'); res.statusCode = 204; res.end(); return true; }
   const path = req.url.split('?')[0];
   if (path === '/ai/status') { send(res, 200, { ok: !!(process.env.ANTHROPIC_API_KEY || '').trim(), model: MODEL() }); return true; }
   if (req.method !== 'POST') return false;

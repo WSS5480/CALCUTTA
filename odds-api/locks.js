@@ -46,7 +46,8 @@ async function handle(req, res) {
     if (!(await require('./acct').check(req))) { send(res, 401, { error: 'Sign in again' }); return true; } // only signed-in accounts can write locks
     const b = await body(req); if (!LG.has(b.lg)) { send(res, 400, { error: 'bad league' }); return true; }
     const kn = await known(b.lg), now = Date.now(), items = (Array.isArray(b.items) ? b.items : []).slice(0, 60).map((i) => clean(i, now, kn)).filter(Boolean);
-    if (!items.length) { send(res, 200, { added: 0 }); return true; }
+    const rejected = (Array.isArray(b.items) ? b.items : []).slice(0, 60).length - items.length;
+    if (!items.length) { send(res, 200, { added: 0, rejected }); return true; }
     const id = 'lock:' + b.lg; let added = 0;
     for (let tries = 0; tries < 4; tries++) {
       let row = await S.dbGet(id); if (!row) { await S.dbPut({ id, salt: 'x', pinhash: 'x', data: { locks: {} }, updated: 1 }, true); row = await S.dbGet(id); if (!row) continue; }
@@ -55,7 +56,7 @@ async function handle(req, res) {
       if (!added) break;
       if (await S.dbPatchIf(id, row.updated, { locks }, Date.now())) { delete cache[b.lg]; break; } added = 0;
     }
-    send(res, 200, { added }); return true;
+    send(res, 200, { added, rejected }); return true;
   } catch (e) { send(res, e.status || 500, { error: e.status ? e.message : 'Lock error: ' + e.message }); return true; }
 }
 module.exports = { handle, clean };

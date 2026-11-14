@@ -28,7 +28,7 @@ async function ma(path, data) {
 }
 // Slow-down for password guessing: 8 tries / 10 min per ip+email.
 const TRY = new Map();
-function throttled(k) { if (TRY.size > 5000) TRY.clear(); const t = Date.now(), a = (TRY.get(k) || []).filter((x) => t - x < 600e3); if (a.length >= 8) { TRY.set(k, a); return true; } a.push(t); TRY.set(k, a); return false; }
+function throttled(k) { if (TRY.size > 5000) { let n = 0; for (const k of TRY.keys()) { TRY.delete(k); if (++n >= 1000) break; } } /* evict the oldest, never wipe every throttle */ const t = Date.now(), a = (TRY.get(k) || []).filter((x) => t - x < 600e3); if (a.length >= 8) { TRY.set(k, a); return true; } a.push(t); TRY.set(k, a); return false; }
 const OWNER_PIN = () => String(process.env.OWNER_PIN || '').trim();
 const OWNER_ME = { email: 'owner', role: 'owner', plan: 'pro', expires_on: null, source: 'owner', allowed: true, pending: false, price: 99, link: null, tag: null, payReady: true };
 const chiToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date());

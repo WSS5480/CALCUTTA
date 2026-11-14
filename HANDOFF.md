@@ -302,3 +302,7 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v205
 - v203/v204 linker used fuzzy team matching and linked "Georgia" to Georgia Tech, "Houston" to Sam Houston, "Virginia Tech" to Virginia. Now exact normalized team name only (St.→State, parens dropped, short display name), re-evaluated on every render (any gid on a Kalshi leg is linker-made; wrong ones are removed). Possible side effect to watch: a parlay that was graded from a wrong link in v203/v204 may have a remembered b.fin; check Kalshi parlays if anything shows lost that should not.
+
+## v206
+- The "📚 N books" control only existed inside game detail, so nobody saw it. Main game card footer (nft) now has a "📚 N books" button (NFL pre-game, when many-book data loaded) that opens a sheet (booksOpen): each book with a 2-letter initials badge (no trademarked logos), its spread and price, consensus, best line per side. "📡 Live" button now on every card state (was live/final only).
+- Book logos deliberately not used (trademarks); initials badges only. NCAA still single-book.

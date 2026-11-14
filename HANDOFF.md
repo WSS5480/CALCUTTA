@@ -275,3 +275,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v198
 - SW was already network-first + skipWaiting + auto-reload on controllerchange. Added: every open app checks for a new version when it becomes visible and every 5 min (index.html, classic.html), so people with the app left open get new builds without reopening.
+
+## v199
+- Phone (<=700px): TODAY banner (#plb) is now a slim full-width strip at the very top, content pushed down (#sc padding-top) so it can never cover the header buttons, Kalshi light or game cards. Tap still expands the bet list (full width). Wide screens unchanged. Verified by local screenshot at 390px.

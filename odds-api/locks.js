@@ -35,7 +35,7 @@ async function handle(req, res) {
     for (let tries = 0; tries < 4; tries++) {
       let row = await S.dbGet(id); if (!row) { await S.dbPut({ id, salt: 'x', pinhash: 'x', data: { locks: {} }, updated: 1 }, true); row = await S.dbGet(id); if (!row) continue; }
       const locks = Object.assign({}, (row.data && row.data.locks) || {}); added = 0;
-      items.forEach((i) => { const o = locks[i.id]; if (o && i.late) return; if (o && o.L !== null && i.v.L === null) return; // a lock with a line is never replaced by one without if (!o) { if (Object.keys(locks).length < CAP) { locks[i.id] = i.v; added++; } } else if (o.su !== i.v.su || o.conf !== i.v.conf || o.L !== i.v.L || JSON.stringify(o.ats) !== JSON.stringify(i.v.ats)) { locks[i.id] = i.v; added++; } });
+      items.forEach((i) => { const o = locks[i.id]; if (o && i.late) return; if (o && o.L !== null && i.v.L === null) return; /* a lock with a line is never replaced by one without */ if (!o) { if (Object.keys(locks).length < CAP) { locks[i.id] = i.v; added++; } } else if (o.su !== i.v.su || o.conf !== i.v.conf || o.L !== i.v.L || JSON.stringify(o.ats) !== JSON.stringify(i.v.ats)) { locks[i.id] = i.v; added++; } });
       if (!added) break;
       if (await S.dbPatchIf(id, row.updated, { locks }, Date.now())) { delete cache[b.lg]; break; } added = 0;
     }

@@ -244,3 +244,7 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 - Result: players-only Brier .226-.229 vs line .2114 (worse by .015-.020); 90/10 with line +.0005..+.0009 worse; 80/20 +.0013..+.0019 worse; learned weight on players ~0-0.05; ATS 45-51% (breakeven 52.4%), ROI -2% to -14%. Player-vs-opponent/division features were worse than plain player strength. Players-only calls ~60-63% of winners (line 65%).
 - Review: no bug that could hide an edge; leaks (lineup A) all favor the model. Caveats: only 2021+ history, n=434 can't detect a 2-3 pt edge, defender score uncentered, 5 sweeps under-converged, abbreviation map only WAS->WSH.
 - Next ideas if wanted: true inactives/injury feed pregame, more seasons (needs older ESPN logs), tune defender scoring.
+
+## Pregame availability test (Nov 14, Oddable v190, no app change)
+- ESPN summary `injuries` on old games returns TODAY's injury list (dates 2026-11-14), so historical pregame injury data is NOT available from ESPN. Used a proxy instead: players who played in the team's previous game but not this one (missing talent, rated by prior career score), and QB swap (last game's starting QB differs). Proxy uses actual participation (slightly optimistic).
+- Walk-forward on 676 line games (week>=3): all variants within +/-.001 Brier of line (+.0002 to +.0010, CI +/-.0009 to .0024); learned weights ~0; ATS 46-52%. QB-change games (161): when home QB swapped, home beat the line by -2.0 pts avg (n72), away QB swapped +1.0 (n75); both within noise (SE ~1.5). Line already prices availability.

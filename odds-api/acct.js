@@ -93,8 +93,13 @@ async function handle(req, res) {
     }
     const e = verify(b.token || req.headers['x-token']);
     if (!e) { send(res, 401, { error: 'Sign in again' }); return true; }
+    if (path === '/acct/name' && ((e === 'owner' && OWNER_PIN()) || isOwnerPhone(e))) {
+      const k = String(b.k || ''), name = String(b.name || '').replace(/[<>&"'\u0000-\u001f]/g, '').trim().slice(0, 24);
+      if (!/^[0-9a-f]{8}$/.test(k)) { send(res, 400, { error: 'Bad player' }); return true; }
+      try { await namesSet(k, name); send(res, 200, { ok: true, name }); } catch (er) { send(res, 502, { error: 'Could not save the name: ' + er.message }); } return true;
+    }
     if (path === '/acct/dash' && ((e === 'owner' && OWNER_PIN()) || isOwnerPhone(e))) {
-  { try { const us = await require('./sync').adminUsers(null); send(res, 200, { users: us.map((u) => ({ k: String(u.id).slice(0, 8), tag: u.tag, updated: u.updated, bets: u.bets, w: u.w, l: u.l, p: u.p, risk: u.risk, pl: u.pl, open: u.open, days: u.days })) }); } catch (er) { send(res, 502, { error: 'Could not read players: ' + er.message }); } return true; }
+  { try { const us = await require('./sync').adminUsers(null); const nm = await namesGet().catch(() => ({})); send(res, 200, { users: us.map((u) => ({ k: String(u.id).slice(0, 8), name: nm[String(u.id).slice(0, 8)] || '', tag: u.tag, updated: u.updated, bets: u.bets, w: u.w, l: u.l, p: u.p, risk: u.risk, pl: u.pl, open: u.open, days: u.days })) }); } catch (er) { send(res, 502, { error: 'Could not read players: ' + er.message }); } return true; }
     }
     if (e === 'owner') { if (!OWNER_PIN()) { send(res, 401, { error: 'Sign in again' }); return true; }
       if (path === '/acct/me') { send(res, 200, { me: OWNER_ME }); return true; } send(res, 400, { error: 'Owner has full access' }); return true; }
@@ -121,6 +126,15 @@ async function handle(req, res) {
     }
   } catch (er) { send(res, 502, { error: 'Account service is waking up, try again in a moment' }); return true; }
   return false;
+}
+// Player names the owner types in the dashboard. Stored in the row 'lock:names' (the 'lock:' prefix keeps it out of every player list).
+async function namesGet() { const r = await syncMod.dbGet('lock:names'); return (r && r.data && r.data.names) || {}; }
+async function namesSet(k, name) {
+  for (let i = 0; i < 4; i++) {
+    let r = await syncMod.dbGet('lock:names'); if (!r) { await syncMod.dbPut({ id: 'lock:names', salt: 'x', pinhash: 'x', data: { names: {} }, updated: 1 }, true); r = await syncMod.dbGet('lock:names'); if (!r) continue; }
+    const names = { ...((r.data && r.data.names) || {}) }; if (name) names[k] = name; else delete names[k];
+    if (await syncMod.dbPatchIf('lock:names', r.updated, { names }, Date.now())) return names;
+  } throw new Error('Busy, try again');
 }
 const OWNER_PHONES = () => String(process.env.OWNER_PHONE || '').split(',').map((x) => syncMod.normPhone(x)).filter((x) => x.length === 10);
 const isOwnerPhone = (e) => /@phone\.oddable$/.test(String(e)) && OWNER_PHONES().some((p) => phoneEmail(crypto.createHash('sha256').update('oddable|' + p).digest('hex')) === e);

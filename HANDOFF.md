@@ -24,6 +24,7 @@ Start here if you are a new AI session picking up this repo. Update this file in
 - Local check: serve `pics/` with `python3 -m http.server`, set `localStorage['pics-lg']='cfb'`, open `index.html?mirror=1`. ESPN must be mocked if outbound access is blocked.
 
 ## Change log
+- v183 (2026-11-14) — Dashboard: player names + Day. Owner types a name on a player's page (POST `/acct/name {k,name}`, owner/OWNER_PHONE only); stored in row `lock:names` of oddable_sync (the `lock:` prefix keeps it out of player lists); `/acct/dash` returns `name` per user and every screen shows the name, else 'Player ····tag'. New **Day** chip with a date picker (any day, incl. today) plus a 'Bets placed <day>' card of unsettled bets. Phone accounts have no email, so there is no email fallback. NOT yet shown in My Apps.
 - v182 (2026-11-14) — account diagnostic moved next to the version pill in the header (shows "acct: not checked" until the gate answers).
 - v181 (2026-11-14) — gate.js/dash.js loaded with ?v=181 (cache-bust on every bump — bump these with the version); footer shows ' · acct <role>[+dash] <tail>' or 'acct check failed: …' so an account problem on a device can be read off the screen. Steve's iPad still lacked the Dashboard button at v180 while Chrome showed it.
 - v180 (2026-11-14) — gate refresh retries every 20s (up to 4x) when the server is unreachable, e.g. during a calcutta-odds redeploy. Steve's iPad missed the v179 Dashboard button because its one /acct/me call landed during the redeploy.

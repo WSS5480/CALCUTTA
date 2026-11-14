@@ -47,7 +47,7 @@
       return;
     }
     const m = me, dl = m.expires_on ? Math.ceil((new Date(m.expires_on + 'T23:59:59') - Date.now()) / 864e5) : 0;
-    el.innerHTML = '<div class="gb"><h1>Subscribe to Oddable</h1><p>' + (m.plan === 'pro' ? 'Your access ended ' + esc(m.expires_on) + '.' : (m.source === 'trial' ? 'Your free trial has ended.' : 'Your access has ended.')) + ' $' + esc(m.price) + ' per month unlocks everything.</p>' +
+    el.innerHTML = '<div class="gb"><h1>Subscribe to Oddable</h1><p>' + (m.plan === 'pro' ? (m.expires_on && String(m.expires_on).slice(0, 10) < new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date()) ? 'Your access ended ' + esc(m.expires_on) + '.' : 'Your renewal is waiting for the owner to confirm. Tap Check again in a bit.') : (m.source === 'trial' ? 'Your free trial has ended.' : 'Your access has ended.')) + ' $' + esc(m.price) + ' per month unlocks everything.</p>' +
       (m.pending ? '<div class="box ok">Payment request received. You will be unlocked as soon as it is confirmed. Tap Check again in a minute.</div>' : '') +
       '<div class="box"><b>Step 1.</b> Send $' + m.price + ' on Cash App' + (m.tag ? ' to <b>' + esc(m.tag) + '</b>' : '') + '.' +
       (/^https:\/\//.test(m.link || '') ? '<button id="gcash">Pay $' + m.price + ' with Cash App</button>' : '<p class="er">Payment is not set up yet. Contact the owner.</p>') +

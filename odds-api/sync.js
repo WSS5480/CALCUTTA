@@ -37,8 +37,9 @@ function merge(a, b) { // a = stored, b = incoming
     if (!x || x.id == null || T.has(String(x.id))) return;
     const o = by.get(String(x.id));
     if (!o) by.set(String(x.id), x);
-    else if ((o.res == null) !== (x.res == null)) by.set(String(x.id), x.res != null ? x : o);
-    else by.set(String(x.id), (x.t || 0) >= (o.t || 0) ? x : o);
+    else if ((x.t || 0) !== (o.t || 0)) by.set(String(x.id), (x.t || 0) > (o.t || 0) ? x : o); // newest edit wins, whichever phone it came from
+    else if ((o.res == null) !== (x.res == null)) by.set(String(x.id), x.res != null ? x : o); // same age: keep the one with a result
+    else by.set(String(x.id), x);
   });
   const log = { ...(a.log || {}) };
   Object.keys(b.log || {}).forEach((k) => { if (!log[k] || JSON.stringify(b.log[k]).length >= JSON.stringify(log[k]).length) log[k] = b.log[k]; });
@@ -49,13 +50,14 @@ function merge(a, b) { // a = stored, b = incoming
   return {
     locks, splk,
     bets: [...by.values()],
-    pins: [...new Set([...arr(a.pins), ...arr(b.pins)].map(String))].slice(-500),
+    pins: (b.pinsAt || a.pinsAt) ? (Number(b.pinsAt || 0) >= Number(a.pinsAt || 0) ? arr(b.pins) : arr(a.pins)).map(String).slice(-500) : [...new Set([...arr(a.pins), ...arr(b.pins)].map(String))].slice(-500), // newest pin change wins, so unpinning sticks
+    pinsAt: Math.max(Number(a.pinsAt || 0), Number(b.pinsAt || 0)),
     log, kdel: [...new Set([...arr(a.kdel), ...arr(b.kdel)])].slice(-3000), tomb,
   };
 }
 
 function body(req) {
-  return new Promise((ok, no) => { let n = 0; const ch = []; req.on('data', (c) => { n += c.length; if (n > MAX_BODY) { no(new Error('too big')); req.destroy(); } else ch.push(c); }); req.on('end', () => { try { ok(JSON.parse(Buffer.concat(ch).toString() || '{}')); } catch (e) { no(e); } }); req.on('error', no); });
+  return new Promise((ok, no) => { let n = 0; const ch = []; req.on('data', (c) => { n += c.length; if (n <= MAX_BODY) ch.push(c); }); req.on('end', () => { if (n > MAX_BODY) return no(Object.assign(new Error('Your saved bets are too big to sync. Delete some old bets and try again.'), { status: 413 })); try { ok(JSON.parse(Buffer.concat(ch).toString() || '{}')); } catch (e) { no(e); } }); req.on('error', no); });
 }
 const send = (res, code, o) => { res.statusCode = code; res.setHeader('Content-Type', 'application/json'); res.setHeader('Access-Control-Allow-Origin', '*'); res.end(JSON.stringify(o)); };
 function blocked(k) { const t = (FAILS.get(k) || []).filter((x) => Date.now() - x < 15 * 60e3); FAILS.set(k, t); return t.length >= 6; }
@@ -105,7 +107,7 @@ async function handle(req, res) {
       send(res, 409, { error: 'Busy, try again' }); return true;
     }
     send(res, 404, { error: 'not found' }); return true;
-  } catch (e) { send(res, 500, { error: 'Sync error: ' + e.message }); return true; }
+  } catch (e) { send(res, e.status || 500, { error: e.status ? e.message : 'Sync error: ' + e.message }); return true; }
 }
 async function adminUsers(emailOf) {
   const { url, key } = cfg();

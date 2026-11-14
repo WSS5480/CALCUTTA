@@ -287,3 +287,7 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 ## v201
 - Voice replies gave no sound on Steve's phone. Fixes in pics/ai.js: aiUnlock() (zero-volume utterance inside the tap; iPhone only speaks after a tap) on mic press, Ask/preset tap and the voice toggle; toggle now speaks "Voice replies are on. Can you hear me?" as an instant test; picks an English voice explicitly; if speech has not started after 2.5 s the sheet says to check the ringer/silent switch and volume (iPhone mutes web speech when the silent switch is on).
 - Not verified on a real phone.
+
+## v202
+- Conference dropdown (#conf) now sits to the right of the team search (.srow); the old "All teams" select (#team) is kept in the DOM but hidden so pickTeam/search code still works. College: ESPN team.conferenceId captured as `cid` on each team (CONFN map: ACC, Big 12, Big Ten, SEC, Pac-12, C-USA, MAC, Mountain West, Independents, Sun Belt, American). NFL: AFC/NFC + 8 divisions from the hardcoded NFLD map. Filter applied once where `games` is built in render (affects the main list and the Live page); choice saved per league (`pics-conf-<lg>`). Cached games from before this version have no `cid` until the scoreboard refreshes.
+- Live page order: live games = games with MY bets first, then highest model confidence; upcoming/final keep time order but my-bet games come first.

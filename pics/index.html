@@ -206,10 +206,10 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v213 -->
+<!-- Pics v214 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v213</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v214</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
   <div id="arbbar" class="arbbar" hidden onclick="arbBarTap()" role="button" aria-label="Arbitrage alert"><span class="mq" id="arbmq"></span></div>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">NCAA</button><button data-sp="nba">NBA</button><button data-sp="mlb">MLB</button><button data-sp="nhl">NHL</button><button data-sp="ncaab">NCAAB</button></div>
   <div class="srow"><input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team"><select id="conf" aria-label="Conference"><option value="">All</option></select></div>
@@ -217,7 +217,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v213 (sport filter on My Bets)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v214 (lock scoreboard)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -1821,6 +1821,18 @@ function labHtml(games) {
 }
 function labSet(m, q) { try { if (m) { INJM = m; localStorage.setItem('injm', m); } if (q !== undefined && q !== null) { QBP = parseFloat(q) || 0; localStorage.setItem('qbp', QBP); } } catch (e) {} render(); }
 function labTog(id, on) { if (on) LABOUT[id] = 1; else delete LABOUT[id]; render(); }
+// Season scoreboard of the locked picks (win + spread) by week, with the spread break-even (52.4% at -110) so the honest record is always in view
+function lkScore(weeks) {
+  const ws = weeks.filter((w) => w.lst).sort((x, y) => y.n - x.n); if (!ws.length) return '';
+  const sum = (k) => ws.reduce((a, w) => a + w[k], 0), P = (h, n) => (n ? Math.round(h / n * 100) + '%' : '–');
+  const lst = sum('lst'), lsh = sum('lsh'), lah = sum('lah'), lam = sum('lam'), lap = ws.reduce((a, w) => a + (w.lk.filter((x) => x.r.lats && x.r.lats !== 'hit' && x.r.lats !== 'miss').length), 0);
+  const spOk = lah + lam ? lah / (lah + lam) >= 0.524 : null;
+  const card = (t, w, l, p, extra, good) => `<div class="sum"><b>${w}-${l}${extra || ''}</b><span>${t}</span><small class="${good === null ? '' : good ? 'p' : 'n'}">${p}</small></div>`;
+  const wk = ws.map((w) => `<div class="card" style="margin:6px 0;padding:10px 12px"><b>Week ${w.n}</b><div class="sub" style="margin-top:4px">🔒 Win <b>${w.lsh}-${w.lst - w.lsh}</b> (${P(w.lsh, w.lst)}) · Spread <b>${w.lah}-${w.lam}</b> (${P(w.lah, w.lah + w.lam)})</div></div>`).join('');
+  return `<details data-k="lkscore" ${isOpen('lkscore', true) ? 'open' : ''}><summary>🏁 Lock scoreboard (season)</summary>
+    <div class="sums">${card('🔒 Win picks', lsh, lst - lsh, P(lsh, lst) + ' · ' + lst + ' locked', '', null)}${card('🔒 Spread picks', lah, lam, P(lah, lah + lam) + ' · break-even 52.4%', lap ? '-' + lap : '', spOk)}</div>
+    <div class="note" style="text-align:left;padding:4px 0">${spOk === false ? 'Spread locks are below break-even so far: treat them as leans, not bets.' : spOk ? 'Spread locks are above break-even so far (small sample, keep tracking).' : ''} Win picks lean on the betting line, so a high win rate mostly means favorites.</div>${wk}</details>`;
+}
 function lockedHtml(LK) {
   if (!LK.length) return '';
   const mk = (ok) => ok === true || ok === 'hit' ? '<b class="hit">✓ hit</b>' : ok === false || ok === 'miss' ? '<b class="miss">✗ miss</b>' : '<b>push</b>';
@@ -2057,7 +2069,7 @@ function renderInner() {
     <div class="sum lock" onclick="lockOpen('win')" style="cursor:pointer"><i class="ibtn" onclick="event.stopPropagation();infoOpen('lock')">ⓘ</i><b>${T.LST ? pct(T.LSH / T.LST, 1) : '–'}</b><span>🔒 ${wl}Locked win picks</span><small>${T.LST ? T.LSH + '-' + (T.LST - T.LSH) : SW ? 'no locked picks this week' : 'counts games picked before kickoff'}</small></div>
     <div class="sum lock" onclick="lockOpen('spread')" style="cursor:pointer"><i class="ibtn" onclick="event.stopPropagation();infoOpen('lock')">ⓘ</i><b>${T.LAH + T.LAM ? pct(T.LAH / (T.LAH + T.LAM), 1) : '–'}</b><span>🔒 ${wl}Locked spread</span><small>${T.LAH + T.LAM ? T.LAH + '-' + T.LAM : SW ? 'none this week' : 'starts with the next finished game'} · tap to see</small></div>`;
   railRender(games, thisWeek); livePageRender(games); navRender();
-  const lockedBox = lockedHtml(T.LK); // the locked list matches the tiles (same week)
+  const lockedBox = lkScore(weeks) + lockedHtml(T.LK); // the locked list matches the tiles (same week)
   { const f = (h, t) => (t ? Math.round(h / t * 100) + '%' : '–'); NST = `<div class="nst">Win <b>${f(SH, ST)}</b> · Spread <b>${f(AH, atsN)}</b><br>🔒 Win <b>${f(LSH, LST)}</b> · 🔒 Spread <b>${f(LAH, LAH + LAM)}</b></div>`; }
   const bestHtml = TEAM ? '' : weekBoard([...thisWeek, ...post.filter((g) => g.week === CUR)]) + titleBoard();
   const restHtml = Object.keys(future).length ? '<div class="gh">Rest of season</div>' + Object.keys(future).map(Number).sort((a, b) => a - b).map((n) => `<details data-k="f${n}" ${isOpen('f' + n, n === CUR + 1) ? 'open' : ''}><summary>Week ${n}: ${future[n].length} games · exp ${projText(future[n])}</summary>${future[n].map(card).join('')}</details>`).join('') : '';

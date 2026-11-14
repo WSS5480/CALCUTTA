@@ -314,3 +314,7 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v208
 - Middle flags now show a rough probability of landing in the window (normal curve, sd 13.5 around the consensus line, whole-number margins strictly between the two lines) and a rough average result = p*both-win + (1-p)*worst case. It is an estimate only (ignores key-number clustering at 3/7).
+
+## v209 – hands-free voice conversation (pics/ai.js)
+- "🎙 Start conversation" button: listens (SpeechRecognition, continuous=false so it ends on a pause), sends, speaks the answer, and ONLY AFTER the speech ends starts listening again (so it never hears itself). Keeps the last 3 Q/A as context. Ends on: tap again / ⏹ / closing the sheet / saying "stop", "end", "goodbye", "that's all" / 3 silent rounds in a row / mic blocked. aiSpeak(text, done) has a length-based watchdog so a missing speech-end event cannot stall it. Hold-to-talk stays as "one question" mode.
+- Tested with a mock (/tmp/t_conv.js: listen → ask → speak → listen → ask with history → silence ends). iPhone may ask for the mic again between turns; not verified on a real phone.

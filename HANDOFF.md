@@ -311,3 +311,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 - odds-api/games.js: each book now also returns `pa` = price of the AWAY side at that line (no extra credits).
 - pics/index.html arbOf(g): pairs a home leg (book A, covers if margin > A.l) with an away leg (book B, covers if margin < B.l), different books, B.l >= A.l. ARB = implied probabilities of the two prices sum < 1 (guaranteed profit, shows %); MIDDLE = at least one whole-number margin strictly between the lines (both bets can win; shows worst case and hit %). Gold ring + "💰 ARB"/"🟡 MIDDLE" button on the NFL card (pre-game only), gold box + gold-highlighted books in the 📚 sheet. Moneyline/total arbs not covered (only spreads are fetched). Unit-tested logic in /tmp/arb.js (not committed).
 - Needs calcutta-odds redeployed; cached /games data without `pa` shows no flags until the next refresh (120 min cache; restart clears it).
+
+## v208
+- Middle flags now show a rough probability of landing in the window (normal curve, sd 13.5 around the consensus line, whole-number margins strictly between the two lines) and a rough average result = p*both-win + (1-p)*worst case. It is an estimate only (ignores key-number clustering at 3/7).

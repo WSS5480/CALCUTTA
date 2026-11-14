@@ -295,3 +295,7 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 ## v203
 - Kalshi parlay card now shows the live cash-out line + "Cash out…" button (the line was only in the single/prop template before).
 - kLegLink() (called at start of betsRender): Kalshi combo legs ("Alabama to win", day) are linked to that team's game in ALL/XL (unique team match within ~40 h of the leg day) by setting l.gid/side/type='ml', so legs show opponent, score, live status. Kalshi's own settled result (l.k && l.res) still wins in legGrade. Sync change-detection uses legSig (text,res,day,k only) so linking does not cause rewrites.
+
+## v204
+- "📡 View live game" button on every football game card (all states, was live/final only), on every linked parlay leg, and on single bets whose game is from the other league. Single bets show the score line (live/final) above the game card. liveBtn(gid) picks the right ESPN path (college vs NFL) for games from ALL vs XL.
+- Not done: sports.html (NBA/MLB/NHL/NCAAB page) cards were not changed.

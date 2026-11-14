@@ -291,3 +291,7 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 ## v202
 - Conference dropdown (#conf) now sits to the right of the team search (.srow); the old "All teams" select (#team) is kept in the DOM but hidden so pickTeam/search code still works. College: ESPN team.conferenceId captured as `cid` on each team (CONFN map: ACC, Big 12, Big Ten, SEC, Pac-12, C-USA, MAC, Mountain West, Independents, Sun Belt, American). NFL: AFC/NFC + 8 divisions from the hardcoded NFLD map. Filter applied once where `games` is built in render (affects the main list and the Live page); choice saved per league (`pics-conf-<lg>`). Cached games from before this version have no `cid` until the scoreboard refreshes.
 - Live page order: live games = games with MY bets first, then highest model confidence; upcoming/final keep time order but my-bet games come first.
+
+## v203
+- Kalshi parlay card now shows the live cash-out line + "Cash out…" button (the line was only in the single/prop template before).
+- kLegLink() (called at start of betsRender): Kalshi combo legs ("Alabama to win", day) are linked to that team's game in ALL/XL (unique team match within ~40 h of the leg day) by setting l.gid/side/type='ml', so legs show opponent, score, live status. Kalshi's own settled result (l.k && l.res) still wins in legGrade. Sync change-detection uses legSig (text,res,day,k only) so linking does not cause rewrites.

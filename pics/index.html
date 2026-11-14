@@ -205,17 +205,17 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v202 -->
+<!-- Pics v203 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v202</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v203</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">NCAA</button><button data-sp="nba">NBA</button><button data-sp="mlb">MLB</button><button data-sp="nhl">NHL</button><button data-sp="ncaab">NCAAB</button></div>
   <div class="srow"><input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team"><select id="conf" aria-label="Conference"><option value="">All</option></select></div>
   <select id="team" aria-label="Team" hidden><option value="">All teams</option></select>
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v202 (conference filter, live order)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v203 (parlay live legs + cash out)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -534,7 +534,7 @@ let BF = null; // form state (not rebuilt by the minute refresh, so typing is ne
 const escH = (x) => String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const sgn = (n) => (n > 0 ? '+' : '') + n;
 function legGrade(l) {
-  if (l.gid) {
+  if (l.gid && !(l.k && l.res)) { // a leg Kalshi already settled keeps Kalshi's result
     const g = gameOf(l.gid); if (!g || g.state === 'pre') return { st: 'pending', g };
     const isOU = l.type === 'ou' || l.type === 'tot', tot = Number(g.home.score) + Number(g.away.score);
     const margin = (l.side === g.home.abbr ? 1 : -1) * (g.home.score - g.away.score), m = isOU ? (/^O/i.test(l.side || '') ? tot - Number(l.line) : Number(l.line) - tot) : l.type === 'sp' ? margin + Number(l.line) : margin;
@@ -637,8 +637,19 @@ function betPL(b, st) { // profit/loss for a result 'won'|'lost'|'push'; blank s
 }
 const betAgainst = (b) => b.side !== (b.type === 'sp' ? (b.appAts || b.appSu) : b.appSu);
 const rec3 = (a) => { const w = a.filter((x) => x === 'won').length, l = a.filter((x) => x === 'lost').length, p = a.filter((x) => x === 'push').length; return { w, l, p, t: w + l, s: w + '-' + l + (p ? '-' + p : ''), pc: w + l ? Math.round(100 * w / (w + l)) + '%' : '–' }; };
+// Kalshi combo legs only carry a team name and a day. Find that team's game (live or loaded) so the leg shows the score, live status and opponent.
+function kLegLink() {
+  try {
+    const pool = Object.values(ALL).concat(Object.values(XL || {})); if (!pool.length) return;
+    BETS.forEach((b) => { if (b.src !== 'kalshi' || b.kind !== 'parlay') return; b.legs.forEach((l) => {
+      if (!l.k || l.gid) return; const m = /^(.+) to win$/.exec(l.text || ''); if (!m) return; const od = l.day ? Date.parse(l.day + 'T12:00:00') : NaN; let best = null;
+      pool.forEach((g) => { const h = teamMatch(m[1], g.home.abbr, g.home.name) >= 2, a = teamMatch(m[1], g.away.abbr, g.away.name) >= 2; if (h === a) return; const d = isNaN(od) ? 0 : Math.abs(g.start - od); if (d > 40 * 36e5) return; if (!best || d < best.d) best = { d, g, side: h ? g.home.abbr : g.away.abbr }; });
+      if (best) { l.gid = String(best.g.id); l.side = best.side; l.type = 'ml'; l.line = null; }
+    }); });
+  } catch (e) {}
+}
 function betsRender(force) {
-  const el = $('#betspage'); if (!el) return; try { spReconcile(); } catch (e) {} if (!force && scrolling()) { clearTimeout(window.__bdef); window.__bdef = setTimeout(() => betsRender(), 800); return; } try { betSync(); } catch (e) {}
+  const el = $('#betspage'); if (!el) return; try { spReconcile(); } catch (e) {} kLegLink(); if (!force && scrolling()) { clearTimeout(window.__bdef); window.__bdef = setTimeout(() => betsRender(), 800); return; } try { betSync(); } catch (e) {}
   const done = BETS.map((b) => ({ b, r: betGrade(b) })), fin = done.filter((x) => ['won', 'lost', 'push'].includes(x.r.st));
   { let ch = false; fin.forEach(({ b, r }) => { if (!b.fin) { b.fin = r.st; b.finPL = Math.round(betPL(b, r.st) * 100) / 100; ch = true; } }); if (ch) betsSave(); }
   const all = rec3(fin.map((x) => x.r.st)), withA = rec3(fin.filter((x) => !x.b.kind && !betAgainst(x.b)).map((x) => x.r.st)), agA = rec3(fin.filter((x) => !x.b.kind && betAgainst(x.b)).map((x) => x.r.st));
@@ -1048,6 +1059,7 @@ function parlayCard(b, r, money) {
     const man2 = l.k ? '' : man;
     const ld = multi ? legDay(l) : null; return `<div class="leg">${legMark(x.st, x.cur)}<div><b>${legText(l)}</b>${ld ? ` <span class="ldate ${ld !== ds[0] ? 'diff' : ''}">${dayNice(ld)}</span>` : ''}${sc ? `<small class="sub" style="display:block">${sc}</small>` : ''}${man2}</div></div>`; }).join('');
   return `<div class="bcard ${r.st === 'won' ? 'bw' : r.st === 'lost' ? 'bl' : r.st === 'live' ? (r.cur === 'lost' ? 'bl' : 'bw') : ''}"><div class="bhd"><div><div class="bwhat">${b.legs.length}-leg parlay${payTxt(b)}</div><div class="sub">${hit} of ${b.legs.length} hitting${multi ? ` · <b class="ldate diff">spans ${ds.length} days</b>` : ''}</div></div>${badgeOf(r, money, b)}</div><div class="legs">${rows}</div>
+    ${b.cash !== undefined && b.cash !== null ? `<div class="sub" style="margin:6px 0">💵 Cashed out on Kalshi for <b>$${Number(b.cash).toFixed(2)}</b> (${b.cash >= (b.stake || 0) ? '+' : '-'}$${Math.abs(b.cash - (b.stake || 0)).toFixed(2)})</div>` : ''}${b.src === 'kalshi' && r.st === 'pending' && b.kt && b.kn && (b.cash === undefined || b.cash === null) || (b.src === 'kalshi' && r.st === 'live' && b.kt && b.kn && (b.cash === undefined || b.cash === null)) ? `<div class="sub" data-kco="${escH(b.id)}" style="margin:6px 0">💵 Checking cash-out value…</div>` : ''}
     ${b.src === 'kalshi' ? '<div class="sub" style="margin-top:6px">From Kalshi · each leg is set automatically when it settles</div>' : ''}<div class="bbtn">${b.src === 'kalshi' ? '' : `<button onclick="betEdit('${b.id}')">Edit</button>`}<button onclick="betDel('${b.id}')">Delete</button></div></div>`;
 }
 function propCard(b, r, money) {
@@ -1205,7 +1217,7 @@ async function kalshiSync(manual) {
       if (isSell) { const q = SOLD[f.ticker + '|' + side] = SOLD[f.ticker + '|' + side] || { n: 0, cash: 0, first: f.created_time }; q.n += cnt; q.cash += cnt * px / 100 - (parseFloat(f.fee_cost) || 0); return; } // a sale (cash out): proceeds after fee
       const k = f.ticker + '|' + side, b = by[k] = by[k] || { ticker: f.ticker, side, count: 0, cost: 0, fee: 0, first: f.created_time }; b.count += cnt; b.cost += cnt * px / 100; b.fee += parseFloat(f.fee_cost) || 0; /* Kalshi's ticket cost includes the fee */ if (f.created_time < b.first) b.first = f.created_time;
     });
-    const MK = (window.__kmk = window.__kmk || {}); let gone = []; try { gone = JSON.parse(lsg('kdel26')) || []; } catch (e) {}
+    const legSig = (ls) => JSON.stringify((ls || []).map((l) => [l.text, l.res, l.day, l.k])); const MK = (window.__kmk = window.__kmk || {}); let gone = []; try { gone = JSON.parse(lsg('kdel26')) || []; } catch (e) {}
     let n = 0;
     for (const b of Object.values(by)) {
       const id = 'k-' + b.ticker + '-' + b.side; if (gone.includes(id)) continue;
@@ -1224,7 +1236,7 @@ async function kalshiSync(manual) {
         const sd = SOLD[b.ticker + '|' + b.side], cashed = sd && sd.n >= b.count - 0.999 ? Math.round(sd.cash * 100) / 100 : null, stake = Math.round((b.cost + b.fee) * 100) / 100, pid = id, lds = legs.map((l) => l.day).filter(Boolean).sort(); // a combo is filed on the day of its first game (the combo market itself expires the day after)
         const pb = { id: pid, kind: 'parlay', src: 'kalshi', kt: b.ticker, ks: b.side, kn: Math.round(Math.max(0, b.count - (sd ? sd.n : 0)) * 100) / 100, legs, stake, mult: stake ? Math.round(b.count / stake * 100) / 100 : null, odds: -110, day: lds[0] || kDay(b.first, m), t: Date.parse(b.first), week: CUR, cash: cashed, soldN: cashed === null ? 0 : Math.round(sd.n * 100) / 100 };
         const pi = BETS.findIndex((x) => x.id === pid);
-        if (pi >= 0) { const o = BETS[pi]; if (o.kind !== 'parlay' || o.stake !== pb.stake || o.mult !== pb.mult || o.kn !== pb.kn || o.day !== pb.day || (o.cash == null ? null : o.cash) !== pb.cash || JSON.stringify(o.legs) !== JSON.stringify(pb.legs)) { BETS[pi] = pb; n++; } } else { BETS.push(pb); n++; }
+        if (pi >= 0) { const o = BETS[pi]; if (o.kind !== 'parlay' || o.stake !== pb.stake || o.mult !== pb.mult || o.kn !== pb.kn || o.day !== pb.day || (o.cash == null ? null : o.cash) !== pb.cash || legSig(o.legs) !== legSig(pb.legs)) { BETS[pi] = pb; n++; } } else { BETS.push(pb); n++; }
         continue;
       }
       const s = S[b.ticker], res = (s && s.market_result) || (m.status === 'settled' || m.status === 'finalized' ? m.result : '');

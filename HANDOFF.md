@@ -306,3 +306,8 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 ## v206
 - The "📚 N books" control only existed inside game detail, so nobody saw it. Main game card footer (nft) now has a "📚 N books" button (NFL pre-game, when many-book data loaded) that opens a sheet (booksOpen): each book with a 2-letter initials badge (no trademarked logos), its spread and price, consensus, best line per side. "📡 Live" button now on every card state (was live/final only).
 - Book logos deliberately not used (trademarks); initials badges only. NCAA still single-book.
+
+## v207 – arbitrage / middle finder (gold)
+- odds-api/games.js: each book now also returns `pa` = price of the AWAY side at that line (no extra credits).
+- pics/index.html arbOf(g): pairs a home leg (book A, covers if margin > A.l) with an away leg (book B, covers if margin < B.l), different books, B.l >= A.l. ARB = implied probabilities of the two prices sum < 1 (guaranteed profit, shows %); MIDDLE = at least one whole-number margin strictly between the lines (both bets can win; shows worst case and hit %). Gold ring + "💰 ARB"/"🟡 MIDDLE" button on the NFL card (pre-game only), gold box + gold-highlighted books in the 📚 sheet. Moneyline/total arbs not covered (only spreads are fetched). Unit-tested logic in /tmp/arb.js (not committed).
+- Needs calcutta-odds redeployed; cached /games data without `pa` shows no flags until the next refresh (120 min cache; restart clears it).

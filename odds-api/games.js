@@ -12,7 +12,7 @@ function shape(json) {
   (json || []).forEach((ev) => {
     const home = NAMES[ev.home_team], away = NAMES[ev.away_team]; if (!home || !away) return;
     const books = [];
-    (ev.bookmakers || []).forEach((b) => { const m = (b.markets || []).find((x) => x.key === 'spreads'); const o = m && (m.outcomes || []).find((x) => x.name === ev.home_team); if (o && Number.isFinite(o.point)) books.push({ k: b.key, t: b.title, l: -o.point, p: Number.isFinite(o.price) ? o.price : null }); });
+    (ev.bookmakers || []).forEach((b) => { const m = (b.markets || []).find((x) => x.key === 'spreads'); const o = m && (m.outcomes || []).find((x) => x.name === ev.home_team), oa = m && (m.outcomes || []).find((x) => x.name === ev.away_team); if (o && Number.isFinite(o.point)) books.push({ k: b.key, t: b.title, l: -o.point, p: Number.isFinite(o.price) ? o.price : null, pa: oa && Number.isFinite(oa.price) ? oa.price : null }); });
     if (!books.length) return;
     const ls = books.map((b) => b.l);
     games.push({ home, away, start: ev.commence_time, line: round(med(ls)), n: books.length, hi: Math.max(...ls), lo: Math.min(...ls), books: books.sort((a, b) => b.l - a.l) });

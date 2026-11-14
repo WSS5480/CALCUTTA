@@ -182,3 +182,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 ## 2026-11-13 — test bets leaked into the owner's real account (rule)
 - 9 test bets (PITT/UCLA/HOU/NY/ATL/OKC/POR/MEM, ids b1794608213749..b1794610039079, added 4:16-4:47 PM CT in his Chrome during banner testing) uploaded to his cloud account on first sign-in. He spotted them as "not mine". Removed them from his Chrome and synced the deletes.
 - RULE: never add bets (or any data) while testing in his real Chrome tab if it can sync. Test on a local copy or a throwaway browser profile, and sign out / wipe afterwards.
+
+## 2026-11-13 — owner dashboard feed: open bets (Oddable v170, odds-server only)
+- odds-api/sync.js `adminUsers` now also returns `open` per user (bets with no result yet: day, label, stake, odds; newest first, max 60). Phones still never returned. My Apps (.29) shows them with WTD/MTD/YTD/Lifetime filters.

@@ -2,7 +2,7 @@
 // Costs 1 credit per refresh (one market, one region). Cached GAMES_TTL_MIN minutes (default 20); below LOW credits it refreshes once a day.
 // Line convention matches the app: positive = HOME team favored by that many points.
 const KEY_ = () => { const n = Object.keys(process.env).find((k) => /^odds_?api(_?key)?$/i.test(k)); return n ? process.env[n].trim() : ''; };
-const TTL = () => (+process.env.GAMES_TTL_MIN || 20) * 60 * 1000, LOW = +process.env.LOW_CREDITS || 40;
+const TTL = () => (+process.env.GAMES_TTL_MIN || 120) * 60 * 1000, LOW = +process.env.LOW_CREDITS || 40;
 const SPORT = { nfl: 'americanfootball_nfl' };
 const C = {}; let NAMES = {};
 const med = (a) => { const s = a.slice().sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };

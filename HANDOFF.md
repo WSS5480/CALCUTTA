@@ -197,3 +197,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 - Now: odds-api/games.js (route `/games`, NFL) pulls every US book's spread from The Odds API (1 credit per refresh, cached GAMES_TTL_MIN=20 min, once a day below LOW_CREDITS). Client `loadBooks/applyBooks` (index.html): for NFL games before kickoff the app's line = MEDIAN across books (half-point), ESPN's number kept in `g.espnLine`; the game detail shows "📚 N books" expandable list with each book's number and best line per side. The model/picks use the consensus line. Locked picks keep the line they were locked at.
 - NFL only for now (NCAA/NBA need team-name mapping). Credits: ~3 per hour while someone has the app open; upgrade the Odds API plan when Oddable sells.
 - Env: ODDS_API_KEY already set on calcutta-odds. Optional GAMES_TTL_MIN.
+
+## 2026-11-13 — many-book spreads default refresh 20 -> 120 min (credits)
+- He decided (Nov 11) to stay inside The Odds API free 500 credits/month until Oddable sells. /games at 20 min could burn ~70/day. Default GAMES_TTL_MIN is now 120 (~12 credits/day max). `/games` now also returns `remaining` (credits left). Set GAMES_TTL_MIN lower after the plan is upgraded.

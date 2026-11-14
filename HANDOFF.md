@@ -329,3 +329,9 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 - Arbitrage bar is yellow and blinks (`.arbbar.arb`, `arbblink`); text "💰 ARBITRAGE ALERT 💰".
 - A true-arb NFL pre-game is sorted first in the card list (`newBoard`, `isArb`), the rail (`railRender`, `arbF`) and `thisWeek` (`arbTop`), and its card shows a gold "💰 ARBITRAGE #1 · about +x.x% either way" tag (`.arbtag`).
 - Middles keep the gold ring but are not moved. Verified with a local Playwright mock (/tmp/shot7.js), not the live tab.
+
+## v213 – sport filter on My Bets
+- Dropdown above "How I'm doing" (`bSportSet`, `BSP`, saved in localStorage `pics-bsp`) filters the My Bets cards, summary tiles, drill-downs and open count by sport. Only shown when bets span 2+ sports.
+- Sport of a bet: `b.lg` (nba/mlb/nhl/ncaab); football bets have no lg, so NFL = either team abbr is an NFL team (`NFLD`), else NCAA football. Parlays match if any leg matches; props/unknown → Other.
+- The TODAY box and daily log intentionally still count every sport.
+- Caveat: an NCAA team whose abbr equals an NFL abbr (e.g. MIA) is counted as NFL unless the bet has lg.

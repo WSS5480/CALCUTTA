@@ -257,3 +257,10 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 - ESPN FBS (groups=80) regular season 2021-26: 5,026 games, closing lines for 2,391 (2021, 2022, 2026 mostly; 52-54 each in 2023/2025). Same walk-forward method as NFL with college settings (hfa 3.5, decay .95, ridge 1, mix .7, carry 1, W_MKT .8, SD 16). Efficiency = yds/play from totalYards/(pass att + rush att) + turnovers. Evaluated on 1,836 line games (week>=3). Player-level college test NOT run (data heavy; NFL result was negative).
 - Results: line alone Brier .1719, 74.3% winners (CI 72-76). Live college model .1875 / 71.1% (+.0156 +/-.0044 worse); margin-only 70.7%, efficiency-only 68.9%, Elo 69.4%. Blends 90/10 +.0005, 80/20 +.0012, 50/50 +.0047 (all worse than line). Disagreements with line favorite: model right 82 of 223 (37%), Elo 98 of 286 (34%). ATS 47-50%, ROI -3% to -10%. Always-home 59.6%. No-line model on all 3,958 games: 72.2%.
 - Conclusion same as NFL: line is best; model adds nothing. Plan agreed: lead with line-based win %, label model "reference only", build bet tracker/line shopping/arbitrage value.
+
+## v195 – Ask AI push-to-talk (voice)
+- pics/ai.js: big "🎤 Hold to talk" button in the Ask sheet. pointerdown starts SpeechRecognition (webkit prefix ok, continuous, restarts if the browser stops mid-hold); release stops, waits 450 ms for last words, puts the text in the box, sends via aiAsk(q,gid,true).
+- Voice asks append a hint so Claude answers in 2-4 plain sentences; reply is shown AND spoken with speechSynthesis (markdown/emoji stripped, split in ~180-char chunks). ⏹ Stop button; closing the sheet stops speech. "Voice replies" toggle (localStorage ai-voice) also speaks typed answers.
+- Unsupported browser → clear message, text box still works. Mic blocked → message to allow it in browser settings.
+- Tested only with a mock (tests in /tmp/t_voice.js); real mic/speech needs Steve's first try on his phone (iOS Safari/PWA may limit SpeechRecognition).
+- Also includes v194 (Kalshi cash out) if not yet pushed; reviewer report for v194 still pending at time of writing.

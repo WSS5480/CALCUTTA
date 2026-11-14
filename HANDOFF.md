@@ -321,3 +321,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v210
 - Found by rendering a mock card: (1) the card footer (.nft) overflowed on phones once the MIDDLE/books/Live buttons were added; it now wraps (line text on its own row). (2) The "Best for HOME / AWAY" labels in the books list were swapped since v172 (they showed the worst number); lowest line is best for home, highest is best for away; now shown as e.g. "NYJ +8.5" / "BUF -7.5". (3) Book initials badges were duplicating (BE/BE); now built from capital letters (DK, FD, BM, BR).
+
+## v211 – arbitrage alert bar
+- #arbbar in the header (between the version/acct row and the league chips): scrolling gold strip listing flagged NFL pre-game games ("💰 ARBITRAGE BUF@NYJ: NYJ +8.5 DraftKings / BUF -7.5 FanDuel"). True arbitrage -> strip BLINKS red/gold with "🚨 ARBITRAGE ALERT 🚨"; middles only -> steady gold scroll (blinking for ~7 middles a day would be noise). Tap opens the 📚 sheet for the first hit. arbBarPaint() runs on every render and after loadBooks; hidden when nothing is flagged or on the NCAA page. prefers-reduced-motion disables the animation. Verified by local screenshot (mock games).

@@ -178,3 +178,7 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 - Verified live: X-Forwarded-For on Render is "client, Cloudflare edge, Render proxy". The old code used the LAST entry (Render's own proxy, a 10.x address), so ALL visitors counted as one IP: 6 wrong PINs from anyone locked sign-in for everyone for 15 min, "6 new accounts per 15 min" was global (could block new sign-ups), and the AI limit (40/h) was shared.
 - Fix: odds-api/ip.js `clientIp(req)` = third entry from the end (falls back to the first / socket). Used by acct.js, sync.js, ai.js. The temporary /whoami route is removed.
 - If Render's proxy chain ever changes, re-check with a temporary route that echoes the header.
+
+## 2026-11-13 — test bets leaked into the owner's real account (rule)
+- 9 test bets (PITT/UCLA/HOU/NY/ATL/OKC/POR/MEM, ids b1794608213749..b1794610039079, added 4:16-4:47 PM CT in his Chrome during banner testing) uploaded to his cloud account on first sign-in. He spotted them as "not mine". Removed them from his Chrome and synced the deletes.
+- RULE: never add bets (or any data) while testing in his real Chrome tab if it can sync. Test on a local copy or a throwaway browser profile, and sign out / wipe afterwards.

@@ -7,11 +7,13 @@ const LG = new Set(['nfl', 'cfb']), CAP = 4000, rl = new Map();
 const KN = {};
 async function known(lg) {
   const c = KN[lg]; if (c && Date.now() - c.at < 5 * 6e4) return c.map;
-  const d = (n) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10).replace(/-/g, '');
-  const url = 'https://site.api.espn.com/apis/site/v2/sports/football/' + (lg === 'cfb' ? 'college-football' : 'nfl') + '/scoreboard?dates=' + d(-2) + '-' + d(10) + (lg === 'cfb' ? '&groups=80&limit=400' : '&limit=200');
+  const base = 'https://site.api.espn.com/apis/site/v2/sports/football/' + (lg === 'cfb' ? 'college-football' : 'nfl') + '/scoreboard?limit=400' + (lg === 'cfb' ? '&groups=80' : '');
+  const map = {}, add = (j) => (j.events || []).forEach((e) => { const t = Date.parse(e.date); if (e.id && Number.isFinite(t)) map[String(e.id)] = t; });
   try {
-    const r = await fetch(url, { signal: AbortSignal.timeout(15000) }); if (!r.ok) throw new Error('espn ' + r.status);
-    const map = {}; ((await r.json()).events || []).forEach((e) => { const t = Date.parse(e.date); if (e.id && Number.isFinite(t)) map[String(e.id)] = t; });
+    const r = await fetch(base, { signal: AbortSignal.timeout(15000) }); if (!r.ok) throw new Error('espn ' + r.status);
+    const j = await r.json(); add(j);
+    const wk = j.week && j.week.number, st = j.season && j.season.type; // next week too: the app locks games up to a few days ahead
+    if (wk && st) { try { const r2 = await fetch(base + '&week=' + (wk + 1) + '&seasontype=' + st, { signal: AbortSignal.timeout(15000) }); if (r2.ok) add(await r2.json()); } catch (e) {} }
     if (!Object.keys(map).length) throw new Error('espn empty'); KN[lg] = { at: Date.now(), map }; return map;
   } catch (e) { if (c) return c.map; throw Object.assign(new Error('schedule unavailable'), { status: 503 }); }
 }

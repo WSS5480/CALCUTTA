@@ -1,10 +1,10 @@
 // Game spreads from many books (The Odds API), so the app can show a consensus line and every book's number.
-// Costs 1 credit per refresh (one market, one region). Cached GAMES_TTL_MIN minutes (default 20); below LOW credits it refreshes once a day.
+// Costs 1 credit per refresh (one market, one region). Cached GAMES_TTL_MIN minutes (default 120); below LOW credits it refreshes once a day.
 // Line convention matches the app: positive = HOME team favored by that many points.
 const KEY_ = () => { const n = Object.keys(process.env).find((k) => /^odds_?api(_?key)?$/i.test(k)); return n ? process.env[n].trim() : ''; };
 const TTL = () => (+process.env.GAMES_TTL_MIN || 120) * 60 * 1000, LOW = +process.env.LOW_CREDITS || 40;
 const SPORT = { nfl: 'americanfootball_nfl' };
-const C = {}; let NAMES = {};
+const C = {}, INF = {}, FAIL = {}; let NAMES = {};
 const med = (a) => { const s = a.slice().sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 const round = (x) => Math.round(x * 2) / 2; // consensus on the half-point, like a posted line
 function shape(json) {
@@ -19,7 +19,15 @@ function shape(json) {
   });
   return games;
 }
-async function get(lg, names) {
+// One upstream call at a time per league (concurrent requests share it), and after a failure with nothing cached wait 2 minutes before spending another credit.
+function get(lg, names) {
+  const c = C[lg], ttl = c && c.remaining !== null && c.remaining < LOW ? 864e5 : TTL(); NAMES = names || NAMES;
+  if (c && Date.now() - c.at < ttl) return Promise.resolve(c);
+  if (!c && FAIL[lg] && Date.now() - FAIL[lg].at < 12e4) return Promise.reject(FAIL[lg].err);
+  if (!INF[lg]) INF[lg] = pull(lg, names).catch((e) => { if (!C[lg]) FAIL[lg] = { at: Date.now(), err: e }; throw e; }).finally(() => { delete INF[lg]; });
+  return INF[lg];
+}
+async function pull(lg, names) {
   NAMES = names || NAMES; const sp = SPORT[lg]; if (!sp) throw new Error('unsupported league');
   const c = C[lg], ttl = c && c.remaining !== null && c.remaining < LOW ? 864e5 : TTL();
   if (c && Date.now() - c.at < ttl) return c;

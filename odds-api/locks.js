@@ -3,14 +3,27 @@
 const S = require('./sync');
 const send = (res, code, o) => { res.statusCode = code; res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(o)); };
 const LG = new Set(['nfl', 'cfb']), CAP = 4000, rl = new Map();
+// The server checks every lock against ESPN's own schedule (game id + kickoff), so a request cannot invent a game or a kickoff time.
+const KN = {};
+async function known(lg) {
+  const c = KN[lg]; if (c && Date.now() - c.at < 5 * 6e4) return c.map;
+  const d = (n) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10).replace(/-/g, '');
+  const url = 'https://site.api.espn.com/apis/site/v2/sports/football/' + (lg === 'cfb' ? 'college-football' : 'nfl') + '/scoreboard?dates=' + d(-2) + '-' + d(10) + (lg === 'cfb' ? '&groups=80&limit=400' : '&limit=200');
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(15000) }); if (!r.ok) throw new Error('espn ' + r.status);
+    const map = {}; ((await r.json()).events || []).forEach((e) => { const t = Date.parse(e.date); if (e.id && Number.isFinite(t)) map[String(e.id)] = t; });
+    if (!Object.keys(map).length) throw new Error('espn empty'); KN[lg] = { at: Date.now(), map }; return map;
+  } catch (e) { if (c) return c.map; throw Object.assign(new Error('schedule unavailable'), { status: 503 }); }
+}
 const num = (x) => typeof x === 'number' && Number.isFinite(x);
 const abbr = (x) => typeof x === 'string' && /^[A-Za-z0-9&.\-]{1,8}$/.test(x);
-function clean(it, now) {
+function clean(it, now, kn) {
+  if (kn) { if (!it || !(String(it.id) in kn) || !num(it.s) || Math.abs(kn[String(it.id)] - it.s) > 12e4) return null; it = Object.assign({}, it, { s: kn[String(it.id)] }); } // known game, real kickoff
   if (!it || !/^\d{5,12}$/.test(String(it.id)) || !num(it.s) || it.s - now > 9 * 864e5) return null;
   const late = it.s <= now; // a phone that locked the pick BEFORE kickoff (its own lock time is earlier than the start) may hand it in while the game is on, only if nobody has yet
   if (late && !(num(it.t) && it.t < it.s && now - it.s < 8 * 36e5)) return null;
   const n = it.snap || {}; if (!abbr(n.su) || !num(n.conf) || n.conf < 0 || n.conf > 1 || !(n.L === null || num(n.L))) return null;
-  const o = { su: n.su, conf: n.conf, L: n.L, t: now };
+  const o = { su: n.su, conf: n.conf, L: n.L, t: now, s: it.s };
   if (n.ats) { if (!abbr(n.ats.side) || !num(n.ats.cover)) return null; o.ats = { side: n.ats.side, cover: n.ats.cover }; } else o.ats = null;
   return { id: String(it.id), v: o, late };
 }
@@ -28,13 +41,14 @@ async function handle(req, res) {
     if (req.method !== 'POST') return false;
     const ip = require('./ip').clientIp(req), k = ip + ':' + Math.floor(Date.now() / 6e4); rl.set(k, (rl.get(k) || 0) + 1); if (rl.size > 5000) rl.clear();
     if (rl.get(k) > 30) { send(res, 429, { error: 'slow down' }); return true; }
+    if (!(await require('./acct').check(req))) { send(res, 401, { error: 'Sign in again' }); return true; } // only signed-in accounts can write locks
     const b = await body(req); if (!LG.has(b.lg)) { send(res, 400, { error: 'bad league' }); return true; }
-    const now = Date.now(), items = (Array.isArray(b.items) ? b.items : []).slice(0, 60).map((i) => clean(i, now)).filter(Boolean);
+    const kn = await known(b.lg), now = Date.now(), items = (Array.isArray(b.items) ? b.items : []).slice(0, 60).map((i) => clean(i, now, kn)).filter(Boolean);
     if (!items.length) { send(res, 200, { added: 0 }); return true; }
     const id = 'lock:' + b.lg; let added = 0;
     for (let tries = 0; tries < 4; tries++) {
       let row = await S.dbGet(id); if (!row) { await S.dbPut({ id, salt: 'x', pinhash: 'x', data: { locks: {} }, updated: 1 }, true); row = await S.dbGet(id); if (!row) continue; }
-      const locks = Object.assign({}, (row.data && row.data.locks) || {}); added = 0;
+      const locks = Object.assign({}, (row.data && row.data.locks) || {}); added = 0; Object.keys(locks).forEach((k) => { const o = locks[k]; if (o && o.s && now - o.s > 14 * 864e5) delete locks[k]; }); // old games drop out; the cap can never fill with stale rows
       items.forEach((i) => { const o = locks[i.id]; if (o && i.late) return; if (o && o.L !== null && i.v.L === null) return; /* a lock with a line is never replaced by one without */ if (!o) { if (Object.keys(locks).length < CAP) { locks[i.id] = i.v; added++; } } else if (o.su !== i.v.su || o.conf !== i.v.conf || o.L !== i.v.L || JSON.stringify(o.ats) !== JSON.stringify(i.v.ats)) { locks[i.id] = i.v; added++; } });
       if (!added) break;
       if (await S.dbPatchIf(id, row.updated, { locks }, Date.now())) { delete cache[b.lg]; break; } added = 0;

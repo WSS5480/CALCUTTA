@@ -94,6 +94,13 @@ async function handle(req, res) {
     }
     const e = verify(b.token || req.headers['x-token']);
     if (!e) { send(res, 401, { error: 'Sign in again' }); return true; }
+    if (path === '/acct/dunlock') {
+      if (!isOwnerPhone(e) || !OWNER_PIN()) { send(res, 403, { error: 'Not an owner account' }); return true; }
+      if (throttled(ip + '|dunlock') || throttled(e + '|dunlock')) { send(res, 429, { error: 'Too many tries, wait a few minutes' }); return true; }
+      const a = Buffer.from(String(b.pin || '')), w = Buffer.from(OWNER_PIN()); if (a.length !== w.length || !crypto.timingSafeEqual(a, w)) { send(res, 401, { error: 'Wrong owner PIN' }); return true; }
+      send(res, 200, { dash: dmint(e) }); return true;
+    }
+    if ((path === '/acct/name' || path === '/acct/dash') && isOwnerPhone(e) && !dok(req.headers['x-dash'], e)) { send(res, 401, { error: 'Owner PIN needed', need: 'owner-pin' }); return true; }
     if (path === '/acct/name' && ((e === 'owner' && OWNER_PIN()) || isOwnerPhone(e))) {
       const k = String(b.k || ''), name = String(b.name || '').replace(/[<>&"'\u0000-\u001f]/g, '').trim().slice(0, 24);
       if (!/^[0-9a-f]{8}$/.test(k)) { send(res, 400, { error: 'Bad player' }); return true; }
@@ -139,5 +146,9 @@ async function namesSet(k, name) {
 }
 const OWNER_PHONES = () => String(process.env.OWNER_PHONE || '').split(',').map((x) => syncMod.normPhone(x)).filter((x) => x.length === 10);
 const isOwnerPhone = (e) => /@phone\.oddable$/.test(String(e)) && OWNER_PHONES().some((p) => phoneEmail(crypto.createHash('sha256').update('oddable|' + p).digest('hex')) === e);
+// Second factor for owner-phone dashboards: the phone PIN alone is not enough, the owner PIN is entered once per device (30 days).
+const dmint = (e) => { const p = Buffer.from(JSON.stringify({ e, v: pinVer(), x: Date.now() + 30 * 864e5 })).toString('base64url'); return p + '.' + crypto.createHmac('sha256', KEY()).update('dash|' + p).digest('hex'); };
+function dok(tok, e) { try { const [p, sg] = String(tok || '').split('.'); if (!p || !sg) return false; const w = crypto.createHmac('sha256', KEY()).update('dash|' + p).digest('hex'); if (sg.length !== w.length || !crypto.timingSafeEqual(Buffer.from(sg), Buffer.from(w))) return false; const o = JSON.parse(Buffer.from(p, 'base64url').toString()); return o.e === e && o.v === pinVer() && o.x > Date.now(); } catch (er) { return false; } }
+const dashOk = (e, req, b) => (e === 'owner' && !!OWNER_PIN()) || (isOwnerPhone(e) && dok(req.headers['x-dash'] || (b && b.dash), e));
 const phoneEmail = (id) => crypto.createHmac('sha256', KEY()).update('phoneid|' + id).digest('hex').slice(0, 20) + '@phone.oddable';
 module.exports = { handle, check, on, phoneEmail };

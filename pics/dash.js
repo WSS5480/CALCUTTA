@@ -7,7 +7,7 @@
   const money = (n) => (n < 0 ? '-$' : '$') + Math.abs(Math.round(n)).toLocaleString();
   const GOOD = '#2ecc71', BAD = '#ff6b6b', BLUE = '#4f8cff';
   const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date());
-  let D = null, DT = 0, P = 'all', DAYSEL = '', stack = [{ t: 'home' }], busy = false, err = '';
+  let D = null, DT = 0, P = 'all', DAYSEL = '', NEEDPIN = false, stack = [{ t: 'home' }], busy = false, err = '';
 
   function from(p) {
     const td = today(); if (p === 'all') return '';
@@ -84,6 +84,7 @@
 
   function paint() {
     const el = document.getElementById('odash'); if (!el) return; const s = stack[stack.length - 1];
+    if (NEEDPIN) { el.querySelector('.odb').innerHTML = '<div class="odc"><h3>Owner PIN</h3><div class="sub" style="margin-bottom:8px">One more check for this device (kept 30 days). Enter your owner PIN.</div><div style="display:flex;gap:8px;flex-wrap:wrap"><input id="oddpin" type="password" inputmode="numeric" autocomplete="off" placeholder="Owner PIN" style="flex:1;min-width:160px;min-height:44px;padding:6px 10px;border-radius:10px;border:1px solid var(--line,#fff3);background:var(--panel2,#1a2340);color:var(--ink,#eee);font:15px inherit"><button data-unlock="1">Unlock</button></div><div class="sub" id="oddps"></div></div>'; el.querySelector('.odt1').textContent = 'Dashboard'; el.querySelector('.odback').style.visibility = 'hidden'; return; }
     let body = err ? '<div class="odc" style="color:' + BAD + '">' + esc(err) + '</div>' : !D ? '<div class="odc">Loading players…</div>' : s.t === 'home' ? home() : s.t === 'users' ? users() : s.t === 'rank' ? rankV() : s.t === 'days' ? daysV() : s.t === 'open' ? openV() : s.t === 'day' ? dayV(s.v) : s.t === 'user' ? userV(s.v) : '';
     el.querySelector('.odb').innerHTML = body; el.querySelector('.odt1').textContent = s.t === 'user' ? (((D && D.users) || []).filter((x) => x.k === s.v).map(nm)[0] || 'Player') : s.t === 'day' ? s.v : TITLE[s.t];
     el.querySelector('.odback').style.visibility = stack.length > 1 ? 'visible' : 'hidden';
@@ -92,12 +93,18 @@
   const el = () => document.getElementById('odash');
   async function load(force) {
     if (busy || (!force && D && Date.now() - DT < 60000)) return; busy = true; err = '';
-    try { const r = await fetch(API, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': g('odd-tok') || '' }, body: '{}' }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Server said ' + r.status); D = j; DT = Date.now(); } catch (e) { err = (e && e.message === 'Failed to fetch') ? 'Could not reach the server. It may be waking up; tap refresh in a few seconds.' : (e.message || 'Error'); }
+    try { const r = await fetch(API, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': g('odd-tok') || '', 'x-dash': g('odd-dt') || '' }, body: '{}' }); const j = await r.json().catch(() => ({})); NEEDPIN = r.status === 401 && j.need === 'owner-pin'; if (NEEDPIN) { err = ''; D = null; busy = false; paint(); return; } if (!r.ok) throw new Error(j.error || 'Server said ' + r.status); D = j; DT = Date.now(); } catch (e) { err = (e && e.message === 'Failed to fetch') ? 'Could not reach the server. It may be waking up; tap refresh in a few seconds.' : (e.message || 'Error'); }
     busy = false; paint();
+  }
+  async function unlock() {
+    const inp = document.getElementById('oddpin'), msg = document.getElementById('oddps'); if (!inp || !inp.value) return; if (msg) msg.textContent = 'Checking…';
+    try { const r = await fetch(API.replace('/dash', '/dunlock'), { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': g('odd-tok') || '' }, body: JSON.stringify({ pin: inp.value }) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Server said ' + r.status);
+      try { localStorage.setItem('odd-dt', j.dash); } catch (e) {} NEEDPIN = false; load(true); }
+    catch (e) { if (msg) msg.textContent = (e && e.message === 'Failed to fetch') ? 'Could not reach the server, try again.' : (e.message || 'Error'); }
   }
   async function saveName(k) {
     const inp = document.getElementById('oddn'), msg = document.getElementById('oddns'); if (!inp) return; const name = inp.value.trim(); if (msg) msg.textContent = 'Saving…';
-    try { const r = await fetch(API.replace('/dash', '/name'), { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': g('odd-tok') || '' }, body: JSON.stringify({ k, name }) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Server said ' + r.status);
+    try { const r = await fetch(API.replace('/dash', '/name'), { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': g('odd-tok') || '', 'x-dash': g('odd-dt') || '' }, body: JSON.stringify({ k, name }) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Server said ' + r.status);
       const u = (D.users || []).find((x) => x.k === k); if (u) u.name = j.name || ''; paint(); const m2 = document.getElementById('oddns'); if (m2) m2.textContent = j.name ? 'Saved' : 'Name cleared'; }
     catch (e) { if (msg) msg.textContent = (e && e.message === 'Failed to fetch') ? 'Could not reach the server, try again in a few seconds.' : (e.message || 'Error'); }
   }
@@ -112,6 +119,7 @@
     document.body.appendChild(e); stack = [{ t: 'home' }]; P = 'all';
     e.onclick = (ev) => { const t = ev.target; const x = t.closest && t.closest('[data-go]'), pb = t.closest && t.closest('[data-p]');
       if (t.closest('.odx')) { e.remove(); return; } if (t.closest('.odback')) { if (stack.length > 1) stack.pop(); paint(); return; } if (t.closest('.odref')) { load(true); return; }
+      if (t.closest && t.closest('[data-unlock]')) { unlock(); return; }
       const sv = t.closest && t.closest('[data-save]'); if (sv) { saveName(sv.getAttribute('data-save')); return; }
       if (pb) { P = pb.getAttribute('data-p'); if (P === 'day' && !DAYSEL) DAYSEL = today(); paint(); return; } if (x) { const v = x.getAttribute('data-go'); if (v) go(v); } };
     e.onchange = (ev) => { if (ev.target && ev.target.id === 'oddd' && /^\d{4}-\d{2}-\d{2}$/.test(ev.target.value)) { DAYSEL = ev.target.value; paint(); } };

@@ -147,3 +147,8 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v165 — 2026-11-13 — top-left version label
 - The label in the header (top-left, line ~209 of pics/index.html) was a separate hard-coded string and still said v163 on v164. It now says v165. On every bump change ALL of: `<!-- Pics vNNN -->`, the header label, the footer "Oddable vNNN" line, and sw.js cache name.
+
+## v166 — 2026-11-13 — sign-up / sign-in "Failed to fetch" FIXED (root cause of "0 customers")
+- Bug: the gate posts JSON + an x-token header to /acct/*, so browsers send a CORS preflight (OPTIONS) first. The odds server had no answer for OPTIONS on /acct (acct.js returned false, server.js gave a bare 404), so every phone sign-in, new-account and free-trial call failed in a real browser with "Failed to fetch". gate.js swallowed the phone-sign-in error, so no Oddable player ever became a My Apps customer. Present since v112; earlier tests missed it because test browsers/scripts did not enforce CORS.
+- Fix: odds-api/server.js answers every OPTIONS with 204 + Allow-Headers content-type,x-token. Verified locally. LESSON: test cross-origin calls from the real page origin (Chrome on steves-pics.onrender.com), not only with scripts.
+- Note: every push to this repo restarts calcutta-odds (~15 s of "Failed to fetch" for anyone using it).

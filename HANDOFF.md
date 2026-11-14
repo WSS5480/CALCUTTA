@@ -144,3 +144,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v164 — 2026-11-13 — banner no longer vanishes when opened
 - Bug: tapping the TODAY banner (#plb) to list bets made it disappear until refresh. plbFit() measured the banner's open (taller) height, decided it was under the logo, then tucked it away and closed it. Fix: plbFit() returns while the list is open (window.__plbo). Reproduced on v163 and verified on v164 at phone width (scrolled so the logo sits under the open banner).
+
+## v165 — 2026-11-13 — top-left version label
+- The label in the header (top-left, line ~209 of pics/index.html) was a separate hard-coded string and still said v163 on v164. It now says v165. On every bump change ALL of: `<!-- Pics vNNN -->`, the header label, the footer "Oddable vNNN" line, and sw.js cache name.

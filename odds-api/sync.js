@@ -126,7 +126,10 @@ async function adminUsers(emailOf) {
     const dayKeys = Object.keys(days).filter((k) => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
     const lbl = (b) => String(b.text || ((b.side || '?') + ' ' + (b.line ? (b.line > 0 ? '+' : '') + b.line : 'ML') + (b.away && b.home ? ' (' + b.away + '@' + b.home + ')' : ''))).slice(0, 90);
     const open = bets.filter((b) => b && !b.fin).sort((a, c) => N(c.t) - N(a.t)).slice(0, 60).map((b) => ({ day: String(b.day || '').slice(0, 10), what: lbl(b), stake: N(b.stake), odds: N(b.odds) || null }));
-    return { id: String(x.id).slice(0, 20), open, acct: emailOf ? emailOf(String(x.id)) : null, tag: String(x.id).slice(0, 4), updated: x.updated || 0, bets: bets.length, picks: Object.keys(d.locks || {}).length, w, l, p, pct: w + l ? Math.round((w / (w + l)) * 1000) / 10 : null, risk: Math.round(risk * 100) / 100, pl: Math.round(pl * 100) / 100, first: dayKeys[0] || null, last: dayKeys[dayKeys.length - 1] || null, days: dayKeys.slice(-400).reverse().map((k) => Object.assign({ day: k }, days[k])) };
+    const placed = {}; bets.forEach((b) => { if (!b || !/^\d{4}-\d{2}-\d{2}$/.test(String(b.day || '').slice(0, 10))) return; if (!N(b.stake) && !b.text && !b.side) return; const k = String(b.day).slice(0, 10), o = placed[k] || (placed[k] = { n: 0, w: 0, l: 0, p: 0, risk: 0, pl: 0, o: 0 }); o.n++; o.risk += N(b.stake); if (b.fin === 'won') { o.w++; o.pl += N(b.finPL); } else if (b.fin === 'lost') { o.l++; o.pl += N(b.finPL); } else if (b.fin === 'push') { o.p++; } else o.o++; });
+    Object.keys(placed).forEach((k) => { placed[k].risk = Math.round(placed[k].risk * 100) / 100; placed[k].pl = Math.round(placed[k].pl * 100) / 100; });
+    const openC = open.filter((b) => b.stake || !/^ \?/.test(b.what));
+    return { id: String(x.id).slice(0, 20), placed, open: openC, acct: emailOf ? emailOf(String(x.id)) : null, tag: String(x.id).slice(0, 4), updated: x.updated || 0, bets: bets.length, picks: Object.keys(d.locks || {}).length, w, l, p, pct: w + l ? Math.round((w / (w + l)) * 1000) / 10 : null, risk: Math.round(risk * 100) / 100, pl: Math.round(pl * 100) / 100, first: dayKeys[0] || null, last: dayKeys[dayKeys.length - 1] || null, days: dayKeys.slice(-400).reverse().map((k) => Object.assign({ day: k }, days[k])) };
   }).sort((a, b) => b.updated - a.updated);
 }
 

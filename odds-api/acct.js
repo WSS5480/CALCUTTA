@@ -99,7 +99,7 @@ async function handle(req, res) {
       try { await namesSet(k, name); send(res, 200, { ok: true, name }); } catch (er) { send(res, 502, { error: 'Could not save the name: ' + er.message }); } return true;
     }
     if (path === '/acct/dash' && ((e === 'owner' && OWNER_PIN()) || isOwnerPhone(e))) {
-  { try { const us = await require('./sync').adminUsers(null); const nm = await namesGet().catch(() => ({})); send(res, 200, { users: us.map((u) => ({ k: String(u.id).slice(0, 8), name: nm[String(u.id).slice(0, 8)] || '', tag: u.tag, updated: u.updated, bets: u.bets, w: u.w, l: u.l, p: u.p, risk: u.risk, pl: u.pl, open: u.open, days: u.days })) }); } catch (er) { send(res, 502, { error: 'Could not read players: ' + er.message }); } return true; }
+  { try { const us = await require('./sync').adminUsers(null); const nm = await namesGet().catch(() => ({})); send(res, 200, { users: us.map((u) => ({ k: String(u.id).slice(0, 8), name: nm[String(u.id).slice(0, 8)] || '', tag: u.tag, updated: u.updated, bets: u.bets, w: u.w, l: u.l, p: u.p, risk: u.risk, pl: u.pl, open: u.open, placed: u.placed, days: u.days })) }); } catch (er) { send(res, 502, { error: 'Could not read players: ' + er.message }); } return true; }
     }
     if (e === 'owner') { if (!OWNER_PIN()) { send(res, 401, { error: 'Sign in again' }); return true; }
       if (path === '/acct/me') { send(res, 200, { me: OWNER_ME }); return true; } send(res, 400, { error: 'Owner has full access' }); return true; }

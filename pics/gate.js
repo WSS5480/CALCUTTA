@@ -2,6 +2,15 @@
 (function () {
   const API = 'https://calcutta-odds.onrender.com/acct';
   const g = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+    // Warning before opening any sport that has no pick model (everything but NFL and NCAA football). Shown on every tap.
+  window.oddWarn = function (go) {
+    try {
+      if (document.getElementById('oddwarn')) return; const o = document.createElement('div'); o.id = 'oddwarn';
+      o.style.cssText = 'position:fixed;inset:0;z-index:120;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:16px';
+      o.innerHTML = '<div style="max-width:340px;width:100%;background:var(--panel,#121a33);color:var(--ink,#eee);border:1px solid var(--line,#fff3);border-radius:16px;padding:18px;font:15px/1.4 system-ui"><div style="font-size:30px">⚠️</div><h3 style="margin:6px 0 8px;font-size:18px">Not a pick model yet</h3><p style="margin:0 0 14px">Bet at own risk.</p><div style="display:flex;gap:10px"><button id="oddw-no" style="flex:1;min-height:44px;border-radius:10px;border:1px solid var(--line,#fff3);background:var(--panel2,#1a2340);color:var(--ink,#eee);font:700 14px inherit">Cancel</button><button id="oddw-ok" style="flex:1;min-height:44px;border-radius:10px;border:0;background:#0b3d91;color:#fff;font:700 14px inherit">Continue</button></div></div>';
+      document.body.appendChild(o); document.getElementById('oddw-no').onclick = () => o.remove(); document.getElementById('oddw-ok').onclick = () => { o.remove(); go(); };
+    } catch (e) { go(); }
+  };
   const s = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} };
   // One person's data per phone. wipeData() clears everything that belongs to the signed-in person (bets, daily log, pins, locked picks, caches of them);
   // ownerSwitch(id) wipes it when a DIFFERENT person signs in on this phone, so nobody ever sees the previous user's data or uploads it into their own account.

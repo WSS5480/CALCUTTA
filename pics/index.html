@@ -203,7 +203,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v177 -->
+<!-- Pics v178 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
   <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v177</span></div></div>
@@ -213,7 +213,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v177 (Kalshi cash-out preview)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v178 (live win % fix)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -1359,7 +1359,7 @@ function lmBlock(g) {
   return `<button class="lmbtn" data-lm="${g.id}">${on ? '▾' : '📈'} Line movement</button>` + (on ? `<div class="lm"><div class="tg"><button data-lmmode="hour" class="${LMMODE === 'hour' ? 'on' : ''}">By hour</button><button data-lmmode="day" class="${LMMODE === 'day' ? 'on' : ''}">By day</button></div>${lmChart(g)}</div>` : '');
 }
 
-function merge(list) { list.forEach((g) => { const old = ALL[g.id]; if (old && g.state === 'in' && !g.sit && old.sit) g.sit = old.sit; if (old && g.line === null && old.line !== null) g.line = old.line; applyBooks(g); ALL[g.id] = g; lmRecord(g); }); }
+function merge(list) { list.forEach((g) => { const old = ALL[g.id]; if (g.state === 'in' && g.sit && (g.sit.wp === null || g.sit.wp === undefined)) { try { const w = WPH[g.id]; if (w && w.length && Number.isFinite(w[w.length - 1])) g.sit.wp = w[w.length - 1]; } catch (e) {} } if (old && g.state === 'in' && !g.sit && old.sit) g.sit = old.sit; if (old && g.line === null && old.line !== null) g.line = old.line; applyBooks(g); ALL[g.id] = g; lmRecord(g); }); }
 // Many-book spreads (NFL, before kickoff): the line the app uses is the CONSENSUS (median) across books; ESPN's single-book line is kept as espnLine.
 let BOOKS = {}, BKT = 0;
 function applyBooks(g) { if (CFB || g.state !== 'pre') return; const b = BOOKS[g.away.abbr + '@' + g.home.abbr]; if (!b) return; if (g.espnLine === undefined) g.espnLine = g.line; g.line = b.line; g.books = b; }
@@ -1767,7 +1767,7 @@ function grade(g) {
 // ---- Live view: score, down & distance, field bar, last play and a win-probability line chart (ESPN play-by-play probabilities) ----
 const WPH = {};
 async function liveFetch() {
-  const want = Object.values(ALL).filter((g) => (g.state === 'in' || (g.state === 'post' && !WPH[g.id])) && ((TEAM && g.state === 'in' && (g.home.abbr === TEAM || g.away.abbr === TEAM)) || isOpen('wk' + g.id, false) || isOpen('g' + g.id, false) || DET['lp' + g.id]));
+  const want = Object.values(ALL).filter((g) => (g.state === 'in' || (g.state === 'post' && !WPH[g.id])) && (g.state === 'in' || (TEAM && g.state === 'in' && (g.home.abbr === TEAM || g.away.abbr === TEAM)) || isOpen('wk' + g.id, false) || isOpen('g' + g.id, false) || DET['lp' + g.id]));
   await Promise.all(want.slice(0, 6).map(async (g) => {
     try { const s = await getJson(SB + 'summary?event=' + g.id); WPH[g.id] = (s.winprobability || []).map((w) => w.homeWinPercentage); } catch (e) {}
   }));

@@ -1,0 +1,1 @@
+nflverse player-lineup backtest (Nov 14 2026). Data (not committed, re-download): games.csv from github.com/nflverse/nfldata (closing spread_line + moneylines), stats_player_week_YYYY.csv and injuries_YYYY.csv from github.com/nflverse/nflverse-data releases (tags stats_player, injuries). Put them in /tmp/nv/, run bt_players.py then eval.py.

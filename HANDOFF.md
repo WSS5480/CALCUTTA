@@ -344,3 +344,9 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 ## v215 – fix My Bets crash from v213 (urgent)
 - v213 bSport1: `if (ab) if (!NFLAB) init; return NFLAB.has(...)` lost its braces, so any bet with no team abbreviations (props, Kalshi legs with no game) hit `NFLAB.has` on null and betsRender threw (My Bets blank, live page error). Fixed with braces. Test now includes an abbr-less prop bet (/tmp/shot8.js).
 - Lesson: mock tests must include prop / parlay / no-game bets, not just single bets with teams.
+
+## Nov 14 2026 – lock/model analysis (no app change)
+- Findings (NFL, walk-forward, nflverse closing lines, 2018-25 = 1,867 games): the model, the 50/50 blend and every player-lineup variant (trailing-3-season weights 1/.6/.3, EPA-based player scores, lineup = last 3 games minus Out/Doubtful, Questionable x0.5 from the OFFICIAL injury report) are worse than the closing line (RMSE line 12.82 vs 13.24-13.46). Best spread result 52.0% (947-874) < 52.4% break-even. Predicting (result - line) from players gains nothing (12.83 vs 12.82); injury value alone vs the line = 49.4% -> the market already prices injuries. Actual-lineup (look-ahead) ceiling 51.9-53.8%.
+- Winner side: app winner pick == favorite (90/10 blend); at real moneylines (2015-25) favorites by 10+ pts win 85.6% but ROI -0.6% (avg ML -719); 7-10 pts ROI -2.2%; 14+ ROI -1.3%; dogs of 10+ ROI -17%. So no winner-lock edge either.
+- Decision pending from Steve: stop spread locks / label reference-only; make locks a server job and not user-dependent; tabled idea: pregame-lineup lock (scheduled probe of ESPN inactives Sun Nov 15 10:45 CT, likely moot given the results).
+- Scripts: backtest/nflverse/ (bt_players.py, eval.py). Data sources: nflverse (free, reachable from the sandbox through GitHub).

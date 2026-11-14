@@ -22,7 +22,7 @@ async function handle(req, res) {
   if (req.method !== 'POST') return false;
   if (!(await require('./acct.js').check(req))) { send(res, 401, { error: 'Sign in to use AI' }); return true; }
   if (!(process.env.ANTHROPIC_API_KEY || '').trim()) { send(res, 503, { error: 'AI not set up (ANTHROPIC_API_KEY missing)' }); return true; }
-  const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',').pop().trim();
+  const ip = require('./ip').clientIp(req);
   if (limited(ip)) { send(res, 429, { error: 'Hourly limit reached, try later' }); return true; }
   let b; try { b = await body(req); } catch (e) { send(res, 400, { error: 'bad request' }); return true; }
   try {

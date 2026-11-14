@@ -173,3 +173,8 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 - sw.js no longer caches the `?c=` update-check URLs (cache growth). KERR is escaped; Kalshi leg titles are stored raw and escaped once (no more `&amp;amp;`). "Your access ended" only shows for a really ended plan; a waiting renewal says so.
 - TEMPORARY /whoami route on the odds server to check which X-Forwarded-For entry is the real client (rate limits currently use the LAST entry). Remove after checking, and fix `ip` in acct.js, sync.js, ai.js if wrong.
 - NOT done (design/limits): token + push subscription are not revoked on sign-out (30-day bearer token, no server list); ?mirror=1 skips the gate and /odds /lines /backtest /sync stay open (soft paywall); account-enumeration messages on sign-up/sign-in kept for usability.
+
+## v170 — 2026-11-13 — every visitor shared ONE rate-limit bucket (fixed)
+- Verified live: X-Forwarded-For on Render is "client, Cloudflare edge, Render proxy". The old code used the LAST entry (Render's own proxy, a 10.x address), so ALL visitors counted as one IP: 6 wrong PINs from anyone locked sign-in for everyone for 15 min, "6 new accounts per 15 min" was global (could block new sign-ups), and the AI limit (40/h) was shared.
+- Fix: odds-api/ip.js `clientIp(req)` = third entry from the end (falls back to the first / socket). Used by acct.js, sync.js, ai.js. The temporary /whoami route is removed.
+- If Render's proxy chain ever changes, re-check with a temporary route that echoes the header.

@@ -81,7 +81,7 @@ async function handle(req, res) {
     const phone = normPhone(b.phone), pin = String(b.pin || '');
     if (phone.length !== 10) { send(res, 400, { error: 'Enter a 10-digit cell number' }); return true; }
     if (!/^\d{4,10}$/.test(pin)) { send(res, 400, { error: 'PIN must be 4 to 10 digits' }); return true; }
-    const id = idOf(phone), ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',').pop().trim();
+    const id = idOf(phone), ip = require('./ip').clientIp(req);
     if (blocked(id) || blocked('ip:' + ip)) { send(res, 429, { error: 'Too many wrong PINs. Try again in 15 minutes.' }); return true; }
     const row = await dbGet(id);
     if (path === '/sync/signup') {

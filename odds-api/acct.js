@@ -61,7 +61,7 @@ async function handle(req, res) {
   if (path === '/acct/status') { send(res, 200, { gate: on() }); return true; }
   if (req.method !== 'POST') return false;
   if (!on()) { send(res, 200, { gate: false }); return true; }
-  const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',').pop().trim(); // Render appends the real client address last
+  const ip = require('./ip').clientIp(req); // Render appends the real client address last
   let b; try { b = await body(req); } catch (e) { send(res, 400, { error: 'bad request' }); return true; }
   const email = String(b.email || '').trim().toLowerCase();
   try {

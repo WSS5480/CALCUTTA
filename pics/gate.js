@@ -129,7 +129,7 @@
     if (!g('odd-tok')) { if (g('sync-phone') && g('sync-pin') && !g('odd-noauto')) { show(); $('gate').innerHTML = '<div class="gb"><h1>Oddable</h1><p>Signing you in…</p></div>'; if (await autoPhone()) return; } show(); return; }
     // Offline / server asleep: keep working for 72h after the last successful check.
     const lastOk = Number(g('odd-ok') || 0);
-    if (lastOk && Date.now() - lastOk < GRACE) { refresh().catch((e) => { if (e.status === 401) out(); }); return; }
+    if (lastOk && Date.now() - lastOk < GRACE) { const again = (n) => refresh().catch((e) => { if (e.status === 401) out(); else if (n < 4) setTimeout(() => again(n + 1), 20000); }); again(0); return; } // retry while the server redeploys
     show(); $('gate').innerHTML = '<div class="gb"><h1>Oddable</h1><p>Checking your account…</p></div>';
     refresh().catch((e) => { if (e.status === 401) out(); else { if (el) el.innerHTML = '<div class="gb"><h1>Oddable</h1><p class="er">Could not reach the server. It may be waking up.</p><button id="gretry">Try again</button></div>'; const b = $('gretry'); if (b) b.onclick = () => location.reload(); } });
   }

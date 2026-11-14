@@ -141,3 +141,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 ## 2026-11-13 — My Apps build .25: one shared Cash App tag
 - Cash App tag is entered once on the My Apps console home (ma_settings key `cashtag`); every app's pay link uses it. Dose Guide's box writes the same value. CASHAPP_TAG env is only a fallback. Reason: Steve wants every app to ask for it the same way he just did in the Dose Guide.
 - Owner phone alerts (web push) are NOT shipped: branch `owner-push-wip` in MY_APPS_MANAGEMENT, subscribe route still failing locally.
+
+## v164 — 2026-11-13 — banner no longer vanishes when opened
+- Bug: tapping the TODAY banner (#plb) to list bets made it disappear until refresh. plbFit() measured the banner's open (taller) height, decided it was under the logo, then tucked it away and closed it. Fix: plbFit() returns while the list is open (window.__plbo). Reproduced on v163 and verified on v164 at phone width (scrolled so the logo sits under the open banner).

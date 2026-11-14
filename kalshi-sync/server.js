@@ -77,6 +77,21 @@ async function handle(req, res) { // mounted under /kalshi/*; returns false for 
     const qs = j.query && typeof j.query === 'object' ? '?' + new URLSearchParams(Object.fromEntries(Object.entries(j.query).map(([k, v]) => [k, String(v)]))) : '';
     try { const r = await fetch(BASE + pth + qs, { headers: hh }); const t = await r.text(); res.writeHead(r.status, cors); res.end(t); return true; } catch (e) { return send(502, { error: 'upstream' }); }
   }
+  if (path === '/order' && req.method === 'POST') { // CASH OUT: forwards ONE kind of order the user's own browser signed and confirmed: a SELL that can only reduce a position (reduce_only, immediate-or-cancel, limit price). Buys and anything else are refused here.
+    let body = ''; for await (const c of req) { body += c; if (body.length > 4000) return send(413, { error: 'too big' }); }
+    let j; try { j = JSON.parse(body); } catch (e) { return send(400, { error: 'bad json' }); }
+    const o = j.order || {}, side = o.side;
+    if (o.action !== 'sell' || (side !== 'yes' && side !== 'no')) return send(403, { error: 'only sell orders are allowed' });
+    if (!/^[A-Za-z0-9._-]{3,80}$/.test(String(o.ticker || ''))) return send(400, { error: 'bad ticker' });
+    if (!Number.isInteger(o.count) || o.count < 1 || o.count > 1000000) return send(400, { error: 'bad count' });
+    const pk = side + '_price_dollars', pv = String(o[pk] || ''); if (!/^0\.\d{2,4}$/.test(pv) || +pv < 0.01 || +pv > 0.99) return send(400, { error: 'bad price' });
+    if (o.time_in_force !== 'immediate_or_cancel' || o.type !== 'limit' || o.reduce_only !== true) return send(403, { error: 'order must be a limit, immediate-or-cancel, reduce-only sell' });
+    if (!/^[A-Za-z0-9-]{8,64}$/.test(String(o.client_order_id || ''))) return send(400, { error: 'bad client_order_id' });
+    const h = j.headers || {}; const hh = { 'KALSHI-ACCESS-KEY': String(h['KALSHI-ACCESS-KEY'] || ''), 'KALSHI-ACCESS-TIMESTAMP': String(h['KALSHI-ACCESS-TIMESTAMP'] || ''), 'KALSHI-ACCESS-SIGNATURE': String(h['KALSHI-ACCESS-SIGNATURE'] || ''), 'content-type': 'application/json' };
+    if (!hh['KALSHI-ACCESS-KEY'] || !hh['KALSHI-ACCESS-SIGNATURE']) return send(400, { error: 'missing auth headers' });
+    const clean = { ticker: o.ticker, action: 'sell', side, count: o.count, type: 'limit', time_in_force: 'immediate_or_cancel', reduce_only: true, client_order_id: o.client_order_id, [pk]: pv };
+    try { const r = await fetch(BASE + '/portfolio/orders', { method: 'POST', headers: hh, body: JSON.stringify(clean) }); const t = await r.text(); res.writeHead(r.status, cors); res.end(t); return true; } catch (e) { return send(502, { error: 'upstream' }); }
+  }
   if (!TOKEN || u.searchParams.get('token') !== TOKEN) return send(401, { error: 'bad token' });
   if (path === '/bets') { if (Date.now() - CACHE.at > EVERY * 2) await sync(); return send(200, { at: CACHE.at, err: CACHE.err, bets: CACHE.bets }); }
   if (path === '/debug') { // raw look at what Kalshi returns, so the mapping can be tuned. No secrets.

@@ -115,6 +115,7 @@ html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
 #sc{position:fixed;top:0;left:0;right:0;bottom:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding-bottom:calc(92px + env(safe-area-inset-bottom))}
 .bn,#plb,#ptr{transform:translate3d(0,0,0);-webkit-transform:translate3d(0,0,0);will-change:transform}
 .chips{position:sticky;top:0;z-index:15;background:var(--bg);padding:8px 0;margin:0}
+.kcob{display:inline-block;margin-left:8px;border:1px solid var(--red);background:none;color:var(--red);border-radius:999px;padding:3px 12px;font:700 13px inherit;cursor:pointer}#kcom{position:fixed;inset:0;z-index:130;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px}#kcom .kbox{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:16px;max-width:420px;width:100%;padding:16px;max-height:90vh;overflow:auto}#kcom .kbox h3{margin:0 0 8px}#kcom .kn{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--line)}#kcom .kb{display:flex;gap:10px;margin-top:14px}#kcom .kb button{flex:1;padding:12px;border-radius:12px;font:700 15px inherit;border:1px solid var(--line);background:var(--panel2);color:var(--ink)}#kcom .kb button.sell{background:var(--red);border-color:var(--red);color:#fff}#kcom .kb button:disabled{opacity:.5}
 .kdot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-left:8px;align-self:center;background:#9ca3af;cursor:pointer;flex:none}.kdot[hidden]{display:none}.kdot.ok{background:#22c55e;animation:kblink 1.5s ease-in-out infinite}.kdot.busy{background:#f59e0b}.kdot.bad{background:#ef4444}@keyframes kblink{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(34,197,94,.65)}50%{opacity:.55;box-shadow:0 0 0 6px rgba(34,197,94,0)}}@media (prefers-reduced-motion:reduce){.kdot.ok{animation:none}}
 .pgin{animation:pgin .16s ease-out}@keyframes pgin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .gsp{text-align:center;font-size:14px;margin:2px 0 6px}.gsp b{color:var(--ink)}
@@ -204,17 +205,17 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v193 -->
+<!-- Pics v194 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v193</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v194</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">NCAA</button><button data-sp="nba">NBA</button><button data-sp="mlb">MLB</button><button data-sp="nhl">NHL</button><button data-sp="ncaab">NCAAB</button></div>
   <input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team">
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v193 (Kalshi light)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v194 (Kalshi cash out)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -545,6 +546,7 @@ function legGrade(l) {
 // A result is remembered on the bet the first time it is final, so it survives when the game is no longer in the loaded scoreboard.
 function betGrade(b) { const r = betGradeLive(b); if (r.st === 'pending' && b.fin) return { st: b.fin }; return r; }
 function betGradeLive(b) {
+  if (b.cash !== undefined && b.cash !== null && b.stake) return { st: b.cash > b.stake + 0.005 ? 'won' : b.cash < b.stake - 0.005 ? 'lost' : 'push' }; // sold on Kalshi: the sale decides the result
   if (b.kind === 'prop') return { st: b.res || 'pending' };
   if (b.kind === 'parlay') {
     const L = b.legs.map(legGrade);
@@ -628,6 +630,7 @@ const betProfit = (b) => {
 };
 const betMult = (o) => { o = Number(o) || -110; if (Math.abs(o) < 100) o = -110; return o > 0 ? o / 100 : 100 / -o; };
 function betPL(b, st) { // profit/loss for a result 'won'|'lost'|'push'; blank stake counts as 1 unit only if no bet has a $ stake
+  if (b.cash !== undefined && b.cash !== null && b.stake) return Math.round((b.cash - b.stake) * 100) / 100; // cashed out: real proceeds minus cost
   const u = b.stake || (BETS.some((x) => x.stake) ? 0 : 1);
   return st === 'won' ? u * betProfit(b) : st === 'lost' ? -u : 0;
 }
@@ -688,7 +691,7 @@ function betsRender(force) {
     const badge = r.st === 'live' ? `<span class="b ${r.cur === 'won' ? 'hit' : r.cur === 'lost' ? 'miss' : 'push'}">● LIVE ${r.cur === 'won' ? 'covering' : r.cur === 'lost' ? 'losing' : 'even'}</span>` : r.st === 'pending' ? '<span class="b push">Pending</span>' : `<span class="b ${r.st === 'won' ? 'hit' : r.st === 'lost' ? 'miss' : 'push'}">${r.st === 'won' ? '✓ WON' : r.st === 'lost' ? '✗ LOST' : 'PUSH'} ${money(betPL(b, r.st))}</span>`;
     return `<div class="bcard ${['won', 'lost'].includes(r.st) ? (r.st === 'won' ? 'bw' : 'bl') : r.st === 'live' ? (r.cur === 'won' ? 'bw' : r.cur === 'lost' ? 'bl' : '') : ''}"><div class="bhd"><div><div class="bwhat">${what}${b.stake ? ` <small>· ${usd(b.stake)}</small>` : ''}${b.mult ? ` <small>· pays ${b.mult}x</small>` : (b.odds && b.odds !== -110 ? ` <small>· ${sgn(b.odds)}</small>` : '')}</div><div class="sub">${b.noApp ? '<b>Imported slip</b> · open the ' + (b.lg || '').toUpperCase() + ' page once to add the app pick' : (ag ? '<b style="color:var(--red)">Against the app</b>' : '<b style="color:var(--green)">With the app</b>') + ' · app had ' + b.appSu + (b.appConf ? ' ' + pct(b.appConf) : '')}${b.type === 'sp' && b.appAts ? ' · spread ' + b.appAts : ''}${b.type === 'sp' && b.appLine !== null && b.appLine !== undefined ? ' · app line ' + sgn(b.side === b.home ? -b.appLine : b.appLine) : ''}</div></div>${badge}</div>
       ${g ? (ALL[b.gid] ? gameCard(g, true) : miniGame(g)) : `<div class="sub" style="padding:8px 0">${b.away} @ ${b.home} · wk ${b.week} · game not loaded</div>`}
-      ${b.src === 'kalshi' && !b.res && b.kt && b.kn ? `<div class="sub" data-kco="${escH(b.id)}" style="margin:6px 0">💵 Checking cash-out value…</div>` : ''}
+      ${b.cash !== undefined && b.cash !== null ? `<div class="sub" style="margin:6px 0">💵 Cashed out on Kalshi for <b>$${Number(b.cash).toFixed(2)}</b> (${b.cash >= (b.stake || 0) ? '+' : '-'}$${Math.abs(b.cash - (b.stake || 0)).toFixed(2)})${b.soldN ? ' · ' + b.soldN + ' contracts' : ''}</div>` : ''}${b.src === 'kalshi' && !b.res && b.kt && b.kn && (b.cash === undefined || b.cash === null) ? `<div class="sub" data-kco="${escH(b.id)}" style="margin:6px 0">💵 Checking cash-out value…</div>` : ''}
       <div class="bbtn"><button onclick="betEdit('${b.id}')">Edit</button><button onclick="betDel('${b.id}')">Delete</button></div></div>`;
   };
   const isPast = (x) => betDay(x.b) < today && ['won', 'lost', 'push'].includes(x.r.st);
@@ -1194,10 +1197,11 @@ async function kalshiSync(manual) {
   try {
     const min = Math.floor(Date.now() / 1000 - 45 * 86400), fills = await kPages('/portfolio/fills', 'fills', { min_ts: min });
     let setl = []; try { setl = await kPages('/portfolio/settlements', 'settlements', { min_ts: min }); } catch (e) {}
-    const S = {}; setl.forEach((s) => { S[s.ticker] = s; }); const by = {};
+    const S = {}; setl.forEach((s) => { S[s.ticker] = s; }); const by = {}, SOLD = {};
     fills.forEach((f) => {
-      const side = (f.side || '').toLowerCase(); if ((f.action || 'buy').toLowerCase() !== 'buy') return;
+      const side = (f.side || '').toLowerCase(), isSell = (f.action || 'buy').toLowerCase() === 'sell'; if (!isSell && (f.action || 'buy').toLowerCase() !== 'buy') return;
       const cnt = kn(f.count, f.count_fp), px = side === 'yes' ? kc(f, 'yes_price', 'yes_price_dollars') : kc(f, 'no_price', 'no_price_dollars'); if (isNaN(cnt) || isNaN(px)) return;
+      if (isSell) { const q = SOLD[f.ticker + '|' + side] = SOLD[f.ticker + '|' + side] || { n: 0, cash: 0, first: f.created_time }; q.n += cnt; q.cash += cnt * px / 100 - (parseFloat(f.fee_cost) || 0); return; } // a sale (cash out): proceeds after fee
       const k = f.ticker + '|' + side, b = by[k] = by[k] || { ticker: f.ticker, side, count: 0, cost: 0, fee: 0, first: f.created_time }; b.count += cnt; b.cost += cnt * px / 100; b.fee += parseFloat(f.fee_cost) || 0; /* Kalshi's ticket cost includes the fee */ if (f.created_time < b.first) b.first = f.created_time;
     });
     const MK = (window.__kmk = window.__kmk || {}); let gone = []; try { gone = JSON.parse(lsg('kdel26')) || []; } catch (e) {}
@@ -1216,16 +1220,16 @@ async function kalshiSync(manual) {
           const od = Date.parse(lm.occurrence_datetime || lm.expected_expiration_time || '');
           legs.push({ text, res: lres, day: isNaN(od) ? null : dayKey(od), k: 1 });
         }
-        const stake = Math.round((b.cost + b.fee) * 100) / 100, pid = id, lds = legs.map((l) => l.day).filter(Boolean).sort(); // a combo is filed on the day of its first game (the combo market itself expires the day after)
-        const pb = { id: pid, kind: 'parlay', src: 'kalshi', kt: b.ticker, ks: b.side, kn: Math.round(b.count * 100) / 100, legs, stake, mult: stake ? Math.round(b.count / stake * 100) / 100 : null, odds: -110, day: lds[0] || kDay(b.first, m), t: Date.parse(b.first), week: CUR };
+        const sd = SOLD[b.ticker + '|' + b.side], cashed = sd && sd.n >= b.count - 0.999 ? Math.round(sd.cash * 100) / 100 : null, stake = Math.round((b.cost + b.fee) * 100) / 100, pid = id, lds = legs.map((l) => l.day).filter(Boolean).sort(); // a combo is filed on the day of its first game (the combo market itself expires the day after)
+        const pb = { id: pid, kind: 'parlay', src: 'kalshi', kt: b.ticker, ks: b.side, kn: Math.round(b.count * 100) / 100, legs, stake, mult: stake ? Math.round(b.count / stake * 100) / 100 : null, odds: -110, day: lds[0] || kDay(b.first, m), t: Date.parse(b.first), week: CUR, cash: cashed, soldN: cashed === null ? 0 : Math.round(sd.n * 100) / 100 };
         const pi = BETS.findIndex((x) => x.id === pid);
-        if (pi >= 0) { const o = BETS[pi]; if (o.kind !== 'parlay' || o.stake !== pb.stake || o.mult !== pb.mult || o.kn !== pb.kn || o.day !== pb.day || JSON.stringify(o.legs) !== JSON.stringify(pb.legs)) { BETS[pi] = pb; n++; } } else { BETS.push(pb); n++; }
+        if (pi >= 0) { const o = BETS[pi]; if (o.kind !== 'parlay' || o.stake !== pb.stake || o.mult !== pb.mult || o.kn !== pb.kn || o.day !== pb.day || (o.cash == null ? null : o.cash) !== pb.cash || JSON.stringify(o.legs) !== JSON.stringify(pb.legs)) { BETS[pi] = pb; n++; } } else { BETS.push(pb); n++; }
         continue;
       }
       const s = S[b.ticker], res = (s && s.market_result) || (m.status === 'settled' || m.status === 'finalized' ? m.result : '');
-      const pick = (b.side === 'yes' ? m.yes_sub_title : m.no_sub_title) || (b.side === 'yes' ? 'YES' : 'NO'), stake = Math.round((b.cost + b.fee) * 100) / 100;
-      const nb = { id, kind: 'prop', src: 'kalshi', kt: b.ticker, ks: b.side, kn: Math.round(b.count * 100) / 100, text: pick + ' · ' + (m.title || b.ticker).replace(/\?$/, ''), stake, mult: stake ? Math.round(b.count / stake * 100) / 100 : null, odds: -110, res: res ? (res === 'scalar' || res === 'void' ? 'push' : res === b.side ? 'won' : 'lost') : null, day: kDay(b.first, m), t: Date.parse(b.first), week: CUR };
-      const i = BETS.findIndex((x) => x.id === id); if (i >= 0) { const o = BETS[i]; if (o.stake !== nb.stake || o.res !== nb.res || o.mult !== nb.mult || o.day !== nb.day || o.kn !== nb.kn) { BETS[i] = nb; n++; } } else { BETS.push(nb); n++; }
+      const sd = SOLD[b.ticker + '|' + b.side], cashed = sd && sd.n >= b.count - 0.999 ? Math.round(sd.cash * 100) / 100 : null, pick = (b.side === 'yes' ? m.yes_sub_title : m.no_sub_title) || (b.side === 'yes' ? 'YES' : 'NO'), stake = Math.round((b.cost + b.fee) * 100) / 100;
+      const nb = { id, kind: 'prop', src: 'kalshi', kt: b.ticker, ks: b.side, kn: Math.round(b.count * 100) / 100, text: pick + ' · ' + (m.title || b.ticker).replace(/\?$/, ''), stake, mult: stake ? Math.round(b.count / stake * 100) / 100 : null, odds: -110, res: cashed !== null ? (cashed > stake + 0.005 ? 'won' : cashed < stake - 0.005 ? 'lost' : 'push') : res ? (res === 'scalar' || res === 'void' ? 'push' : res === b.side ? 'won' : 'lost') : null, day: kDay(b.first, m), t: Date.parse(b.first), week: CUR, cash: cashed, soldN: cashed === null ? 0 : Math.round(sd.n * 100) / 100 };
+      const i = BETS.findIndex((x) => x.id === id); if (i >= 0) { const o = BETS[i]; if (o.stake !== nb.stake || o.res !== nb.res || o.mult !== nb.mult || o.day !== nb.day || o.kn !== nb.kn || (o.cash == null ? null : o.cash) !== nb.cash) { BETS[i] = nb; n++; } } else { BETS.push(nb); n++; }
     }
     KLAST = Date.now(); KST = 'Kalshi synced ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + ' · ' + Object.keys(by).length + ' bets'; if (n) betsSave();
   } catch (e) { KST = e.status === 401 || e.status === 403 ? 'Kalshi rejected your key. Tap Disconnect, then connect again.' : 'Kalshi sync could not connect (the server may be waking up). Will retry.'; }
@@ -1237,16 +1241,63 @@ function kcoPaint(b) {
   const el = [].slice.call(document.querySelectorAll('[data-kco]')).filter((x) => x.getAttribute('data-kco') === String(b.id))[0], c = KCO[b.kt]; if (!el || !c) return;
   const m = c.m, st = m.status, bid = b.ks === 'yes' ? kc(m, 'yes_bid', 'yes_bid_dollars') : kc(m, 'no_bid', 'no_bid_dollars');
   if ((st && st !== 'active' && st !== 'open') || isNaN(bid) || bid <= 0) { el.innerHTML = '💵 Cash out: no buyer right now <span style="opacity:.6">(preview only)</span>'; return; }
-  const v = b.kn * bid / 100, pl = v - (b.stake || 0);
-  el.innerHTML = '💵 Cash out now ≈ <b>$' + v.toFixed(2) + '</b> <span style="color:' + (pl >= 0 ? 'var(--green)' : 'var(--red)') + '">(' + (pl >= 0 ? '+' : '-') + '$' + Math.abs(pl).toFixed(2) + ' vs your $' + (b.stake || 0).toFixed(2) + ')</span> <span style="opacity:.6">· ' + b.kn + ' contracts at ' + Math.round(bid) + '¢ · preview only, nothing is sold</span>';
+  const v = b.kn * bid / 100, pl = v - (b.stake || 0), canSell = Math.floor(b.kn || 0) >= 1;
+  el.innerHTML = '💵 Cash out now ≈ <b>$' + v.toFixed(2) + '</b> <span style="color:' + (pl >= 0 ? 'var(--green)' : 'var(--red)') + '">(' + (pl >= 0 ? '+' : '-') + '$' + Math.abs(pl).toFixed(2) + ' vs your $' + (b.stake || 0).toFixed(2) + ')</span> <span style="opacity:.6">· ' + b.kn + ' contracts at ' + Math.round(bid) + '¢ · nothing is sold until you confirm</span> ' + (canSell ? '<button class="kcob" onclick="kcoAsk(\'' + String(b.id).replace(/[^\w-]/g, '') + '\')">Cash out…</button>' : '');
 }
 async function kcoLoad() {
   if (KCOB || !lsg('kal-id') || !lsg('kal-pem')) return; KCOB = true;
-  try { const open = BETS.filter((b) => b.src === 'kalshi' && !b.res && b.kt && b.kn).slice(0, 15);
-    for (const b of open) { const c = KCO[b.kt]; if (c && Date.now() - c.t < 30000) { kcoPaint(b); continue; } try { KCO[b.kt] = { t: Date.now(), m: ((await kalshiGet('/markets/' + encodeURIComponent(b.kt))).market) || {} }; } catch (e) { KCO[b.kt] = { t: Date.now() - 20000, m: { status: 'err' } }; } kcoPaint(b); }
+  try { const open = BETS.filter((b) => b.src === 'kalshi' && !b.res && b.kt && b.kn && (b.cash === undefined || b.cash === null)).slice(0, 15);
+    for (const b of open) { const c = KCO[b.kt]; if (c && Date.now() - c.t < 8000) { kcoPaint(b); continue; } try { KCO[b.kt] = { t: Date.now(), m: ((await kalshiGet('/markets/' + encodeURIComponent(b.kt))).market) || {} }; } catch (e) { KCO[b.kt] = { t: Date.now() - 20000, m: { status: 'err' } }; } kcoPaint(b); }
   } catch (e) {}
   KCOB = false;
 }
+
+// ---- CASH OUT (a real sale on Kalshi, only after the confirm screen) ----
+const KORD = 'https://calcutta-odds.onrender.com/kalshi/order'; let KCOM = null, KCOSEND = false;
+async function kalshiOrder(order) {
+  const { kind, key } = await kalshiKey(), ts = String(Date.now()), path = '/portfolio/orders', msg = new TextEncoder().encode(ts + 'POST' + KAPI + path);
+  const sig = kind === 'rsa' ? await crypto.subtle.sign({ name: 'RSA-PSS', saltLength: 32 }, key, msg) : await crypto.subtle.sign('Ed25519', key, msg);
+  const r = await fetch(KORD, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ order, headers: { 'KALSHI-ACCESS-KEY': lsg('kal-id'), 'KALSHI-ACCESS-TIMESTAMP': ts, 'KALSHI-ACCESS-SIGNATURE': b64e(sig) } }) });
+  const j = await r.json().catch(() => ({})); if (!r.ok) { const e = new Error((j && (j.error && (j.error.message || j.error) || j.message)) || ('Kalshi ' + r.status)); e.status = r.status; throw e; } return j;
+}
+async function kcoQuote(b) { // fresh price right now, never the cached one
+  const m = ((await kalshiGet('/markets/' + encodeURIComponent(b.kt))).market) || {}; KCO[b.kt] = { t: Date.now(), m };
+  const bid = b.ks === 'yes' ? kc(m, 'yes_bid', 'yes_bid_dollars') : kc(m, 'no_bid', 'no_bid_dollars'), n = Math.floor(b.kn || 0), ok = (!m.status || m.status === 'active' || m.status === 'open') && !isNaN(bid) && bid >= 1 && n >= 1;
+  const px = ok ? Math.floor(bid) : NaN; return { ok, bid: ok ? bid : NaN, px, n, get: ok ? n * px / 100 : 0 };
+}
+function kcoBox(h) { let e = document.getElementById('kcom'); if (!e) { e = document.createElement('div'); e.id = 'kcom'; document.body.appendChild(e); e.addEventListener('click', (ev) => { if (ev.target === e && !KCOSEND) kcoClose(); }); } e.innerHTML = '<div class="kbox">' + h + '</div>'; }
+function kcoClose() { clearInterval(window.__kcoT); KCOM = null; const e = document.getElementById('kcom'); if (e) e.remove(); }
+function kcoView(q, note) {
+  const b = KCOM && KCOM.b; if (!b) return; const stake = b.stake || 0, pl = q.get - stake, title = b.kind === 'parlay' ? (b.legs.length + '-leg combo: ' + b.legs.map((l) => String(l.text || '').replace(/ to win$/, '')).join(', ')) : String(b.text || b.kt);
+  const left = Math.round(((b.kn || 0) - q.n) * 100) / 100;
+  kcoBox('<h3>Sell on Kalshi?</h3><div class="sub" style="margin-bottom:8px">' + escH(title.length > 160 ? title.slice(0, 157) + '…' : title) + '</div>' + (q.ok
+    ? '<div class="kn"><span>Sell price now</span><b>' + q.px + '¢ per contract</b></div><div class="kn"><span>Contracts you sell</span><b>' + q.n + '</b></div><div class="kn"><span>You would receive</span><b>≈ $' + q.get.toFixed(2) + '</b></div><div class="kn"><span>You paid</span><b>$' + stake.toFixed(2) + '</b></div><div class="kn"><span>Result if sold</span><b style="color:' + (pl >= 0 ? 'var(--green)' : 'var(--red)') + '">' + (pl >= 0 ? '+' : '-') + '$' + Math.abs(pl).toFixed(2) + '</b></div>' + (left > 0.005 ? '<div class="sub" style="margin-top:6px">Kalshi sells whole contracts only, so ' + left + ' contract' + (left === 1 ? '' : 's') + ' stay open.</div>' : '') + '<div class="sub" style="margin-top:8px">This is a <b>real sale on your Kalshi account</b>. It sells at ' + q.px + '¢ or better and cancels if the price drops. Kalshi may take a small fee. The price here updates live.</div>'
+    : '<div class="note">No buyer right now, so nothing can be sold. This updates live.</div>') + (note ? '<div class="note" style="margin-top:8px">' + escH(note) + '</div>' : '') + '<div class="kb"><button onclick="kcoClose()">Cancel</button>' + (q.ok ? '<button class="sell" id="kcogo" onclick="kcoGo()">Confirm sale</button>' : '') + '</div>');
+}
+async function kcoAsk(id) {
+  const b = BETS.find((x) => String(x.id).replace(/[^\w-]/g, '') === id); if (!b || !b.kt || !b.ks) return;
+  if (lsg('kco-ro') === '1' && !confirm('Your Kalshi key was refused for trading before. Try again?')) return;
+  KCOM = { b, shown: null }; kcoBox('<h3>Sell on Kalshi?</h3><div class="sub">Getting the live price…</div><div class="kb"><button onclick="kcoClose()">Cancel</button></div>');
+  const tick = async () => { if (KCOSEND || !KCOM) return; try { const q = await kcoQuote(b); if (!KCOM || KCOSEND) return; const old = KCOM.shown; KCOM.shown = q; kcoView(q, old && q.ok && old.ok && q.px !== old.px ? 'Price moved: ' + old.px + '¢ → ' + q.px + '¢. Check it, then confirm.' : ''); } catch (e) { if (KCOM && !KCOSEND) kcoView({ ok: false, n: 0, get: 0 }, 'Could not get the price: ' + (e.message || e)); } };
+  await tick(); window.__kcoT = setInterval(tick, 4000);
+}
+async function kcoGo() {
+  if (KCOSEND || !KCOM || !KCOM.shown || !KCOM.shown.ok) return; KCOSEND = true; const b = KCOM.b, shown = KCOM.shown, btn = document.getElementById('kcogo'); if (btn) { btn.disabled = true; btn.textContent = 'Checking price…'; }
+  try {
+    const q = await kcoQuote(b); if (!q.ok || q.px < shown.px) { KCOSEND = false; KCOM.shown = q; kcoView(q, q.ok ? 'Price moved to ' + q.px + '¢ (you saw ' + shown.px + '¢). Nothing was sold. Check it, then confirm again.' : 'The buyer left. Nothing was sold.'); return; } // never sell below the price the screen showed
+    if (btn) btn.textContent = 'Selling…';
+    const o = { ticker: b.kt, action: 'sell', side: b.ks, count: q.n, type: 'limit', time_in_force: 'immediate_or_cancel', reduce_only: true, client_order_id: 'oddable-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8), [b.ks + '_price_dollars']: (q.px / 100).toFixed(4) };
+    const r = await kalshiOrder(o), od = r.order || {}, fc = parseFloat(od.fill_count_fp != null ? od.fill_count_fp : od.fill_count) || 0;
+    try { const lg = JSON.parse(lsg('kco-log') || '[]'); lg.push({ t: Date.now(), id: b.id, ticker: b.kt, side: b.ks, count: q.n, price: q.px, filled: fc, status: od.status || '', oid: od.order_id || '' }); lss('kco-log', JSON.stringify(lg.slice(-50))); } catch (e) {}
+    KCOSEND = false; clearInterval(window.__kcoT);
+    kcoBox('<h3>' + (fc > 0 ? '✅ Sold' : 'Not sold') + '</h3><div class="sub">' + (fc > 0 ? 'Kalshi filled ' + fc + ' of ' + q.n + ' contracts at ' + q.px + '¢ or better.' + (fc < q.n ? ' The rest was not sold (no buyer at that price).' : '') + ' Your bet updates in a moment.' : 'Nobody took it at ' + q.px + '¢, so nothing was sold. You can try again.') + '</div><div class="kb"><button onclick="kcoClose()">Done</button></div>');
+    KCOM = null; setTimeout(() => kalshiSync(true), 1500); setTimeout(() => kalshiSync(true), 8000);
+  } catch (e) {
+    KCOSEND = false; const ro = e.status === 401 || e.status === 403; if (ro) lss('kco-ro', '1');
+    kcoBox('<h3>Could not sell</h3><div class="sub">' + escH(ro ? 'Kalshi did not allow it. Your API key may be read-only: create a key with trading permission on Kalshi, then connect it again. (' + (e.message || e.status) + ')' : (e.message || String(e))) + '</div><div class="sub" style="margin-top:6px">Nothing was sold.</div><div class="kb"><button onclick="kcoClose()">Close</button></div>'); KCOM = null;
+  }
+}
+setInterval(() => { try { if (!document.hidden && !KCOM && document.querySelector('[data-kco]')) kcoLoad(); } catch (e) {} }, 10000); // live cash-out value on every open Kalshi bet
 const __br = betsRender; betsRender = function (f) { __br(f); setTimeout(kcoLoad, 60); };
 const kalshiFormHtml = () => `<div class="card kf"><div class="gh" style="margin-top:0">Connect Kalshi</div>
   ${kDraft().pub ? `<div class="sub"><b>Your key is made.</b> Do this in your phone's browser (Safari/Chrome), not the Kalshi app:<br><b>1.</b> Tap <b>Copy public key</b>.<br><b>2.</b> Open Kalshi API Keys, log in, and add your own public key (paste it there). Kalshi gives you a <b>Key ID</b>.<br><b>3.</b> Paste the Key ID below and tap <b>Connect</b>.</div>

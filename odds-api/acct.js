@@ -31,7 +31,8 @@ const TRY = new Map();
 function throttled(k) { if (TRY.size > 5000) TRY.clear(); const t = Date.now(), a = (TRY.get(k) || []).filter((x) => t - x < 600e3); if (a.length >= 8) { TRY.set(k, a); return true; } a.push(t); TRY.set(k, a); return false; }
 const OWNER_PIN = () => String(process.env.OWNER_PIN || '').trim();
 const OWNER_ME = { email: 'owner', role: 'owner', plan: 'pro', expires_on: null, source: 'owner', allowed: true, pending: false, price: 99, link: null, tag: null, payReady: true };
-const allowed = (a) => a && (a.role === 'owner' || a.plan === 'pro');
+const chiToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date());
+const allowed = (a) => a && (a.role === 'owner' || (a.plan === 'pro' && !(a.expires_on && String(a.expires_on).slice(0, 10) < chiToday()))); // an ended plan never counts, even if the console still says pro
 // Entitlement cache so every AI call does not hit My Apps.
 const CACHE = new Map();
 async function entitlement(email, fresh) {

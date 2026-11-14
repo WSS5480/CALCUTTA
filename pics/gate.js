@@ -6,7 +6,7 @@
   // One person's data per phone. wipeData() clears everything that belongs to the signed-in person (bets, daily log, pins, locked picks, caches of them);
   // ownerSwitch(id) wipes it when a DIFFERENT person signs in on this phone, so nobody ever sees the previous user's data or uploads it into their own account.
   window.oddWipe = function () {
-    try { const ks = []; for (let i = 0; i < localStorage.length; i++) ks.push(localStorage.key(i)); ks.forEach((k) => { if (/^(bets26|betlog26|pinned26|kdel26|plbhtml26|surv26|sync-ids|sync-tomb|sync-last|sync-err|sync-rl|odd-ok|odd-push|odd-me)$/.test(k) || /^(lk26-|splk-)/.test(k)) localStorage.removeItem(k); }); } catch (e) {}
+    try { const ks = []; for (let i = 0; i < localStorage.length; i++) ks.push(localStorage.key(i)); ks.forEach((k) => { if (/^(bets26|betlog26|pinned26|kdel26|plbhtml26|surv26|sync-ids|sync-tomb|sync-last|sync-err|sync-rl|odd-ok|odd-push|odd-me|kal-id|kal-pem)$/.test(k) || /^(lk26-|splk-)/.test(k)) localStorage.removeItem(k); }); } catch (e) {}
   };
   window.oddOwner = function (id) { // call right before saving a new sign-in; returns true if the previous person's data was cleared
     const k = String(id || '').toLowerCase().replace(/\s/g, ''); if (!k) return false; const prev = g('sync-owner'); s('sync-owner', k);
@@ -76,6 +76,7 @@
       } else { j = await call('/' + (up ? 'register' : 'login'), { email: $('gemail').value, password: $('gpw').value, name: up && $('gname') ? $('gname').value : '' }); window.oddOwner('e:' + String($('gemail').value || '')); s('sync-phone', null); s('sync-pin', null); }
       s('odd-tok', j.token); s('odd-noauto', null); setMe(j.me);
       if (window.__oddReload) { window.__oddReload = false; location.reload(); return; }
+      if (!me) { err('Could not load your account. Please try again.'); if (b) b.textContent = up ? 'Start free trial' : 'Sign in'; }
     } catch (e) { err(e.message); if (b) b.textContent = up ? 'Start free trial' : 'Sign in'; }
     busy = false;
   }

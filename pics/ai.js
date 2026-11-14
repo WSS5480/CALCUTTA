@@ -15,22 +15,27 @@ async function aiAsk(q, gid, byVoice) {
 // ---- Push to talk: hold the mic, speak, let go; Claude answers out loud ----
 const aiVoiceOn = () => { try { return localStorage.getItem('ai-voice') === '1'; } catch (e) { return false; } };
 function aiStopTalk() { try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) {} const b = document.getElementById('aistop'); if (b) b.hidden = true; }
+let aiVoiceObj = null;
+function aiPickVoice() { try { const v = window.speechSynthesis.getVoices(); aiVoiceObj = v.find((x) => /^en[-_]US/i.test(x.lang) && x.localService) || v.find((x) => /^en/i.test(x.lang)) || null; } catch (e) {} }
+try { if (window.speechSynthesis) { aiPickVoice(); window.speechSynthesis.onvoiceschanged = aiPickVoice; } } catch (e) {}
+function aiUnlock() { try { const ss = window.speechSynthesis; if (!ss) return; ss.cancel(); const u = new SpeechSynthesisUtterance(' '); u.volume = 0; ss.speak(u); } catch (e) {} } // must run inside a tap: iPhone only allows speech that follows a tap
 function aiSpeak(text) {
   const ss = window.speechSynthesis; if (!ss) return; aiStopTalk();
   const clean = String(text || '').replace(/\*\*/g, '').replace(/[\u{1F300}-\u{1FAFF}\u2600-\u27BF\uFE0F]/gu, '').replace(/\s+/g, ' ').trim(); if (!clean) return;
   const parts = clean.match(/[^.!?]+[.!?]*\s*/g) || [clean], chunks = []; let cur = ''; parts.forEach((p) => { if ((cur + p).length > 180 && cur) { chunks.push(cur); cur = p; } else cur += p; }); if (cur) chunks.push(cur);
   const b = document.getElementById('aistop'); if (b) b.hidden = false;
-  chunks.forEach((c, i) => { const u = new SpeechSynthesisUtterance(c); u.rate = 1.03; u.lang = 'en-US'; if (i === chunks.length - 1) u.onend = () => { const x = document.getElementById('aistop'); if (x) x.hidden = true; }; ss.speak(u); });
+  let started = false; setTimeout(() => { if (!started) { const m = document.getElementById('aimsg'); if (m) m.textContent = 'No sound? Turn the phone ringer/silent switch to ring, raise the volume, and tap the voice button again.'; } }, 2500);
+  chunks.forEach((c, i) => { const u = new SpeechSynthesisUtterance(c); u.rate = 1.03; u.lang = 'en-US'; if (aiVoiceObj) u.voice = aiVoiceObj; u.onstart = () => { started = true; }; if (i === chunks.length - 1) u.onend = () => { const x = document.getElementById('aistop'); if (x) x.hidden = true; }; ss.speak(u); });
 }
 function aiMicInit(o, gid) {
-  const sb = o.querySelector('#aistop'), vb = o.querySelector('#aivoice'); sb.onclick = aiStopTalk; vb.onclick = () => { const on = !aiVoiceOn(); try { localStorage.setItem('ai-voice', on ? '1' : '0'); } catch (e) {} vb.textContent = on ? '🔊 Voice replies: on' : '🔇 Voice replies: off'; if (!on) aiStopTalk(); };
+  const sb = o.querySelector('#aistop'), vb = o.querySelector('#aivoice'); sb.onclick = aiStopTalk; vb.onclick = () => { const on = !aiVoiceOn(); try { localStorage.setItem('ai-voice', on ? '1' : '0'); } catch (e) {} vb.textContent = on ? '🔊 Voice replies: on' : '🔇 Voice replies: off'; if (!on) aiStopTalk(); else { aiUnlock(); aiSpeak('Voice replies are on. Can you hear me?'); } };
   const mic = o.querySelector('#aimic'), msg = o.querySelector('#aimsg'), SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   let rec = null, text = '', held = false, started = 0;
   const say = (t) => { msg.textContent = t; };
   if (!SR) { mic.onclick = () => say('Voice input is not available in this browser. On iPhone use Safari; or tap the text box and use the keyboard microphone.'); return; }
   const start = (e) => {
     e.preventDefault(); if (held) return; held = true; text = ''; aiStopTalk();
-    try { const u = new SpeechSynthesisUtterance(''); window.speechSynthesis && window.speechSynthesis.speak(u); } catch (x) {} // unlock spoken replies on iPhone (needs a tap)
+    aiUnlock();
     try { rec = new SR(); rec.lang = 'en-US'; rec.interimResults = true; rec.continuous = true; rec.maxAlternatives = 1; } catch (x) { held = false; say('Could not start the microphone.'); return; }
     rec.onresult = (ev) => { let t = ''; for (let i = 0; i < ev.results.length; i++) t += ev.results[i][0].transcript + ' '; text = t.trim(); say('🎤 ' + (text || 'Listening…')); };
     rec.onerror = (ev) => { held = false; mic.classList.remove('on'); say(ev.error === 'not-allowed' || ev.error === 'service-not-allowed' ? 'Microphone is blocked. Allow the microphone for this site in your browser settings.' : ev.error === 'no-speech' ? 'I did not hear anything. Hold the button and talk.' : 'Voice error: ' + ev.error); };
@@ -50,7 +55,7 @@ async function aiOpen(gid, auto) {
   const g = gid ? aiG(gid) : null, pre = g ? [['Take or pass?', `Should I take ${g.away.abbr} @ ${g.home.abbr}? Moneyline and spread, brief reasoning.`]] : [['Best plays today', 'Which games on this slate are the best plays and which should I pass? Short list.'], ['Review my bets', 'Review my open bets: what looks good, what looks risky?']];
   o.innerHTML = '<div class="isb"><div class="ish"><b>🤖 Ask Claude' + (g ? ' · ' + g.away.abbr + ' @ ' + g.home.abbr : '') + '</b><button onclick="document.getElementById(\'aisheet\').hidden=true;aiStopTalk()">✕</button></div><button class="mic" id="aimic">🎤 Hold to talk</button><div class="vrow"><span id="aimsg">Hold the button, ask your question, let go. Claude answers out loud.</span><span><button id="aistop" hidden>⏹ Stop</button> <button id="aivoice">🔇 Voice replies: off</button></span></div><div id="aipre" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">' + pre.map((x, i) => `<button class="apill" data-q="${x[1].replace(/"/g, '&quot;')}">${x[0]}</button>`).join('') + '</div><div style="display:flex;gap:6px"><input id="aiq" placeholder="Ask about the games or your bets" style="flex:1;min-width:0;padding:10px;border-radius:10px;border:1px solid var(--line,#444);background:transparent;color:inherit;font-size:16px"><button class="apill" id="aigo">Ask</button></div><div id="aiout" style="white-space:pre-wrap;margin-top:12px;line-height:1.45"></div></div>';
   o.hidden = false; aiMicInit(o, gid); { const v = o.querySelector('#aivoice'); if (v && aiVoiceOn()) v.textContent = '🔊 Voice replies: on'; }
-  const go = (q) => { if (q) aiAsk(q, gid); };
+  const go = (q) => { if (q) { aiUnlock(); aiAsk(q, gid); } };
   o.querySelectorAll('#aipre button').forEach((b) => (b.onclick = () => go(b.dataset.q)));
   o.querySelector('#aigo').onclick = () => go(o.querySelector('#aiq').value.trim());
   o.querySelector('#aiq').onkeydown = (e) => { if (e.key === 'Enter') go(e.target.value.trim()); };

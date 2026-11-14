@@ -283,3 +283,7 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 - Reverted v199 top-strip banner (Steve wanted the old floating TODAY box back in the corner). Instead the version badge, Kalshi light and acct text moved to their own row under the Add bet / Ask AI buttons (flex-basis 100
 ## v200
 - Reverted the v199 top-strip banner (Steve wanted the old floating TODAY box back in its corner). The version badge, Kalshi light and acct text moved to their own row under the Add bet / Ask AI buttons (full-width wrapper in header .hbt) so the banner cannot cover them. Verified by local screenshot at 390px.
+
+## v201
+- Voice replies gave no sound on Steve's phone. Fixes in pics/ai.js: aiUnlock() (zero-volume utterance inside the tap; iPhone only speaks after a tap) on mic press, Ask/preset tap and the voice toggle; toggle now speaks "Voice replies are on. Can you hear me?" as an instant test; picks an English voice explicitly; if speech has not started after 2.5 s the sheet says to check the ringer/silent switch and volume (iPhone mutes web speech when the silent switch is on).
+- Not verified on a real phone.

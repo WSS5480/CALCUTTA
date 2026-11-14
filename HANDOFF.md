@@ -340,3 +340,7 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 - New "🏁 Lock scoreboard (season)" box at the top of Stats (Games ▸ Stats & locked), per league: season locked-win record, locked-spread record with the 52.4% break-even, and a wrapped card per week (`lkScore(weeks)` in index.html, uses the existing per-week lock counts). Honest note when spread locks are under break-even.
 - Why: Nov 14 replay of last week (NFL wk9, NCAA wk10): locked winners 13/14 NFL, spread locks 5/14; model replay matches the locks; model ≈ the line, so spread picks are leans only. Scoreboard keeps the real record visible while we decide whether to sell it.
 - NCAA locks are per device unless synced via /locks, so NCAA week numbers can be partial.
+
+## v215 – fix My Bets crash from v213 (urgent)
+- v213 bSport1: `if (ab) if (!NFLAB) init; return NFLAB.has(...)` lost its braces, so any bet with no team abbreviations (props, Kalshi legs with no game) hit `NFLAB.has` on null and betsRender threw (My Bets blank, live page error). Fixed with braces. Test now includes an abbr-less prop bet (/tmp/shot8.js).
+- Lesson: mock tests must include prop / parlay / no-game bets, not just single bets with teams.

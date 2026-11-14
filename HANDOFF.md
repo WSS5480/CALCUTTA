@@ -272,3 +272,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v197
 - Header badge (span before #kdot in index.html) was hardcoded v194 and looked like the app was stale; bumped to v197. REMEMBER: bump this badge, the sub line, <!-- Pics --> comment, sw.js, sports.html gate.js on every release.
+
+## v198
+- SW was already network-first + skipWaiting + auto-reload on controllerchange. Added: every open app checks for a new version when it becomes visible and every 5 min (index.html, classic.html), so people with the app left open get new builds without reopening.

@@ -1487,7 +1487,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 setTimeout(() => { if (lsg('kal-id')) kalshiSync(false); }, 3000); setTimeout(checkUpdate, 4000); setInterval(checkUpdate, 10 * 60 * 1000);
 if ('serviceWorker' in navigator) {
   const had = !!navigator.serviceWorker.controller; let rl = false;
-  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((r) => r.update().catch(() => {})).catch(() => {});
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((r) => { r.update().catch(() => {}); const up = () => { if (!document.hidden) r.update().catch(() => {}); }; document.addEventListener('visibilitychange', up); setInterval(up, 300000); }).catch(() => {});
   navigator.serviceWorker.addEventListener('controllerchange', () => { if (had && !rl) { rl = true; location.reload(); } });
 }
 

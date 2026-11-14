@@ -16,14 +16,14 @@
     J('sync-ids', []).forEach((i) => { if (!ids.has(String(i))) tomb.add(String(i)); });
     const locks = {}, splk = {};
     try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (/^lk26-[a-z]+-/.test(k) && !k.endsWith('-s')) locks[k] = J(k, null); else if (/^splk-/.test(k)) splk[k.slice(5)] = J(k, {}); } } catch (e) {}
-    return { bets, pins: J('pinned26', []), pinsAt: Number(g('pinsat26')) || 0, log: J('betlog26', {}), kdel: J('kdel26', []), locks, splk, tomb: [...tomb] };
+    return { bets, pins: J('pinned26', []), pinsAt: Number(g('pinsat26')) || 0, log: J('betlog26', {}), logAt: Number(g('logat26')) || 0, kdel: J('kdel26', []), locks, splk, tomb: [...tomb] };
   }
   const gatherFrom = (d) => d;
-  const hashOf = (d) => stable({ b: [...d.bets].sort((a, b) => String(a.id).localeCompare(String(b.id))), p: [...d.pins].map(String).sort(), l: d.log, k: [...d.kdel].map(String).sort(), lk: d.locks, sp: d.splk });
+  const hashOf = (d) => stable({ b: [...d.bets].sort((a, b) => String(a.id).localeCompare(String(b.id))), p: [...d.pins].map(String).sort(), l: d.log, la: d.logAt || 0, k: [...d.kdel].map(String).sort(), lk: d.locks, sp: d.splk });
   function apply(d) {
     const reloadMem = () => { try { if (typeof BETS !== 'undefined') { BETS = JSON.parse(g('bets26')) || []; if (window.betsSeed) window.betsSeed(); } if (typeof PIN !== 'undefined') PIN = JSON.parse(g('pinned26')) || []; } catch (e) {} }; // keep the in-memory list in step so the next save can't overwrite what just synced
     s('bets26', JSON.stringify(d.bets || [])); s('pinned26', JSON.stringify(d.pins || [])); s('betlog26', JSON.stringify(d.log || {})); s('kdel26', JSON.stringify(d.kdel || []));
-    s('pinsat26', String(d.pinsAt || 0));
+    s('pinsat26', String(d.pinsAt || 0)); s('logat26', String(d.logAt || 0));
     Object.keys(d.locks || {}).forEach((k) => { if (/^lk26-[a-z]+-[A-Za-z0-9_-]+$/.test(k) && d.locks[k]) s(k, JSON.stringify(d.locks[k])); });
     Object.keys(d.splk || {}).forEach((lg) => { if (/^[a-z0-9]{2,8}$/.test(lg)) s('splk-' + lg, JSON.stringify(d.splk[lg])); });
     s('sync-ids', JSON.stringify((d.bets || []).map((b) => String(b.id)))); s('sync-tomb', JSON.stringify(d.tomb || []));

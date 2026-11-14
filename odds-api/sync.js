@@ -41,8 +41,10 @@ function merge(a, b) { // a = stored, b = incoming
     else if ((o.res == null) !== (x.res == null)) by.set(String(x.id), x.res != null ? x : o); // same age: keep the one with a result
     else by.set(String(x.id), x);
   });
-  const log = { ...(a.log || {}) };
-  Object.keys(b.log || {}).forEach((k) => { if (!log[k] || JSON.stringify(b.log[k]).length >= JSON.stringify(log[k]).length) log[k] = b.log[k]; });
+  // A stats-log reset (logAt) wins over older copies: the side with the newer reset replaces the log outright; with no reset (or equal) the days are merged as before.
+  const la = Number(a.logAt || 0), lb = Number(b.logAt || 0);
+  const log = la !== lb ? { ...((la > lb ? a : b).log || {}) } : { ...(a.log || {}) };
+  if (la === lb) Object.keys(b.log || {}).forEach((k) => { if (!log[k] || JSON.stringify(b.log[k]).length >= JSON.stringify(log[k]).length) log[k] = b.log[k]; });
   const locks = { ...(a.locks || {}) };
   Object.keys(b.locks || {}).forEach((k) => { const o = locks[k], x = b.locks[k]; if (!o || ((x && x.t) || 0) >= ((o && o.t) || 0)) locks[k] = x; });
   const splk = { ...(a.splk || {}) };
@@ -52,7 +54,7 @@ function merge(a, b) { // a = stored, b = incoming
     bets: [...by.values()],
     pins: (b.pinsAt || a.pinsAt) ? (Number(b.pinsAt || 0) >= Number(a.pinsAt || 0) ? arr(b.pins) : arr(a.pins)).map(String).slice(-500) : [...new Set([...arr(a.pins), ...arr(b.pins)].map(String))].slice(-500), // newest pin change wins, so unpinning sticks
     pinsAt: Math.max(Number(a.pinsAt || 0), Number(b.pinsAt || 0)),
-    log, kdel: [...new Set([...arr(a.kdel), ...arr(b.kdel)])].slice(-3000), tomb,
+    log, logAt: Math.max(la, lb), kdel: [...new Set([...arr(a.kdel), ...arr(b.kdel)])].slice(-3000), tomb,
   };
 }
 

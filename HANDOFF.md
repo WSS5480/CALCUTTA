@@ -211,3 +211,8 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v175 — 2026-11-13 — 🔒 on the green TAKE line for live games
 - The new-style game card's green/amber TAKE lines (`takeHtml`, index.html) recomputed the pick live; for games in progress they now show the LOCKED pregame pick (lock from `lkLoad`, shared via /locks) with a 🔒 on each line. Pregame and final cards are unchanged (finals have no TAKE line). Before this, the lock mark only appeared in the small panel text and the results list.
+
+## v176 — 2026-11-13 — bets from another account found in his; stats-log reset (logAt)
+- Evidence (My Apps player days): player 38f5 and his account (cf32) had matching days (Nov 9: 4 bets 4-0 $351; Nov 10: 1 bet 1-0 $240...) = bets crossed between accounts under the pre-v167 code (no wipe when a different person signed in on a device). 6f07 showed no overlap. He deleted all 26 hand-added bets (kept his 6 Kalshi) from his account; 38f5's account was NOT touched (cleaning it needs that user's data).
+- The frozen stats log (`betlog26`, "survives even if bets are deleted") still held the old days, so My Bets / the console kept showing 27-6. New: `logAt` (localStorage `logat26`). Merge (`odds-api/sync.js`): the side with the newer logAt replaces the log outright (a stale phone can't bring old days back); equal/none = union as before. Reset = set `betlog26` to {} and `logat26` to Date.now() then sync; wipe list now includes `logat26` and `pinsat26`. Tests: /tmp-style merge tests PASS (reset beats old log, stale phone can't restore it, union unchanged).
+- TODO ideas: a "Reset my stats" button for any user; owner tool to clean 38f5's account (needs their consent/data).

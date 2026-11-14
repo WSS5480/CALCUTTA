@@ -264,3 +264,8 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 - Unsupported browser → clear message, text box still works. Mic blocked → message to allow it in browser settings.
 - Tested only with a mock (tests in /tmp/t_voice.js); real mic/speech needs Steve's first try on his phone (iOS Safari/PWA may limit SpeechRecognition).
 - Also includes v194 (Kalshi cash out) if not yet pushed; reviewer report for v194 still pending at time of writing.
+
+## v196 – review fixes for v194 cash-out
+- server: body `null`/non-object on /proxy and /order now 400 (was TypeError). 
+- client: Cancel/close ignored while a sale is in flight (KCOSEND); kcoAsk uses a token (M) so a cancelled/reopened modal can't leave a stale interval or show another bet's price; `kn` = bought − sold (partial sales no longer overstate); "no fill"/error wording now says check Kalshi instead of "nothing sold".
+- Open (from reviewer, not fixed): upstream fetch has no timeout; no per-IP limit on /kalshi/order; confirm-button mis-tap on layout shift; kco-ro flag never clears; only first 15 open bets get live cash-out values; 45-day window can mismatch buys/sells on old positions; "result if sold" ignores sell fee. Real Kalshi semantics (reduce_only trim vs reject, fill field names, combo sells) unverified: first sale must be a small position.

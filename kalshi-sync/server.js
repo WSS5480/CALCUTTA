@@ -70,7 +70,7 @@ async function handle(req, res) { // mounted under /kalshi/*; returns false for 
   if (path === '/health') return send(200, { ok: true, keyLoaded: !!KEY, keyId: !!KEY_ID, tokenSet: !!TOKEN, at: CACHE.at, err: CACHE.err ? 'see /kalshi/debug' : null });
   if (path === '/proxy' && req.method === 'POST') { // stateless: forwards a request the user's own browser already signed. Nothing is stored or logged.
     let body = ''; for await (const c of req) { body += c; if (body.length > 4000) return send(413, { error: 'too big' }); }
-    let j; try { j = JSON.parse(body); } catch (e) { return send(400, { error: 'bad json' }); }
+    let j; try { j = JSON.parse(body); } catch (e) { return send(400, { error: 'bad json' }); } if (!j || typeof j !== 'object') return send(400, { error: 'bad json' });
     const pth = String(j.path || ''); if (!/^\/(portfolio\/(fills|settlements)|markets\/[A-Za-z0-9._-]+)$/.test(pth)) return send(403, { error: 'path not allowed' });
     const h = j.headers || {}; const hh = { 'KALSHI-ACCESS-KEY': String(h['KALSHI-ACCESS-KEY'] || ''), 'KALSHI-ACCESS-TIMESTAMP': String(h['KALSHI-ACCESS-TIMESTAMP'] || ''), 'KALSHI-ACCESS-SIGNATURE': String(h['KALSHI-ACCESS-SIGNATURE'] || '') };
     if (!hh['KALSHI-ACCESS-KEY'] || !hh['KALSHI-ACCESS-SIGNATURE']) return send(400, { error: 'missing auth headers' });
@@ -79,7 +79,7 @@ async function handle(req, res) { // mounted under /kalshi/*; returns false for 
   }
   if (path === '/order' && req.method === 'POST') { // CASH OUT: forwards ONE kind of order the user's own browser signed and confirmed: a SELL that can only reduce a position (reduce_only, immediate-or-cancel, limit price). Buys and anything else are refused here.
     let body = ''; for await (const c of req) { body += c; if (body.length > 4000) return send(413, { error: 'too big' }); }
-    let j; try { j = JSON.parse(body); } catch (e) { return send(400, { error: 'bad json' }); }
+    let j; try { j = JSON.parse(body); } catch (e) { return send(400, { error: 'bad json' }); } if (!j || typeof j !== 'object') return send(400, { error: 'bad json' });
     const o = j.order || {}, side = o.side;
     if (o.action !== 'sell' || (side !== 'yes' && side !== 'no')) return send(403, { error: 'only sell orders are allowed' });
     if (!/^[A-Za-z0-9._-]{3,80}$/.test(String(o.ticker || ''))) return send(400, { error: 'bad ticker' });

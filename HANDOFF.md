@@ -299,3 +299,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 ## v204
 - "📡 View live game" button on every football game card (all states, was live/final only), on every linked parlay leg, and on single bets whose game is from the other league. Single bets show the score line (live/final) above the game card. liveBtn(gid) picks the right ESPN path (college vs NFL) for games from ALL vs XL.
 - Not done: sports.html (NBA/MLB/NHL/NCAAB page) cards were not changed.
+
+## v205
+- v203/v204 linker used fuzzy team matching and linked "Georgia" to Georgia Tech, "Houston" to Sam Houston, "Virginia Tech" to Virginia. Now exact normalized team name only (St.→State, parens dropped, short display name), re-evaluated on every render (any gid on a Kalshi leg is linker-made; wrong ones are removed). Possible side effect to watch: a parlay that was graded from a wrong link in v203/v204 may have a remembered b.fin; check Kalshi parlays if anything shows lost that should not.

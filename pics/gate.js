@@ -3,6 +3,16 @@
   const API = 'https://calcutta-odds.onrender.com/acct';
   const g = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const s = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} };
+  // One person's data per phone. wipeData() clears everything that belongs to the signed-in person (bets, daily log, pins, locked picks, caches of them);
+  // ownerSwitch(id) wipes it when a DIFFERENT person signs in on this phone, so nobody ever sees the previous user's data or uploads it into their own account.
+  window.oddWipe = function () {
+    try { const ks = []; for (let i = 0; i < localStorage.length; i++) ks.push(localStorage.key(i)); ks.forEach((k) => { if (/^(bets26|betlog26|pinned26|kdel26|plbhtml26|surv26|sync-ids|sync-tomb|sync-last|sync-err|sync-rl|odd-ok|odd-push|odd-me)$/.test(k) || /^(lk26-|splk-)/.test(k)) localStorage.removeItem(k); }); } catch (e) {}
+  };
+  window.oddOwner = function (id) { // call right before saving a new sign-in; returns true if the previous person's data was cleared
+    const k = String(id || '').toLowerCase().replace(/\s/g, ''); if (!k) return false; const prev = g('sync-owner'); s('sync-owner', k);
+    if (prev && prev !== k) { window.oddWipe(); window.__oddReload = true; return true; } return false;
+  };
+  (function () { const p = g('sync-phone'); if (p && !g('sync-owner')) s('sync-owner', p); })();
   const GRACE = 72 * 36e5;
   let me = null, el = null, mode = 'in', busy = false;
   const css = document.createElement('style');
@@ -61,9 +71,11 @@
       if (mode === 'in' || mode === 'up') {
         const ph = $('gph').value, pn = $('gpn').value;
         j = await call('/phone', { phone: ph, pin: pn, create: up });
-        s('sync-phone', ph.replace(/\D/g, '').replace(/^1(\d{10})$/, '$1')); s('sync-pin', pn);
-      } else j = await call('/' + (up ? 'register' : 'login'), { email: $('gemail').value, password: $('gpw').value, name: up && $('gname') ? $('gname').value : '' });
+        const np = ph.replace(/\D/g, '').replace(/^1(\d{10})$/, '$1'); window.oddOwner(np);
+        s('sync-phone', np); s('sync-pin', pn);
+      } else { j = await call('/' + (up ? 'register' : 'login'), { email: $('gemail').value, password: $('gpw').value, name: up && $('gname') ? $('gname').value : '' }); window.oddOwner('e:' + String($('gemail').value || '')); s('sync-phone', null); s('sync-pin', null); }
       s('odd-tok', j.token); s('odd-noauto', null); setMe(j.me);
+      if (window.__oddReload) { window.__oddReload = false; location.reload(); return; }
     } catch (e) { err(e.message); if (b) b.textContent = up ? 'Start free trial' : 'Sign in'; }
     busy = false;
   }
@@ -80,7 +92,7 @@
     if (m.role === 'owner' || !m.expires_on) return; const d = Math.ceil((new Date(m.expires_on + 'T23:59:59') - Date.now()) / 864e5);
     if (d <= 3 && d >= 0 && !document.getElementById('gtoast')) { const t = document.createElement('div'); t.id = 'gtoast'; t.textContent = (m.source === 'trial' ? 'Free trial' : 'Subscription') + ' ends ' + (d === 0 ? 'today' : 'in ' + d + ' day' + (d > 1 ? 's' : '')) + ' — tap to renew'; t.onclick = () => { me = Object.assign({}, m, { allowed: false }); show(); t.remove(); }; document.body.appendChild(t); setTimeout(() => t.remove(), 9000); }
   }
-  function out() { s('odd-noauto', '1'); s('odd-tok', null); s('odd-ok', null); s('odd-push', null); me = null; mode = 'in'; show(); }
+  function out() { s('odd-noauto', '1'); s('odd-tok', null); s('odd-ok', null); s('odd-push', null); s('sync-phone', null); s('sync-pin', null); s('sync-owner', null); window.oddWipe(); me = null; mode = 'in'; location.reload(); }
   async function refresh(force) {
     const j = await call('/me'); setMe(j.me); return j.me;
   }

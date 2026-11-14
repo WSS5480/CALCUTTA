@@ -87,17 +87,20 @@
   window.OddSync = {
     open,
     now: async () => { s('sync-err', ''); const ok = await syncNow({ apply: true }); if (ok) { const m = document.getElementById('syncmsg'); if (m) m.insertAdjacentHTML('afterbegin', '<p style="color:#7ee8ae;margin:0 0 8px">✓ Synced</p>'); } },
-    out: () => { s('sync-phone', ''); s('sync-pin', ''); s('sync-ids', '[]'); s('sync-tomb', '[]'); paint(); },
+    out: () => { s('sync-phone', ''); s('sync-pin', ''); s('sync-owner', ''); if (window.oddWipe) window.oddWipe(); s('sync-ids', '[]'); s('sync-tomb', '[]'); location.reload(); },
     go: async (path) => {
       const ph = (document.getElementById('sph') || {}).value || '', pn = (document.getElementById('spn') || {}).value || '', m = document.getElementById('syncmsg');
       s('sync-err', ''); if (m) m.insertAdjacentHTML('afterbegin', '<p class="sn" id="sbusy">Working…</p>');
       try {
         const body = { phone: ph, pin: pn };
-        if (path === '/signup') body.data = gather();
+        const nk = ph.replace(/\D/g, '').replace(/^1(\d{10})$/, '$1'), po = g('sync-owner'), differs = !!(po && po !== nk);
+        if (path === '/signup') body.data = differs ? { bets: [], pins: [], log: {}, kdel: [], locks: {}, splk: {}, tomb: [] } : gather(); // never upload the last person's data into a new account
         const j = await call(path, body);
+        if (window.oddOwner) window.oddOwner(nk); // signed in as a different person: clear the last person's data now
         s('sync-phone', ph.replace(/\D/g, '').replace(/^1(\d{10})$/, '$1')); s('sync-pin', pn);
         if (path === '/signup') { apply(j.data || gather()); s('sync-last', String(Date.now())); paint(); }
         else { s('sync-rl', '0'); await syncNow({ apply: true }); paint(); }
+        if (window.__oddReload) { window.__oddReload = false; location.reload(); }
       } catch (e) { s('sync-err', e.message); paint(); }
     },
   };

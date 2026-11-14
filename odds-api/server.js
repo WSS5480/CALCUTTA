@@ -57,6 +57,9 @@ const LINES = {};
 async function tickLines() { try { const n = await logLines(LINES); if (n) console.log('lines: +' + n); } catch (e) { console.error('lines tick failed:', e.message); } }
 setInterval(tickLines, 20 * 60 * 1000);
 tickLines();
+// Price log (Kalshi + books + ESPN line, every 20 min) for measuring book-vs-Kalshi gaps after the season
+const PL = require('./pricelog.js'); const plTick = () => PL.tick(LINES, require('./games')).catch((e) => console.error('pricelog:', e.message));
+setInterval(plTick, 20 * 60 * 1000); setTimeout(plTick, 90 * 1000);
 // Free Render services sleep when idle; ping our own public URL so the tick keeps running (set KEEP_AWAKE=0 to turn off)
 if (process.env.RENDER_EXTERNAL_URL && process.env.KEEP_AWAKE !== '0') {
   setInterval(() => fetch(process.env.RENDER_EXTERNAL_URL + '/health').catch(() => {}), 10 * 60 * 1000);
@@ -68,6 +71,7 @@ http.createServer(async (req, res) => {
   // CORS preflight for every route (the sign-in/sign-up calls send JSON + an x-token header, so the browser asks first; without this answer they fail with "Failed to fetch")
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'content-type,x-token,x-dash', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Max-Age': '86400' }); return res.end(); }
   if (req.url.startsWith('/acct')) { try { if (await require('./acct.js').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"acct"}'); } }
+  if (req.url.startsWith('/pricelog')) { try { if (await PL.handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"pricelog"}'); } }
   if (req.url.startsWith('/oddsline')) { try { if (await require('./oddslines.js').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"oddsline"}'); } }
   if (req.url.startsWith('/ai')) { try { if (await require('./ai.js').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"ai"}'); } }
   if (req.url.startsWith('/sync')) { try { if (await require('./sync.js').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"sync"}'); } }

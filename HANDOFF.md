@@ -350,3 +350,12 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 - Winner side: app winner pick == favorite (90/10 blend); at real moneylines (2015-25) favorites by 10+ pts win 85.6% but ROI -0.6% (avg ML -719); 7-10 pts ROI -2.2%; 14+ ROI -1.3%; dogs of 10+ ROI -17%. So no winner-lock edge either.
 - Decision pending from Steve: stop spread locks / label reference-only; make locks a server job and not user-dependent; tabled idea: pregame-lineup lock (scheduled probe of ESPN inactives Sun Nov 15 10:45 CT, likely moot given the results).
 - Scripts: backtest/nflverse/ (bt_players.py, eval.py). Data sources: nflverse (free, reachable from the sandbox through GitHub).
+
+## Nov 14 2026 – v216: strategy tools (info only; model and locks NOT touched, per Steve)
+- Built from the review round (no strategy beat the closing line after multiple-testing; these are information/measurement tools):
+  - **Wind flag** (💨 chip on outdoor NFL cards, Open-Meteo forecast at kickoff, 12+ mph shows, 15+ highlighted; sheet gives the history and a live record of flagged games kept in localStorage `wndlog26`). `parseEvents` now also stores `g.total` (ESPN overUnder) and `g.indoor`.
+  - **Key numbers + best price** inside the 📚 books sheet (`keyNumHtml`, `shopHtml`): half-point worth up to -131 off 3, -125 off 7, -119 off 6, -120 off 10, else about -116.
+  - **Teaser dog legs** (🎯 chip when consensus line is 1.5–2.5): break-even leg rates by price, history 77.5% of 693 legs. Weak evidence; says so.
+  - **Price log** `odds-api/pricelog.js`: every 20 min saves Kalshi NFL market prices (series env `KALSHI_SERIES`, default KXNFLGAME,KXNFLSPREAD,KXNFLTOTAL; public endpoint, base env `KALSHI_PUBLIC_BASE`), cached multi-book spreads (no credits spent, uses `games.peek`) and ESPN line, into Supabase row `plog:YYYY-MM-DD`. Read at `/pricelog` (status) and `/pricelog?day=YYYY-MM-DD`. NOT verified live: sandbox cannot reach Kalshi; check `/pricelog` status after deploy.
+- Decision (Steve, Nov 14): keep the model out for now; the scoreboard relabel ("favorite" label, all-games baseline) is NOT built.
+- Reviews' key finding: no spread/ML/total rule beats the line after correction; the shaded side loses about 7%; teaser dog leg and windy Unders are weak leads. One season of price-log data is the next real test.

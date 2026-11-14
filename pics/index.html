@@ -206,10 +206,10 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v215 -->
+<!-- Pics v216 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v215</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v216</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
   <div id="arbbar" class="arbbar" hidden onclick="arbBarTap()" role="button" aria-label="Arbitrage alert"><span class="mq" id="arbmq"></span></div>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">NCAA</button><button data-sp="nba">NBA</button><button data-sp="mlb">MLB</button><button data-sp="nhl">NHL</button><button data-sp="ncaab">NCAAB</button></div>
   <div class="srow"><input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team"><select id="conf" aria-label="Conference"><option value="">All</option></select></div>
@@ -217,7 +217,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v215 (My Bets crash fix, lock scoreboard)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v216 (wind flag, key numbers, teaser legs, price log)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -288,7 +288,7 @@ function parseEvents(j, week) {
     c.competitors.forEach((x) => { TEAMID[x.team.id] = ab(x.team.abbreviation); NAMES[ab(x.team.abbreviation)] = x.team.shortDisplayName || x.team.displayName || x.team.abbreviation; });
     cs.sort((a, b) => a.home - b.home);
     const o = c.odds && c.odds[0];
-    return { id: e.id, week: week || (j.week && j.week.number) || 0, start: +new Date(e.date), state: t.state, detail: t.shortDetail || '', away: cs[0], home: cs[1], neutral: !!c.neutralSite, line: o ? parseLine(o.details, cs[1].abbr, cs[0].abbr) : null, sit: c.situation ? { down: c.situation.down, dist: c.situation.distance, yl: c.situation.yardLine, poss: TEAMID[c.situation.possession] || '', text: (c.situation.lastPlay && c.situation.lastPlay.text) || '', ptxt: c.situation.downDistanceText || '', rz: !!c.situation.isRedZone, wp: c.situation.lastPlay && c.situation.lastPlay.probability && Number.isFinite(c.situation.lastPlay.probability.homeWinPercentage) ? c.situation.lastPlay.probability.homeWinPercentage : null } : null };
+    return { id: e.id, week: week || (j.week && j.week.number) || 0, start: +new Date(e.date), state: t.state, detail: t.shortDetail || '', away: cs[0], home: cs[1], neutral: !!c.neutralSite, line: o ? parseLine(o.details, cs[1].abbr, cs[0].abbr) : null, total: o && Number.isFinite(+o.overUnder) ? +o.overUnder : null, indoor: c.venue && c.venue.indoor !== undefined ? !!c.venue.indoor : null, sit: c.situation ? { down: c.situation.down, dist: c.situation.distance, yl: c.situation.yardLine, poss: TEAMID[c.situation.possession] || '', text: (c.situation.lastPlay && c.situation.lastPlay.text) || '', ptxt: c.situation.downDistanceText || '', rz: !!c.situation.isRedZone, wp: c.situation.lastPlay && c.situation.lastPlay.probability && Number.isFinite(c.situation.lastPlay.probability.homeWinPercentage) ? c.situation.lastPlay.probability.homeWinPercentage : null } : null };
   });
 }
 
@@ -413,7 +413,7 @@ function nCard(g) {
     <div class="nbr"><i style="width:${p.pa * 100}%;background:#7c6ad8"></i><i style="width:${p.ph * 100}%;background:#4fd18b"></i></div>
     <div class="npr"><span>${g.away.abbr} ${pct(p.pa)}</span><span>${pct(p.ph)} ${g.home.abbr}</span></div>
     ${takeHtml(g, p)}<i class="ibtn inl" style="float:none;margin-left:4px" onclick="infoOpen('hit')">ⓘ what counts as a hit</i>
-    <div class="nft"><span>${bits.join(' · ') || 'No line posted'}</span>${(() => { const a = arbOf(g); return a ? `<button class="nw" style="border-color:#f5c542;color:#f5c542;font-weight:800" onclick="booksOpen('${g.id}')">${a.arb ? '💰 ARB' : '🟡 MIDDLE'}</button>` : ''; })()}${betGids().has(String(g.id)) ? '<button class="nw on" disabled>📌 My bet</button>' : `<button class="nw ${pinned ? 'on' : ''}" onclick="pinToggle('${g.id}')">${pinned ? '📌 Watching' : '📍 Watch'}</button>`}${g.books ? `<button class="nw" onclick="booksOpen('${g.id}')">📚 ${g.books.n} books</button>` : ''}<button class="nw livebtn" onclick="liveOpen('football/'+(CFB?'college-football':'nfl'),'${g.id}')">📡 Live</button>${g.state === 'post' ? '' : `<button class="nw" onclick="aiOpen('${g.id}')">🤖 Ask</button>`}</div>
+    <div class="nft"><span>${bits.join(' · ') || 'No line posted'}</span>${(() => { const a = arbOf(g); return a ? `<button class="nw" style="border-color:#f5c542;color:#f5c542;font-weight:800" onclick="booksOpen('${g.id}')">${a.arb ? '💰 ARB' : '🟡 MIDDLE'}</button>` : ''; })()}${betGids().has(String(g.id)) ? '<button class="nw on" disabled>📌 My bet</button>' : `<button class="nw ${pinned ? 'on' : ''}" onclick="pinToggle('${g.id}')">${pinned ? '📌 Watching' : '📍 Watch'}</button>`}<span data-wind="${g.id}">${windChip(g)}</span>${tsChip(g)}${g.books ? `<button class="nw" onclick="booksOpen('${g.id}')">📚 ${g.books.n} books</button>` : ''}<button class="nw livebtn" onclick="liveOpen('football/'+(CFB?'college-football':'nfl'),'${g.id}')">📡 Live</button>${g.state === 'post' ? '' : `<button class="nw" onclick="aiOpen('${g.id}')">🤖 Ask</button>`}</div>
     ${g.state === 'post' ? '' : `<button class="nbet" onclick="event.stopPropagation();betFromGame('${g.id}')">＋ Add bet</button>`}</div>`;
 }
 function newBoard(games) {
@@ -1463,6 +1463,68 @@ function arbOf(g) {
     const sc = arb ? 1000 + sure * 100 : win + hit; if (!best || sc > best.sc) best = { sc, arb, mid, A, B, win, worst, hit, sure, pw, ev: pw * hit + (1 - pw) * worst };
   }); }); return best;
 }
+// ---- v216 strategy tools (information only; the model and locks are not touched) ----
+// Wind flag, key-number half-point value, and the teaser dog leg. Evidence summaries come from the 2006-2026 backtests; none passed a strict multiple-testing check, so every card says so.
+const STAD = { ARI: [33.53, -112.26, 1], ATL: [33.76, -84.4, 1], BAL: [39.28, -76.62, 0], BUF: [42.77, -78.79, 0], CAR: [35.23, -80.85, 0], CHI: [41.86, -87.62, 0], CIN: [39.1, -84.52, 0], CLE: [41.51, -81.7, 0], DAL: [32.75, -97.09, 1], DEN: [39.74, -105.02, 0], DET: [42.34, -83.05, 1], GB: [44.5, -88.06, 0], HOU: [29.68, -95.41, 1], IND: [39.76, -86.16, 1], JAX: [30.32, -81.64, 0], KC: [39.05, -94.48, 0], LV: [36.09, -115.18, 1], LAC: [33.95, -118.34, 1], LAR: [33.95, -118.34, 1], MIA: [25.96, -80.24, 0], MIN: [44.97, -93.26, 1], NE: [42.09, -71.26, 0], NO: [29.95, -90.08, 1], NYG: [40.81, -74.07, 0], NYJ: [40.81, -74.07, 0], PHI: [39.9, -75.17, 0], PIT: [40.45, -80.02, 0], SF: [37.4, -121.97, 0], SEA: [47.6, -122.33, 0], TB: [27.98, -82.5, 0], TEN: [36.17, -86.77, 0], WAS: [38.91, -76.86, 0], WSH: [38.91, -76.86, 0] };
+let WIND = {}, WNDT = 0;
+const wndLog = () => { try { return JSON.parse(localStorage.getItem('wndlog26')) || {}; } catch (e) { return {}; } };
+const wndOut = (g) => (g.state === 'pre' && !g.neutral && !CFB && STAD[g.home.abbr] && !(g.indoor !== undefined && g.indoor !== null ? g.indoor : STAD[g.home.abbr][2]));
+function windChip(g) { const w = WIND[g.id]; if (!w || w.mph < 12) return ''; return `<button class="nw" style="${w.mph >= 15 ? 'border-color:#5aa9ff;color:#5aa9ff;font-weight:800' : ''}" onclick="windOpen('${g.id}')">💨 ${Math.round(w.mph)} mph</button>`; }
+async function windLoad() {
+  if (CFB || Date.now() - WNDT < 30 * 60e3) return; WNDT = Date.now();
+  const gs = Object.values(ALL).filter((g) => wndOut(g) && g.start - Date.now() < 7 * 864e5 && g.start > Date.now() - 36e5); const done = {};
+  for (const g of gs) {
+    const st = STAD[g.home.abbr], key = st[0] + ',' + st[1];
+    try {
+      if (!done[key]) { const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=' + st[0] + '&longitude=' + st[1] + '&hourly=wind_speed_10m,wind_gusts_10m&wind_speed_unit=mph&forecast_days=8&timezone=UTC'); if (!r.ok) continue; done[key] = (await r.json()).hourly; }
+      const h = done[key], t = new Date(Math.round(g.start / 36e5) * 36e5).toISOString().slice(0, 13) + ':00', i = h.time.indexOf(t); if (i < 0) continue;
+      WIND[g.id] = { mph: h.wind_speed_10m[i], gust: h.wind_gusts_10m[i], at: Date.now() };
+      document.querySelectorAll('[data-wind="' + g.id + '"]').forEach((el) => { el.innerHTML = windChip(g); });
+      if (WIND[g.id].mph >= 12) { try { const L = wndLog(); L[g.id] = { mph: Math.round(WIND[g.id].mph * 10) / 10, total: g.total === undefined ? null : g.total, away: g.away.abbr, home: g.home.abbr, wk: g.week, ko: g.start }; localStorage.setItem('wndlog26', JSON.stringify(L)); } catch (e) {} }
+    } catch (e) {}
+  }
+}
+function windRecord() { const L = wndLog(); let u = 0, o = 0, p = 0, n = 0; Object.keys(L).forEach((id) => { const x = L[id], g = ALL[id]; n++; if (!g || g.state !== 'post' || x.total === null || x.total === undefined) return; const s = g.home.score + g.away.score; if (s < x.total) u++; else if (s > x.total) o++; else p++; }); return { u, o, p, n }; }
+function sheetOpen(html) { let o = document.getElementById('infosheet'); if (!o) { o = document.createElement('div'); o.id = 'infosheet'; o.onclick = (e) => { if (e.target === o) o.hidden = true; }; document.body.appendChild(o); } o.innerHTML = '<div class="isb"><div class="ish"><b></b><button onclick="document.getElementById(\'infosheet\').hidden=true">✕</button></div>' + html + '</div>'; o.hidden = false; }
+function windOpen(id) {
+  const g = ALL[id], w = WIND[id]; if (!g || !w) return; const r = windRecord();
+  sheetOpen(`<b>💨 ${g.away.abbr} @ ${g.home.abbr}: wind ${Math.round(w.mph)} mph at kickoff</b> <span class="sub">(gusts ${Math.round(w.gust)})</span>
+  <div class="sub" style="margin-top:6px">Forecast for the stadium at kickoff. This is information, not a pick.</div>
+  <div style="margin-top:8px"><b>What the history says (2006–2026, outdoor games)</b><br>• 15+ mph: <b>Under went 240-194</b> (about +7.6% at -110).<br>• 12+ mph: Under went 181-133 (about +11%), but that cutoff was picked after seeing the results.<br>• Books lower the total only about 0.8 points for 15+ mph wind; those games actually ran about 2.6 points lower.</div>
+  <div class="note" style="text-align:left;margin-top:8px">⚠️ Small sample (50–60 windy games a year). Two independent studies found it, but it does not pass a strict statistical test. Check that your book has not already dropped the total, and use a forecast close to kickoff.</div>
+  <div class="sub" style="margin-top:8px">📒 Our live record for flagged games this season: <b>Under ${r.u} · Over ${r.o}${r.p ? ' · Push ' + r.p : ''}</b> (${r.n} flagged so far; games count once they are final and we saw the total).</div>`);
+}
+// --- key numbers / half-point value (from the 2006-2025 margin distribution) ---
+const KEYN = { 3: 'up to -131', 7: 'up to -125', 6: 'up to -119', 10: 'up to -120' };
+function keyNumHtml(g) {
+  const bk = g.books && g.books.books; if (!bk) return ''; const vals = [...new Set(bk.map((x) => x.l))].sort((a, b) => a - b), out = [];
+  Object.keys(KEYN).forEach((k) => { k = +k; const ab = Math.abs; let pair = null;
+    vals.forEach((a) => vals.forEach((b) => { if (!pair && a < b && b - a === 0.5 && a * b > 0 && (ab(a) === k || ab(b) === k)) pair = [ab(a), ab(b)].sort((x, y) => x - y); }));
+    const near = vals.some((a) => ab(a) === k);
+    if (pair) out.push(`<div style="margin:6px 0">💎 <b>Key number ${k}:</b> books post both ${pair[0]} and ${pair[1]}. That half-point is worth <b>${KEYN[k]}</b> in juice, so take the better number even at a worse price up to that.</div>`);
+    else if (near) out.push(`<div class="sub" style="margin:6px 0">Sits on the key number ${k}. Buying the half-point is worth ${KEYN[k]}.</div>`); });
+  return out.join('') + (out.length ? '' : '<div class="sub" style="margin:6px 0">Not on a key number (3, 6, 7, 10): a half-point is worth only about -115 to -117 here.</div>');
+}
+function shopHtml(g) {
+  const bk = g.books && g.books.books; if (!bk || !bk.length) return ''; const dec = (p) => (p == null ? 0 : decOf(p)), sg = (x) => (x > 0 ? '+' : '') + (x === 0 ? 'PK' : x);
+  const lo = Math.min(...bk.map((x) => x.l)), hi = Math.max(...bk.map((x) => x.l));
+  const h = bk.filter((x) => x.l === lo).sort((a, b) => dec(b.p) - dec(a.p))[0], a = bk.filter((x) => x.l === hi).sort((x, y) => dec(y.pa) - dec(x.pa))[0];
+  const pr = (p) => (p == null ? '' : ' (' + (p > 0 ? '+' : '') + p + ')');
+  return `<div style="margin:8px 0;padding:8px 10px;border:1px solid var(--line);border-radius:10px"><b>🛒 Best price to shop</b><div style="margin-top:4px">${g.home.abbr} ${sg(-lo)} at <b>${escH(h.t)}</b>${pr(h.p)}</div><div>${g.away.abbr} ${sg(hi)} at <b>${escH(a.t)}</b>${pr(a.pa)}</div><div class="sub" style="margin-top:4px">Same number, take the cheaper juice. On average the more expensive (shaded) side loses about 7% over time, so never pay -115 or worse when -110 is posted.</div></div>`;
+}
+// --- teaser dog leg: underdog +1.5 to +2.5 teased 6 points (2006-2025: 77.5% of legs won) ---
+const tsLeg = (g) => { if (CFB || g.state !== 'pre' || g.line === null || g.line === undefined) return null; const a = Math.abs(g.line); if (a < 1.5 || a > 2.5) return null; const dog = g.line > 0 ? g.away : g.home; return { g, dog, from: a, to: a + 6 }; };
+const tsBE = (price) => { const w = price < 0 ? 100 / -price : price / 100; return Math.sqrt(1 / (1 + w)); }; // leg win rate needed for a 2-leg teaser at that price
+function tsChip(g) { return tsLeg(g) ? `<button class="nw" style="border-color:#4fd18b;color:#4fd18b" onclick="teaserOpen('${g.id}')">🎯 Teaser</button>` : ''; }
+function teaserOpen(id) {
+  const legs = Object.values(ALL).map(tsLeg).filter(Boolean).sort((x, y) => x.g.start - y.g.start), me = ALL[id];
+  const li = legs.map((l) => `<div style="display:flex;justify-content:space-between;min-height:30px;align-items:center;${l.g.id === id ? 'font-weight:800' : ''}"><span>${l.dog.abbr} <b>+${l.from}</b> → <b>+${l.to}</b></span><span class="sub">${l.g.away.abbr} @ ${l.g.home.abbr}</span></div>`).join('') || '<div class="note">No qualifying legs right now.</div>';
+  const be = [-110, -120, -130, -140, -150].map((p) => `<div style="display:flex;justify-content:space-between"><span>2-leg teaser at ${p}</span><b>${(tsBE(p) * 100).toFixed(1)}%</b></div>`).join('');
+  sheetOpen(`<b>🎯 Teaser dog legs this week</b><div class="sub" style="margin-top:4px">Underdog getting +1.5 to +2.5 points, teased 6 to about +7.5 / +8.5. You need two legs.</div><div style="margin:8px 0">${li}</div>
+  <b>Leg win rate you need to break even</b><div style="margin:4px 0">${be}</div>
+  <div style="margin-top:8px"><b>History (2006–2025):</b> these legs won <b>77.5%</b> (693 legs; 77.7% in the 2016–2025 test years, above break-even in 16 of 20 years). That is worth about +10% on a ticket at -120, +7% at -130, +3.6% at -140.</div>
+  <div class="note" style="text-align:left;margin-top:8px">⚠️ Modest lead, not a promise: one rule chosen from teaser literature, but it does not survive a strict multiple-testing correction, and the edge shrinks as the price worsens. Skip it if your book charges worse than -130. Two legs a week at most. Oddable never places bets.</div>`);
+}
 function arbBarPaint() {
   const bar = document.getElementById('arbbar'); if (!bar) return; const hits = [];
   if (!CFB) Object.values(ALL).forEach((g) => { if (g.state !== 'pre') return; const a = arbOf(g); if (a) hits.push({ g, a }); });
@@ -1479,7 +1541,7 @@ function booksOpen(id) {
   let o = document.getElementById('infosheet'); if (!o) { o = document.createElement('div'); o.id = 'infosheet'; o.onclick = (e) => { if (e.target === o) o.hidden = true; }; document.body.appendChild(o); }
   const ar = arbOf(g), sg = (x) => (x > 0 ? '+' : '') + (x === 0 ? 'PK' : x), gold = (x) => (ar && (x.k === ar.A.k || x.k === ar.B.k) ? 'background:rgba(245,197,66,.16);border-radius:8px;padding:0 6px;' : '');
   const rows = b.books.map((x) => `<div style="${gold(x)}display:flex;justify-content:space-between;gap:8px;min-height:36px;align-items:center;border-top:1px solid var(--line)"><span style="display:flex;align-items:center;gap:8px"><span style="width:26px;height:26px;border-radius:7px;background:var(--panel2);display:inline-flex;align-items:center;justify-content:center;font:800 11px system-ui">${escH((String(x.t).replace(/\.[a-z]+$/i, '').match(/[A-Z]/g) || []).slice(0, 2).join('').padEnd(2, String(x.t)[1] || '').toUpperCase())}</span>${escH(x.t)}</span><b>${bt(x.l)}${x.p ? ' <span style="opacity:.6;font-weight:400">(' + (x.p > 0 ? '+' : '') + x.p + ')</span>' : ''}</b></div>`).join('');
-  o.innerHTML = '<div class="isb"><div class="ish"><b>📚 ' + g.away.abbr + ' @ ' + g.home.abbr + ' · ' + b.n + ' books</b><button onclick="document.getElementById(\'infosheet\').hidden=true">✕</button></div><div class="sub">Consensus ' + bt(g.line) + (g.espnLine !== undefined && g.espnLine !== g.line ? ' · ESPN/DraftKings ' + (g.espnLine === null ? '—' : bt(g.espnLine)) : '') + '</div>' + rows + '<div class="note" style="margin-top:8px">Best number for ' + g.home.abbr + ' (home): <b>' + g.home.abbr + ' ' + sg(-b.lo) + '</b> · best for ' + g.away.abbr + ' (away): <b>' + g.away.abbr + ' ' + sg(b.hi) + '</b></div></div>'; if (ar) o.querySelector('.isb').insertAdjacentHTML('afterbegin', '<div style="border:2px solid #f5c542;background:rgba(245,197,66,.12);border-radius:12px;padding:10px;margin:0 0 10px"><b style="color:#f5c542">' + (ar.arb ? '💰 ARBITRAGE' : '🟡 MIDDLE') + '</b><div style="margin-top:4px">Bet <b>' + g.home.abbr + ' ' + sg(-ar.A.l) + '</b> at <b>' + escH(ar.A.t) + '</b> (' + (ar.A.p > 0 ? '+' : '') + ar.A.p + ') and <b>' + g.away.abbr + ' ' + sg(ar.B.l) + '</b> at <b>' + escH(ar.B.t) + '</b> (' + (ar.B.pa > 0 ? '+' : '') + ar.B.pa + ').</div><div class="sub" style="margin-top:4px">' + (ar.arb ? 'Equal payout either way: about <b>+' + (ar.sure * 100).toFixed(1) + '%</b> of what you risk, win or lose.' : '') + (ar.mid ? ' If the final margin lands inside the window (' + ar.win + ' score' + (ar.win > 1 ? 's' : '') + ') <b>both bets win</b> (about ' + (ar.hit * 100).toFixed(0) + '% on the total risked); otherwise you lose about ' + (Math.abs(ar.worst) * 100).toFixed(0) + '%. Rough chance of landing in the window: <b>' + (ar.pw * 100).toFixed(0) + '%</b>, so the rough average result is <b>' + (ar.ev >= 0 ? '+' : '') + (ar.ev * 100).toFixed(1) + '%</b> of what you risk (a guess, not a promise).' : '') + '</div><div class="sub" style="margin-top:4px;opacity:.7">Lines move fast and limits apply. Check both books before betting. Oddable never places bets.</div></div>'); o.hidden = false;
+  o.innerHTML = '<div class="isb"><div class="ish"><b>📚 ' + g.away.abbr + ' @ ' + g.home.abbr + ' · ' + b.n + ' books</b><button onclick="document.getElementById(\'infosheet\').hidden=true">✕</button></div><div class="sub">Consensus ' + bt(g.line) + (g.espnLine !== undefined && g.espnLine !== g.line ? ' · ESPN/DraftKings ' + (g.espnLine === null ? '—' : bt(g.espnLine)) : '') + '</div>' + rows + shopHtml(g) + keyNumHtml(g) + '<div class="note" style="margin-top:8px">Best number for ' + g.home.abbr + ' (home): <b>' + g.home.abbr + ' ' + sg(-b.lo) + '</b> · best for ' + g.away.abbr + ' (away): <b>' + g.away.abbr + ' ' + sg(b.hi) + '</b></div></div>'; if (ar) o.querySelector('.isb').insertAdjacentHTML('afterbegin', '<div style="border:2px solid #f5c542;background:rgba(245,197,66,.12);border-radius:12px;padding:10px;margin:0 0 10px"><b style="color:#f5c542">' + (ar.arb ? '💰 ARBITRAGE' : '🟡 MIDDLE') + '</b><div style="margin-top:4px">Bet <b>' + g.home.abbr + ' ' + sg(-ar.A.l) + '</b> at <b>' + escH(ar.A.t) + '</b> (' + (ar.A.p > 0 ? '+' : '') + ar.A.p + ') and <b>' + g.away.abbr + ' ' + sg(ar.B.l) + '</b> at <b>' + escH(ar.B.t) + '</b> (' + (ar.B.pa > 0 ? '+' : '') + ar.B.pa + ').</div><div class="sub" style="margin-top:4px">' + (ar.arb ? 'Equal payout either way: about <b>+' + (ar.sure * 100).toFixed(1) + '%</b> of what you risk, win or lose.' : '') + (ar.mid ? ' If the final margin lands inside the window (' + ar.win + ' score' + (ar.win > 1 ? 's' : '') + ') <b>both bets win</b> (about ' + (ar.hit * 100).toFixed(0) + '% on the total risked); otherwise you lose about ' + (Math.abs(ar.worst) * 100).toFixed(0) + '%. Rough chance of landing in the window: <b>' + (ar.pw * 100).toFixed(0) + '%</b>, so the rough average result is <b>' + (ar.ev >= 0 ? '+' : '') + (ar.ev * 100).toFixed(1) + '%</b> of what you risk (a guess, not a promise).' : '') + '</div><div class="sub" style="margin-top:4px;opacity:.7">Lines move fast and limits apply. Check both books before betting. Oddable never places bets.</div></div>'); o.hidden = false;
 }
 const booksHtml = (g) => { const b = g.books; if (!b) return ''; return `<details class="sub" style="margin-top:6px"><summary>📚 ${b.n} books · consensus ${g.line === 0 ? 'pick’em' : byText(g, g.line)}${g.espnLine !== undefined && g.espnLine !== g.line ? ' (ESPN/DraftKings ' + (g.espnLine === null ? '—' : byText(g, g.espnLine)) + ')' : ''}</summary><div style="margin-top:4px">${b.books.map((x) => `<div style="display:flex;justify-content:space-between;gap:8px;min-height:32px;align-items:center"><span>${escH(x.t)}</span><b>${x.l === 0 ? 'pick’em' : byText(g, x.l)}${x.p ? ' <span style="opacity:.6;font-weight:400">(' + (x.p > 0 ? '+' : '') + x.p + ')</span>' : ''}</b></div>`).join('')}<div style="opacity:.6;margin-top:4px">Best for ${g.home.abbr}: ${g.home.abbr} ${b.lo === 0 ? 'PK' : (-b.lo > 0 ? '+' : '') + -b.lo} · best for ${g.away.abbr}: ${g.away.abbr} ${b.hi === 0 ? 'PK' : (b.hi > 0 ? '+' : '') + b.hi}</div></div></details>`; };
 
@@ -2109,7 +2171,7 @@ async function tick() {
   try {
     const j = await getJson(SB + 'scoreboard' + (CFB ? '?' + SCX.slice(1) : ''));
     CUR = (j.week && j.week.number) || CUR;
-    merge(parseEvents(j, CUR)); loadBooks(); lkPull();
+    merge(parseEvents(j, CUR)); loadBooks(); lkPull(); try { windLoad(); } catch (e) {}
     LAST = new Date();
     renderBg();
     liveFetch();

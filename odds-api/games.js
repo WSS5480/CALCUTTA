@@ -37,4 +37,4 @@ async function pull(lg, names) {
   const rem = r.headers.get('x-requests-remaining');
   return (C[lg] = { at: Date.now(), updated: new Date().toISOString(), remaining: rem === null ? null : +rem, games: shape(await r.json()) });
 }
-module.exports = { get, shape };
+module.exports = { get, shape, peek: (lg) => C[lg] || null };

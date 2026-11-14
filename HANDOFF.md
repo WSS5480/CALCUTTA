@@ -200,3 +200,8 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## 2026-11-13 — many-book spreads default refresh 20 -> 120 min (credits)
 - He decided (Nov 11) to stay inside The Odds API free 500 credits/month until Oddable sells. /games at 20 min could burn ~70/day. Default GAMES_TTL_MIN is now 120 (~12 credits/day max). `/games` now also returns `remaining` (credits left). Set GAMES_TTL_MIN lower after the plan is upgraded.
+
+## v173 — 2026-11-13 — shared locked picks (everyone sees the same lock)
+- Problem: locks (lk26-<lg>-<gameId>) were saved only on the phone that had the app open before kickoff, so other users / new sign-ins / wiped phones had no lock on live and finished games ("nobody sees the lock").
+- Fix: odds-api/locks.js, route `/locks` (GET ?lg=nfl|cfb; POST {lg, items:[{id,s,snap}]}), stored in the Supabase table `oddable_sync` as rows id `lock:nfl` / `lock:cfb` (excluded from the players list in `adminUsers`). Newest write before kickoff wins; after kickoff only a "late seed" is accepted (the phone's own lock time must be before the start, game started < 8h ago, and only if the server has none). Client (index.html): `lockSnap` queues an upload on every change, `lkPull` copies server locks into localStorage (overwrites once a game has started), runs at startup and every refresh. Format of the local lock is unchanged, so the cloud sync and the Locked list work as before.
+- NOT covered: if NO phone had the app open before kickoff there is still no lock (the model only runs in the browser). Next idea: owner phone/Chrome kept open on game days, or a server-side model.

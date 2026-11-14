@@ -113,7 +113,7 @@ async function adminUsers(emailOf) {
   const { url, key } = cfg();
   const r = await fetch(`${url}/rest/v1/oddable_sync?select=id,updated,data&limit=2000`, { headers: hdr(key) });
   if (!r.ok) throw new Error('db read ' + r.status);
-  const rows = await r.json();
+  const rows = (await r.json()).filter((x) => !String(x.id).startsWith('lock:')); // shared lock rows are not players
   return rows.map((x) => {
     const d = x.data || {}, bets = arr(d.bets), log = d.log || {}, days = {}, N = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
     let w = 0, l = 0, p = 0, risk = 0, pl = 0;
@@ -151,4 +151,4 @@ async function verifyLogin(phone, pin, ip, create) {
   if (!same(hashPin(pin, row.salt), row.pinhash)) { fail(id); fail('ip:' + ip); throw bad(401, 'Wrong PIN'); }
   return { id, created: false };
 }
-module.exports = { handle, merge, normPhone, verifyLogin, adminUsers };
+module.exports = { handle, merge, normPhone, verifyLogin, adminUsers, dbGet, dbPut, dbPatchIf };

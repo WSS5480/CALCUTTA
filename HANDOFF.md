@@ -318,3 +318,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 ## v209 – hands-free voice conversation (pics/ai.js)
 - "🎙 Start conversation" button: listens (SpeechRecognition, continuous=false so it ends on a pause), sends, speaks the answer, and ONLY AFTER the speech ends starts listening again (so it never hears itself). Keeps the last 3 Q/A as context. Ends on: tap again / ⏹ / closing the sheet / saying "stop", "end", "goodbye", "that's all" / 3 silent rounds in a row / mic blocked. aiSpeak(text, done) has a length-based watchdog so a missing speech-end event cannot stall it. Hold-to-talk stays as "one question" mode.
 - Tested with a mock (/tmp/t_conv.js: listen → ask → speak → listen → ask with history → silence ends). iPhone may ask for the mic again between turns; not verified on a real phone.
+
+## v210
+- Found by rendering a mock card: (1) the card footer (.nft) overflowed on phones once the MIDDLE/books/Live buttons were added; it now wraps (line text on its own row). (2) The "Best for HOME / AWAY" labels in the books list were swapped since v172 (they showed the worst number); lowest line is best for home, highest is best for away; now shown as e.g. "NYJ +8.5" / "BUF -7.5". (3) Book initials badges were duplicating (BE/BE); now built from capital letters (DK, FD, BM, BR).

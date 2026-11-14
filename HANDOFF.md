@@ -269,3 +269,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 - server: body `null`/non-object on /proxy and /order now 400 (was TypeError). 
 - client: Cancel/close ignored while a sale is in flight (KCOSEND); kcoAsk uses a token (M) so a cancelled/reopened modal can't leave a stale interval or show another bet's price; `kn` = bought − sold (partial sales no longer overstate); "no fill"/error wording now says check Kalshi instead of "nothing sold".
 - Open (from reviewer, not fixed): upstream fetch has no timeout; no per-IP limit on /kalshi/order; confirm-button mis-tap on layout shift; kco-ro flag never clears; only first 15 open bets get live cash-out values; 45-day window can mismatch buys/sells on old positions; "result if sold" ignores sell fee. Real Kalshi semantics (reduce_only trim vs reject, fill field names, combo sells) unverified: first sale must be a small position.
+
+## v197
+- Header badge (span before #kdot in index.html) was hardcoded v194 and looked like the app was stale; bumped to v197. REMEMBER: bump this badge, the sub line, <!-- Pics --> comment, sw.js, sports.html gate.js on every release.

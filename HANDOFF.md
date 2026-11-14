@@ -191,3 +191,9 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 - Chips WTD/MTD/YTD/Lifetime. Tiles + graphs all drill down with a Back button: P/L by day (tap bar -> that day's players), running total (tap -> day), bets per day, win % by player (tap -> player page: tiles, P/L by day, current bets, by-day list), Open bets tile -> all open bets.
 - His own phone account is NOT owner (decided with him: owner PIN only). To use it he signs out and signs in with the owner PIN; sign back in as himself for his own bets.
 - Tested with a mocked feed in Chromium (390px, no overflow/errors); not yet reviewed by an independent reviewer.
+
+## v172 — 2026-11-13 — NFL spreads from many books (consensus)
+- Before: game spreads came from ESPN's feed = ONE book (DraftKings), e.g. BUF -8.5 at NYJ while other apps showed lower. Super Bowl odds already used The Odds API; game spreads did not.
+- Now: odds-api/games.js (route `/games`, NFL) pulls every US book's spread from The Odds API (1 credit per refresh, cached GAMES_TTL_MIN=20 min, once a day below LOW_CREDITS). Client `loadBooks/applyBooks` (index.html): for NFL games before kickoff the app's line = MEDIAN across books (half-point), ESPN's number kept in `g.espnLine`; the game detail shows "📚 N books" expandable list with each book's number and best line per side. The model/picks use the consensus line. Locked picks keep the line they were locked at.
+- NFL only for now (NCAA/NBA need team-name mapping). Credits: ~3 per hour while someone has the app open; upgrade the Odds API plan when Oddable sells.
+- Env: ODDS_API_KEY already set on calcutta-odds. Optional GAMES_TTL_MIN.

@@ -203,17 +203,17 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v171 -->
+<!-- Pics v172 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v171</span></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v172</span></div></div>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">NCAA</button><button data-sp="nba">NBA</button><button data-sp="mlb">MLB</button><button data-sp="nhl">NHL</button><button data-sp="ncaab">NCAAB</button></div>
   <input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team">
   <select id="team" aria-label="Team"><option value="">All teams</option></select>
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v171 (owner dashboard)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v172 (many-book spreads)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -1339,7 +1339,12 @@ function lmBlock(g) {
   return `<button class="lmbtn" data-lm="${g.id}">${on ? '▾' : '📈'} Line movement</button>` + (on ? `<div class="lm"><div class="tg"><button data-lmmode="hour" class="${LMMODE === 'hour' ? 'on' : ''}">By hour</button><button data-lmmode="day" class="${LMMODE === 'day' ? 'on' : ''}">By day</button></div>${lmChart(g)}</div>` : '');
 }
 
-function merge(list) { list.forEach((g) => { const old = ALL[g.id]; if (old && g.state === 'in' && !g.sit && old.sit) g.sit = old.sit; if (old && g.line === null && old.line !== null) g.line = old.line; ALL[g.id] = g; lmRecord(g); }); }
+function merge(list) { list.forEach((g) => { const old = ALL[g.id]; if (old && g.state === 'in' && !g.sit && old.sit) g.sit = old.sit; if (old && g.line === null && old.line !== null) g.line = old.line; applyBooks(g); ALL[g.id] = g; lmRecord(g); }); }
+// Many-book spreads (NFL, before kickoff): the line the app uses is the CONSENSUS (median) across books; ESPN's single-book line is kept as espnLine.
+let BOOKS = {}, BKT = 0;
+function applyBooks(g) { if (CFB || g.state !== 'pre') return; const b = BOOKS[g.away.abbr + '@' + g.home.abbr]; if (!b) return; if (g.espnLine === undefined) g.espnLine = g.line; g.line = b.line; g.books = b; }
+async function loadBooks() { if (CFB || Date.now() - BKT < 60000) return; BKT = Date.now(); try { const r = await fetch('https://calcutta-odds.onrender.com/games'); if (!r.ok) return; const j = await r.json(); const m = {}; (j.games || []).forEach((x) => { m[ab(x.away) + '@' + ab(x.home)] = x; }); BOOKS = m; Object.values(ALL).forEach(applyBooks); try { renderBg(); } catch (e) {} } catch (e) {} }
+const booksHtml = (g) => { const b = g.books; if (!b) return ''; return `<details class="sub" style="margin-top:6px"><summary>📚 ${b.n} books · consensus ${g.line === 0 ? 'pick’em' : byText(g, g.line)}${g.espnLine !== undefined && g.espnLine !== g.line ? ' (ESPN/DraftKings ' + (g.espnLine === null ? '—' : byText(g, g.espnLine)) + ')' : ''}</summary><div style="margin-top:4px">${b.books.map((x) => `<div style="display:flex;justify-content:space-between;gap:8px;min-height:32px;align-items:center"><span>${escH(x.t)}</span><b>${x.l === 0 ? 'pick’em' : byText(g, x.l)}${x.p ? ' <span style="opacity:.6;font-weight:400">(' + (x.p > 0 ? '+' : '') + x.p + ')</span>' : ''}</b></div>`).join('')}<div style="opacity:.6;margin-top:4px">Best for ${g.home.abbr}: ${byText(g, b.hi)} · best for ${g.away.abbr}: ${byText(g, b.lo)}</div></div></details>`; };
 
 async function getJson(u) { const r = await fetch(u, { cache: 'no-store' }); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }
 
@@ -1790,7 +1795,7 @@ function card(g) {
     <div class="row"><b>${rk(g.away)}${nm(g.away.abbr)} <small>${g.away.record}</small></b><b>${pct(p.pa)}</b></div>
     <div class="bar"><i style="width:${p.pa * 100}%"></i></div>
     <div class="row"><b>${rk(g.home)}${nm(g.home.abbr)} <small>${g.home.record} · home</small></b><b>${pct(p.ph)}</b></div>
-    <div class="pick">${predPanel(g)}<div class="sub" style="margin-top:4px">${p.mkt ? 'Win % blends our model with the line' : 'Win % is our model only (no line yet)'} · model ${byText(g, p.mh)}${g.line !== null ? ' · line ' + byText(g, g.line) : ''}</div></div>
+    <div class="pick">${predPanel(g)}<div class="sub" style="margin-top:4px">${p.mkt ? 'Win % blends our model with the line' : 'Win % is our model only (no line yet)'} · model ${byText(g, p.mh)}${g.line !== null ? ' · line ' + byText(g, g.line) : ''}</div>${booksHtml(g)}</div>
     ${p.inj ? `<div class="sub">🩹 Starters hurt${INJM === 'off' ? ' (info only)' : INJM === 'qb' ? (p.dInj ? ' (QB out: spread pick adjusted ' + (p.dInj > 0 ? '+' : '') + p.dInj.toFixed(1) + ')' : ' (info only)') : ' (in test: ' + (p.dInj ? 'moves margin ' + (p.dInj > 0 ? '+' : '') + p.dInj.toFixed(1) : 'no change') + ')'}: ${[['a', g.away], ['h', g.home]].filter(([k]) => p.inj[k].pts).map(([k, t]) => `${t.abbr} −${p.inj[k].pts.toFixed(1)} (${p.inj[k].list.join(', ')})`).join(' · ')}</div>` : ''}
     <button class="addtb" onclick="event.stopPropagation();betFromGame('${g.id}')">＋ Add to My Bets</button>
     ${lmBlock(g)}
@@ -1937,7 +1942,7 @@ async function tick() {
   try {
     const j = await getJson(SB + 'scoreboard' + (CFB ? '?' + SCX.slice(1) : ''));
     CUR = (j.week && j.week.number) || CUR;
-    merge(parseEvents(j, CUR));
+    merge(parseEvents(j, CUR)); loadBooks();
     LAST = new Date();
     renderBg();
     liveFetch();
@@ -2002,7 +2007,7 @@ async function checkUpdate() {
   } catch (e) {}
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
-setTimeout(() => { if (lsg('kal-id')) kalshiSync(false); }, 3000); if (!window.MIRROR) setTimeout(checkUpdate, 4000); if (/[?&]add=1/.test(location.search)) setTimeout(() => { try { history.replaceState(null, '', location.pathname); } catch (e) {} setView('bets'); setTimeout(() => { addMenu(true); const m = document.getElementById('addmenu'); if (!m || m.hidden) betsRender(); }, 150); }, 1200); if (!window.MIRROR) setInterval(checkUpdate, 10 * 60 * 1000);
+setTimeout(() => { if (lsg('kal-id')) kalshiSync(false); }, 3000); setTimeout(loadBooks, 2500); if (!window.MIRROR) setTimeout(checkUpdate, 4000); if (/[?&]add=1/.test(location.search)) setTimeout(() => { try { history.replaceState(null, '', location.pathname); } catch (e) {} setView('bets'); setTimeout(() => { addMenu(true); const m = document.getElementById('addmenu'); if (!m || m.hidden) betsRender(); }, 150); }, 1200); if (!window.MIRROR) setInterval(checkUpdate, 10 * 60 * 1000);
 if ('serviceWorker' in navigator) {
   const had = !!navigator.serviceWorker.controller; let rl = false;
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((r) => r.update().catch(() => {})).catch(() => {});

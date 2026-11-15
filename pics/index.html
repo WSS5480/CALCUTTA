@@ -206,10 +206,10 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v221 -->
+<!-- Pics v222 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v221</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v222</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
   <div id="arbbar" class="arbbar" hidden onclick="arbBarTap()" role="button" aria-label="Arbitrage alert"><span class="mq" id="arbmq"></span></div>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">NCAA</button><button data-sp="nba">NBA</button><button data-sp="mlb">MLB</button><button data-sp="nhl">NHL</button><button data-sp="ncaab">NCAAB</button></div>
   <div class="srow"><input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team"><select id="conf" aria-label="Conference"><option value="">All</option></select></div>
@@ -217,7 +217,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v221 (trophy picks)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v222 (top pick cards)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -236,7 +236,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </div>
 <div id="plb" hidden></div>
 <nav class="bn" id="bn"></nav>
-<script src="trophy.js?v=221"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
+<script src="trophy.js?v=222"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
 <script>
 const SC = document.getElementById('sc');
 // The page scrolls inside #sc so the banner and bottom bar (outside it) can never drift on iOS
@@ -433,7 +433,8 @@ function newBoard(games) {
   const uo = (g) => { const p = pred(g); if (!p || p.phMkt === null || p.phMkt === undefined) return null; const dh = p.phMkt < 0.5, pm = dh ? p.phMkt : 1 - p.phMkt, pmod = dh ? p.phModel : 1 - p.phModel, pb = dh ? p.ph : p.pa, rm = oddsML(g), ra = rm ? (dh ? rm.h : rm.a) : null, dec = ra ? (ra > 0 ? 1 + ra / 100 : 1 + 100 / -ra) : 1 / (pm + 0.024); return { g, t: dh ? g.home : g.away, pm, pmod, pb, dec, real: !!ra, gap: pmod - pm, am: ra || Math.round((dec - 1) * 100) }; };
   const ucand = grp.pre.map(uo).filter((x) => x && x.pm < 0.45), ur = ucand.filter((x) => x.gap > 0).sort((a, c) => c.gap - a.gap)[0] || ucand.sort((a, c) => c.pb - a.pb)[0];
   const upset = ur && !(bp && ur.g === bp.g) ? `<div class="upset"><div class="bh2">🏆🏆 Biggest Upset Pick<small>${ur.t.abbr} to win outright · the books give them ${pct(ur.pm)}, the model says ${pct(ur.pmod)}</small></div><div class="bmoney"><b>$100 bet → $${(100 * ur.dec).toFixed(0)} back</b> <span>(+$${(100 * (ur.dec - 1)).toFixed(0)} profit) · ${ur.dec.toFixed(2)}x · ${ur.real ? '' : 'about '}${ur.am > 0 ? '+' : ''}${ur.am}${ur.real ? '' : ' (estimated)'}</span></div><div class="sub" style="margin:2px 4px 6px">${ur.real ? 'Real moneyline from the odds feed.' : 'Price is estimated from the spread.'} Long shot: expect to lose most of the time. Check your book.</div>${nCard(ur.g)}</div>` : '';
-  return botd + upset + `<div class="nbar"><button onclick="nGo(-1)" ${wk <= weeks[0] ? 'disabled style="opacity:.35"' : ''}>◀</button><b>${wk === CUR ? 'This week · ' : ''}Week ${wk}</b><button onclick="nGo(1)" ${wk >= weeks[weeks.length - 1] ? 'disabled style="opacity:.35"' : ''}>▶</button></div>
+  const TRB = (() => { const td = trophyData(), tw = td && td[wk]; if (!tw || !tw.picks.length) return ''; return tw.picks.map((p) => { const g = ALL[p.id]; if (!g) return ''; const r = trGrade(p); return `<div class="${p.rank === 1 ? 'botd' : 'upset'}"><div class="bh2">${p.rank === 1 ? '🏆🏆 Top Pick' : '🏆 Second Top Pick'}<small>${p.abbr} ${p.line > 0 ? '+' : ''}${p.line} against the spread · ${Math.round(p.conf * 100)}% chance to cover${r === 'hit' ? ' · ✓ covered' : r === 'miss' ? ' · ✗ missed' : r === 'push' ? ' · push' : ''}</small></div><div class="sub" style="margin:2px 4px 6px">Spread pick from the frozen factor model. Break-even is 52.4%; the same method ran about 50% in 2018-2025. A tracker, not a guarantee.</div>${nCard(g)}</div>`; }).join(''); })();
+  return (TRB || botd + upset) + `<div class="nbar"><button onclick="nGo(-1)" ${wk <= weeks[0] ? 'disabled style="opacity:.35"' : ''}>◀</button><b>${wk === CUR ? 'This week · ' : ''}Week ${wk}</b><button onclick="nGo(1)" ${wk >= weeks[weeks.length - 1] ? 'disabled style="opacity:.35"' : ''}>▶</button></div>
   <div class="nchips">${chip('all', 'All', wg.length)}${chip('live', 'Live', grp.live.length)}${chip('pre', 'Upcoming', grp.pre.length)}${chip('post', 'Final', grp.post.length)}${chip('watch', '📌 Watch', watch.length)}</div>
   ${list.filter((g) => NFILT === 'watch' || !((bp && g === bp.g) || (ur && g === ur.g))).map(nCard).join('') || '<div class="note">' + (NFILT === 'watch' ? 'Nothing watched yet. Tap 📍 Watch on any game.' : 'No games here.') + '</div>'}`;
 }

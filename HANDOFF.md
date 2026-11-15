@@ -392,3 +392,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 - Honest framing is printed on screen: same method 2018-2025 ≈ 50%, break-even 52.4%; 2026 run leaned on away teams covering ~57%.
 - Old locks/scoreboard/model untouched. User asked for it Nov 15 2026 after the factor/backtest work.
 - OPEN: server-side lock of trophy picks (cross-device); NFL only (hidden for NCAA).
+
+## v222 — Top Pick cards replace Bet of the Day / Biggest Upset Pick
+- Games tab: the two gold cards at the top are now "🏆🏆 Top Pick" (trophy #1) and "🏆 Second Top Pick" (trophy #2) for the shown week, with spread, model cover chance and ✓/✗ once graded. Old Bet of the Day / Upset cards remain only as a fallback (NCAA, or trophy data not loaded yet). User asked Nov 15 2026 ("I thought we changed those").

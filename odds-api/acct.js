@@ -64,6 +64,7 @@ async function handle(req, res) {
   const ip = require('./ip').clientIp(req); // third from the end of X-Forwarded-For (see ip.js)
   let b; try { b = await body(req); } catch (e) { send(res, 400, { error: 'bad request' }); return true; }
   const email = String(b.email || '').trim().toLowerCase();
+  const cleanName = (n) => String(n || '').replace(/[<>&"'\u0000-\u001f]/g, '').trim().slice(0, 24);
   try {
     if (path === '/acct/owner') {
       if (!OWNER_PIN()) { send(res, 400, { error: 'Owner PIN is not set on the server' }); return true; }
@@ -75,18 +76,21 @@ async function handle(req, res) {
     if (path === '/acct/phone') {
       // Existing Oddable users keep their cell number + PIN. It maps to a My Apps account (7-day trial, then Cash App renewal).
       if (b.create && OWNER_PHONES().includes(syncMod.normPhone(b.phone))) { send(res, 403, { error: 'This number cannot be created here' }); return true; } // an owner phone is never created by a stranger
+      const nm0 = cleanName(b.name); if (b.create && nm0.length < 2) { send(res, 400, { error: 'Enter a name or handle to create your account' }); return true; }
       let v; try { v = await syncMod.verifyLogin(b.phone, b.pin, ip, !!b.create); } catch (er) { send(res, er.status || 500, { error: er.message }); return true; }
       const pe = phoneEmail(v.id), pw = crypto.createHmac('sha256', KEY()).update('phone|' + v.id).digest('hex').slice(0, 32);
-      let r = await ma('/api/v1/auth/register', { email: pe, password: pw, name: 'Phone ' + v.id.slice(0, 4) });
+      let r = await ma('/api/v1/auth/register', { email: pe, password: pw, name: b.create && nm0 ? nm0 : 'Phone ' + v.id.slice(0, 4) });
+      if (b.create && nm0) { try { await namesSet(String(v.id).slice(0, 8), nm0); } catch (er) {} }
       if (!r.ok && r.status === 409) r = await ma('/api/v1/auth/login', { email: pe, password: pw });
       if (!r.ok) { send(res, 502, { error: r.j.error || 'Could not open your account' }); return true; }
       CACHE.delete(pe);
       const me = await shape(pe, true); if (me && isOwnerPhone(pe)) me.ownerDash = true; send(res, 200, { token: mint(pe), me }); return true;
     }
     if (path === '/acct/login' || path === '/acct/register') {
+      if (path === '/acct/register' && cleanName(b.name).length < 2) { send(res, 400, { error: 'Enter a name or handle to create your account' }); return true; }
       if (/@phone\.oddable$/.test(email)) { send(res, 400, { error: 'Use your cell number and PIN to sign in' }); return true; }
       if (throttled(ip + '|' + email)) { send(res, 429, { error: 'Too many tries, wait a few minutes' }); return true; }
-      const r = await ma(path === '/acct/login' ? '/api/v1/auth/login' : '/api/v1/auth/register', { email, password: b.password, name: b.name });
+      const r = await ma(path === '/acct/login' ? '/api/v1/auth/login' : '/api/v1/auth/register', { email, password: b.password, name: cleanName(b.name) });
       if (!r.ok) { send(res, r.status === 401 || r.status === 409 || r.status === 400 ? r.status : 502, { error: r.j.error || 'Could not sign in' }); return true; }
       CACHE.delete(email);
       const me = await shape(email, true);
@@ -100,6 +104,15 @@ async function handle(req, res) {
       const a = Buffer.from(String(b.pin || '')), w = Buffer.from(OWNER_PIN()); if (a.length !== w.length || !crypto.timingSafeEqual(a, w)) { send(res, 401, { error: 'Wrong owner PIN' }); return true; }
       send(res, 200, { dash: dmint(e) }); return true;
     }
+    if (path === '/acct/myname') { // a signed-in player sets or reads their own name / handle (phone accounts; email accounts gave a name at sign-up)
+      if (!/@phone\.oddable$/.test(e)) { send(res, 200, { ok: true, name: e === 'owner' ? OWNER_NAME() : '' }); return true; }
+      const us = await require('./sync').adminUsers(phoneEmail), u = us.find((x) => phoneEmail(x.id) === e); if (!u) { send(res, 404, { error: 'Account not found' }); return true; }
+      const k = String(u.id).slice(0, 8), nm = await namesGet().catch(() => ({})), nn = cleanName(b.name);
+      if (isOwnerPhone(e)) { send(res, 200, { ok: true, name: OWNER_NAME() }); return true; }
+      if (!b.name) { send(res, 200, { ok: true, name: nm[k] || '' }); return true; }
+      if (nn.length < 2) { send(res, 400, { error: 'Enter a name or handle (2+ characters)' }); return true; }
+      try { await namesSet(k, nn); send(res, 200, { ok: true, name: nn }); } catch (er) { send(res, 502, { error: 'Could not save the name' }); } return true;
+    }
     if ((path === '/acct/name' || path === '/acct/dash') && isOwnerPhone(e) && !dok(req.headers['x-dash'], e)) { send(res, 401, { error: 'Owner PIN needed', need: 'owner-pin' }); return true; }
     if (path === '/acct/name' && ((e === 'owner' && OWNER_PIN()) || isOwnerPhone(e))) {
       const k = String(b.k || ''), name = String(b.name || '').replace(/[<>&"'\u0000-\u001f]/g, '').trim().slice(0, 24);
@@ -107,7 +120,7 @@ async function handle(req, res) {
       try { await namesSet(k, name); send(res, 200, { ok: true, name }); } catch (er) { send(res, 502, { error: 'Could not save the name: ' + er.message }); } return true;
     }
     if (path === '/acct/dash' && ((e === 'owner' && OWNER_PIN()) || isOwnerPhone(e))) {
-  { try { const us = await require('./sync').adminUsers(null); const nm = await namesGet().catch(() => ({})); send(res, 200, { users: us.map((u) => ({ k: String(u.id).slice(0, 8), name: nm[String(u.id).slice(0, 8)] || '', tag: u.tag, updated: u.updated, bets: u.bets, w: u.w, l: u.l, p: u.p, risk: u.risk, pl: u.pl, open: u.open, placed: u.placed, list: u.list, days: u.days })) }); } catch (er) { send(res, 502, { error: 'Could not read players: ' + er.message }); } return true; }
+  { try { const us = await require('./sync').adminUsers(null); const nm = await namesGet().catch(() => ({})); send(res, 200, { users: us.map((u) => ({ k: String(u.id).slice(0, 8), name: (isOwnerPhone(phoneEmail(u.id)) ? OWNER_NAME() : nm[String(u.id).slice(0, 8)]) || '', tag: u.tag, updated: u.updated, bets: u.bets, w: u.w, l: u.l, p: u.p, risk: u.risk, pl: u.pl, open: u.open, placed: u.placed, list: u.list, days: u.days })) }); } catch (er) { send(res, 502, { error: 'Could not read players: ' + er.message }); } return true; }
     }
     if (e === 'owner') { if (!OWNER_PIN()) { send(res, 401, { error: 'Sign in again' }); return true; }
       if (path === '/acct/me') { send(res, 200, { me: OWNER_ME }); return true; } send(res, 400, { error: 'Owner has full access' }); return true; }
@@ -136,6 +149,7 @@ async function handle(req, res) {
   return false;
 }
 // Player names the owner types in the dashboard. Stored in the row 'lock:names' (the 'lock:' prefix keeps it out of every player list).
+const OWNER_NAME = () => process.env.OWNER_NAME || 'Sir Oddable';
 async function namesGet() { const r = await syncMod.dbGet('lock:names'); return (r && r.data && r.data.names) || {}; }
 async function namesSet(k, name) {
   for (let i = 0; i < 4; i++) {

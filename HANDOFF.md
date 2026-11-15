@@ -418,3 +418,10 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 - `propTick()` every 30 s (and 6 s after load / right after saving) fetches ESPN `summary?event=ID` for live/just-finished games with tracked props, `parseP` reads every athlete's passing/rushing/receiving lines into `PSTAT[gid]`, `pFind` matches the name (full name, else unique last name + first initial). `propAuto` grades: over = won the moment stat > line; under = lost the moment stat > line; final: under unmet = won, over unmet = lost, exact = push. Auto results set `b.auto=true` (manual taps still win; editing a prop clears the auto result).
 - Card shows "64 / 100", progress bar, "needs N more", score. Props without tracking stay manual (Won/Lost/Push buttons). Player must be in ESPN's box score (counts as 0 until he records a stat). Parlay legs that are props are still manual.
 - Tested with mocked box scores (64 -> pending, 104 -> won, final under -> won). User asked Nov 15 2026.
+
+## v229 — Every player needs a name or handle; owner is "Sir Oddable"
+- Sign-up (phone+PIN and email) now has a required "Name or handle" field (2+ chars, 24 max); client and server (`/acct/phone` create, `/acct/register`) both refuse an empty name. Phone sign-ups save the name into the owner dashboard names store (`lock:names`) and into the My Apps account name.
+- Existing players with no name get a one-time "Pick a name or handle" prompt after sign-in (`/acct/myname`, phone accounts; saved on the phone as `odd-name`). Email accounts already gave a name at sign-up.
+- The owner's account shows as "Sir Oddable" in the dashboard (env `OWNER_NAME` overrides; default Sir Oddable). User said "I am Sir Oddable" Nov 15 2026.
+- gate.js cache-bust in index.html was stuck at v=183; now v=229.
+- Needs the odds server (calcutta-odds) redeployed to take effect for the server checks.

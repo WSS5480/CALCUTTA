@@ -42,7 +42,7 @@
       const em = mode === 'ein' || mode === 'eup', up = mode === 'up' || mode === 'eup';
       el.innerHTML = '<div class="gb"><h1>Oddable</h1><p>Sign in to see picks, locked records and your bets. New accounts get a 7-day free trial.</p>' +
         '<div class="tabs"><button class="' + (!up ? 'on' : 'alt') + '" id="gt-in">Sign in</button><button class="' + (up ? 'on' : 'alt') + '" id="gt-up">Create account</button></div>' +
-        (em ? (up ? '<input id="gname" placeholder="Name" autocomplete="name">' : '') +
+        (up ? '<input id="gname" placeholder="Name or handle (required)" autocomplete="nickname" maxlength="24">' : '') + (em ? 
           '<input id="gemail" type="email" placeholder="Email" autocomplete="email" autocapitalize="none"><input id="gpw" type="password" placeholder="Password (8+ characters)" autocomplete="' + (up ? 'new-password' : 'current-password') + '">'
           : '<input id="gph" type="tel" inputmode="numeric" placeholder="Cell number" autocomplete="tel"><input id="gpn" type="password" inputmode="numeric" placeholder="PIN (new accounts: 6-10 digits)" autocomplete="off">') +
         '<div class="er" id="gerr"></div><button id="gdo">' + (up ? 'Start free trial' : 'Sign in') + '</button>' +
@@ -79,10 +79,11 @@
       let j;
       if (mode === 'in' || mode === 'up') {
         const ph = $('gph').value, pn = $('gpn').value;
-        j = await call('/phone', { phone: ph, pin: pn, create: up });
+        if (up && String(($('gname') || {}).value || '').trim().length < 2) { err('Enter a name or handle (2+ characters).'); busy = false; if (b) b.textContent = 'Start free trial'; return; }
+        j = await call('/phone', { phone: ph, pin: pn, create: up, name: up && $('gname') ? $('gname').value : '' });
         const np = ph.replace(/\D/g, '').replace(/^1(\d{10})$/, '$1'); window.oddOwner(np);
         s('sync-phone', np); s('sync-pin', pn);
-      } else { j = await call('/' + (up ? 'register' : 'login'), { email: $('gemail').value, password: $('gpw').value, name: up && $('gname') ? $('gname').value : '' }); window.oddOwner('e:' + String($('gemail').value || '')); s('sync-phone', null); s('sync-pin', null); }
+      } else { if (up && String(($('gname') || {}).value || '').trim().length < 2) { err('Enter a name or handle (2+ characters).'); busy = false; if (b) b.textContent = 'Start free trial'; return; } j = await call('/' + (up ? 'register' : 'login'), { email: $('gemail').value, password: $('gpw').value, name: up && $('gname') ? $('gname').value : '' }); window.oddOwner('e:' + String($('gemail').value || '')); s('sync-phone', null); s('sync-pin', null); }
       s('odd-tok', j.token); s('odd-noauto', null); setMe(j.me);
       if (window.__oddReload) { window.__oddReload = false; location.reload(); return; }
       if (!me) { err('Could not load your account. Please try again.'); if (b) b.textContent = up ? 'Start free trial' : 'Sign in'; }
@@ -96,7 +97,17 @@
   }
   function setMe(m) {
     me = m; if (!m) return; setTimeout(drawAcct, 0); try { const dg = document.getElementById('odiag'); if (dg) dg.textContent = (m.ownerDash || (m.role === 'owner' && m.source === 'owner')) ? ' · acct ' + (m.role || '?') + (m.ownerDash ? '+dash' : '') + ' ' + String(m.email || '').slice(-8) : ''; s('odd-dash', (m.role === 'owner' && m.source === 'owner') || m.ownerDash ? '1' : null); if (window.navRender) setTimeout(window.navRender, 0); } catch (e) {}
-    if (m.allowed) { s('odd-ok', String(Date.now())); hide(); soon(m); } else show();
+    if (m.allowed) { s('odd-ok', String(Date.now())); hide(); soon(m); setTimeout(namePrompt, 1200); } else show();
+  }
+  // Everyone needs a name or handle. New accounts type one at sign-up; accounts made before that get asked once.
+  async function namePrompt() {
+    if (!g('odd-tok') || g('odd-name') || document.getElementById('gnm') || !g('sync-phone')) return;
+    let cur = ''; try { cur = (await call('/myname', {})).name || ''; } catch (e) { return; }
+    if (cur) { s('odd-name', cur); return; }
+    const o = document.createElement('div'); o.id = 'gnm'; o.style.cssText = 'position:fixed;inset:0;z-index:300;background:rgba(5,10,20,.92);display:flex;align-items:center;justify-content:center;padding:20px;font:15px/1.4 -apple-system,system-ui,sans-serif;color:#fff';
+    o.innerHTML = '<div style="max-width:380px;width:100%;background:#13203a;border:1px solid #2b3f66;border-radius:16px;padding:18px"><b style="font-size:18px">Pick a name or handle</b><p style="color:#8fa0bf;margin:8px 0">Every Oddable player needs one. It is how you show up in your account and to the owner.</p><input id="gnmi" placeholder="Name or handle" maxlength="24" autocapitalize="words" style="width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid #2b3f66;background:#0b1220;color:#fff;font-size:16px"><div id="gnme" style="color:#ff6b6b;min-height:18px;font-size:13px;margin:6px 0"></div><button id="gnms" style="width:100%;padding:12px;border-radius:10px;border:0;background:#7c3aed;color:#fff;font-size:16px;font-weight:700">Save</button></div>';
+    document.body.appendChild(o); const go = async () => { const v = ($('gnmi').value || '').trim(); if (v.length < 2) { $('gnme').textContent = 'Enter at least 2 characters.'; return; } try { const j = await call('/myname', { name: v }); s('odd-name', j.name || v); o.remove(); } catch (e) { $('gnme').textContent = e.message; } };
+    $('gnms').onclick = go; $('gnmi').onkeydown = (e) => { if (e.key === 'Enter') go(); };
   }
   function soon(m) {
     if (m.role === 'owner' || !m.expires_on) return; const d = Math.ceil((new Date(m.expires_on + 'T23:59:59') - Date.now()) / 864e5);

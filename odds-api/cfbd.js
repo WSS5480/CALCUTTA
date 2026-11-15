@@ -99,12 +99,24 @@ async function runConf(y0 = 2014, y1 = 2025) {
   const f = (a) => ({ rec: a.join('-'), pct: a[0] + a[1] ? +(a[0] / (a[0] + a[1]) * 100).toFixed(1) : null });
   return Object.entries(C).map(([k, c]) => ({ conf: k, n: c.all[0] + c.all[1] + c.all[2], all: f(c.all), edge3plus: f(c.e3), edge7plus: f(c.e7) })).sort((a, b) => b.n - a.n);
 }
-let CT = null, CU = null, CC = null;
+
+async function runSlices(y0 = 2014, y1 = 2025) {
+  const S = {}, Y = {}, add = (k, y, o) => { (S[k] = S[k] || [0, 0, 0])[o]++; const q = (Y[k] = Y[k] || {}); (q[y] = q[y] || [0, 0, 0])[o]++; };
+  for (let y = y0; y <= y1; y++) for (const g of await lines(y)) {
+    if (g.line === 0) continue; const awayDog = g.line > 0, cov = awayDog ? g.line + (g.ap - g.hp) : -g.line + (g.hp - g.ap), o = cov > 0 ? 0 : cov < 0 ? 1 : 2, same = g.hc && g.hc === g.ac, side = awayDog ? 'road dog' : 'home dog', small = Math.abs(g.line) <= 7 ? ' (spread<=7)' : '';
+    add((same ? 'conference game, ' : 'non-conference, ') + side, y, o); if (small) add((same ? 'conference game, ' : 'non-conference, ') + side + small, y, o);
+    if (same) add(g.hc + ', ' + side, y, o);
+  }
+  const f = (a) => ({ rec: a.join('-'), pct: a[0] + a[1] ? +(a[0] / (a[0] + a[1]) * 100).toFixed(1) : null, units: +(a[0] * 100 / 110 - a[1]).toFixed(1), n: a[0] + a[1] + a[2] });
+  return Object.keys(S).map((k) => { const ys = Object.entries(Y[k]).filter(([, a]) => a[0] + a[1] >= 5), up = ys.filter(([, a]) => a[0] / (a[0] + a[1]) > 0.5238).length; return { slice: k, ...f(S[k]), seasonsAbove: up + '/' + ys.length }; }).sort((a, b) => b.pct - a.pct);
+}
+let CT = null, CU = null, CC = null, CS = null;
 async function handle(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json');
   if (!KEY()) { res.statusCode = 503; res.end('{"error":"CFBD_API_KEY not set"}'); return true; }
   const q = new URL(req.url, 'http://x').searchParams;
   if (req.url.startsWith('/cfbd/backtest')) { try { if (!CT || Date.now() - CT.t > 3600e3 || q.get('fresh')) CT = { t: Date.now(), v: await run(Math.max(2014, +q.get('from') || 2014), Math.min(2025, +q.get('to') || 2025), +q.get('c') || 0.05) }; res.end(JSON.stringify(CT.v, null, 1)); } catch (e) { res.statusCode = 502; res.end(JSON.stringify({ error: e.message })); } return true; }
+  if (req.url.startsWith('/cfbd/slices')) { try { if (!CS || Date.now() - CS.t > 3600e3) CS = { t: Date.now(), v: await runSlices() }; res.end(JSON.stringify(CS.v)); } catch (e) { res.statusCode = 502; res.end(JSON.stringify({ error: e.message })); } return true; }
   if (req.url.startsWith('/cfbd/conf')) { try { if (!CC || Date.now() - CC.t > 3600e3) CC = { t: Date.now(), v: await runConf() }; res.end(JSON.stringify(CC.v)); } catch (e) { res.statusCode = 502; res.end(JSON.stringify({ error: e.message })); } return true; }
   if (req.url.startsWith('/cfbd/current')) { try { if (!CU || Date.now() - CU.t > 3600e3) CU = { t: Date.now(), v: await runCurrent() }; res.end(JSON.stringify(CU.v, null, 1)); } catch (e) { res.statusCode = 502; res.end(JSON.stringify({ error: e.message })); } return true; }
   res.statusCode = 404; res.end('{"error":"not found"}'); return true;

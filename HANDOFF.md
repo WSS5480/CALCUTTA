@@ -428,3 +428,7 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v230 — Watch live links
 - parseEvents now keeps `g.tv` (ESPN broadcast network names). Game cards (not yet played) get a "📺 CBS" chip; tap opens `tvOpen`: "Open <network>" link (Paramount+/CBS, FOX Sports, NBC, Peacock, ESPN, ABC, Prime Video, NFL Network, Netflix via TVNET map) and a "Sign in to a TV service" list (YouTube TV, Fubo, Sling, Hulu + Live TV, DirecTV, NFL+, Paramount+, Peacock). The service the user taps is remembered (`tvpref`) and listed first. Links only; Oddable never streams or sees logins. User asked Nov 15 2026.
+
+## v231 — Cable and satellite providers in the Watch sheet
+- Added a "Cable and satellite" group (Spectrum, Xfinity, Cox, Optimum, Verizon Fios, AT&T TV, DISH, Mediacom, Frontier) above the streaming services. The tapped provider name is remembered locally (`tvpref`) and listed first.
+- DECISION (Nov 15 2026): Oddable does NOT store or collect TV-provider usernames/passwords. User asked to "remember credentials"; we only remember which provider they use. Reasons: storing someone's cable login in our app/sync server would make us a credential vault (breach and misuse risk, provider terms). The provider's own sign-in ("remember me") and the phone's password manager do that safely.

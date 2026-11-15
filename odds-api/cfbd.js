@@ -14,7 +14,7 @@ async function lines(year) {
     if (!isFinite(sp)) continue;
     if (g.homeClassification && g.homeClassification !== 'fbs') continue;
     if (g.awayClassification && g.awayClassification !== 'fbs') continue;
-    out.push({ y: year, wk: g.week, t: Date.parse(g.startDate) || 0, h: g.homeTeam, a: g.awayTeam, hp: g.homeScore, ap: g.awayScore, line: -sp }); // line>0: home favored
+    out.push({ y: year, wk: g.week, t: Date.parse(g.startDate) || 0, h: g.homeTeam, a: g.awayTeam, hc: g.homeConference || '', ac: g.awayConference || '', hp: g.homeScore, ap: g.awayScore, line: -sp }); // line>0: home favored
   }
   out.sort((x, y) => x.wk - y.wk || x.t - y.t);
   CACHE[year] = { t: Date.now(), v: out }; return out;
@@ -86,12 +86,26 @@ async function runCurrent(y0 = 2014, y1 = 2025) {
   const f = (a) => ({ record: a.join('-'), pct: +(a[0] / (a[0] + a[1]) * 100).toFixed(1) });
   return { note: 'current app college model replica, spread picks vs closing consensus; W-L-push; break-even 52.38%', allPicks: buckets.map((b) => ({ edgeAtLeast: b.e, ...f([b.w, b.l, b.p]), units: +(b.w * 100 / 110 - b.l).toFixed(1) })), topEdgeEachWeek: f(top), secondEdgeEachWeek: f(top2), byYear: yr };
 }
-let CT = null, CU = null;
+
+async function runConf(y0 = 2014, y1 = 2025) {
+  const C = {}, add = (k, edge, o) => { const c = C[k] || (C[k] = { all: [0, 0, 0], e3: [0, 0, 0], e7: [0, 0, 0] }); c.all[o]++; if (edge >= 3) c.e3[o]++; if (edge >= 7) c.e7[o]++; };
+  for (let y = y0; y <= y1; y++) {
+    const prev = finalRatings(await lines(y - 1)), gs = await lines(y), wks = [...new Set(gs.map((g) => g.wk))].sort((a, b) => a - b);
+    for (const wk of wks) {
+      const RAT = weekRatings(prev, gs.filter((g) => g.wk < wk), wk);
+      gs.filter((g) => g.wk === wk).forEach((g) => { const mh = (RAT[g.h] || 0) - (RAT[g.a] || 0) + HFA, homeCover = mh > g.line, cov = g.hp - g.ap - g.line, o = cov === 0 ? 2 : (homeCover ? cov > 0 : cov < 0) ? 0 : 1, edge = Math.abs(mh - g.line), k = g.hc && g.hc === g.ac ? g.hc : 'Non-conference (' + (g.hc || '?') + ' host)'; add(g.hc && g.hc === g.ac ? k : 'Non-conference (all)', edge, o); if (g.hc && g.hc === g.ac) add('(all conference games)', edge, o); });
+    }
+  }
+  const f = (a) => ({ rec: a.join('-'), pct: a[0] + a[1] ? +(a[0] / (a[0] + a[1]) * 100).toFixed(1) : null });
+  return Object.entries(C).map(([k, c]) => ({ conf: k, n: c.all[0] + c.all[1] + c.all[2], all: f(c.all), edge3plus: f(c.e3), edge7plus: f(c.e7) })).sort((a, b) => b.n - a.n);
+}
+let CT = null, CU = null, CC = null;
 async function handle(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json');
   if (!KEY()) { res.statusCode = 503; res.end('{"error":"CFBD_API_KEY not set"}'); return true; }
   const q = new URL(req.url, 'http://x').searchParams;
   if (req.url.startsWith('/cfbd/backtest')) { try { if (!CT || Date.now() - CT.t > 3600e3 || q.get('fresh')) CT = { t: Date.now(), v: await run(Math.max(2014, +q.get('from') || 2014), Math.min(2025, +q.get('to') || 2025), +q.get('c') || 0.05) }; res.end(JSON.stringify(CT.v, null, 1)); } catch (e) { res.statusCode = 502; res.end(JSON.stringify({ error: e.message })); } return true; }
+  if (req.url.startsWith('/cfbd/conf')) { try { if (!CC || Date.now() - CC.t > 3600e3) CC = { t: Date.now(), v: await runConf() }; res.end(JSON.stringify(CC.v)); } catch (e) { res.statusCode = 502; res.end(JSON.stringify({ error: e.message })); } return true; }
   if (req.url.startsWith('/cfbd/current')) { try { if (!CU || Date.now() - CU.t > 3600e3) CU = { t: Date.now(), v: await runCurrent() }; res.end(JSON.stringify(CU.v, null, 1)); } catch (e) { res.statusCode = 502; res.end(JSON.stringify({ error: e.message })); } return true; }
   res.statusCode = 404; res.end('{"error":"not found"}'); return true;
 }

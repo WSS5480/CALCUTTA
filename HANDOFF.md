@@ -456,3 +456,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 - The long caveat paragraph moved behind an ⓘ (INFO.trnote); the visible line is just the units at -110.
 - `GET /cfbd/current`: replica of the app's current college spread pick (margin power ratings, last-season carry, 0.95 weekly decay, HFA 3.5) vs the same CFBD lines. Missing vs app: AP-rank prior, yards-per-play efficiency, neutral-site flag.
 - `GET /cfbd/conf`: the current-model replica broken out by conference (both teams in same conference, else non-conference).
+
+## v237 — Division road dog tag
+- Informational 🏠 "Division road dog" chip on upcoming NFL games where the away team is the underdog in a division game (Trophy.isDiv in trophy.js). Sheet: 2004-2025 685-599 (53.3%, ~+24 units at -110), 14/22 seasons above break-even, home division dogs 48.6%. Labeled not proven (about a dozen slices tested). Does not change any pick or lock. Decision: user asked for it Nov 15 2026.

@@ -62,6 +62,7 @@
     var meets = rows.filter(function (r) { return r.t < g.start && r.id !== g.id && season - r.season <= 6 && ((r.home === home && r.away === away) || (r.home === away && r.away === home)); }).slice(-3).map(function (r) { return { season: r.season, week: r.week, home: r.home, away: r.away, hs: r.hs, as: r.as, L: r.L }; });
     return { p: c.p, items: items, b: M.b, dogAbbr: c.dog.abbr, favAbbr: c.fav.abbr, dogHome: c.dogHome, dogLast: lastOf(dog), favLast: lastOf(fav), meets: meets };
   }
-  root.Trophy = { init: init, ready: ready, weekly: weekly, explain: explain, pickOf: pickOf, pool: pool, dogCover: dogCover };
+  function isDiv(a, b) { var f = function (x) { return x === 'LAR' ? 'LA' : x; }; return !!(DIV && DIV[[f(a), f(b)].sort().join('-')]); }
+  root.Trophy = { isDiv: isDiv, init: init, ready: ready, weekly: weekly, explain: explain, pickOf: pickOf, pool: pool, dogCover: dogCover };
   if (typeof module !== 'undefined') module.exports = root.Trophy;
 })(typeof window !== 'undefined' ? window : globalThis);

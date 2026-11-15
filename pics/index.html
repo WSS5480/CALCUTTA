@@ -206,7 +206,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v236 -->
+<!-- Pics v237 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
   <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v231</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
@@ -217,7 +217,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v236 (results drill)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v237 (division road dog)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -236,7 +236,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </div>
 <div id="plb" hidden></div>
 <nav class="bn" id="bn"></nav>
-<script src="trophy.js?v=236"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
+<script src="trophy.js?v=237"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
 <script>
 const SC = document.getElementById('sc');
 // The page scrolls inside #sc so the banner and bottom bar (outside it) can never drift on iOS
@@ -413,7 +413,7 @@ function nCard(g) {
     <div class="nbr"><i style="width:${p.pa * 100}%;background:#7c6ad8"></i><i style="width:${p.ph * 100}%;background:#4fd18b"></i></div>
     <div class="npr"><span>${g.away.abbr} ${pct(p.pa)}</span><span>${pct(p.ph)} ${g.home.abbr}</span></div>
     ${takeHtml(g, p)}<i class="ibtn inl" style="float:none;margin-left:4px" onclick="infoOpen('hit')">ⓘ what counts as a hit</i>
-    <div class="nft"><span>${bits.join(' · ') || 'No line posted'}</span>${(() => { const a = arbOf(g); return a ? `<button class="nw" style="border-color:#f5c542;color:#f5c542;font-weight:800" onclick="booksOpen('${g.id}')">${a.arb ? '💰 ARB' : '🟡 MIDDLE'}</button>` : ''; })()}${betGids().has(String(g.id)) ? '<button class="nw on" disabled>📌 My bet</button>' : `<button class="nw ${pinned ? 'on' : ''}" onclick="pinToggle('${g.id}')">${pinned ? '📌 Watching' : '📍 Watch'}</button>`}<span data-wind="${g.id}">${windChip(g)}</span>${tsChip(g)}${dogChip(g)}${trophyChip(g)}${tvChip(g)}${g.books ? `<button class="nw" onclick="booksOpen('${g.id}')">📚 ${g.books.n} books</button>` : ''}<button class="nw livebtn" onclick="liveOpen('football/'+(CFB?'college-football':'nfl'),'${g.id}')">📡 Live</button>${g.state === 'post' ? '' : `<button class="nw" onclick="aiOpen('${g.id}')">🤖 Ask</button>`}</div>
+    <div class="nft"><span>${bits.join(' · ') || 'No line posted'}</span>${(() => { const a = arbOf(g); return a ? `<button class="nw" style="border-color:#f5c542;color:#f5c542;font-weight:800" onclick="booksOpen('${g.id}')">${a.arb ? '💰 ARB' : '🟡 MIDDLE'}</button>` : ''; })()}${betGids().has(String(g.id)) ? '<button class="nw on" disabled>📌 My bet</button>' : `<button class="nw ${pinned ? 'on' : ''}" onclick="pinToggle('${g.id}')">${pinned ? '📌 Watching' : '📍 Watch'}</button>`}<span data-wind="${g.id}">${windChip(g)}</span>${tsChip(g)}${dogChip(g)}${divChip(g)}${trophyChip(g)}${tvChip(g)}${g.books ? `<button class="nw" onclick="booksOpen('${g.id}')">📚 ${g.books.n} books</button>` : ''}<button class="nw livebtn" onclick="liveOpen('football/'+(CFB?'college-football':'nfl'),'${g.id}')">📡 Live</button>${g.state === 'post' ? '' : `<button class="nw" onclick="aiOpen('${g.id}')">🤖 Ask</button>`}</div>
     ${g.state === 'post' ? '' : `<button class="nbet" onclick="event.stopPropagation();betFromGame('${g.id}')">＋ Add bet</button>`}</div>`;
 }
 function newBoard(games) {
@@ -1555,6 +1555,9 @@ function tsChip(g) { return tsLeg(g) ? `<button class="nw" style="border-color:#
 // --- informational only: underdog off a 14+ point loss (2004-2025: dog covered 53.6% of 1,303 games; ~break-even after juice, not a pick rule) ---
 function dogOff(g) { if (CFB || g.state !== 'pre' || g.line === null || g.line === undefined || g.line === 0) return null; const dog = g.line > 0 ? g.away : g.home; let last = null; Object.values(ALL).forEach((x) => { if (x.state !== 'post' || x.start >= g.start) return; if (x.home.abbr !== dog.abbr && x.away.abbr !== dog.abbr) return; if (!last || x.start > last.start) last = x; }); if (!last) return null; const mine = last.home.abbr === dog.abbr ? last.home : last.away, other = mine === last.home ? last.away : last.home, m = mine.score - other.score; return m <= -14 ? { dog, margin: m, opp: other.abbr } : null; }
 function dogChip(g) { return dogOff(g) ? `<button class="nw" style="border-color:#c9a227;color:#c9a227" onclick="dogOpen('${g.id}')">🐶 Dog off blowout</button>` : ''; }
+function divDog(g) { return !CFB && g.state === 'pre' && g.line !== null && g.line !== undefined && g.line > 0 && window.Trophy && Trophy.ready() && Trophy.isDiv(g.away.abbr, g.home.abbr); }
+function divChip(g) { return divDog(g) ? `<button class="nw" style="border-color:#c9a227;color:#c9a227" onclick="divOpen('${g.id}')">🏠 Division road dog</button>` : ''; }
+function divOpen(id) { const g = ALL[id]; if (!g || !divDog(g)) return; sheetOpen(`<div style="margin:6px 0"><b>${g.away.abbr}</b> is the road underdog in a division game against ${g.home.abbr}.</div><div class="sub" style="margin:6px 0">Over 2004-2025, road underdogs in division games covered <b>53.3%</b> (685-599, 1,284 games), about +24 units at -110. Break-even is 52.4%, so this is only a slight lead. It was found while testing about a dozen slices, so it is not a proven edge. It was above break-even in 14 of 22 seasons and in both halves of the period. Home underdogs in division games covered 48.6%, so the effect shows up only for the road team. Information only: it does not change any pick or lock.</div>`); }
 function dogOpen(id) { const g = ALL[id], d = g && dogOff(g); if (!d) return; sheetOpen(`<div style="margin:6px 0"><b>${d.dog.abbr}</b> is the underdog and lost its last game by <b>${-d.margin}</b> to ${d.opp}.</div><div class="sub" style="margin:6px 0">Over 2004-2025, underdogs in this spot covered <b>53.6%</b> (1,303 games). Break-even at -110 is 52.4%, so this is about even after juice. It was 1 of 24 factors tested and does not hold up once that is counted. Information only: it does not change any pick or lock.</div>`); }
 // --- Locks: frozen factor model (trophy.js). #1 of the week = double trophy, #2 = single trophy. Spread picks. ---
 let TRL = false, TRC = null, TRS = {};
@@ -2426,6 +2429,6 @@ if ('serviceWorker' in navigator) {
 })();
 </script>
 <script>setTimeout(()=>{const l=document.querySelector('.lg'),o=l&&l.querySelector('.on');if(o)l.scrollLeft=Math.max(0,o.offsetLeft-60);},500);</script>
-<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=236"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
+<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=237"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
 </body>
 </html>

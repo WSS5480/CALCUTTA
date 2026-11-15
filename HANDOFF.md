@@ -454,3 +454,4 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 ## v236 — Results drill + info icon
 - Results box: Double lock / Lock / Both boxes tap to a list of that group's picks (week, line, confidence, score, ✓/✗); tap a pick for the full breakdown, with a "Back to list" button. Standing rule: summary tiles drill down with a back button.
 - The long caveat paragraph moved behind an ⓘ (INFO.trnote); the visible line is just the units at -110.
+- `GET /cfbd/current`: replica of the app's current college spread pick (margin power ratings, last-season carry, 0.95 weekly decay, HFA 3.5) vs the same CFBD lines. Missing vs app: AP-rank prior, yards-per-play efficiency, neutral-site flag.

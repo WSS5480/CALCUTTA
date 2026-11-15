@@ -49,8 +49,8 @@
   // all weeks: rank #1 / #2 by model chance among games with a line
   function weekly(cur, season) {
     if (!M) return {};
-    var rows = pool(cur, season), by = {};
-    cur.forEach(function (g) { if (g.state === 'canceled') return; var p = pickOf(g, rows, season); if (p) (by[g.week] = by[g.week] || []).push(p); });
+    var rows = pool(cur, season), by = {}, seen = {};
+    cur.forEach(function (g) { if (g.state === 'canceled' || seen[g.id]) return; seen[g.id] = 1; var p = pickOf(g, rows, season); if (p) (by[g.week] = by[g.week] || []).push(p); });
     Object.keys(by).forEach(function (k) { by[k].sort(function (a, b) { return b.conf - a.conf; }); by[k].forEach(function (p, i) { p.rank = i + 1; }); by[k] = by[k].slice(0, 2); });
     return by;
   }

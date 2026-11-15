@@ -425,3 +425,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 - The owner's account shows as "Sir Oddable" in the dashboard (env `OWNER_NAME` overrides; default Sir Oddable). User said "I am Sir Oddable" Nov 15 2026.
 - gate.js cache-bust in index.html was stuck at v=183; now v=229.
 - Needs the odds server (calcutta-odds) redeployed to take effect for the server checks.
+
+## v230 — Watch live links
+- parseEvents now keeps `g.tv` (ESPN broadcast network names). Game cards (not yet played) get a "📺 CBS" chip; tap opens `tvOpen`: "Open <network>" link (Paramount+/CBS, FOX Sports, NBC, Peacock, ESPN, ABC, Prime Video, NFL Network, Netflix via TVNET map) and a "Sign in to a TV service" list (YouTube TV, Fubo, Sling, Hulu + Live TV, DirecTV, NFL+, Paramount+, Peacock). The service the user taps is remembered (`tvpref`) and listed first. Links only; Oddable never streams or sees logins. User asked Nov 15 2026.

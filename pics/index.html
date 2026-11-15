@@ -206,10 +206,10 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v229 -->
+<!-- Pics v230 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v229</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v230</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
   <div id="arbbar" class="arbbar" hidden onclick="arbBarTap()" role="button" aria-label="Arbitrage alert"><span class="mq" id="arbmq"></span></div>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">NCAA</button><button data-sp="nba">NBA</button><button data-sp="mlb">MLB</button><button data-sp="nhl">NHL</button><button data-sp="ncaab">NCAAB</button></div>
   <div class="srow"><input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team"><select id="conf" aria-label="Conference"><option value="">All</option></select></div>
@@ -217,7 +217,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v229 (name required)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v230 (watch live links)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -236,7 +236,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </div>
 <div id="plb" hidden></div>
 <nav class="bn" id="bn"></nav>
-<script src="trophy.js?v=229"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
+<script src="trophy.js?v=230"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
 <script>
 const SC = document.getElementById('sc');
 // The page scrolls inside #sc so the banner and bottom bar (outside it) can never drift on iOS
@@ -288,7 +288,7 @@ function parseEvents(j, week) {
     c.competitors.forEach((x) => { TEAMID[x.team.id] = ab(x.team.abbreviation); NAMES[ab(x.team.abbreviation)] = x.team.shortDisplayName || x.team.displayName || x.team.abbreviation; });
     cs.sort((a, b) => a.home - b.home);
     const o = c.odds && c.odds[0];
-    return { id: e.id, week: week || (j.week && j.week.number) || 0, start: +new Date(e.date), state: t.state, detail: t.shortDetail || '', away: cs[0], home: cs[1], neutral: !!c.neutralSite, line: o ? parseLine(o.details, cs[1].abbr, cs[0].abbr) : null, total: o && Number.isFinite(+o.overUnder) ? +o.overUnder : null, indoor: c.venue && c.venue.indoor !== undefined ? !!c.venue.indoor : null, sit: c.situation ? { down: c.situation.down, dist: c.situation.distance, yl: c.situation.yardLine, poss: TEAMID[c.situation.possession] || '', text: (c.situation.lastPlay && c.situation.lastPlay.text) || '', ptxt: c.situation.downDistanceText || '', rz: !!c.situation.isRedZone, wp: c.situation.lastPlay && c.situation.lastPlay.probability && Number.isFinite(c.situation.lastPlay.probability.homeWinPercentage) ? c.situation.lastPlay.probability.homeWinPercentage : null } : null };
+    return { id: e.id, week: week || (j.week && j.week.number) || 0, start: +new Date(e.date), state: t.state, detail: t.shortDetail || '', away: cs[0], home: cs[1], neutral: !!c.neutralSite, tv: [...new Set((c.broadcasts || []).flatMap((b) => b.names || []).filter(Boolean))].slice(0, 3), line: o ? parseLine(o.details, cs[1].abbr, cs[0].abbr) : null, total: o && Number.isFinite(+o.overUnder) ? +o.overUnder : null, indoor: c.venue && c.venue.indoor !== undefined ? !!c.venue.indoor : null, sit: c.situation ? { down: c.situation.down, dist: c.situation.distance, yl: c.situation.yardLine, poss: TEAMID[c.situation.possession] || '', text: (c.situation.lastPlay && c.situation.lastPlay.text) || '', ptxt: c.situation.downDistanceText || '', rz: !!c.situation.isRedZone, wp: c.situation.lastPlay && c.situation.lastPlay.probability && Number.isFinite(c.situation.lastPlay.probability.homeWinPercentage) ? c.situation.lastPlay.probability.homeWinPercentage : null } : null };
   });
 }
 
@@ -413,7 +413,7 @@ function nCard(g) {
     <div class="nbr"><i style="width:${p.pa * 100}%;background:#7c6ad8"></i><i style="width:${p.ph * 100}%;background:#4fd18b"></i></div>
     <div class="npr"><span>${g.away.abbr} ${pct(p.pa)}</span><span>${pct(p.ph)} ${g.home.abbr}</span></div>
     ${takeHtml(g, p)}<i class="ibtn inl" style="float:none;margin-left:4px" onclick="infoOpen('hit')">ⓘ what counts as a hit</i>
-    <div class="nft"><span>${bits.join(' · ') || 'No line posted'}</span>${(() => { const a = arbOf(g); return a ? `<button class="nw" style="border-color:#f5c542;color:#f5c542;font-weight:800" onclick="booksOpen('${g.id}')">${a.arb ? '💰 ARB' : '🟡 MIDDLE'}</button>` : ''; })()}${betGids().has(String(g.id)) ? '<button class="nw on" disabled>📌 My bet</button>' : `<button class="nw ${pinned ? 'on' : ''}" onclick="pinToggle('${g.id}')">${pinned ? '📌 Watching' : '📍 Watch'}</button>`}<span data-wind="${g.id}">${windChip(g)}</span>${tsChip(g)}${dogChip(g)}${trophyChip(g)}${g.books ? `<button class="nw" onclick="booksOpen('${g.id}')">📚 ${g.books.n} books</button>` : ''}<button class="nw livebtn" onclick="liveOpen('football/'+(CFB?'college-football':'nfl'),'${g.id}')">📡 Live</button>${g.state === 'post' ? '' : `<button class="nw" onclick="aiOpen('${g.id}')">🤖 Ask</button>`}</div>
+    <div class="nft"><span>${bits.join(' · ') || 'No line posted'}</span>${(() => { const a = arbOf(g); return a ? `<button class="nw" style="border-color:#f5c542;color:#f5c542;font-weight:800" onclick="booksOpen('${g.id}')">${a.arb ? '💰 ARB' : '🟡 MIDDLE'}</button>` : ''; })()}${betGids().has(String(g.id)) ? '<button class="nw on" disabled>📌 My bet</button>' : `<button class="nw ${pinned ? 'on' : ''}" onclick="pinToggle('${g.id}')">${pinned ? '📌 Watching' : '📍 Watch'}</button>`}<span data-wind="${g.id}">${windChip(g)}</span>${tsChip(g)}${dogChip(g)}${trophyChip(g)}${tvChip(g)}${g.books ? `<button class="nw" onclick="booksOpen('${g.id}')">📚 ${g.books.n} books</button>` : ''}<button class="nw livebtn" onclick="liveOpen('football/'+(CFB?'college-football':'nfl'),'${g.id}')">📡 Live</button>${g.state === 'post' ? '' : `<button class="nw" onclick="aiOpen('${g.id}')">🤖 Ask</button>`}</div>
     ${g.state === 'post' ? '' : `<button class="nbet" onclick="event.stopPropagation();betFromGame('${g.id}')">＋ Add bet</button>`}</div>`;
 }
 function newBoard(games) {
@@ -1613,6 +1613,20 @@ function trophyBox() {
   const both = [R[1][0] + R[2][0], R[1][1] + R[2][1], R[1][2] + R[2][2]], units = (a) => (a[0] * 100 / 110 - a[1]);
   return `<style>.trbx{display:flex;gap:8px;margin:8px 0}.trb{flex:1;border:2px solid;border-radius:12px;padding:8px;text-align:center}.trp{font:800 24px inherit}.trw{display:flex;gap:6px;align-items:flex-start;border-top:1px solid var(--line);padding:6px 0}.trn{width:44px;font-weight:800}.trc{flex:1;font-size:13px}</style><div class="gh">🔒 Locks (spread)</div><div class="trbx">${box('🔒🔒 Double lock', R[1], '#f5c542')}${box('🔒 Lock', R[2], '#e0b44c')}${box('Both', both, '#9ca3af')}</div><div class="note" style="text-align:left">At -110, both picks: <b>${units(both) >= 0 ? '+' : ''}${units(both).toFixed(1)}</b> units. ${R[1][0] + R[1][1] + R[2][0] + R[2][1] < 60 ? 'Small sample: a few weeks of results say almost nothing yet. ' : ''}Break-even is 52.4%. The same method run on 2018-2025 ended near 50%, so treat this as a tracker, not a promise. * = picked after the fact with the model frozen before the season; weeks marked without a star were locked before kickoff on this phone.</div>${trophyHistory()}${rows}`;
 }
+// --- Watch live: network + TV-service links (the network's page or app handles your TV provider sign-in) ---
+const TVNET = { CBS: ['https://www.paramountplus.com/live-tv/', 'Paramount+ / CBS'], FOX: ['https://www.foxsports.com/live', 'FOX Sports'], FS1: ['https://www.foxsports.com/live', 'FOX Sports'], NBC: ['https://www.nbc.com/live', 'NBC'], PEACOCK: ['https://www.peacocktv.com/', 'Peacock'], ESPN: ['https://www.espn.com/watch/', 'ESPN'], ESPN2: ['https://www.espn.com/watch/', 'ESPN'], 'ESPN+': ['https://www.espn.com/watch/', 'ESPN'], ABC: ['https://abc.com/watch-live', 'ABC'], 'PRIME VIDEO': ['https://www.amazon.com/gp/video/storefront', 'Prime Video'], AMAZON: ['https://www.amazon.com/gp/video/storefront', 'Prime Video'], 'NFL NETWORK': ['https://www.nfl.com/network/watch/nfl-network-live', 'NFL Network'], NETFLIX: ['https://www.netflix.com/', 'Netflix'] };
+const TVSVC = [['YouTube TV', 'https://tv.youtube.com/'], ['Fubo', 'https://www.fubo.tv/'], ['Sling', 'https://www.sling.com/'], ['Hulu + Live TV', 'https://www.hulu.com/live-tv'], ['DirecTV', 'https://www.directv.com/'], ['NFL+', 'https://www.nfl.com/plus/'], ['Paramount+', 'https://www.paramountplus.com/'], ['Peacock', 'https://www.peacocktv.com/']];
+const tvNet = (n) => TVNET[String(n || '').toUpperCase().replace(/\s+/g, ' ').trim()] || null;
+function tvChip(g) { if (g.state === 'post') return ''; const n = (g.tv && g.tv[0]) || ''; return `<button class="nw" onclick="tvOpen('${g.id}')">📺 ${n ? escH(n) : 'Watch'}</button>`; }
+function tvPref(name) { try { if (name) localStorage.setItem('tvpref', name); return localStorage.getItem('tvpref') || ''; } catch (e) { return ''; } }
+function tvOpen(id) {
+  const g = ALL[id]; if (!g) return; const nets = (g.tv || []).map((n) => ({ n, t: tvNet(n) })), pref = tvPref(), a = (u, l, hl) => `<a href="${u}" target="_blank" rel="noopener noreferrer" onclick="tvPref('${escH(l)}')" style="display:block;padding:10px 12px;margin:6px 0;border:1px solid ${hl ? '#f5c542' : 'var(--line)'};border-radius:10px;text-decoration:none;color:inherit;font-weight:${hl ? 800 : 600}">${escH(l)} ›</a>`;
+  const first = nets.filter((x) => x.t).map((x) => a(x.t[0], 'Open ' + x.t[1], true)).join('');
+  const svc = [...TVSVC].sort((x, y) => (y[0] === pref) - (x[0] === pref)).map((x) => a(x[1], x[0], x[0] === pref)).join('');
+  sheetOpen(`<div style="margin:4px 0"><b>📺 Watch ${g.away.abbr} at ${g.home.abbr}</b></div><div class="sub">${g.state === 'in' ? 'Live now' : new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })} · ${nets.length ? 'On ' + nets.map((x) => escH(x.n)).join(', ') : 'Network not listed yet'}</div>
+  ${first ? '<div style="margin:10px 0 2px"><b>Open the broadcast</b></div>' + first + '<div class="sub">The network opens in your browser or its app. It asks you to sign in with your TV provider (cable, satellite or a streaming service) to unlock the game.</div>' : '<div class="sub" style="margin:8px 0">Check your local listings. Games on local broadcast channels also work with a digital antenna.</div>'}
+  <div style="margin:12px 0 2px"><b>Sign in to a TV service</b></div>${svc}<div class="sub">Tap one and Oddable remembers it first next time. Oddable only links out; it does not stream games or see your login.</div>`);
+}
 function teaserOpen(id) {
   const legs = Object.values(ALL).map(tsLeg).filter(Boolean).sort((x, y) => x.g.start - y.g.start), me = ALL[id];
   const li = legs.map((l) => `<div style="display:flex;justify-content:space-between;min-height:30px;align-items:center;${l.g.id === id ? 'font-weight:800' : ''}"><span>${l.dog.abbr} <b>+${l.from}</b> → <b>+${l.to}</b></span><span class="sub">${l.g.away.abbr} @ ${l.g.home.abbr}</span></div>`).join('') || '<div class="note">No qualifying legs right now.</div>';
@@ -2375,6 +2389,6 @@ if ('serviceWorker' in navigator) {
 })();
 </script>
 <script>setTimeout(()=>{const l=document.querySelector('.lg'),o=l&&l.querySelector('.on');if(o)l.scrollLeft=Math.max(0,o.offsetLeft-60);},500);</script>
-<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=229"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
+<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=230"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
 </body>
 </html>

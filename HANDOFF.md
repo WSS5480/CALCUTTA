@@ -371,3 +371,8 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 ## Nov 15 2026 – v219: pull-down inside the owner dashboard flashed the main page
 - Cause: the app's window-level pull-to-refresh (index.html, `#ptr`) still fired under the `#odash` overlay (window.scrollY is 0 while the overlay scrolls), refreshing/reloading the main page; v218's auto-reopen then made it look like flashing.
 - Fix: pull-to-refresh ignores touches while `#odash` exists; overlay has `overscroll-behavior:contain`. Rule: any window-level gesture or auto-reload must check for `#odash`.
+
+## Nov 15 2026 – win/loss totals fix (server, odds-api/sync.js `adminUsers`)
+- Problem: owner-dashboard totals came from either the daily log or the per-bet results (whichever had more), so they disagreed with the bets: the log skips today and goes stale, the bets miss deleted ones.
+- Rule (Steve: deleted bets still count): per day take whichever source has MORE settled bets (log vs bets), then sum the days; settled bets with no day are added on top. Expected after deploy: 38f5 44-18-1, d3b6 35-60, 6f07 30-42 (were 41-16-1, 33-59, 27-38).
+- Not verified: whether Kalshi-synced results themselves are right (they come from Kalshi settlement).

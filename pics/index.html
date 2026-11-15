@@ -206,7 +206,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v234 -->
+<!-- Pics v235 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
   <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v231</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
@@ -217,7 +217,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v234 (tv link help)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v235 (watch links)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -236,7 +236,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </div>
 <div id="plb" hidden></div>
 <nav class="bn" id="bn"></nav>
-<script src="trophy.js?v=234"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
+<script src="trophy.js?v=235"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
 <script>
 const SC = document.getElementById('sc');
 // The page scrolls inside #sc so the banner and bottom bar (outside it) can never drift on iOS
@@ -1622,18 +1622,16 @@ const tvNet = (n) => TVNET[String(n || '').toUpperCase().replace(/\s+/g, ' ').tr
 function tvChip(g) { if (g.state === 'post') return ''; const n = (g.tv && g.tv[0]) || ''; return `<button class="nw" onclick="tvOpen('${g.id}')">📺 ${n ? escH(n) : 'Watch'}</button>`; }
 function tvPref(name) { try { if (name) localStorage.setItem('tvpref', name); return localStorage.getItem('tvpref') || ''; } catch (e) { return ''; } }
 function tvOpen(id) {
-  const g = ALL[id]; if (!g) return; const nets = (g.tv || []).map((n) => ({ n, t: tvNet(n) })), pref = tvPref(), a = (u, l, hl) => `<a href="${u}" target="_blank" rel="noopener noreferrer" onclick="tvPref('${escH(l)}')" style="display:block;padding:10px 12px;margin:6px 0;border:1px solid ${hl ? '#f5c542' : 'var(--line)'};border-radius:10px;text-decoration:none;color:inherit;font-weight:${hl ? 800 : 600}">${escH(l)} ›</a>`;
-  const first = nets.filter((x) => x.t).map((x) => a(x.t[0], 'Open ' + x.t[1], true)).join('');
-  const list = (L) => [...L].sort((x, y) => (y[0] === pref) - (x[0] === pref)).map((x) => a(x[1], x[0], x[0] === pref)).join(''), svc = list(TVSVC), cab = list(TVCAB);
-  sheetOpen(`<div style="margin:4px 0"><b>📺 Watch ${g.away.abbr} at ${g.home.abbr}</b></div><div class="sub">${g.state === 'in' ? 'Live now' : new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })} · ${nets.length ? 'On ' + nets.map((x) => escH(x.n)).join(', ') : 'Network not listed yet'}</div>
-  <button style="display:block;width:100%;padding:10px 12px;margin:8px 0;border:1px solid var(--line);border-radius:10px;background:none;color:inherit;font-weight:700" onclick="sheetClose();mvAdd('${g.id}')">🔲 Add to Multiview</button>
-  ${first ? '<div style="margin:10px 0 2px"><b>Open the broadcast</b></div>' + first + '<div class="sub">Tap the network, then on its page pick ' + (pref ? '<b>' + escH(pref) + '</b>' : 'your TV provider') + ' and sign in there. That sign-in is what unlocks the game. Signing in to your provider\'s own site (like spectrum.net) does not link to the network, so use the network button first.</div>' : '<div class="sub" style="margin:8px 0">Check your local listings. Games on local broadcast channels also work with a digital antenna.</div>'}
-  <div style="margin:12px 0 2px"><b>Cable and satellite</b></div>${cab}<div style="margin:12px 0 2px"><b>Streaming TV services</b></div>${svc}<div class="sub">Tapping a provider below opens its own live-TV page (Spectrum opens Spectrum TV) and Oddable remembers it, listed first next time. Oddable only links out: it never stores or sees your username or password. Tick \"remember me\" on the provider's own sign-in, or let your phone's password manager fill it in.</div>`);
+  const g = ALL[id]; if (!g) return; const nets = (g.tv || []).map((n) => ({ n, t: tvNet(n) })), a = (u, l, hl) => `<a href="${u}" target="_blank" rel="noopener noreferrer" style="display:block;padding:12px;margin:6px 0;border:1px solid ${hl ? '#f5c542' : 'var(--line)'};border-radius:10px;text-decoration:none;color:inherit;font-weight:${hl ? 800 : 600}">${escH(l)} ›</a>`;
+  const first = nets.filter((x) => x.t).map((x) => a(x.t[0], 'Watch on ' + x.t[1], true)).join('');
+  sheetOpen(`<div style="margin:4px 0"><b>📺 ${g.away.abbr} at ${g.home.abbr}</b></div><div class="sub">${g.state === 'in' ? 'Live now' : new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })} · ${nets.length ? 'On ' + nets.map((x) => escH(x.n)).join(', ') : 'Network not listed yet'}</div>
+  ${first || '<div class="sub" style="margin:8px 0">Network not listed yet. Check ESPN below.</div>'}${a('https://www.espn.com/nfl/game/_/gameId/' + g.id, 'ESPN game page', !first)}${a('https://www.espn.com/watch/', 'Watch ESPN (opens the ESPN app if installed)', false)}
+  <button style="display:block;width:100%;padding:10px 12px;margin:8px 0;border:1px solid var(--line);border-radius:10px;background:none;color:inherit;font-weight:700" onclick="sheetClose();mvAdd('${g.id}')">🔲 Add to Multiview</button><div class="sub">Links open the network or ESPN, in their app if you have it. Sign in there with your TV provider if asked.</div>`);
 }
 // ---- Multiview: several games at once (own live data) + each game's stream in its own window, any service per tile ----
 let MV = (() => { try { const m = JSON.parse(localStorage.getItem('mv26')); return m && Array.isArray(m.ids) ? m : { ids: [], svc: {} }; } catch (e) { return { ids: [], svc: {} }; } })(), MVFOC = '', MVT = null;
 const mvSave = () => { try { localStorage.setItem('mv26', JSON.stringify(MV)); } catch (e) {} };
-function mvSvcs(g) { const o = []; (g.tv || []).forEach((n) => { const t = tvNet(n); if (t) o.push([t[1], t[0]]); }); TVSVC.concat(TVCAB).forEach((x) => o.push([x[0], x[1]])); return o; }
+function mvSvcs(g) { const o = []; (g.tv || []).forEach((n) => { const t = tvNet(n); if (t) o.push([t[1], t[0]]); }); o.push(['ESPN', 'https://www.espn.com/nfl/game/_/gameId/' + g.id]); return o; }
 function mvUrl(g) { const L = mvSvcs(g), want = MV.svc[g.id] || tvPref(); const f = L.find((x) => x[0] === want) || L[0]; return f ? f : ['', '']; }
 function mvAdd(id) { id = String(id); if (!MV.ids.includes(id)) { if (MV.ids.length >= 4) MV.ids.shift(); MV.ids.push(id); mvSave(); } mvOpen(); }
 function mvDel(id) { MV.ids = MV.ids.filter((x) => x !== String(id)); if (MVFOC === String(id)) MVFOC = ''; mvSave(); mvRender(); }
@@ -2421,6 +2419,6 @@ if ('serviceWorker' in navigator) {
 })();
 </script>
 <script>setTimeout(()=>{const l=document.querySelector('.lg'),o=l&&l.querySelector('.on');if(o)l.scrollLeft=Math.max(0,o.offsetLeft-60);},500);</script>
-<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=234"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
+<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=235"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
 </body>
 </html>

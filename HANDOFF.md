@@ -444,3 +444,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v234 — TV sign-in wording, Spectrum link
 - User signed in at spectrum.net and nothing linked: provider sites do not authorize the networks. Sheet now says to tap the network first and pick the provider on the network's own sign-in. Spectrum link now goes to watch.spectrum.net (Spectrum TV live). Still no credentials stored.
+
+## v235 — Watch sheet simplified
+- Removed cable/streaming provider lists (and the saved-provider pick). 📺 sheet now: network link, ESPN game page, Watch ESPN (app), Add to Multiview. Multiview service picker = game's network + ESPN. User request after Spectrum sign-in didn't link.

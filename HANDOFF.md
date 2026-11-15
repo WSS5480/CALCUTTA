@@ -447,3 +447,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v235 — Watch sheet simplified
 - Removed cable/streaming provider lists (and the saved-provider pick). 📺 sheet now: network link, ESPN game page, Watch ESPN (app), Add to Multiview. Multiview service picker = game's network + ESPN. User request after Spectrum sign-in didn't link.
+
+## College backtest route (odds-api/cfbd.js)
+- `GET /cfbd/backtest` on calcutta-odds: needs env `CFBD_API_KEY` (set by owner, never in repo). Pulls FBS spread lines/scores per season from CFBD (cached 24h), walk-forward logistic model (12 features, C=0.05, trained on seasons before the test season), top 2 games/week = Double lock/Lock. Returns per-year W-L-push, totals, units at -110. Key is never echoed. Simpler factor set than NFL's 45.

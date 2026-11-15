@@ -374,5 +374,5 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## Nov 15 2026 – win/loss totals fix (server, odds-api/sync.js `adminUsers`)
 - Problem: owner-dashboard totals came from either the daily log or the per-bet results (whichever had more), so they disagreed with the bets: the log skips today and goes stale, the bets miss deleted ones.
-- Rule (Steve: deleted bets still count): per day take whichever source has MORE settled bets (log vs bets), then sum the days; settled bets with no day are added on top. Expected after deploy: 38f5 44-18-1, d3b6 35-60, 6f07 30-42 (were 41-16-1, 33-59, 27-38).
+- Rule (Steve: deleted bets still count): per day take the bets unless the log has MORE settled bets (tie goes to the bets: they hold actual money), then sum the days; settled bets with no day are added on top. Expected after deploy: 38f5 44-18-1, d3b6 35-60, 6f07 30-42 (were 41-16-1, 33-59, 27-38).
 - Not verified: whether Kalshi-synced results themselves are right (they come from Kalshi settlement).

@@ -412,3 +412,9 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v227 — No more green "TAKE" boxes
 - Game cards' old win/spread recommendations (✅ TAKE ... / 👍 Lean / pass) are now neutral grey text: "Model leans X to win · N% · info only", "Model spread lean ... · info only", "Toss-up". Only 🔒🔒 Double lock and 🔒 Lock are recommendations. Model math unchanged. User approved Nov 15 2026 after asking how the TAKE boxes work (backtest: old spread picks ~48%, below 52.4% break-even).
+
+## v228 — Live player props
+- New prop form section "Live tracking": game, player (full name), stat (rush/rec/pass yds, receptions, pass/rush/rec/any TDs, completions, rush attempts, INTs), line, over/under. Saved on the bet as `b.pp = {gid,name,stat,line,dir}`.
+- `propTick()` every 30 s (and 6 s after load / right after saving) fetches ESPN `summary?event=ID` for live/just-finished games with tracked props, `parseP` reads every athlete's passing/rushing/receiving lines into `PSTAT[gid]`, `pFind` matches the name (full name, else unique last name + first initial). `propAuto` grades: over = won the moment stat > line; under = lost the moment stat > line; final: under unmet = won, over unmet = lost, exact = push. Auto results set `b.auto=true` (manual taps still win; editing a prop clears the auto result).
+- Card shows "64 / 100", progress bar, "needs N more", score. Props without tracking stay manual (Won/Lost/Push buttons). Player must be in ESPN's box score (counts as 0 until he records a stat). Parlay legs that are props are still manual.
+- Tested with mocked box scores (64 -> pending, 104 -> won, final under -> won). User asked Nov 15 2026.

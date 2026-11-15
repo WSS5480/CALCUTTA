@@ -206,10 +206,10 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v227 -->
+<!-- Pics v228 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v227</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v228</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
   <div id="arbbar" class="arbbar" hidden onclick="arbBarTap()" role="button" aria-label="Arbitrage alert"><span class="mq" id="arbmq"></span></div>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">NCAA</button><button data-sp="nba">NBA</button><button data-sp="mlb">MLB</button><button data-sp="nhl">NHL</button><button data-sp="ncaab">NCAAB</button></div>
   <div class="srow"><input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team"><select id="conf" aria-label="Conference"><option value="">All</option></select></div>
@@ -217,7 +217,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v227 (leans, no TAKE)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v228 (live player props)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -236,7 +236,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </div>
 <div id="plb" hidden></div>
 <nav class="bn" id="bn"></nav>
-<script src="trophy.js?v=227"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
+<script src="trophy.js?v=228"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
 <script>
 const SC = document.getElementById('sc');
 // The page scrolls inside #sc so the banner and bottom bar (outside it) can never drift on iOS
@@ -1076,8 +1076,40 @@ function parlayCard(b, r, money) {
     ${b.cash !== undefined && b.cash !== null ? `<div class="sub" style="margin:6px 0">💵 Cashed out on Kalshi for <b>$${Number(b.cash).toFixed(2)}</b> (${b.cash >= (b.stake || 0) ? '+' : '-'}$${Math.abs(b.cash - (b.stake || 0)).toFixed(2)})</div>` : ''}${b.src === 'kalshi' && r.st === 'pending' && b.kt && b.kn && (b.cash === undefined || b.cash === null) || (b.src === 'kalshi' && r.st === 'live' && b.kt && b.kn && (b.cash === undefined || b.cash === null)) ? `<div class="sub" data-kco="${escH(b.id)}" style="margin:6px 0">💵 Checking cash-out value…</div>` : ''}
     ${b.src === 'kalshi' ? '<div class="sub" style="margin-top:6px">From Kalshi · each leg is set automatically when it settles</div>' : ''}<div class="bbtn">${b.src === 'kalshi' ? '' : `<button onclick="betEdit('${b.id}')">Edit</button>`}<button onclick="betDel('${b.id}')">Delete</button></div></div>`;
 }
+// --- Live player props: pick a game, a player, a stat and a line; the card tracks the stat live and grades itself ---
+const PSTATS = { rushYds: 'Rushing yards', recYds: 'Receiving yards', passYds: 'Passing yards', rec: 'Receptions', passTD: 'Passing TDs', rushTD: 'Rushing TDs', recTD: 'Receiving TDs', anyTD: 'Touchdowns (rush + rec)', comp: 'Pass completions', rushAtt: 'Rushing attempts', int: 'Interceptions thrown' };
+let PSTAT = {};
+function parseP(s) {
+  const out = {};
+  ((s.boxscore && s.boxscore.players) || []).forEach((t) => { const team = ab(t.team.abbreviation); (t.statistics || []).forEach((c) => { const L = c.labels || [], ix = (n) => L.indexOf(n); (c.athletes || []).forEach((a) => { const st = a.stats || [], v = (n) => parseFloat(st[ix(n)]) || 0, id = a.athlete.id, o = (out[id] = out[id] || { name: a.athlete.displayName || '', team, passYds: 0, passTD: 0, int: 0, comp: 0, rushAtt: 0, rushYds: 0, rushTD: 0, rec: 0, recYds: 0, recTD: 0 });
+    if (c.name === 'passing') { o.comp = parseInt((st[ix('C/ATT')] || '').split('/')[0], 10) || 0; o.passYds = v('YDS'); o.passTD = v('TD'); o.int = v('INT'); } else if (c.name === 'rushing') { o.rushAtt = v('CAR'); o.rushYds = v('YDS'); o.rushTD = v('TD'); } else if (c.name === 'receiving') { o.rec = v('REC'); o.recYds = v('YDS'); o.recTD = v('TD'); } }); }); });
+  Object.values(out).forEach((o) => { o.anyTD = o.rushTD + o.recTD; }); return out;
+}
+const pNorm = (x) => (x || '').toLowerCase().replace(/[^a-z ]/g, '').replace(/\b(jr|sr|ii|iii|iv)\b/g, '').replace(/\s+/g, ' ').trim();
+function pFind(gid, name) { const box = PSTAT[gid]; if (!box) return null; const n = pNorm(name), all = Object.values(box.p); let m = all.filter((o) => pNorm(o.name) === n); if (!m.length) { const last = n.split(' ').pop(); m = all.filter((o) => pNorm(o.name).split(' ').pop() === last && (n.split(' ').length < 2 || pNorm(o.name).charAt(0) === n.charAt(0))); } return m.length === 1 ? m[0] : null; }
+function pVal(b) { const pp = b.pp; if (!pp) return null; const box = PSTAT[pp.gid], g = gameOf(pp.gid); if (!box || !g || g.state === 'pre') return { v: null, g }; const o = pFind(pp.gid, pp.name); return { v: o ? o[pp.stat] || 0 : (Object.keys(box.p).length ? 0 : null), found: !!o, g }; }
+function propAuto(b) {
+  if (!b.pp || (b.res && !b.auto)) return false; const x = pVal(b); if (!x || x.v === null) return false; const line = b.pp.line, over = b.pp.dir !== 'under', fin = x.g.state === 'post'; let r = null;
+  if (over) { if (x.v > line) r = 'won'; else if (fin) r = x.v === line ? 'push' : 'lost'; } else { if (x.v > line) r = 'lost'; else if (fin) r = x.v === line ? 'push' : 'won'; }
+  if (r && b.res !== r) { b.res = r; b.auto = true; delete b.fin; delete b.finPL; return true; } return false;
+}
+let PTBUSY = false;
+async function propTick() {
+  if (PTBUSY || window.MIRROR) return; const need = (b) => { const g = gameOf(b.pp.gid); return !!g && (g.state === 'in' || (g.state === 'post' && !(PSTAT[b.pp.gid] && PSTAT[b.pp.gid].fin))); }; const live = BETS.filter((b) => b.kind === 'prop' && b.pp && need(b)); if (!live.length) return;
+  PTBUSY = true; try { const ids = [...new Set(live.map((b) => b.pp.gid))].slice(0, 8); await Promise.all(ids.map(async (id) => { try { const j = await getJson(SB + 'summary?event=' + id); PSTAT[id] = { t: Date.now(), p: parseP(j), fin: (gameOf(id) || {}).state === 'post' }; } catch (e) {} })); let ch = false; live.forEach((b) => { if (propAuto(b)) ch = true; }); if (ch) betsSave(); if (VIEW === 'bets') betsRender(); } finally { PTBUSY = false; }
+}
+function pStatHtml(b) {
+  const pp = b.pp; if (!pp) return ''; const x = pVal(b), g = x && x.g, lab = PSTATS[pp.stat] || pp.stat, over = pp.dir !== 'under';
+  if (!g) return `<div class="sub">Game not found yet. It tracks once the game is on the schedule.</div>`;
+  if (g.state === 'pre') return `<div class="sub">${escH(pp.name)} ${over ? 'over' : 'under'} ${pp.line} ${lab.toLowerCase()} · tracking starts at kickoff (${new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })})</div>`;
+  if (x.v === null) return `<div class="sub">Waiting for the box score…</div>`;
+  const need = over ? Math.max(0, +(pp.line - x.v + 0.5).toFixed(1)) : null, pct = Math.max(0, Math.min(100, Math.round(x.v / pp.line * 100))), done = b.res, col = done === 'won' ? '#4fd18b' : done === 'lost' ? '#ff6b6b' : '#f5c542';
+  const msg = over ? (x.v > pp.line ? 'Over hit' : g.state === 'post' ? 'Fell short' : `needs ${Math.ceil(pp.line - x.v + (Number.isInteger(pp.line) ? 0.5 : 0))} more`) : (x.v > pp.line ? 'Went over, under lost' : g.state === 'post' ? 'Stayed under' : `${+(pp.line - x.v).toFixed(1)} of room left`);
+  return `<div style="margin:6px 0"><div style="display:flex;justify-content:space-between;font-size:13px"><span><b>${escH(pp.name)}</b> ${over ? 'over' : 'under'} ${pp.line} ${lab.toLowerCase()}</span><span><b style="color:${col}">${x.v}</b> / ${pp.line}</span></div><div style="height:8px;border-radius:6px;background:rgba(255,255,255,.12);overflow:hidden;margin:4px 0"><div style="height:100%;width:${pct}%;background:${col}"></div></div><div class="sub">${msg} · ${g.away.abbr} ${g.away.score}–${g.home.abbr} ${g.home.score}${g.state === 'in' ? ' · live, updates every 30 s' : ''}${x.found === false ? ' · player not in the box score yet (counts as 0)' : ''}</div></div>`;
+}
+setInterval(() => { try { propTick(); } catch (e) {} }, 30000); setTimeout(() => { try { propTick(); } catch (e) {} }, 6000);
 function propCard(b, r, money) {
-  return `<div class="bcard ${r.st === 'won' ? 'bw' : r.st === 'lost' ? 'bl' : ''}"><div class="bhd"><div><div class="bwhat">${b.text.replace(/</g, '&lt;')}${payTxt(b)}</div><div class="sub">Prop bet · ${b.day}</div></div>${badgeOf(r, money, b)}</div>
+  return `<div class="bcard ${r.st === 'won' ? 'bw' : r.st === 'lost' ? 'bl' : ''}"><div class="bhd"><div><div class="bwhat">${b.text.replace(/</g, '&lt;')}${payTxt(b)}</div><div class="sub">Prop bet · ${b.day}${b.pp ? ' · live tracked' : ''}</div></div>${badgeOf(r, money, b)}</div>${pStatHtml(b)}
     ${b.src === 'kalshi' ? `<div class="sub">From Kalshi · result is set automatically</div><div class="bbtn"><button onclick="betDel('${b.id}')">Hide</button></div></div>` : ''}${b.src === 'kalshi' ? '' : `<div class="bbtn"><button onclick="propSet('${b.id}','won')">✓ Won</button><button onclick="propSet('${b.id}','lost')">✗ Lost</button><button onclick="propSet('${b.id}','push')">Push</button>${b.res ? `<button onclick="propSet('${b.id}','')">Reset</button>` : ''}<button onclick="betEdit('${b.id}')">Edit</button><button onclick="betDel('${b.id}')">Delete</button></div></div>`}`;
 }
 function legSet(id, i, res) { const b = BETS.find((x) => x.id === id); if (!b) return; b.legs[i].res = res || null; delete b.fin; delete b.finPL; betsSave(); betsRender(); }
@@ -1101,10 +1133,11 @@ function parlaySave() {
   b.legs = BF.legs.map((l) => { const c = { ...l }; delete c.flag; delete c.miss; return c; }); applyPay(b); delete b.fin; delete b.finPL; if (!old) BETS.push(b); betsSave(); BF = null; betsRender();
 }
 function propSave() {
-  betSync(); if (!BF.text.trim()) { BF.note = 'Describe the bet first.'; betsRender(); return; }
+  betSync(); const tr = BF.pg && (BF.pl || '').trim() && BF.pn !== undefined && BF.pn !== '' && !isNaN(parseFloat(BF.pn)); if (!(BF.text || '').trim() && !tr) { BF.note = 'Describe the bet first, or fill in the live tracking fields.'; betsRender(); return; }
+  if (tr && !(BF.text || '').trim()) { const g0 = ALL[BF.pg]; BF.text = `${BF.pl.trim()} ${BF.pr === 'under' ? 'under' : 'over'} ${parseFloat(BF.pn)} ${(PSTATS[BF.ps] || 'rushing yards').toLowerCase()}${g0 ? ' (' + g0.away.abbr + '@' + g0.home.abbr + ')' : ''}`; }
   const old = BF.id ? BETS.find((x) => x.id === BF.id) : null;
   const b = old || { id: 'b' + Date.now(), kind: 'prop', t: Date.now(), week: CUR };
-  b.text = BF.text.trim(); b.day = BF.day || dayKey(Date.now()); if (!old && BF.res) b.res = BF.res; applyPay(b); delete b.fin; delete b.finPL; if (!old) BETS.push(b); betsSave(); BF = null; betsRender();
+  b.text = BF.text.trim(); b.day = BF.day || dayKey(Date.now()); if (tr) { b.pp = { gid: BF.pg, name: BF.pl.trim(), stat: BF.ps || 'rushYds', line: parseFloat(BF.pn), dir: BF.pr === 'under' ? 'under' : 'over' }; const g1 = ALL[BF.pg]; if (g1) b.day = dayKey(g1.start); if (b.auto) { delete b.res; delete b.auto; } } else { delete b.pp; } if (!old && BF.res) b.res = BF.res; applyPay(b); delete b.fin; delete b.finPL; if (!old) BETS.push(b); betsSave(); BF = null; betsRender(); setTimeout(() => { try { propTick(); } catch (e) {} }, 400);
 }
 function addMenu(v) { window.__addm = v === undefined ? !window.__addm : !!v; const m = $('#addmenu'); if (m) m.hidden = !window.__addm; }
 document.addEventListener('click', (e) => { if (window.__addm && !e.target.closest('.pillw')) addMenu(0); });
@@ -1122,13 +1155,14 @@ function betSync() {
   if (BF.step === 'legform') { if (tt !== undefined) BF.leg.type = tt; if (sl !== undefined) BF.leg.line = parseFloat(sl) || 0; }
   else { if (tt !== undefined) BF.type = tt; if (sl !== undefined) BF.line = parseFloat(sl) || 0; }
   if (sx !== undefined) BF.text = sx; if (sd !== undefined) BF.day = sd;
+  { const pg = v('bfg'), pl = v('bfpl'), ps = v('bfst'), pn = v('bfpn'), pr = v('bfdr'); if (pg !== undefined) { BF.pg = pg; BF.pl = pl; BF.ps = ps; BF.pn = pn; BF.pr = pr; } }
 }
 function betSide(a) { betSync(); const g = ALL[BF.gid]; if (BF.side !== a) { BF.line = -BF.line; BF.side = a; } betsRender(); }
 function betType() { betSync(); betsRender(); }
 function betFormHtml() {
   const note = BF.note ? `<div class="note" style="margin:6px 0">${BF.note}</div>` : '';
   if (BF.step === 'kind') return `<div class="card"><div class="gh" style="margin-top:0">What kind of bet?</div><div class="kinds"><button onclick="BF={step:'pick'};betsRender()"><b>Single</b><small>spread or win on one game</small></button><button onclick="parlayNew()"><b>Parlay</b><small>2+ legs, one payout</small></button><button onclick="propNew()"><b>Prop</b><small>player or custom bet</small></button></div><button onclick="BF=null;betsRender()">Cancel</button></div>`;
-  if (BF.step === 'prop') return `<div class="card"><div class="gh" style="margin-top:0">${BF.id ? 'Edit prop bet' : 'New prop bet'}</div>${note}<label>What is the bet? <input id="bfx" type="text" placeholder="Mahomes over 275.5 pass yds" value="${(BF.text || '').replace(/"/g, '&quot;')}"></label><label>Date of the game <input id="bfd" type="date" value="${BF.day}"></label>${payFields()}<div class="sub">Props can't be graded automatically. Tap Won, Lost or Push on the card when it's decided.</div><div class="bbtn"><button class="pri" onclick="propSave()">Save prop</button><button onclick="BF=null;betsRender()">Cancel</button></div></div>`;
+  if (BF.step === 'prop') return `<div class="card"><div class="gh" style="margin-top:0">${BF.id ? 'Edit prop bet' : 'New prop bet'}</div>${note}<label>What is the bet? <input id="bfx" type="text" placeholder="Optional if tracking below, e.g. Mahomes over 275.5 pass yds" value="${(BF.text || '').replace(/"/g, '&quot;')}"></label><label>Date of the game <input id="bfd" type="date" value="${BF.day}"></label> <div class="sub" style="margin-top:8px"><b>Live tracking (optional)</b>: pick the game, the player and the stat, and the card counts it live and grades itself.</div><label>Game <select id="bfg"><option value="">No live tracking</option>${Object.values(ALL).filter((g) => g.state === 'in' || g.state === 'pre' || g.id === BF.pg).sort((a, b) => a.start - b.start).slice(0, 40).map((g) => `<option value="${g.id}" ${BF.pg === g.id ? 'selected' : ''}>${g.away.abbr} @ ${g.home.abbr} · ${g.state === 'in' ? 'LIVE' : new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</option>`).join('')}</select></label><label>Player (full name) <input id="bfpl" type="text" placeholder="Bijan Robinson" value="${escH(BF.pl || '')}"></label><label>Stat <select id="bfst">${Object.keys(PSTATS).map((k) => `<option value="${k}" ${BF.ps === k ? 'selected' : ''}>${PSTATS[k]}</option>`).join('')}</select></label><label>Line <input id="bfpn" type="number" step="0.5" inputmode="decimal" placeholder="100" value="${BF.pn === undefined || BF.pn === '' ? '' : BF.pn}"></label><label>Over or under <select id="bfdr"><option value="over" ${BF.pr !== 'under' ? 'selected' : ''}>Over</option><option value="under" ${BF.pr === 'under' ? 'selected' : ''}>Under</option></select></label>${payFields()}<div class="sub">With live tracking on, the card grades itself (over wins the moment the stat passes the line). Without it, tap Won, Lost or Push on the card.</div><div class="bbtn"><button class="pri" onclick="propSave()">Save prop</button><button onclick="BF=null;betsRender()">Cancel</button></div></div>`;
   if (BF.step === 'legpick') return `<div class="card"><div class="gh" style="margin-top:0">Pick the game for this leg</div>${gameRowsHtml('legPickGame')}<button onclick="BF.step='parlay';betsRender()">Back</button></div>`;
   if (BF.step === 'legform') { const g = ALL[BF.leg.gid]; return `<div class="card"><div class="gh" style="margin-top:0">Leg · ${g.away.abbr} @ ${g.home.abbr}</div><div class="bsd"><button class="${BF.leg.side === g.away.abbr ? 'on' : ''}" onclick="legSide('${g.away.abbr}')">${g.away.abbr}</button><button class="${BF.leg.side === g.home.abbr ? 'on' : ''}" onclick="legSide('${g.home.abbr}')">${g.home.abbr}</button></div>
     <label>Leg type <select id="bft" onchange="betSync();betsRender()"><option value="sp" ${BF.leg.type === 'sp' ? 'selected' : ''}>Spread</option><option value="ml" ${BF.leg.type === 'ml' ? 'selected' : ''}>Win (moneyline)</option></select></label>
@@ -1163,7 +1197,7 @@ function betSave() {
 function betEdit(id) { const b = BETS.find((x) => x.id === id); if (!b) return;
   const pay = { stake: b.stake || '', odds: b.mult ? b.mult : (b.odds && b.odds !== -110 ? b.odds : ''), pt: b.mult ? 'x' : 'am' };
   if (b.kind === 'parlay') { BF = { step: 'parlay', id, legs: JSON.parse(JSON.stringify(b.legs)), ...pay }; betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
-  if (b.kind === 'prop') { BF = { step: 'prop', id, text: b.text, day: b.day, ...pay }; betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+  if (b.kind === 'prop') { BF = { step: 'prop', id, text: b.text, day: b.day, ...pay, ...(b.pp ? { pg: b.pp.gid, pl: b.pp.name, ps: b.pp.stat, pn: b.pp.line, pr: b.pp.dir } : {}) }; betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
   if (!ALL[b.gid]) return; BF = { step: 'form', id, gid: b.gid, side: b.side, type: b.type, line: b.line, stake: b.stake || '', odds: b.mult ? b.mult : (b.odds && b.odds !== -110 ? b.odds : ''), pt: b.mult ? 'x' : 'am' }; betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
 const PROXY = 'https://calcutta-odds.onrender.com/kalshi/proxy', KAPI = '/trade-api/v2', lsg = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, lss = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
 let KERR = '', KST = '', KFORM = false, KBUSY = false, KLAST = 0;

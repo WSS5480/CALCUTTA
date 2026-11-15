@@ -384,3 +384,11 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 ## v220 — Underdog-off-blowout tag (info only)
 - Card chip "🐶 Dog off blowout" when the market underdog lost its last game by 14+ (NFL, pre-game). Sheet explains: 2004-2025 dog covered 53.6% of 1,303 games, ~break-even after juice, 1 of 24 factors tested, not significant after correction.
 - Does NOT touch model, locks or scoreboard. User approved Nov 15 2026 after factor backtest found no edge.
+
+## v221 — Trophy picks (spread): #1 = 🏆🏆, #2 = 🏆
+- `pics/trophy.js` (pure functions, no DOM) + `trophy-model.json` (frozen logistic factor model, trained 2004-2025, 45 factors, never retrained in-season) + `trophy-hist.json` (2020-2025 results for last-game/h2h features). Python original: /tmp/nv/work_dogs (dogs.py, D.pkl) — parity checked: JS reproduces the Python weekly picks exactly (2026: #1 8-2, #2 6-3).
+- Each week the two games with the highest model chance to COVER (either side) are #1 and #2. Card chip "🏆🏆 #1 / 🏆 #2 TEAM line". Results tab: boxes with #1 / #2 / both W-L, percent, units at -110, then a week list.
+- Freeze: before the week's first kickoff the pick list is saved per phone (localStorage `trk26-wN-live`, copied to `trk26-wN` at kickoff). Weeks seen only after kickoff are marked * (picked after the fact, model frozen). Not synced to the server yet.
+- Honest framing is printed on screen: same method 2018-2025 ≈ 50%, break-even 52.4%; 2026 run leaned on away teams covering ~57%.
+- Old locks/scoreboard/model untouched. User asked for it Nov 15 2026 after the factor/backtest work.
+- OPEN: server-side lock of trophy picks (cross-device); NFL only (hidden for NCAA).

@@ -459,3 +459,8 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v237 — Division road dog tag
 - Informational 🏠 "Division road dog" chip on upcoming NFL games where the away team is the underdog in a division game (Trophy.isDiv in trophy.js). Sheet: 2004-2025 685-599 (53.3%, ~+24 units at -110), 14/22 seasons above break-even, home division dogs 48.6%. Labeled not proven (about a dozen slices tested). Does not change any pick or lock. Decision: user asked for it Nov 15 2026.
+
+## v238 — Division road dog is a tracked rule (replaces the info tag in v237)
+- User: "not an info tag, real code it and test it". Rule: take the road underdog (ATS) in every NFL division game. Green chip on upcoming games ("Division road dog: ABC +3"), Results tab section with "This season" and "Since added" boxes (tap to drill into the games), units at -110, info sheet. Weeks before 11 are back-filled; week 11 on (DD_START) is the real out-of-sample test. Graded vs the game's line (closing/last logged, nflverse fallback).
+- Test: 2026 weeks 1-10 in the app = 17-11, same as the Python backtest. Walk-forward (bet only if prior seasons > 52.4%): 2010-2026 501-453 (52.5%, +2.5u); since 2015 352-298 (54.2%, +22u); 2004-2025 685-599 (53.3%). Chance best of ~12 slices looks this good by luck ~10%. Honest label kept: tracker, not a proven edge.
+- Does not feed the Double lock / Lock picks.

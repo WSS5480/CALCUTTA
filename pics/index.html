@@ -60,7 +60,7 @@ input#tsearch{width:100%;max-width:320px;margin:2px 0 4px;padding:9px 12px;borde
 .ldate{display:inline-block;font:700 11px inherit;padding:2px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted);vertical-align:middle}.ldate.diff{background:#facc15;border-color:#facc15;color:#1b1400}.also{margin:8px 4px 0}
 .lkrow{padding:8px 4px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:8px}.lkbar{display:flex;gap:8px;margin:8px 0}.lkbar button{flex:1;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:12px;padding:8px 6px;font:700 13px inherit}.lkbar button.on{border-color:var(--blue);color:var(--blue)}
 .swk{grid-column:1/-1;display:flex;align-items:center;gap:8px;flex-wrap:wrap}.swk label{color:var(--muted);font-size:13px}.swk select{flex:1;min-width:0;padding:9px 10px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);font:600 15px system-ui}.swk button{border:1px solid var(--blue);background:var(--panel2);color:var(--ink);border-radius:999px;padding:8px 12px;font:700 13px system-ui;cursor:pointer}.sum{position:relative}.ibtn{position:absolute;top:8px;right:10px;font:700 15px/1 system-ui;color:var(--blue);font-style:normal;cursor:pointer;padding:4px}.ibtn.inl{position:static;margin-left:6px}
-#infosheet{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.6);display:flex;align-items:flex-end}#infosheet[hidden]{display:none}.isb{background:var(--panel);color:var(--ink);width:100%;max-height:80vh;overflow:auto;border-radius:22px 22px 0 0;padding:16px 18px calc(24px + env(safe-area-inset-bottom));line-height:1.45}.isb p{margin:10px 0}.ish{display:flex;justify-content:space-between;align-items:center;font-size:18px}.ish button{border:0;background:var(--panel2);color:var(--ink);border-radius:999px;width:34px;height:34px;font-size:16px}
+#infosheet{position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.6);display:flex;align-items:flex-end}#infosheet[hidden]{display:none}.isb{background:var(--panel);color:var(--ink);width:100%;max-height:80vh;overflow:auto;border-radius:22px 22px 0 0;padding:16px 18px calc(24px + env(safe-area-inset-bottom));line-height:1.45}.isb p{margin:10px 0}.ish{display:flex;justify-content:space-between;align-items:center;font-size:18px}.ish button{border:0;background:var(--panel2);color:var(--ink);border-radius:999px;width:34px;height:34px;font-size:16px}
 header .lg{margin-top:86px;flex-wrap:wrap}
 select#team{width:100%;max-width:320px;margin:2px 0 6px;padding:9px 12px;border:1px solid var(--blue);border-radius:12px;background:#fff;color:var(--ink);font:600 15px inherit}
 .sum.lock{border-color:#7c3aed;background:#f1ebff}
@@ -206,7 +206,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v231 -->
+<!-- Pics v232 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
   <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v231</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
@@ -217,7 +217,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v231 (cable providers)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v232 (multiview)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -236,7 +236,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </div>
 <div id="plb" hidden></div>
 <nav class="bn" id="bn"></nav>
-<script src="trophy.js?v=231"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
+<script src="trophy.js?v=232"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
 <script>
 const SC = document.getElementById('sc');
 // The page scrolls inside #sc so the banner and bottom bar (outside it) can never drift on iOS
@@ -523,7 +523,7 @@ function livePageRender(games) {
   const bestFirst = (a, b) => (BG.has(String(b.id)) - BG.has(String(a.id))) || (pred(b).conf - pred(a).conf); grp.live.sort(bestFirst); grp.pre.sort((a, b) => (BG.has(String(b.id)) - BG.has(String(a.id))) || a.start - b.start); grp.post.sort((a, b) => (BG.has(String(b.id)) - BG.has(String(a.id))) || b.start - a.start);
   const list = LF === 'all' ? [...grp.live, ...grp.pre, ...grp.post] : LF === 'live' ? grp.live : LF === 'pre' ? grp.pre : LF === 'watch' ? [] : grp.post;
   const chip = (k, l, n) => `<button class="${LF === k ? 'on' : ''}" onclick="setLF('${k}')"><b>${n}</b>${l}</button>`;
-  el.innerHTML = `<div class="lpg"><h2>Live</h2><div class="lchips">${chip('all', 'All', wk.length)}${chip('live', 'Live', grp.live.length)}${chip('pre', 'Upcoming', grp.pre.length)}${chip('post', 'Final', grp.post.length)}${chip('watch', '📌 Watching', pins.length + [...BG].filter((id) => !games.some((g) => String(g.id) === id) && XL[id]).length)}</div>${LF === 'watch' ? (pins.map((g) => gameCard(g)).join('') + [...BG].filter((id) => !games.some((g) => String(g.id) === id) && XL[id]).map((id) => miniGame(XL[id])).join('') || '<div class="note">Nothing watched yet. Tap 📍 Watch on any game.</div>') : ''}${LF === 'watch' ? '' : (list.map((g) => gameCard(g)).join('') || '<div class="note">No games here.</div>')}</div>`;
+  el.innerHTML = `<div class="lpg"><h2>Live <button onclick="mvOpen()" style="float:right;font:700 13px system-ui;padding:6px 10px;border:1px solid var(--line);border-radius:9px;background:none;color:inherit">🔲 Multiview</button></h2><div class="lchips">${chip('all', 'All', wk.length)}${chip('live', 'Live', grp.live.length)}${chip('pre', 'Upcoming', grp.pre.length)}${chip('post', 'Final', grp.post.length)}${chip('watch', '📌 Watching', pins.length + [...BG].filter((id) => !games.some((g) => String(g.id) === id) && XL[id]).length)}</div>${LF === 'watch' ? (pins.map((g) => gameCard(g)).join('') + [...BG].filter((id) => !games.some((g) => String(g.id) === id) && XL[id]).map((id) => miniGame(XL[id])).join('') || '<div class="note">Nothing watched yet. Tap 📍 Watch on any game.</div>') : ''}${LF === 'watch' ? '' : (list.map((g) => gameCard(g)).join('') || '<div class="note">No games here.</div>')}</div>`;
 }
 
 // ---- My Bets: personal tracker. Pick a game, set YOUR side and YOUR line (books differ), and it keeps win/loss plus how you did against the app ----
@@ -1520,6 +1520,7 @@ async function windLoad() {
   }
 }
 function windRecord() { const L = wndLog(); let u = 0, o = 0, p = 0, n = 0; Object.keys(L).forEach((id) => { const x = L[id], g = ALL[id]; n++; if (!g || g.state !== 'post' || x.total === null || x.total === undefined) return; const s = g.home.score + g.away.score; if (s < x.total) u++; else if (s > x.total) o++; else p++; }); return { u, o, p, n }; }
+function sheetClose() { const o = document.getElementById('infosheet'); if (o) o.hidden = true; }
 function sheetOpen(html) { let o = document.getElementById('infosheet'); if (!o) { o = document.createElement('div'); o.id = 'infosheet'; o.onclick = (e) => { if (e.target === o) o.hidden = true; }; document.body.appendChild(o); } o.innerHTML = '<div class="isb"><div class="ish"><b></b><button onclick="document.getElementById(\'infosheet\').hidden=true">✕</button></div>' + html + '</div>'; o.hidden = false; }
 function windOpen(id) {
   const g = ALL[id], w = WIND[id]; if (!g || !w) return; const r = windRecord();
@@ -1625,9 +1626,39 @@ function tvOpen(id) {
   const first = nets.filter((x) => x.t).map((x) => a(x.t[0], 'Open ' + x.t[1], true)).join('');
   const list = (L) => [...L].sort((x, y) => (y[0] === pref) - (x[0] === pref)).map((x) => a(x[1], x[0], x[0] === pref)).join(''), svc = list(TVSVC), cab = list(TVCAB);
   sheetOpen(`<div style="margin:4px 0"><b>📺 Watch ${g.away.abbr} at ${g.home.abbr}</b></div><div class="sub">${g.state === 'in' ? 'Live now' : new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })} · ${nets.length ? 'On ' + nets.map((x) => escH(x.n)).join(', ') : 'Network not listed yet'}</div>
+  <button style="display:block;width:100%;padding:10px 12px;margin:8px 0;border:1px solid var(--line);border-radius:10px;background:none;color:inherit;font-weight:700" onclick="sheetClose();mvAdd('${g.id}')">🔲 Add to Multiview</button>
   ${first ? '<div style="margin:10px 0 2px"><b>Open the broadcast</b></div>' + first + '<div class="sub">The network opens in your browser or its app. It asks you to sign in with your TV provider (cable, satellite or a streaming service) to unlock the game.</div>' : '<div class="sub" style="margin:8px 0">Check your local listings. Games on local broadcast channels also work with a digital antenna.</div>'}
   <div style="margin:12px 0 2px"><b>Cable and satellite</b></div>${cab}<div style="margin:12px 0 2px"><b>Streaming TV services</b></div>${svc}<div class="sub">Tap your provider and Oddable remembers it, listed first next time. Oddable only links out: it never stores or sees your username or password. Tick \"remember me\" on the provider's own sign-in, or let your phone's password manager fill it in.</div>`);
 }
+// ---- Multiview: several games at once (own live data) + each game's stream in its own window, any service per tile ----
+let MV = (() => { try { const m = JSON.parse(localStorage.getItem('mv26')); return m && Array.isArray(m.ids) ? m : { ids: [], svc: {} }; } catch (e) { return { ids: [], svc: {} }; } })(), MVFOC = '', MVT = null;
+const mvSave = () => { try { localStorage.setItem('mv26', JSON.stringify(MV)); } catch (e) {} };
+function mvSvcs(g) { const o = []; (g.tv || []).forEach((n) => { const t = tvNet(n); if (t) o.push([t[1], t[0]]); }); TVSVC.concat(TVCAB).forEach((x) => o.push([x[0], x[1]])); return o; }
+function mvUrl(g) { const L = mvSvcs(g), want = MV.svc[g.id] || tvPref(); const f = L.find((x) => x[0] === want) || L[0]; return f ? f : ['', '']; }
+function mvAdd(id) { id = String(id); if (!MV.ids.includes(id)) { if (MV.ids.length >= 4) MV.ids.shift(); MV.ids.push(id); mvSave(); } mvOpen(); }
+function mvDel(id) { MV.ids = MV.ids.filter((x) => x !== String(id)); if (MVFOC === String(id)) MVFOC = ''; mvSave(); mvRender(); }
+function mvSet(id, v) { MV.svc[id] = v; mvSave(); tvPref(v); mvRender(); }
+function mvFocus(id) { MVFOC = MVFOC === String(id) ? '' : String(id); mvRender(); }
+function mvWin(id) { const g = ALL[id]; if (!g) return; const u = mvUrl(g)[1]; if (!u) return; const i = Math.max(0, MV.ids.indexOf(String(id))), W = screen.availWidth || 1200, H = screen.availHeight || 800, w = Math.round(W / 2), h = Math.round(H / 2); window.open(u, 'mv' + id, `popup=yes,width=${w},height=${h},left=${(i % 2) * w},top=${i > 1 ? h : 0}`); }
+function mvAllWin() { MV.ids.forEach((id, i) => setTimeout(() => mvWin(id), i * 250)); }
+function mvTab(id) { const g = ALL[id]; if (!g) return; const u = mvUrl(g)[1]; if (u) window.open(u, '_blank', 'noopener'); }
+function mvFull(id) { const el = document.querySelector(id ? `#mv [data-t="${id}"]` : '#mvg'); if (!el) return; try { if (document.fullscreenElement) document.exitFullscreen(); else (el.requestFullscreen || el.webkitRequestFullscreen).call(el); } catch (e) {} }
+function mvRender() {
+  const el = document.getElementById('mvg'); if (!el) return;
+  const gs = MV.ids.map((id) => ALL[id]).filter(Boolean), show = MVFOC && gs.find((g) => String(g.id) === MVFOC) ? gs.filter((g) => String(g.id) === MVFOC) : gs;
+  el.className = 'mvg n' + Math.min(4, show.length || 1);
+  const bar = document.getElementById('mvbar'); if (bar) bar.innerHTML = `<b>🔲 Multiview</b><span>${gs.length}/4</span><button onclick="mvPick()">➕ Add game</button><button onclick="mvAllWin()">🪟 All streams</button><button onclick="mvFull('')">⛶ Full screen</button><button onclick="mvClose()">✕</button>`;
+  const act = document.activeElement; if (act && act.tagName === 'SELECT' && el.contains(act)) return;
+  el.innerHTML = show.map((g) => { const sv = mvUrl(g), L = mvSvcs(g), foc = MVFOC === String(g.id);
+    return `<div class="mvt" data-t="${g.id}"><div class="mvh"><b>${g.away.abbr} @ ${g.home.abbr}</b><select onchange="mvSet('${g.id}',this.value)">${L.map((x) => `<option ${x[0] === sv[0] ? 'selected' : ''}>${escH(x[0])}</option>`).join('')}</select></div><div class="mvb">${liveView(g)}</div><div class="mvf"><button onclick="mvWin('${g.id}')">🪟 Stream window</button><button onclick="mvTab('${g.id}')">↗ Tab</button><button onclick="mvFocus('${g.id}')">${foc ? '▦ Grid' : '🔍 Focus'}</button><button onclick="mvFull('${g.id}')">⛶</button><button onclick="mvDel('${g.id}')">🗑</button></div></div>`; }).join('') || '<div class="note" style="padding:30px;text-align:center">No games yet. Tap ➕ Add game, or tap 📺 on any game card and choose Add to Multiview.</div>';
+}
+function mvPick() { const gs = Object.values(ALL).filter((g) => g.state !== 'post' && !MV.ids.includes(String(g.id))).sort((a, b) => (b.state === 'in') - (a.state === 'in') || a.start - b.start).slice(0, 24); sheetOpen(`<b>Add to Multiview</b><div class="sub">Up to 4 at once. Adding a fifth drops the oldest.</div>` + (gs.map((g) => `<button style="display:block;width:100%;text-align:left;padding:10px 12px;margin:6px 0;border:1px solid var(--line);border-radius:10px;background:none;color:inherit;font-weight:600" onclick="sheetClose();mvAdd('${g.id}')">${g.state === 'in' ? '🔴 ' : ''}${g.away.abbr} @ ${g.home.abbr} <span class="sub">${g.state === 'in' ? 'Live' : new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</span></button>`).join('') || '<div class="note">No games right now.</div>')); }
+function mvOpen() {
+  let m = document.getElementById('mv');
+  if (!m) { const st = document.createElement('style'); st.textContent = '#mv{position:fixed;inset:0;z-index:250;background:var(--bg,#0b0f17);display:flex;flex-direction:column}#mvbar{display:flex;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line)}#mvbar b{flex:1}#mvbar button,.mvf button{padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:none;color:inherit;font:600 13px system-ui}#mvg{flex:1;overflow:auto;display:grid;gap:8px;padding:8px}.mvg.n1{grid-template-columns:1fr}.mvg.n2,.mvg.n3,.mvg.n4{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}.mvt{border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;overflow:auto;background:var(--bg,#0b0f17)}.mvh{display:flex;gap:8px;align-items:center;padding:8px 10px}.mvh b{flex:1}.mvh select{max-width:55%;padding:6px;border-radius:8px}.mvb{flex:1;padding:0 8px}.mvf{display:flex;flex-wrap:wrap;gap:6px;padding:8px}.mvf button{flex:1}'; document.head.appendChild(st); m = document.createElement('div'); m.id = 'mv'; m.innerHTML = '<div id="mvbar"></div><div id="mvg"></div>'; document.body.appendChild(m); }
+  m.hidden = false; mvRender(); clearInterval(MVT); MVT = setInterval(mvRender, 5000);
+}
+function mvClose() { const m = document.getElementById('mv'); if (m) m.hidden = true; clearInterval(MVT); try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {} }
 function teaserOpen(id) {
   const legs = Object.values(ALL).map(tsLeg).filter(Boolean).sort((x, y) => x.g.start - y.g.start), me = ALL[id];
   const li = legs.map((l) => `<div style="display:flex;justify-content:space-between;min-height:30px;align-items:center;${l.g.id === id ? 'font-weight:800' : ''}"><span>${l.dog.abbr} <b>+${l.from}</b> → <b>+${l.to}</b></span><span class="sub">${l.g.away.abbr} @ ${l.g.home.abbr}</span></div>`).join('') || '<div class="note">No qualifying legs right now.</div>';
@@ -2390,6 +2421,6 @@ if ('serviceWorker' in navigator) {
 })();
 </script>
 <script>setTimeout(()=>{const l=document.querySelector('.lg'),o=l&&l.querySelector('.on');if(o)l.scrollLeft=Math.max(0,o.offsetLeft-60);},500);</script>
-<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=231"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
+<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=232"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
 </body>
 </html>

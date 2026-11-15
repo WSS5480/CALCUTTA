@@ -432,3 +432,9 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 ## v231 — Cable and satellite providers in the Watch sheet
 - Added a "Cable and satellite" group (Spectrum, Xfinity, Cox, Optimum, Verizon Fios, AT&T TV, DISH, Mediacom, Frontier) above the streaming services. The tapped provider name is remembered locally (`tvpref`) and listed first.
 - DECISION (Nov 15 2026): Oddable does NOT store or collect TV-provider usernames/passwords. User asked to "remember credentials"; we only remember which provider they use. Reasons: storing someone's cable login in our app/sync server would make us a credential vault (breach and misuse risk, provider terms). The provider's own sign-in ("remember me") and the phone's password manager do that safely.
+
+## v232 — Multiview
+- 🔲 Multiview (Live page button, and "Add to Multiview" in the 📺 sheet): up to 4 games at once, full-screen overlay `#mv`, refreshes every 5 s from Oddable's own live data.
+- Per tile: service picker (game's network, streaming, cable), 🪟 stream window (window.open, tiled by position), ↗ tab, 🔍 focus/grid toggle, ⛶ fullscreen, 🗑 remove. Top bar: add game, all streams (opens every tile's window), full screen for the grid.
+- Limit: paid streams cannot be embedded (X-Frame-Options/DRM), so streams open in separate windows/tabs, not inside Oddable.
+- State in localStorage `mv26` ({ids, svc}). No credentials stored.

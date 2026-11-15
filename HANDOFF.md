@@ -409,3 +409,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v226 — Drill-down on every Double lock / Lock
 - Each pick in Results > Locks is tappable (›). `lkDetail(id)` opens a sheet: pick + result, model cover chance, the 8 factors that moved it most (value and +/- effect for the picked side, from `Trophy.explain`), both teams' last game, last 3 meetings, the line history for the pick team, and "Open full game ›" (`lkOpenGame`: Results > week > game for finished games, openGame for the rest). Sheet ✕ is the back button. User asked Nov 15 2026 (standing rule: tiles drill down).
+
+## v227 — No more green "TAKE" boxes
+- Game cards' old win/spread recommendations (✅ TAKE ... / 👍 Lean / pass) are now neutral grey text: "Model leans X to win · N% · info only", "Model spread lean ... · info only", "Toss-up". Only 🔒🔒 Double lock and 🔒 Lock are recommendations. Model math unchanged. User approved Nov 15 2026 after asking how the TAKE boxes work (backtest: old spread picks ~48%, below 52.4% break-even).

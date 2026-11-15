@@ -206,7 +206,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v233 -->
+<!-- Pics v234 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
   <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v231</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
@@ -217,7 +217,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v233 (green history)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v234 (tv link help)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -236,7 +236,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </div>
 <div id="plb" hidden></div>
 <nav class="bn" id="bn"></nav>
-<script src="trophy.js?v=233"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
+<script src="trophy.js?v=234"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
 <script>
 const SC = document.getElementById('sc');
 // The page scrolls inside #sc so the banner and bottom bar (outside it) can never drift on iOS
@@ -1617,7 +1617,7 @@ function trophyBox() {
 // --- Watch live: network + TV-service links (the network's page or app handles your TV provider sign-in) ---
 const TVNET = { CBS: ['https://www.paramountplus.com/live-tv/', 'Paramount+ / CBS'], FOX: ['https://www.foxsports.com/live', 'FOX Sports'], FS1: ['https://www.foxsports.com/live', 'FOX Sports'], NBC: ['https://www.nbc.com/live', 'NBC'], PEACOCK: ['https://www.peacocktv.com/', 'Peacock'], ESPN: ['https://www.espn.com/watch/', 'ESPN'], ESPN2: ['https://www.espn.com/watch/', 'ESPN'], 'ESPN+': ['https://www.espn.com/watch/', 'ESPN'], ABC: ['https://abc.com/watch-live', 'ABC'], 'PRIME VIDEO': ['https://www.amazon.com/gp/video/storefront', 'Prime Video'], AMAZON: ['https://www.amazon.com/gp/video/storefront', 'Prime Video'], 'NFL NETWORK': ['https://www.nfl.com/network/watch/nfl-network-live', 'NFL Network'], NETFLIX: ['https://www.netflix.com/', 'Netflix'] };
 const TVSVC = [['YouTube TV', 'https://tv.youtube.com/'], ['Fubo', 'https://www.fubo.tv/'], ['Sling', 'https://www.sling.com/'], ['Hulu + Live TV', 'https://www.hulu.com/live-tv'], ['DirecTV', 'https://www.directv.com/'], ['NFL+', 'https://www.nfl.com/plus/'], ['Paramount+', 'https://www.paramountplus.com/'], ['Peacock', 'https://www.peacocktv.com/']];
-const TVCAB = [['Spectrum', 'https://www.spectrum.net/'], ['Xfinity', 'https://www.xfinity.com/'], ['Cox', 'https://www.cox.com/'], ['Optimum', 'https://www.optimum.net/'], ['Verizon Fios', 'https://www.verizon.com/home/fios-tv/'], ['AT&T TV', 'https://www.att.com/tv/'], ['DISH', 'https://www.dish.com/'], ['Mediacom', 'https://www.mediacomcable.com/'], ['Frontier', 'https://frontier.com/']];
+const TVCAB = [['Spectrum', 'https://watch.spectrum.net/'], ['Xfinity', 'https://www.xfinity.com/'], ['Cox', 'https://www.cox.com/'], ['Optimum', 'https://www.optimum.net/'], ['Verizon Fios', 'https://www.verizon.com/home/fios-tv/'], ['AT&T TV', 'https://www.att.com/tv/'], ['DISH', 'https://www.dish.com/'], ['Mediacom', 'https://www.mediacomcable.com/'], ['Frontier', 'https://frontier.com/']];
 const tvNet = (n) => TVNET[String(n || '').toUpperCase().replace(/\s+/g, ' ').trim()] || null;
 function tvChip(g) { if (g.state === 'post') return ''; const n = (g.tv && g.tv[0]) || ''; return `<button class="nw" onclick="tvOpen('${g.id}')">📺 ${n ? escH(n) : 'Watch'}</button>`; }
 function tvPref(name) { try { if (name) localStorage.setItem('tvpref', name); return localStorage.getItem('tvpref') || ''; } catch (e) { return ''; } }
@@ -1627,8 +1627,8 @@ function tvOpen(id) {
   const list = (L) => [...L].sort((x, y) => (y[0] === pref) - (x[0] === pref)).map((x) => a(x[1], x[0], x[0] === pref)).join(''), svc = list(TVSVC), cab = list(TVCAB);
   sheetOpen(`<div style="margin:4px 0"><b>📺 Watch ${g.away.abbr} at ${g.home.abbr}</b></div><div class="sub">${g.state === 'in' ? 'Live now' : new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })} · ${nets.length ? 'On ' + nets.map((x) => escH(x.n)).join(', ') : 'Network not listed yet'}</div>
   <button style="display:block;width:100%;padding:10px 12px;margin:8px 0;border:1px solid var(--line);border-radius:10px;background:none;color:inherit;font-weight:700" onclick="sheetClose();mvAdd('${g.id}')">🔲 Add to Multiview</button>
-  ${first ? '<div style="margin:10px 0 2px"><b>Open the broadcast</b></div>' + first + '<div class="sub">The network opens in your browser or its app. It asks you to sign in with your TV provider (cable, satellite or a streaming service) to unlock the game.</div>' : '<div class="sub" style="margin:8px 0">Check your local listings. Games on local broadcast channels also work with a digital antenna.</div>'}
-  <div style="margin:12px 0 2px"><b>Cable and satellite</b></div>${cab}<div style="margin:12px 0 2px"><b>Streaming TV services</b></div>${svc}<div class="sub">Tap your provider and Oddable remembers it, listed first next time. Oddable only links out: it never stores or sees your username or password. Tick \"remember me\" on the provider's own sign-in, or let your phone's password manager fill it in.</div>`);
+  ${first ? '<div style="margin:10px 0 2px"><b>Open the broadcast</b></div>' + first + '<div class="sub">Tap the network, then on its page pick ' + (pref ? '<b>' + escH(pref) + '</b>' : 'your TV provider') + ' and sign in there. That sign-in is what unlocks the game. Signing in to your provider\'s own site (like spectrum.net) does not link to the network, so use the network button first.</div>' : '<div class="sub" style="margin:8px 0">Check your local listings. Games on local broadcast channels also work with a digital antenna.</div>'}
+  <div style="margin:12px 0 2px"><b>Cable and satellite</b></div>${cab}<div style="margin:12px 0 2px"><b>Streaming TV services</b></div>${svc}<div class="sub">Tapping a provider below opens its own live-TV page (Spectrum opens Spectrum TV) and Oddable remembers it, listed first next time. Oddable only links out: it never stores or sees your username or password. Tick \"remember me\" on the provider's own sign-in, or let your phone's password manager fill it in.</div>`);
 }
 // ---- Multiview: several games at once (own live data) + each game's stream in its own window, any service per tile ----
 let MV = (() => { try { const m = JSON.parse(localStorage.getItem('mv26')); return m && Array.isArray(m.ids) ? m : { ids: [], svc: {} }; } catch (e) { return { ids: [], svc: {} }; } })(), MVFOC = '', MVT = null;
@@ -2421,6 +2421,6 @@ if ('serviceWorker' in navigator) {
 })();
 </script>
 <script>setTimeout(()=>{const l=document.querySelector('.lg'),o=l&&l.querySelector('.on');if(o)l.scrollLeft=Math.max(0,o.offsetLeft-60);},500);</script>
-<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=233"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
+<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=234"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
 </body>
 </html>

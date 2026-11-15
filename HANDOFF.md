@@ -441,3 +441,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v233 — History box green look
 - 2014-2025 History cells use the green hit / red miss boxes again: green when a season record beats break-even (52.4% at -110), red when below. Totals row too.
+
+## v234 — TV sign-in wording, Spectrum link
+- User signed in at spectrum.net and nothing linked: provider sites do not authorize the networks. Sheet now says to tap the network first and pick the provider on the network's own sign-in. Spectrum link now goes to watch.spectrum.net (Spectrum TV live). Still no credentials stored.

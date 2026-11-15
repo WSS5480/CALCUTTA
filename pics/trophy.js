@@ -54,6 +54,14 @@
     Object.keys(by).forEach(function (k) { by[k].sort(function (a, b) { return b.conf - a.conf; }); by[k].forEach(function (p, i) { p.rank = i + 1; }); by[k] = by[k].slice(0, 2); });
     return by;
   }
-  root.Trophy = { init: init, ready: ready, weekly: weekly, pickOf: pickOf, pool: pool, dogCover: dogCover };
+  function explain(g, rows, season) {
+    var c = dogCover(g, rows, season); if (!c) return null;
+    var items = M.cols.map(function (k, i) { var v = c.f[k] || 0; return { k: k, v: v, c: M.coef[i] * ((v - M.mean[i]) / M.scale[i]) }; });
+    var home = T(g.home.abbr), away = T(g.away.abbr), dog = c.dogHome ? home : away, fav = c.dogHome ? away : home;
+    var lastOf = function (team) { var h = teamHist(rows, team, g.start, g.id), x = h[h.length - 1]; return x ? { opp: x.opp, margin: x.margin, week: x.week, season: x.season, spr: x.spr } : null; };
+    var meets = rows.filter(function (r) { return r.t < g.start && r.id !== g.id && season - r.season <= 6 && ((r.home === home && r.away === away) || (r.home === away && r.away === home)); }).slice(-3).map(function (r) { return { season: r.season, week: r.week, home: r.home, away: r.away, hs: r.hs, as: r.as, L: r.L }; });
+    return { p: c.p, items: items, b: M.b, dogAbbr: c.dog.abbr, favAbbr: c.fav.abbr, dogHome: c.dogHome, dogLast: lastOf(dog), favLast: lastOf(fav), meets: meets };
+  }
+  root.Trophy = { init: init, ready: ready, weekly: weekly, explain: explain, pickOf: pickOf, pool: pool, dogCover: dogCover };
   if (typeof module !== 'undefined') module.exports = root.Trophy;
 })(typeof window !== 'undefined' ? window : globalThis);

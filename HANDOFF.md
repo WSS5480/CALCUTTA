@@ -398,3 +398,7 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v223 — History box in Trophy picks
 - Results > Trophy picks now has a collapsible "📜 History: same method, 2014-2025": per-season #1 / #2 records (each season picked by a model trained only on earlier seasons), totals #1 108-101, #2 110-99, both 218-200 (52.2%, about -1.8 units after juice). Static array TRH in index.html (computed in /tmp/nv/work_dogs, walk-forward). User asked Nov 15 2026.
+
+## v224 — "Lock" now means only the two weekly picks
+- User (Nov 15 2026): remove the old lock lingo; "lock" is now only 🔒🔒 Double lock (best game of the week) and 🔒 Lock (second). Removed the old 🔒 Locked win/spread tiles, the Locked picks list/score box, the lock badge on result rows, the 🔒 line in the stats note and the padlock on live cards; tab renamed "Stats". Trophy picks renamed everywhere (chips, top cards, Results boxes, History box).
+- Underlying per-game snapshots (lockSnap / lk* / server /locks) still run silently; only the display was removed. Dead helpers lkScore/lockedHtml remain unused.

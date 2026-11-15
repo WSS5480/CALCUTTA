@@ -395,3 +395,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v222 — Top Pick cards replace Bet of the Day / Biggest Upset Pick
 - Games tab: the two gold cards at the top are now "🏆🏆 Top Pick" (trophy #1) and "🏆 Second Top Pick" (trophy #2) for the shown week, with spread, model cover chance and ✓/✗ once graded. Old Bet of the Day / Upset cards remain only as a fallback (NCAA, or trophy data not loaded yet). User asked Nov 15 2026 ("I thought we changed those").
+
+## v223 — History box in Trophy picks
+- Results > Trophy picks now has a collapsible "📜 History: same method, 2014-2025": per-season #1 / #2 records (each season picked by a model trained only on earlier seasons), totals #1 108-101, #2 110-99, both 218-200 (52.2%, about -1.8 units after juice). Static array TRH in index.html (computed in /tmp/nv/work_dogs, walk-forward). User asked Nov 15 2026.

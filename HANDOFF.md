@@ -402,3 +402,7 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 ## v224 — "Lock" now means only the two weekly picks
 - User (Nov 15 2026): remove the old lock lingo; "lock" is now only 🔒🔒 Double lock (best game of the week) and 🔒 Lock (second). Removed the old 🔒 Locked win/spread tiles, the Locked picks list/score box, the lock badge on result rows, the 🔒 line in the stats note and the padlock on live cards; tab renamed "Stats". Trophy picks renamed everywhere (chips, top cards, Results boxes, History box).
 - Underlying per-game snapshots (lockSnap / lk* / server /locks) still run silently; only the display was removed. Dead helpers lkScore/lockedHtml remain unused.
+
+## v225 — Locks cover the whole season even without ESPN lines
+- Finished games often have no line from ESPN, which would drop those weeks from Double lock / Lock. trophyData now fills a missing line from (1) the logged line history (lmLoad), then (2) `pics/trophy-season.json` (nflverse closing spreads, weeks 1-11 of 2026, keyed `week-away-home`). Tested: with every ESPN line removed the app still shows 8-2 / 6-3 / 14-5 for weeks 1-10.
+- Results (boxes + week list) are computed from live scores in ALL, so they update on every refresh. trophy-season.json is static: refresh it from games.csv weekly if the Action-logged lines ever stop covering a week.

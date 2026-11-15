@@ -380,3 +380,7 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 ## Nov 15 2026 – dashboard Open bets list: "? ML" rows
 - Cause 1: Kalshi parlays have no text/side, so the label fell back to "? ML". Parlays now read "N-leg parlay" (odds-api/sync.js `lbl`).
 - Cause 2: empty bet records (only `t` and `id`, $0 stake, e.g. player 4143) passed the filter because the old regex had a stray leading space. They are now dropped from `open`.
+
+## v220 — Underdog-off-blowout tag (info only)
+- Card chip "🐶 Dog off blowout" when the market underdog lost its last game by 14+ (NFL, pre-game). Sheet explains: 2004-2025 dog covered 53.6% of 1,303 games, ~break-even after juice, 1 of 24 factors tested, not significant after correction.
+- Does NOT touch model, locks or scoreboard. User approved Nov 15 2026 after factor backtest found no edge.

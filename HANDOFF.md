@@ -367,3 +367,7 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 ## Nov 15 2026 – v218: owner dashboard no longer closes by itself
 - Cause: background page reloads wiped the `#odash` overlay: `checkUpdate` (new version out), the service-worker `controllerchange` reload, and `sync.js` reloading when a bet is added/settled/pinned from another device.
 - Fix: those three skip the reload while `#odash` exists; `dash.js` also saves `odash-open` in sessionStorage and reopens the dashboard after any reload (Close clears it). Lesson: any new auto-reload must check for `#odash`.
+
+## Nov 15 2026 – v219: pull-down inside the owner dashboard flashed the main page
+- Cause: the app's window-level pull-to-refresh (index.html, `#ptr`) still fired under the `#odash` overlay (window.scrollY is 0 while the overlay scrolls), refreshing/reloading the main page; v218's auto-reopen then made it look like flashing.
+- Fix: pull-to-refresh ignores touches while `#odash` exists; overlay has `overscroll-behavior:contain`. Rule: any window-level gesture or auto-reload must check for `#odash`.

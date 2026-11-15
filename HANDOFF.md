@@ -376,3 +376,7 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 - Problem: owner-dashboard totals came from either the daily log or the per-bet results (whichever had more), so they disagreed with the bets: the log skips today and goes stale, the bets miss deleted ones.
 - Rule (Steve: deleted bets still count): per day take the bets unless the log has MORE settled bets (tie goes to the bets: they hold actual money), then sum the days; settled bets with no day are added on top. Expected after deploy: 38f5 44-18-1, d3b6 35-60, 6f07 30-42 (were 41-16-1, 33-59, 27-38).
 - Not verified: whether Kalshi-synced results themselves are right (they come from Kalshi settlement).
+
+## Nov 15 2026 – dashboard Open bets list: "? ML" rows
+- Cause 1: Kalshi parlays have no text/side, so the label fell back to "? ML". Parlays now read "N-leg parlay" (odds-api/sync.js `lbl`).
+- Cause 2: empty bet records (only `t` and `id`, $0 stake, e.g. player 4143) passed the filter because the old regex had a stray leading space. They are now dropped from `open`.

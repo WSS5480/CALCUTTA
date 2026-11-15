@@ -359,3 +359,7 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
   - **Price log** `odds-api/pricelog.js`: every 20 min saves Kalshi NFL market prices (series env `KALSHI_SERIES`, default KXNFLGAME,KXNFLSPREAD,KXNFLTOTAL; public endpoint, base env `KALSHI_PUBLIC_BASE`), cached multi-book spreads (no credits spent, uses `games.peek`) and ESPN line, into Supabase rows `plog:YYYY-MM-DD-HH` (Chicago hour; read with /pricelog?day=YYYY-MM-DD-HH). Read at `/pricelog` (status) and `/pricelog?day=YYYY-MM-DD`. NOT verified live: sandbox cannot reach Kalshi; check `/pricelog` status after deploy.
 - Decision (Steve, Nov 14): keep the model out for now; the scoreboard relabel ("favorite" label, all-games baseline) is NOT built.
 - Reviews' key finding: no spread/ML/total rule beats the line after correction; the shaded side loses about 7%; teaser dog leg and windy Unders are weak leads. One season of price-log data is the next real test.
+
+## Nov 14 2026 – v217: owner dashboard wins/losses
+- `pics/dash.js`: new Wins and Losses tiles on the owner dashboard home (tap opens that list), and an All / Won / Lost / Push filter (with counts) on the Bets list. The dash.js cache param in `index.html` was stuck at ?v=183: bump it whenever dash.js changes (now ?v=217).
+- Steve (Nov 14): all accounts are free for now; he will change the subscription later. Do not add paywalls or billing changes until he asks.

@@ -7,7 +7,7 @@
   const money = (n) => (n < 0 ? '-$' : '$') + Math.abs(Math.round(n)).toLocaleString();
   const GOOD = '#2ecc71', BAD = '#ff6b6b', BLUE = '#4f8cff';
   const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date());
-  let D = null, DT = 0, P = 'all', DAYSEL = '', NEEDPIN = false, stack = [{ t: 'home' }], busy = false, err = '';
+  let D = null, DT = 0, P = 'all', DAYSEL = '', NEEDPIN = false, stack = [{ t: 'home' }], busy = false, err = '', GF = 'all';
 
   function from(p) {
     const td = today(); if (p === 'all') return '';
@@ -61,7 +61,7 @@
     const U = D.users || [], all = sum(U.flatMap(rows)), days = byDay(), OPN = U.reduce((n, u) => n + (u.open || []).length, 0), act = U.filter((u) => Date.now() - u.updated < 7 * 864e5).length;
     const rank = U.map((u) => [u, agU(u)]).filter(([, a]) => a.w + a.l > 0).sort((x, y) => (y[1].pct || 0) - (x[1].pct || 0));
     const last = U.reduce((m, u) => Math.max(m, u.updated || 0), 0);
-    return chips() + '<div class="sub" style="margin:-4px 0 10px">A player\'s numbers update when their app syncs; results of games that ended since then show as unsettled. Latest sync ' + (last ? new Date(last).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '—') + '.</div>' + (P === 'day' ? openOn(DAYSEL || today()) : '') + '<div class="odg">' + tile('users', U.length, 'Players') + tile('games', all.n, 'Bets · ' + PN[P]) + tile('rank', sh(all.pct), 'Win % (' + all.w + '-' + all.l + ')') + tile('days', money(all.pl), 'Players\' P/L', all.pl >= 0 ? GOOD : BAD) + tile('open', OPN, 'Open bets now') + tile('users', act, 'Active this week') + tile('open', all.o, 'Unsettled · ' + PN[P]) + tile('days', money(all.risk), 'Risked · ' + PN[P]) + '</div>'
+    return chips() + '<div class="sub" style="margin:-4px 0 10px">A player\'s numbers update when their app syncs; results of games that ended since then show as unsettled. Latest sync ' + (last ? new Date(last).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '—') + '.</div>' + (P === 'day' ? openOn(DAYSEL || today()) : '') + '<div class="odg">' + tile('users', U.length, 'Players') + tile('games', all.n, 'Bets · ' + PN[P]) + tile('gw', all.w, 'Wins · ' + PN[P], GOOD) + tile('gl', all.l, 'Losses · ' + PN[P], BAD) + tile('rank', sh(all.pct), 'Win % (' + all.w + '-' + all.l + ')') + tile('days', money(all.pl), 'Players\' P/L', all.pl >= 0 ? GOOD : BAD) + tile('open', OPN, 'Open bets now') + tile('users', act, 'Active this week') + tile('open', all.o, 'Unsettled · ' + PN[P]) + tile('days', money(all.risk), 'Risked · ' + PN[P]) + '</div>'
       + card('Profit and loss by day', 'all players · tap a bar', bars(days, (d) => d.pl, (d) => d.day))
       + card('Running total', 'tap to open a day', line(days))
       + card('Bets per day', 'tap a bar', bars(days, (d) => d.n, (d) => d.day, BLUE))
@@ -86,8 +86,13 @@
       + card('Current bets', 'not settled yet', (u.open || []).length ? u.open.map((b) => openRow(b)).join('') : '<div class="sub">No open bets.</div>')
       + card('By day', PN[P] + ' · newest first', ds.length ? ds.slice().reverse().map(dayRow).join('') : '<div class="sub">No finished days in this period.</div>');
   }
-  function gamesV() { return chips() + gamesCard('Every game', PN[P] + ' · newest first', gamesOf(D.users || []), true); }
-  const TITLE = { games: 'Games', home: 'Dashboard', users: 'Players', rank: 'Win %', days: 'Days', open: 'Open bets', day: 'Day', user: 'Player' };
+  function gamesV() {
+    const per = gamesOf(D.users || []), cnt = (f) => per.filter(({ b }) => f === 'all' || b.fin === f).length, nm2 = { all: 'All', won: 'Won', lost: 'Lost', push: 'Push' };
+    const bar = '<div class="odch">' + ['all', 'won', 'lost', 'push'].map((f) => '<button data-gf="' + f + '"' + (f === GF ? ' class="on"' : '') + '>' + nm2[f] + ' ' + cnt(f) + '</button>').join('') + '</div>';
+    const arr = per.filter(({ b }) => GF === 'all' || b.fin === GF);
+    return chips() + bar + gamesCard(GF === 'won' ? 'Winning bets' : GF === 'lost' ? 'Losing bets' : GF === 'push' ? 'Pushes' : 'Every game', PN[P] + ' · newest first', arr, true);
+  }
+  const TITLE = { games: 'Bets', home: 'Dashboard', users: 'Players', rank: 'Win %', days: 'Days', open: 'Open bets', day: 'Day', user: 'Player' };
 
   function paint() {
     const el = document.getElementById('odash'); if (!el) return; const s = stack[stack.length - 1];
@@ -96,7 +101,7 @@
     el.querySelector('.odb').innerHTML = body; el.querySelector('.odt1').textContent = s.t === 'user' ? (((D && D.users) || []).filter((x) => x.k === s.v).map(nm)[0] || 'Player') : s.t === 'day' ? s.v : TITLE[s.t];
     el.querySelector('.odback').style.visibility = stack.length > 1 ? 'visible' : 'hidden';
   }
-  function go(v) { stack.push(v === 'users' || v === 'rank' || v === 'days' || v === 'open' || v === 'games' ? { t: v } : /^u:/.test(v) ? { t: 'user', v: v.slice(2) } : /^\d{4}-\d{2}-\d{2}$/.test(v) ? { t: 'day', v } : null); if (!stack[stack.length - 1]) stack.pop(); paint(); el().scrollTop = 0; }
+  function go(v) { if (v === 'gw' || v === 'gl') { GF = v === 'gw' ? 'won' : 'lost'; v = 'games'; } else if (v === 'games') GF = 'all'; stack.push(v === 'users' || v === 'rank' || v === 'days' || v === 'open' || v === 'games' ? { t: v } : /^u:/.test(v) ? { t: 'user', v: v.slice(2) } : /^\d{4}-\d{2}-\d{2}$/.test(v) ? { t: 'day', v } : null); if (!stack[stack.length - 1]) stack.pop(); paint(); el().scrollTop = 0; }
   const el = () => document.getElementById('odash');
   async function load(force) {
     if (busy || (!force && D && Date.now() - DT < 60000)) return; busy = true; err = '';
@@ -128,7 +133,7 @@
       if (t.closest('.odx')) { e.remove(); return; } if (t.closest('.odback')) { if (stack.length > 1) stack.pop(); paint(); return; } if (t.closest('.odref')) { load(true); return; }
       if (t.closest && t.closest('[data-unlock]')) { unlock(); return; }
       const sv = t.closest && t.closest('[data-save]'); if (sv) { saveName(sv.getAttribute('data-save')); return; }
-      if (pb) { P = pb.getAttribute('data-p'); if (P === 'day' && !DAYSEL) DAYSEL = today(); paint(); return; } if (x) { const v = x.getAttribute('data-go'); if (v) go(v); } };
+      const gfb = t.closest && t.closest('[data-gf]'); if (gfb) { GF = gfb.getAttribute('data-gf'); paint(); return; } if (pb) { P = pb.getAttribute('data-p'); if (P === 'day' && !DAYSEL) DAYSEL = today(); paint(); return; } if (x) { const v = x.getAttribute('data-go'); if (v) go(v); } };
     e.onchange = (ev) => { if (ev.target && ev.target.id === 'oddd' && /^\d{4}-\d{2}-\d{2}$/.test(ev.target.value)) { DAYSEL = ev.target.value; paint(); } };
     paint(); load(true);
   };

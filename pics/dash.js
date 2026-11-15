@@ -128,13 +128,15 @@
   window.oddDash = function () {
     css(); DAYSEL = ''; let e = el(); if (e) e.remove(); e = document.createElement('div'); e.id = 'odash';
     e.innerHTML = '<div class="odh"><button class="odback" style="visibility:hidden">← Back</button><b class="odt1">Dashboard</b><button class="odref">Refresh</button><button class="odx">Close</button></div><div class="odb"></div>';
-    document.body.appendChild(e); stack = [{ t: 'home' }]; P = 'all';
+    document.body.appendChild(e); try { sessionStorage.setItem('odash-open', '1'); } catch (x) {} stack = [{ t: 'home' }]; P = 'all';
     e.onclick = (ev) => { const t = ev.target; const x = t.closest && t.closest('[data-go]'), pb = t.closest && t.closest('[data-p]');
-      if (t.closest('.odx')) { e.remove(); return; } if (t.closest('.odback')) { if (stack.length > 1) stack.pop(); paint(); return; } if (t.closest('.odref')) { load(true); return; }
+      if (t.closest('.odx')) { try { sessionStorage.removeItem('odash-open'); } catch (x) {} e.remove(); return; } if (t.closest('.odback')) { if (stack.length > 1) stack.pop(); paint(); return; } if (t.closest('.odref')) { load(true); return; }
       if (t.closest && t.closest('[data-unlock]')) { unlock(); return; }
       const sv = t.closest && t.closest('[data-save]'); if (sv) { saveName(sv.getAttribute('data-save')); return; }
       const gfb = t.closest && t.closest('[data-gf]'); if (gfb) { GF = gfb.getAttribute('data-gf'); paint(); return; } if (pb) { P = pb.getAttribute('data-p'); if (P === 'day' && !DAYSEL) DAYSEL = today(); paint(); return; } if (x) { const v = x.getAttribute('data-go'); if (v) go(v); } };
     e.onchange = (ev) => { if (ev.target && ev.target.id === 'oddd' && /^\d{4}-\d{2}-\d{2}$/.test(ev.target.value)) { DAYSEL = ev.target.value; paint(); } };
     paint(); load(true);
   };
+  // If the page reloads while the dashboard is open (app update, sync, phone waking the app), put it back instead of dropping the owner on the main screen.
+  try { if (sessionStorage.getItem('odash-open') === '1') setTimeout(() => { if (!document.getElementById('odash') && window.oddDash && g('odd-tok')) window.oddDash(); }, 1500); } catch (e) {}
 })();

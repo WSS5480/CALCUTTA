@@ -363,3 +363,7 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 ## Nov 14 2026 – v217: owner dashboard wins/losses
 - `pics/dash.js`: new Wins and Losses tiles on the owner dashboard home (tap opens that list), and an All / Won / Lost / Push filter (with counts) on the Bets list. The dash.js cache param in `index.html` was stuck at ?v=183: bump it whenever dash.js changes (now ?v=217).
 - Steve (Nov 14): all accounts are free for now; he will change the subscription later. Do not add paywalls or billing changes until he asks.
+
+## Nov 15 2026 – v218: owner dashboard no longer closes by itself
+- Cause: background page reloads wiped the `#odash` overlay: `checkUpdate` (new version out), the service-worker `controllerchange` reload, and `sync.js` reloading when a bet is added/settled/pinned from another device.
+- Fix: those three skip the reload while `#odash` exists; `dash.js` also saves `odash-open` in sessionStorage and reopens the dashboard after any reload (Close clears it). Lesson: any new auto-reload must check for `#odash`.

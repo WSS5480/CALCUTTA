@@ -438,3 +438,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 - Per tile: service picker (game's network, streaming, cable), 🪟 stream window (window.open, tiled by position), ↗ tab, 🔍 focus/grid toggle, ⛶ fullscreen, 🗑 remove. Top bar: add game, all streams (opens every tile's window), full screen for the grid.
 - Limit: paid streams cannot be embedded (X-Frame-Options/DRM), so streams open in separate windows/tabs, not inside Oddable.
 - State in localStorage `mv26` ({ids, svc}). No credentials stored.
+
+## v233 — History box green look
+- 2014-2025 History cells use the green hit / red miss boxes again: green when a season record beats break-even (52.4% at -110), red when below. Totals row too.

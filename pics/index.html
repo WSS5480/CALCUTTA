@@ -206,7 +206,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v232 -->
+<!-- Pics v233 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
   <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v231</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
@@ -217,7 +217,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v232 (multiview)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v233 (green history)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -236,7 +236,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </div>
 <div id="plb" hidden></div>
 <nav class="bn" id="bn"></nav>
-<script src="trophy.js?v=232"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
+<script src="trophy.js?v=233"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
 <script>
 const SC = document.getElementById('sc');
 // The page scrolls inside #sc so the banner and bottom bar (outside it) can never drift on iOS
@@ -1579,8 +1579,8 @@ function trophyData() {
 function trophyChip(g) { const d = trophyData(); if (!d) return ''; const w = d[g.week]; if (!w) return ''; const p = w.picks.find((x) => x.id === g.id); if (!p) return ''; return `<span class="nw" style="border-color:#f5c542;color:#f5c542;font-weight:800">${p.rank === 1 ? '🔒🔒 Double lock' : '🔒 Lock'} ${p.abbr} ${p.line > 0 ? '+' : ''}${p.line}</span>`; }
 const TRH = [[2014,8,9,12,5],[2015,9,8,10,7],[2016,9,8,9,8],[2017,10,7,9,8],[2018,9,8,10,7],[2019,9,8,11,6],[2020,6,11,8,9],[2021,10,8,10,8],[2022,9,9,10,8],[2023,10,8,8,10],[2024,11,7,8,10],[2025,8,10,5,13]]; // season, #1 W, #1 L, #2 W, #2 L (each season picked by a model trained only on earlier seasons)
 function trophyHistory() {
-  const p = (w, l) => (w + l ? Math.round(w / (w + l) * 100) + '%' : '–'), T = TRH.reduce((a, r) => [a[0] + r[1], a[1] + r[2], a[2] + r[3], a[3] + r[4]], [0, 0, 0, 0]), bw = T[0] + T[2], bl = T[1] + T[3], u = (bw * 100 / 110 - bl).toFixed(1);
-  return `<details class="res" style="margin:8px 0"><summary><b>📜 History: same method, 2014-2025</b> · both ${bw}-${bl} (${p(bw, bl)})</summary><div class="note" style="text-align:left">Each past season was picked by a model trained only on the seasons before it, using the same rule: the two most confident spread picks every week. Break-even at -110 is 52.4%. Both picks together: ${bw}-${bl}, ${u > 0 ? '+' : ''}${u} units over 12 seasons after juice: essentially break-even, not a winner.</div><div class="trw"><div class="trn">Year</div><div class="trc"><b>🔒🔒 Double lock</b></div><div class="trc"><b>🔒 Lock</b></div></div>${TRH.slice().reverse().map((r) => `<div class="trw"><div class="trn">${r[0]}</div><div class="trc">${r[1]}-${r[2]} <span class="sub">${p(r[1], r[2])}</span></div><div class="trc">${r[3]}-${r[4]} <span class="sub">${p(r[3], r[4])}</span></div></div>`).join('')}<div class="trw"><div class="trn">All</div><div class="trc"><b>${T[0]}-${T[1]}</b> <span class="sub">${p(T[0], T[1])}</span></div><div class="trc"><b>${T[2]}-${T[3]}</b> <span class="sub">${p(T[2], T[3])}</span></div></div></details>`;
+  const p = (w, l) => (w + l ? Math.round(w / (w + l) * 100) + '%' : '–'), hc = (w, l, bold) => { const win = w + l && w / (w + l) > 0.5238, lose = w + l && w / (w + l) < 0.5238, c = win ? '#4fd18b' : lose ? '#ff6b6b' : ''; return `<div class="trc" style="${c ? `border:1px solid ${c};background:${win ? '#16915a14' : '#d93a2e14'};` : ''}border-radius:8px;padding:4px 6px">${bold ? `<b>${w}-${l}</b>` : `${w}-${l}`} <span class="sub" style="${c ? 'color:' + c : ''}">${p(w, l)}</span></div>`; }, T = TRH.reduce((a, r) => [a[0] + r[1], a[1] + r[2], a[2] + r[3], a[3] + r[4]], [0, 0, 0, 0]), bw = T[0] + T[2], bl = T[1] + T[3], u = (bw * 100 / 110 - bl).toFixed(1);
+  return `<details class="res" style="margin:8px 0"><summary><b>📜 History: same method, 2014-2025</b> · both ${bw}-${bl} (${p(bw, bl)})</summary><div class="note" style="text-align:left">Each past season was picked by a model trained only on the seasons before it, using the same rule: the two most confident spread picks every week. Break-even at -110 is 52.4%. Both picks together: ${bw}-${bl}, ${u > 0 ? '+' : ''}${u} units over 12 seasons after juice: essentially break-even, not a winner.</div><div class="trw"><div class="trn">Year</div><div class="trc"><b>🔒🔒 Double lock</b></div><div class="trc"><b>🔒 Lock</b></div></div>${TRH.slice().reverse().map((r) => `<div class="trw"><div class="trn">${r[0]}</div>${hc(r[1], r[2])}${hc(r[3], r[4])}</div>`).join('')}<div class="trw"><div class="trn">All</div>${hc(T[0], T[1], 1)}${hc(T[2], T[3], 1)}</div></details>`;
 }
 const TRLBL = { prev_margin: 'Last game margin', prev_close_loss: 'Lost last game by 3 or less', prev_ot_loss: 'Lost last game in overtime', prev_blowout_loss: 'Lost last game by 14+', prev_lost_as_fav: 'Lost last game as the favorite', prev_big_win: 'Won last game by 14+', prev_cover_margin: 'Last game vs the spread', ats3: 'Covered share of last 3', rest: 'Days of rest', short: 'Short week (5 days or less)', bye: 'Off a bye', winpct: 'Win % this season', gp: 'Games played this season', late_bubble: 'Late-season bubble team', late_dead: 'Late-season out of it', late_contender: 'Late-season contender', recent_loss_streak: 'Lost its last 2', dead: 'Out of it' };
 function trLabel(k) { if (TRLBL[k.replace(/^[df]_/, '')]) return (k[0] === 'd' ? 'Underdog: ' : 'Favorite: ') + TRLBL[k.replace(/^[df]_/, '')]; return { h2h_n: 'Meetings in the last 6 years', h2h_cover: 'Underdog cover rate in those meetings', h2h_lastlost: 'Underdog lost the last meeting', h2h_avgmargin: 'Underdog average margin in those meetings', div: 'Divisional game', conf: 'Same conference', dog_home: 'Underdog is at home', sp: 'Spread size', both_bubble: 'Both teams on the bubble', dog_dontdie: 'Underdog must-win (late, same conference)' }[k] || k; }
@@ -2421,6 +2421,6 @@ if ('serviceWorker' in navigator) {
 })();
 </script>
 <script>setTimeout(()=>{const l=document.querySelector('.lg'),o=l&&l.querySelector('.on');if(o)l.scrollLeft=Math.max(0,o.offsetLeft-60);},500);</script>
-<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=232"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
+<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=233"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
 </body>
 </html>

@@ -229,6 +229,23 @@ srv.listen(0, async () => {
       fresh16(); CONF = { 402: 0.9, 405: 0.8, 403: 0.7, 404: 0.6, 401: 0.5 }; NOW = K1 - 59 * MIN; await A.tick(); NOW = KS - 59 * MIN; await A.tick(); w = stored(2); assert.strictEqual(w.lock.id, '405');
       set('405', 'EVEN'); NOW = KN - 61 * MIN; await A.tick(); NOW = KN - 59 * MIN; await A.tick(); w = stored(2);
       assert.ok(w.lock && w.lock.final && w.lock.id === '405' && w.lock.line === 9.5 && w.lock.nl === 1, 'never a week without a Lock: frozen at its last live line, flagged "line at mark unavailable"'); set('405', 'SEA -9.5');
+      // --- 21 (v253 final review N7, N5): the live Lock's own game is never left out of the ranking for a line read after its mark ---
+      // N7: the Lock is on a division road dog game; the server is down more than 5 minutes across that game's mark and the line moves (both directions).
+      // The Lock and the road dog freeze together at the new line and price, flagged late (not "line at mark unavailable").
+      for (const [mv, ln] of [['DET -7.5', 7.5], ['DET -5.5', 5.5]]) {
+        fresh16(); const h403 = SCHED.find((g) => g.id === '403'); CONF = { 401: 0.9, 403: 0.8, 402: 0.7, 404: 0.6, 405: 0.5 };
+        NOW = K1 - 59 * MIN; await A.tick(); NOW = KS - 4 * 3600e3; await A.tick(); w = stored(2); assert.ok(w.lock.id === '403' && !w.lock.final && w.lock.line === 6.5 && w.lock.o === -108, 'N7: live Lock on the road dog game');
+        h403.odds = mv; h403.op = [-102, -118]; NOW = KS - 30 * MIN; await A.tick(); w = stored(2); x = dog(w, '403');
+        assert.ok(w.lock.final && w.lock.id === '403' && w.lock.late === 1 && w.lock.pre === true && !w.lock.nl, 'N7 (' + mv + '): Lock final, flagged late, not "line at mark unavailable"');
+        assert.ok(x.final && x.late === 1, 'N7: road dog final late'); assert.strictEqual(w.lock.line, ln, 'N7: Lock at the new line'); assert.strictEqual(x.line, ln, 'N7: road dog at the new line'); assert.strictEqual(w.lock.o, -118); assert.strictEqual(x.o, -118, 'N7: one line, one price'); assert.strictEqual(w.gl['403'].l, ln);
+      }
+      // N5: the first tick of the week lands inside the hour before the Lock's kickoff while earlier results are missing: the Lock waits (held), then freezes at kickoff
+      fresh16(); g108.st = 'in'; CONF = { 402: 0.9, 401: 0.8, 403: 0.7, 404: 0.6, 405: 0.5 };
+      NOW = K1 - 30 * MIN; await A.tick(); w = stored(2); assert.ok(w.lock.id === '401' && !w.lock.final && w.lock.part === 1 && w.lockWait === '401', 'N5: first tick inside the hour, inputs incomplete: held');
+      NOW = K1 - 25 * MIN; await A.tick(); w = stored(2); assert.ok(w.lock.id === '401' && !w.lock.final && !w.lock.nl && w.lockWait === '401', 'N5: still held on the next tick (its line, read after the mark, is not dropped)');
+      NOW = K1 + MIN; await A.tick(); w = stored(2); x = dog(w, '401');
+      assert.ok(w.lock.final && w.lock.id === '401' && w.lock.pre === false && w.lock.part === 1 && !w.lock.nl && !w.lockWait, 'N5: frozen at kickoff, flagged'); assert.strictEqual(w.lock.line, x.line, 'N5: same line as its road dog'); assert.strictEqual(w.lock.o, -105); assert.strictEqual(x.o, -105);
+      g108.st = 'post';
     } finally { TR.pickOf = keepT.pickOf; TR.dogCover = keepT.dogCover; H.win = keepW; }
     // --- 17 (v252 review fixes) ---
     const OLD = { lock: { id: '911', abbr: 'KC', line: 3, conf: 0.6 }, dogs: [], helper: null, t: 1, pre: true };

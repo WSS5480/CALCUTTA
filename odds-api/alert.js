@@ -153,7 +153,7 @@ function compute(weeks, games, cur, nv, bx, now, ll) {
       // that appears late cannot move the live Lock. A line read before the mark still counts (the sleep path: frozen later with the line read in time).
       // This applies once there has been a live Lock; a week the server first sees after its games (asleep or down all week) is still ranked after the fact, flagged *.
       const prevL = rec.lock && !rec.lock.final ? rec.lock : null; // the live Lock as of the last tick
-      const lateLine = (g) => { const e = rec.gl[g.id]; return !!prevL && now >= g.start - MARK && (!e || e.s === 'close' || !(e.lt <= g.start - MARK + GRACE)); };
+      const lateLine = (g) => { const e = rec.gl[g.id]; return !!prevL && String(prevL.id) !== g.id && now >= g.start - MARK && (!e || e.s === 'close' || !(e.lt <= g.start - MARK + GRACE)); };
       const atMark = (g) => { const e = rec.gl[g.id], x = byId[g.id]; if (lateLine(g)) return null; return e && e.f && half(e.l) && e.l !== x.line ? Object.assign({}, x, { line: e.l }) : x; };
       const out = new Set(rec.lockOut || []), picks = wg.map(atMark).filter((g) => g && g.line !== null && g.line !== undefined).map((g) => Trophy.pickOf(g, rows, SEASON)).filter(Boolean).sort((a, b) => b.conf - a.conf);
       // owner (Nov 16 2026): never a week without a Lock: if no game after the #1 is still in contention, the top game still in contention is the Lock.

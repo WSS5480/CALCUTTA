@@ -109,7 +109,7 @@
   document.addEventListener('click', (ev) => { const b = ev.target.closest && ev.target.closest('.oddcontact'); if (!b) return; ev.preventDefault(); ev.stopPropagation(); document.querySelectorAll('#ocalc,#ogolf,#oevt,#ocat,#ostat,#bnmore').forEach((x) => x.remove()); if (window.OddGroups && window.OddGroups.contact) window.OddGroups.contact(); else toast('Open Groups to contact Oddable.'); }, true);
   let LT = 0; const later = () => { clearTimeout(LT); LT = setTimeout(linkContact, 60); };
   document.addEventListener('DOMContentLoaded', () => new MutationObserver(later).observe(document.body, { childList: true, subtree: true, characterData: true }));
-  st.textContent += '#ogrp .oband .gbadge.gside{background:rgba(0,0,0,.34);color:#ffdc73;border-color:#ffdc73}'; // a gold badge inside the header band stays readable (4.5:1) in all three themes
+  st.textContent += '#ogrp .oband .gbadge.gside{background:rgba(0,0,0,.34)!important;color:#ffdc73!important;border-color:#ffdc73!important}html:not(.cb) #ovoice .vp{color:var(--onblue,#fff)}'; // a gold badge inside the header band stays readable (4.5:1) in all three themes
   st.textContent += '.oddcontact{display:inline-flex;align-items:center;min-height:44px;margin:4px 0 0 6px;padding:0 14px;border-radius:999px;border:1px solid currentColor;background:none;color:inherit;font:700 14px system-ui,-apple-system,sans-serif;text-decoration:underline;cursor:pointer;vertical-align:middle}';
   window.OddGames = { open, startFor };
 })();

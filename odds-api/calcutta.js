@@ -186,12 +186,12 @@ async function mutRow(rowId, init, fn, after) {
   throw bad(409, 'Busy, try again');
 }
 const mutCalc = (id, fn, mk) => mutRow(ROW(id), null, async (c) => { if (c.deleted || (mk && !memberOf(c, mk))) throw bad(404, 'Calcutta not found'); settle(c, D.now()); return fn(c); }, (row) => RC.set(String(row.id).slice(10), { at: D.now(), row }));
-const idxEntry = (c) => ({ name: c.name, comm: c.comm, mks: c.members.map((m) => m.mk), code: c.code, status: c.a.status, ev: c.ev, created: c.created, group: c.group || null });
+const idxEntry = (c) => ({ name: c.name, comm: c.comm, mks: c.members.map((m) => m.mk), code: c.code, status: c.a.status, ev: c.ev, created: c.created, act: D.now(), group: c.group || null, pks: [...new Set([].concat(...c.lots.map((l) => (l.por || []).map((e) => e.k).filter((k) => /^[0-9a-f]{24}$/.test(k)))))] }); // S-ALL: players of record (account keys) find their Calcuttas too
 // REVIEW FIX 8: index cached 1 s, abandoned set-ups (never started, 90+ days) pruned, failed updates retried on the next request
 const IDXC = { at: 0, v: null }, PENDING = new Set(), ABANDON = 90 * DAY;
 async function syncIdx(c) {
-  for (let k = 0; k < 3; k++) { try { await mutRow(IDX, { calcs: {} }, (d) => { d.calcs = d.calcs || {}; const e = idxEntry(c), now = D.now(); let ch = JSON.stringify(d.calcs[c.id]) !== JSON.stringify(e); d.calcs[c.id] = e;
-      Object.keys(d.calcs).forEach((id) => { const x = d.calcs[id]; if (id !== c.id && x.status === 'setup' && now - (x.created || 0) > ABANDON) { delete d.calcs[id]; ch = true; } });
+  for (let k = 0; k < 3; k++) { try { await mutRow(IDX, { calcs: {} }, (d) => { d.calcs = d.calcs || {}; const e = idxEntry(c), now = D.now(); const strip = (x) => JSON.stringify(Object.assign({}, x, { act: 0 })); let ch = !d.calcs[c.id] || strip(d.calcs[c.id]) !== strip(e) || now - (d.calcs[c.id].act || 0) > DAY; d.calcs[c.id] = e;
+      Object.keys(d.calcs).forEach((id) => { const x = d.calcs[id]; if (id !== c.id && x.status === 'setup' && (x.mks || []).length <= 1 && now - (x.act || x.created || 0) > ABANDON) /* ROUND 2 D5: last activity, commissioner alone */ { delete d.calcs[id]; ch = true; } });
       if (!ch) return { nochange: true }; return {}; }, (row) => { IDXC.at = D.now(); IDXC.v = row.data.calcs; }); PENDING.delete(c.id); IDXC.at = 0; return; } catch (e) { if (k === 2) { console.error('calcutta index:', e.message); PENDING.add(c.id); } } }
 }
 async function repairIdx() { if (!PENDING.size) return; for (const id of [...PENDING].slice(0, 5)) { PENDING.delete(id); const r = await D.S.dbGet(ROW(id)); if (r && r.data && !r.data.deleted) await syncIdx(r.data); } }
@@ -243,7 +243,7 @@ async function getGames(url, today) {
   const h = GC.get(url); if (h && (h.final || D.now() - h.at < 5 * 6e4)) return h.games;
   try { const r = await D.fetch(url, { signal: AbortSignal.timeout(12000) }); if (!r.ok) throw new Error('HTTP ' + r.status); const games = parseGames(await r.json());
     const fin = !!today && games.length > 0 && games.every((g) => g.done) && !url.includes('dates=' + today.replace(/-/g, '')); GC.set(url, { at: D.now(), games, final: fin }); if (GC.size > 3000) GC.delete(GC.keys().next().value); return games;
-  } catch (e) { return h ? h.games : []; }
+  } catch (e) { throw new Error('score feed: ' + e.message); } // ROUND 2 D1: a failed fetch is an error (never an empty, fresh-looking list)
 }
 function urlsFor(c) {
   const ev = EVENTS[c.ev]; if (ev.fetch) return ev.fetch(seasonYear(c.created, ev)).map((q) => E + ev.path + '/' + q);
@@ -254,9 +254,10 @@ function urlsFor(c) {
 function teamResults(ev, games, inEvent) {
   const R = {}, T = (id) => (R[id] = R[id] || { wins: 0, winT: [], reached: 0, reachT: {}, champ: false, out: false });
   // REVIEW FIX 3: a game counts when ANY lot team plays in it (its opponent may be in no lot); roundOf decides if it is part of the event
-  games.forEach((g) => { if (ev.prelim && g.done && g.teams.length === 2 && ev.prelim.test(g.head || '') && g.teams.some((t) => inEvent.has(t.id))) { const [a, b] = g.teams, w = a.winner ? a : b.winner ? b : a.score > b.score ? a : b; T((w === a ? b : a).id).out = true; } });
-  const gs = games.filter((g) => g.teams.length === 2 && g.teams.some((t) => inEvent.has(t.id))).map((g) => Object.assign({}, g, { round: ev.roundOf ? ev.roundOf(g) : 0 })).filter((g) => g.round != null);
-  gs.sort((a, b) => a.t - b.t || a.id.localeCompare(b.id)); const champR = ev.champRound || ev.final, seriesDone = new Set();
+  const preLost = new Set(); games.forEach((g) => { if (ev.prelim && g.done && g.teams.length === 2 && ev.prelim.test(g.head || '') && g.teams.some((t) => inEvent.has(t.id))) { const [a, b] = g.teams, w = a.winner ? a : b.winner ? b : a.score > b.score ? a : b; preLost.add((w === a ? b : a).id); } });
+  const champR = ev.champRound || ev.final; // ROUND 2 Low: the final always counts (so the event ends even when its champion is in no lot)
+  const gs = games.filter((g) => g.teams.length === 2).map((g) => Object.assign({}, g, { round: ev.roundOf ? ev.roundOf(g) : 0 })).filter((g) => g.round != null && (g.teams.some((t) => inEvent.has(t.id)) || (champR && g.round === champR)));
+  gs.sort((a, b) => a.t - b.t || a.id.localeCompare(b.id)); const seriesDone = new Set();
   let big = null;
   gs.forEach((g) => {
     g.teams.forEach((t) => { const x = T(t.id); if (g.round > x.reached) { x.reached = g.round; } if (x.reachT[g.round] == null) x.reachT[g.round] = g.t; });
@@ -270,6 +271,8 @@ function teamResults(ev, games, inEvent) {
     const m = Math.abs(w.score - l.score); if (inEvent.has(w.id) && (!big || m > big.m)) big = { id: w.id, m, t: g.t };
   });
   if (big) T(big.id).big = true;
+  // ROUND 2 D6: a play-in / First Four loser is out only once the real bracket has begun without it (a 7v8 play-in loser still has a second chance)
+  const realBegun = gs.some((g) => g.round >= 1); preLost.forEach((id) => { const x = T(id); if (!(x.reached >= 1) && realBegun) x.out = true; });
   return R;
 }
 const RES = new Map(); // calc id -> { at, R, busy }
@@ -284,14 +287,35 @@ async function feedResults(c) {
 }
 const STARTED = new Set(); // calc ids whose event has a game under way or finished (in memory; recomputed from the feed after a restart)
 const anyResult = (R) => Object.values(R || {}).some((x) => x && (x.wins || x.reached || x.champ || x.out || x.big || x.place));
-// REVIEW FIX 1 (Nov 16 2026): who owns what is final once the event has started (first game under way / finished) or any result exists
-// (hand-entered or from the feed). Enter / remove entry / buy-back / undo a sale are refused from then on.
-async function frozen(c) { if (Object.keys(c.manual || {}).length) return true; if (EVENTS[c.ev].manualOnly) return false; const R = await results(c, false); return STARTED.has(c.id) || anyResult(R); }
+// REVIEW FIX 1 + ROUND 2 D1-D3 (Nov 16 2026): who owns what is final once the event has started. The first time a game is seen under way /
+// finished, or any result exists (feed or hand-entered), `c.startedAt` is written on the Calcutta row (sticky: never cleared, survives restarts)
+// and every ownership change checks it INSIDE its transaction. When the feed cannot be read on/after the event's start date: fail CLOSED.
 const FROZEN = 'The event has started: who owns what is final now.';
-function notice(c, by, what) { c.notices = c.notices || []; c.notices.push({ at: D.now(), by: cleanName(by, 24), what: cleanName(what + ' (after the auction closed)', 180) }); if (c.notices.length > 50) c.notices = c.notices.slice(-50); }
+function notice(c, by, what, raw) { c.notices = c.notices || []; c.notices.push({ at: D.now(), by: cleanName(by, 24), what: cleanName(raw ? what : what + ' (after the auction closed)', 180) }); if (c.notices.length > 50) c.notices = c.notices.slice(-50); }
+function startOf(c) { // the earliest day the event can start (conservative): its window, else per event from the season
+  if (c.win && c.win.from) return c.win.from; const ev = EVENTS[c.ev], sy = seasonYear(c.created, ev);
+  return { nfl_po: (sy + 1) + '-01-08', nfl_season: sy + '-09-03', cfp: sy + '-12-18' }[c.ev] || null; }
+async function feedState(c) {
+  const h = RES.get(c.id); if (h && h.R && !h.err && D.now() - h.at < 5 * 6e4) return { started: STARTED.has(c.id) || anyResult(h.R), unknown: false };
+  try { const R = await Promise.race([feedResults(c), new Promise((ok, no) => setTimeout(() => no(new Error('timeout')), 8000))]); RES.set(c.id, { at: D.now(), R }); return { started: STARTED.has(c.id) || anyResult(R), unknown: false }; }
+  catch (e) { return { started: STARTED.has(c.id), unknown: true }; }
+}
+function startNow(c) { // inside a transaction: mark started; an auction still open is closed with a notice (ownership cannot change during the games)
+  if (c.startedAt) return; c.startedAt = D.now(); audit(c, 'Oddable', 'The event has started: who owns what is final');
+  if (c.a.status === 'live') { const n = unsold(c).length; c.a.status = 'closed'; c.a.cur = null; c.a.endsAt = null; c.a.nextAt = null; c.a.nextLeft = null; c.a.left = null; c.a.paused = false; c.a.closedAt = D.now(); notice(c, 'Oddable', 'The event has started: the auction is closed' + (n ? ' (' + n + ' lot' + (n === 1 ? '' : 's') + ' unsold)' : ''), true); }
+}
+async function markStarted(id) { try { const c = await mutCalc(id, (c) => { if (c.startedAt) return { nochange: true, v: c }; startNow(c); c.rev++; return c; }); syncIdx(c); } catch (e) { console.error('calcutta start:', e.message); } }
+const LASTCHK = new Map();
+async function freezeCheck(id, cached) { // true = ownership must not change now
+  const row = await loadRow(id, !cached); if (!row) return false; const c = row.data; if (c.startedAt) return true;
+  const ev = EVENTS[c.ev], today = chiDay(D.now()); let started = Object.keys(c.manual || {}).length > 0, closed = false;
+  if (!started && !ev.manualOnly && !ev.plug) { const s0 = startOf(c); if (!s0 || today >= addDay(s0, -2)) { LASTCHK.set(id, D.now()); const st = await feedState(c); if (st.started) started = true; else if (st.unknown && (!s0 || today >= s0)) closed = true; } }
+  if (started) { await markStarted(id); return true; }
+  return closed;
+}
 async function results(c, wait) { // feed results cached 5 min per Calcutta; refreshed in the background so a page never waits on ESPN
   const h = RES.get(c.id), fresh = h && D.now() - h.at < 5 * 6e4;
-  const run = async () => { const x = RES.get(c.id) || {}; if (x.busy) return x.busy; const p = feedResults(c).then((R) => { RES.set(c.id, { at: D.now(), R }); return R; }).catch((e) => { console.error('calcutta feed:', e.message); RES.set(c.id, { at: D.now() - 4 * 6e4, R: (h && h.R) || {} }); return (h && h.R) || {}; }); RES.set(c.id, Object.assign({}, x, { busy: p })); return p; };
+  const run = async () => { const x = RES.get(c.id) || {}; if (x.busy) return x.busy; const p = feedResults(c).then((R) => { RES.set(c.id, { at: D.now(), R }); return R; }).catch((e) => { console.error('calcutta feed:', e.message); RES.set(c.id, { at: D.now() - 4 * 6e4, R: (h && h.R) || {}, err: true }); return (h && h.R) || {}; }); RES.set(c.id, Object.assign({}, x, { busy: p })); return p; };
   let R = h && h.R; if (!fresh) { const p = run(); if (wait || !R) R = await Promise.race([p, new Promise((ok) => setTimeout(() => ok(R || {}), wait ? 20000 : 2500))]); }
   R = clone(R || {}); Object.keys(c.manual || {}).forEach((id) => { const m = c.manual[id], x = R[id] = R[id] || { wins: 0, winT: [], reached: 0, reachT: {}, champ: false, out: false };
     if (m.wins != null) { const n = m.wins; while (x.winT.length < n) x.winT.push(9e15 + (m.at || 0)); /* hand-added wins are paid after the feed wins (slot order) */ x.winT = x.winT.slice(0, n); x.wins = n; }
@@ -356,7 +380,7 @@ function full(c, mk, now) {
   const hb = a.cur ? high(c, a.cur) : null; o.a.high = hb ? { pid: hb.pid, name: mName(c, hb.pid), amt: hb.amt } : null; o.a.minNext = a.cur ? (hb ? hb.amt + c.rules.inc : c.rules.minBid) : null;
   o.a.bids = a.cur ? (c.bids[a.cur] || []).slice(-6).reverse().map((b) => ({ pid: b.pid, name: mName(c, b.pid), amt: b.amt, at: b.at })) : [];
   o.sold = c.a.order.filter((id) => c.sold[id]).map((id) => { const s = c.sold[id]; return { lot: id, name: lotOf(c, id).name, holder: s.pid ? { pid: s.pid, name: mName(c, s.pid) } : { pid: null, name: s.name }, amt: s.amt, at: s.at, how: s.how, bb: s.bb ? (s.bb.pid ? { pid: s.bb.pid, name: mName(c, s.bb.pid) } : { pid: null, name: s.bb.name }) : null }; }).sort((x, y) => y.at - x.at);
-  o.notices = (c.notices || []).slice(-5).reverse(); o.a.undo = a.cur && (c.bids[a.cur] || []).length ? { k: 'bid' } : a.just && c.sold[a.just] && c.sold[a.just].how === 'auction' ? { k: 'sale', name: lotOf(c, a.just).name } : null;
+  o.started = !!c.startedAt; o.notices = (c.notices || []).slice(-5).reverse(); o.a.undo = a.cur && (c.bids[a.cur] || []).length ? { k: 'bid' } : a.just && c.sold[a.just] && c.sold[a.just].how === 'auction' ? { k: 'sale', name: lotOf(c, a.just).name } : null;
   o.potSoFar = Object.values(c.sold).reduce((s, x) => s + x.amt, 0); o.now = now; o.rev = c.rev || 0; return o;
 }
 const canSee = (c, mk) => !!memberOf(c, mk);
@@ -403,19 +427,23 @@ async function handle(req, res) {
     if (op === 'get' || op === 'state') {
       let row = await loadRow(id); if (!row || !canSee(row.data, u.mk)) throw bad(404, 'Calcutta not found');
       if (needsSettle(row.data, now)) { await mutCalc(id, (c) => { c.rev++; return c; }); row = await loadRow(id); }
+      if (!row.data.startedAt && row.data.a.status === 'live' && now - (LASTCHK.get(id) || 0) > 60e3) { const s0 = startOf(row.data); if (s0 && chiDay(now) >= addDay(s0, -2)) { LASTCHK.set(id, now); if (await freezeCheck(id)) row = await loadRow(id, true); } } // ROUND 2 D2: close a running auction once the games begin
       if (op === 'state' && Number(b.rev) === Number(row.data.rev)) { const c = row.data; send(res, 200, { same: true, rev: c.rev, now, a: { endsAt: c.a.endsAt, nextAt: c.a.nextAt, paused: !!c.a.paused } }); return true; }
       send(res, 200, { calc: full(row.data, u.mk, now) }); return true;
     }
-    if (op === 'board') { const row = await loadRow(id); if (!row || !canSee(row.data, u.mk)) throw bad(404, 'Calcutta not found'); const c = row.data, R = await results(c, false), m = money(c, R);
+    if (op === 'board') { let row = await loadRow(id); if (!row || !canSee(row.data, u.mk)) throw bad(404, 'Calcutta not found'); let R = await results(row.data, false);
+      if (!row.data.startedAt && (STARTED.has(id) || anyResult(R) || Object.keys(row.data.manual || {}).length)) { await markStarted(id); row = await loadRow(id, true); } // ROUND 2 D1: persist the start
+      const c = row.data, m = money(c, R);
       m.owners.forEach((o) => { o.me = o.pid === (memberOf(c, u.mk) || {}).pid; delete o.key; }); m.lots.forEach((l) => { l.por = porOut(c, lotOf(c, l.id), u.mk); }); const r = RES.get(c.id);
       send(res, 200, { calc: full(c, u.mk, now), board: m, audit: (c.audit || []).slice(-120).reverse(), feedAt: r && r.at ? r.at : null, manual: Object.keys(c.manual || {}).length }); return true; }
     if (op === 'bid') {
-      rate('bid', u.mk, ip); const amt = Number(b.amt), lot = String(b.lot || '');
+      rate('bid', u.mk, ip); const amt = Number(b.amt), lot = String(b.lot || ''); const fz = await freezeCheck(id, true);
       if (!(Number.isInteger(amt) && amt > 0 && amt <= 100000)) throw bad(400, 'Bids are whole dollars up to $100,000');
       const c = await mutCalc(id, (c) => {
         const m = memberOf(c, u.mk); if (!m) throw bad(403, 'Join this Calcutta to bid');
         if (c.members.indexOf(m) >= maxOf(c)) throw bad(403, capMsg(c, 'Only the first ' + maxOf(c) + ' people can bid'), { code: 'cap' });
         if (c.rules.mode !== 'live') throw bad(409, 'This Calcutta is entered by the commissioner, not bid live');
+        if (fz || c.startedAt) throw bad(409, FROZEN, { code: 'frozen' });
         if (c.a.status !== 'live') throw bad(409, c.a.status === 'closed' ? 'The auction is over' : 'The auction has not started');
         if (c.sold[lot]) throw bad(409, 'Sold. That lot is gone.', { code: 'sold' });
         if (c.a.cur !== lot) throw bad(409, 'That lot is not on the block', { code: 'stale' });
@@ -429,9 +457,10 @@ async function handle(req, res) {
       send(res, 200, { ok: true, calc: full(c, u.mk, now) }); return true;
     }
     if (op === 'ctl') {
-      rate('ctl', u.mk, ip); const what = String(b.op || ''); let idxSync = false; let fz = false; if (what === 'undo') { const r0 = await loadRow(id, true); if (r0 && r0.data.a && r0.data.a.just && !(r0.data.a.cur && (r0.data.bids[r0.data.a.cur] || []).length)) fz = await frozen(r0.data); }
+      rate('ctl', u.mk, ip); const what = String(b.op || ''); let idxSync = false; let fz = false; if (['undo', 'sold', 'next', 'start', 'resume'].includes(what)) fz = await freezeCheck(id); /* ROUND 2 D2: always, after settle */
       const c = await mutCalc(id, (c) => {
         if (!isComm(c, u.mk)) throw bad(403, 'Only the commissioner runs the auction'); const by = mName(c, memberOf(c, u.mk).pid), a = c.a;
+        if ((c.startedAt || fz) && ['undo', 'sold', 'next', 'start', 'resume'].includes(what)) throw bad(409, FROZEN, { code: 'frozen' });
         if (what === 'start') { if (c.rules.mode !== 'live') throw bad(409, 'This Calcutta is entered by hand'); if (a.status !== 'setup') throw bad(409, 'Already started');
           if (c.rules.order === 'random') { const o = a.order.slice(); for (let i = o.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); [o[i], o[j]] = [o[j], o[i]]; } a.order = o; }
           a.status = 'live'; openNext(c, null); audit(c, by, 'Started the auction'); idxSync = true; }
@@ -453,16 +482,16 @@ async function handle(req, res) {
       if (idxSync) await syncIdx(c); send(res, 200, { calc: full(c, u.mk, now) }); return true;
     }
     if (op === 'buyback' || op === 'por') { // OWNER DECISION Nov 16 2026: classic golf Calcutta buy-back (see HANDOFF Decisions)
-      rate('write', u.mk, ip); const lot = String(b.lot || ''); let fz = false; if (op === 'buyback') { const r0 = await loadRow(id, true); if (r0) fz = await frozen(r0.data); }
+      rate('write', u.mk, ip); const lot = String(b.lot || ''); let fz = false; fz = await freezeCheck(id);
       const c = await mutCalc(id, (c) => {
         const me = memberOf(c, u.mk), by = me.name, comm = isComm(c, u.mk), l = lotOf(c, lot); if (!l) throw bad(404, 'No such lot');
         if (!evLocal(c.ev)) throw bad(409, 'Buy back half is not available for pro teams or golfers');
         if (op === 'por') { // commissioner sets the lot's players of record (members, guest ids or names)
           if (!comm) throw bad(403, 'Only the commissioner sets players of record');
-          const s0 = c.sold[lot]; if (s0 && s0.bb) throw bad(409, 'Remove the buy-back first');
+          if (c.sold[lot] || c.startedAt || (c.rules.mode === 'live' && c.a.status !== 'setup')) throw bad(409, 'Players of record are locked once the lot is sold (or the live auction has started)', { code: 'porlocked' }); // ROUND 2 D4
           const mem = c.members.slice(); mem._me = me; let por; if (b.add) { por = (l.por || []).slice(); const e = porEntry(b.add, mem); if (!por.some((x) => x.k === e.k)) por.push(e); if (por.length > 8) throw bad(400, 'Up to 8 players of record per lot'); } else if (b.remove != null) { const i = Number(b.remove); por = (l.por || []).filter((x, j) => j !== i); } else por = cleanPor(b.players, mem);
-          l.por = por; audit(c, by, 'Players of record for ' + l.name + ': ' + (por.length ? porOut(c, l, null).map((p) => p.name).join(', ') : 'none')); c.rev++; return c; }
-        if (!c.rules.buyBack) throw bad(409, 'Buy back half is off for this Calcutta'); if (fz) throw bad(409, FROZEN, { code: 'frozen' }); const wasClosed = c.a.status === 'closed';
+          l.por = por; const ptxt = 'Players of record for ' + l.name + ': ' + (por.length ? porOut(c, l, null).map((p) => p.name).join(', ') : 'none'); audit(c, by, ptxt); notice(c, by, ptxt, true); c.rev++; return c; }
+        if (!c.rules.buyBack) throw bad(409, 'Buy back half is off for this Calcutta'); if (fz || c.startedAt) throw bad(409, FROZEN, { code: 'frozen' }); const wasClosed = c.a.status === 'closed';
         const s = c.sold[lot]; if (!s) throw bad(409, 'That lot is not sold yet');
         if (!(l.por || []).length) throw bad(409, 'Only the lot\'s own player(s) can buy it back, and this lot has none in the group');
         const mine = isPor(l, u.mk);
@@ -476,16 +505,16 @@ async function handle(req, res) {
         s.bb = { pid: w.pid, name: w.name, k: e.k, at: D.now() }; if (holders(c).size > maxOf(c)) throw bad(409, capMsg(c, 'Too many people'), { code: 'cap' });
         audit(c, by, (w.pid ? mName(c, w.pid) : w.name) + ' bought back half of ' + l.name + ' for $' + (Math.floor(s.amt * 100 / 2) / 100) + (comm && !mine ? ' (recorded by the commissioner)' : '')); if (wasClosed) notice(c, by, (w.pid ? mName(c, w.pid) : w.name) + ' bought back half of ' + l.name); c.rev++; return c;
       }, u.mk);
-      send(res, 200, { calc: full(c, u.mk, now) }); return true;
+      if (op === 'por') await syncIdx(c); /* S-ALL: the index knows each lot's players */ send(res, 200, { calc: full(c, u.mk, now) }); return true;
     }
     if (op === 'enter' || op === 'unenter' || op === 'result' || op === 'edit' || op === 'delete' || op === 'close') {
       rate('write', u.mk, ip); let idxSync = op === 'enter' || op === 'unenter' || op === 'close';
       if (op === 'edit') { const row0 = await loadRow(id, true); if (!row0 || !canSee(row0.data, u.mk)) throw bad(404, 'Calcutta not found'); const mem = row0.data.members.slice(); mem._me = memberOf(row0.data, u.mk); const R = await cleanRules(b, now, mem); const c = await mutCalc(id, (c) => { if (!isComm(c, u.mk)) throw bad(403, 'Only the commissioner can change the rules'); if (c.locked || c.a.status !== 'setup') throw bad(409, 'Rules are locked. The auction has started.'); Object.assign(c, R); c.a.order = c.lots.map((l) => l.id); c.rev++; audit(c, mName(c, memberOf(c, u.mk).pid), 'Edited the rules'); return c; }, u.mk); await syncIdx(c); send(res, 200, { calc: full(c, u.mk, now) }); return true; }
       if (op === 'delete') { await mutCalc(id, (c) => { if (!isComm(c, u.mk)) throw bad(403, 'Only the commissioner can delete it'); if (c.locked) throw bad(409, 'Bids are in. It cannot be deleted.'); c.a.status = 'closed'; c.deleted = true; c.members = c.members.filter((m) => m.mk === c.comm); c.rev++; return c; }, u.mk);
         try { await mutRow(IDX, { calcs: {} }, (d) => { delete d.calcs[id]; return {}; }); } catch (e) {} IDXC.at = 0; send(res, 200, { ok: true }); return true; }
-      let fz = false; if (op === 'enter' || op === 'unenter') { const r0 = await loadRow(id, true); if (r0) fz = await frozen(r0.data); }
+      let fz = false; if (op === 'enter' || op === 'unenter') fz = await freezeCheck(id);
       const c = await mutCalc(id, (c) => {
-        if (!isComm(c, u.mk)) throw bad(403, 'Only the commissioner can do that'); if (fz) throw bad(409, FROZEN, { code: 'frozen' }); const wasClosed = c.a.status === 'closed'; const by = mName(c, memberOf(c, u.mk).pid), lot = String(b.lot || '');
+        if (!isComm(c, u.mk)) throw bad(403, 'Only the commissioner can do that'); if (fz || (c.startedAt && (op === 'enter' || op === 'unenter'))) throw bad(409, FROZEN, { code: 'frozen' }); const wasClosed = c.a.status === 'closed'; const by = mName(c, memberOf(c, u.mk).pid), lot = String(b.lot || '');
         const who = () => { if (b.pid) { const m = c.members.find((x) => x.pid === String(b.pid)); if (!m) throw bad(404, 'Not a member'); return { pid: m.pid, name: '' }; } const n = cleanName(b.name, 24); if (n.length < 2) throw bad(400, 'Type who bought it (2+ characters) or pick a member'); return { pid: null, name: n }; };
         if (op === 'enter') { if (c.rules.mode !== 'manual') throw bad(409, 'This Calcutta is bid live in the app'); if (!lotOf(c, lot)) throw bad(404, 'No such lot'); const amt = Number(b.amt); if (!(Number.isInteger(amt) && amt >= c.rules.minBid && amt <= 100000)) throw bad(400, 'Amount: whole dollars, at least $' + c.rules.minBid);
           const w = who(); const before = c.sold[lot]; c.sold[lot] = { pid: w.pid, name: w.name, amt, at: D.now(), how: 'entered', bb: before && before.bb && (before.bb.pid ? before.bb.pid !== w.pid : true) ? before.bb : null };
@@ -502,7 +531,7 @@ async function handle(req, res) {
           ['champ', 'out', 'big'].forEach((k) => { if (b[k] != null) nx[k] = !!b[k]; });
           if (!Object.keys(nx).length) throw bad(400, 'Nothing to change');
           if (nx.champ) Object.keys(c.manual).forEach((k) => { if (k !== tid && c.manual[k].champ) c.manual[k].champ = false; });
-          c.manual[tid] = Object.assign(cur, nx, { at: D.now() }); audit(c, by, 'Result for ' + team.name + ': ' + Object.keys(nx).map((k) => k + ' ' + (nx[k] === true ? 'yes' : nx[k] === false ? 'no' : nx[k])).join(', '));
+          c.manual[tid] = Object.assign(cur, nx, { at: D.now() }); startNow(c); /* ROUND 2 D3: a result means the event has started, for good */ audit(c, by, 'Result for ' + team.name + ': ' + Object.keys(nx).map((k) => k + ' ' + (nx[k] === true ? 'yes' : nx[k] === false ? 'no' : nx[k])).join(', '));
         }
         else if (op === 'close') { if (c.rules.mode !== 'manual') throw bad(409, 'Use End auction'); c.a.status = 'closed'; audit(c, by, 'Closed the results'); }
         c.rev++; return c;
@@ -516,18 +545,37 @@ async function handle(req, res) {
 // ---------- adapter for Groups (manager wires these later; see HANDOFF "Calcutta (engine v1)") ----------
 async function attachToGroup(id, groupId, contestId) { const c = await mutCalc(id, (c) => { c.group = { groupId: cleanName(groupId, 40), contestId: cleanName(contestId, 40) }; c.rev++; return c; }); await syncIdx(c); return { id: c.id, group: c.group }; }
 async function potSummary(id) { const row = await loadRow(id); if (!row) return null; const c = row.data, m = money(c, await results(c, false)); return { bids: m.pot, take: m.take, pool: m.pool, main: m.main, paidOut: m.paidOut, inPlay: m.inPlay, payouts: m.owners.map((o) => ({ pid: o.pid, name: o.name, spent: o.spent, won: o.won })) }; }
-// Stats contract (stats coder): one record per Calcutta where the user held lots. userKey = account id (acct.who) or member key.
+// Stats contract (stats coder). OWNER DECISION S-ALL (Nov 16 2026): one record for EVERY Calcutta the user is in as a buyer, a co-owner
+// (bought back half) or a team's own player (player of record), with the team(s), price paid (spent), payout (won) and net (pl).
+// userKey = account id (acct.who) or member key. A team player who owns no share gets a record with spent/won/pl 0 and the team's result.
 async function statsFor(userKey, opt) {
   const mk = /^[0-9a-f]{24}$/.test(String(userKey)) ? String(userKey) : mkOf(String(userKey)), from = (opt && opt.from) || '0000-00-00', to = (opt && opt.to) || '9999-99-99';
   const all = await idx(), out = [];
-  for (const id of Object.keys(all)) { if (!(all[id].mks || []).includes(mk)) continue; const row = await loadRow(id); if (!row || row.data.deleted) continue; const c = row.data, m = memberOf(c, mk); if (!m) continue;
+  for (const id of Object.keys(all)) { const e = all[id]; if (!(e.mks || []).includes(mk) && !(e.pks || []).includes(mk) && !(!e.pks && evLocal(e.ev))) continue; // old entries without pks: local events are opened
+    const row = await loadRow(id); if (!row || row.data.deleted) continue; const c = row.data, m = memberOf(c, mk), myPid = m ? m.pid : null;
+    const mine = c.lots.filter((l) => { const s = c.sold[l.id]; return isPor(l, mk) || (s && myPid && (s.pid === myPid || (s.bb && s.bb.pid === myPid))) || (s && s.bb && s.bb.k === mk); });
+    if (!mine.length) continue; // a member who bought nothing and plays on no team is not in this Calcutta's money
     const sales = Object.values(c.sold).map((s) => s.at).filter(Boolean), date = chiDay(sales.length ? Math.min(...sales) : c.created); if (date < from || date > to) continue;
-    const mo = money(c, await results(c, true)), o = mo.owners.find((x) => x.pid === m.pid); if (!o) continue;
-    out.push(Object.assign({ src: 'calcutta', id: c.id, date, sport: EVENTS[c.ev].sport, kind: 'calcutta' }, c.group ? { groupId: c.group.groupId, contestId: c.group.contestId } : {}, { title: c.name, result: null, place: { n: o.place, of: mo.owners.length } /* REVIEW FIX 5: stats contract {n, of} */, spent: o.spent, won: o.won, pl: Math.round((o.won - o.spent) * 100) / 100, verified: true, extra: { lots: o.lots.map((l) => ({ name: l.name, cost: l.cost, earned: l.earned })) } }));
+    const mo = money(c, await results(c, true)); let spentC = 0, wonC = 0; const roles = new Set(), teams = [];
+    mine.forEach((l) => { const s = c.sold[l.id], ml = mo.lots.find((x) => x.id === l.id), earnC = Math.round(ml.earned * 100), amtC = s ? Math.round(s.amt * 100) : 0;
+      const buyer = !!(s && myPid && s.pid === myPid), co = !!(s && s.bb && ((myPid && s.bb.pid === myPid) || s.bb.k === mk)), player = isPor(l, mk);
+      let cost = 0, earned = 0, share = 'none';
+      if (buyer) { cost = s.bb ? amtC - Math.floor(amtC / 2) : amtC; earned = s.bb ? earnC - Math.floor(earnC / 2) : earnC; share = s.bb ? 'half' : 'all'; roles.add('buyer'); }
+      if (co) { cost += Math.floor(amtC / 2); earned += Math.floor(earnC / 2); share = buyer ? 'all' : 'half (bought back)'; roles.add('co-owner'); }
+      if (player) roles.add('player');
+      spentC += cost; wonC += earned;
+      teams.push({ lot: l.id, name: l.name, teams: l.teams.map((t) => t.name), role: [buyer && 'buyer', co && 'co-owner', player && 'player'].filter(Boolean).join(' + '), share, cost: cost / 100, earned: earned / 100, net: (earned - cost) / 100,
+        price: s ? s.amt : null, lotEarned: ml.earned, alive: ml.alive, sold: !!s, holder: ml.holder ? ml.holder.name : null }); });
+    const o = myPid ? mo.owners.find((x) => x.pid === myPid) : mo.owners.find((x) => mine.some((l) => c.sold[l.id] && c.sold[l.id].bb && c.sold[l.id].bb.k === mk && x.name === c.sold[l.id].bb.name));
+    const owns = roles.has('buyer') || roles.has('co-owner');
+    out.push(Object.assign({ src: 'calcutta', id: c.id, date, sport: EVENTS[c.ev].sport, kind: 'calcutta' }, c.group ? { groupId: c.group.groupId, contestId: c.group.contestId } : {}, { title: c.name, result: null },
+      owns && o ? { place: { n: o.place, of: mo.owners.length } } /* REVIEW FIX 5: stats contract {n, of} */ : {},
+      { spent: spentC / 100, won: wonC / 100, pl: (wonC - spentC) / 100, verified: true,
+        extra: { role: [...roles], over: mo.over, ev: c.ev, teams, lots: teams.filter((t) => t.share !== 'none').map((t) => ({ name: t.name, cost: t.cost, earned: t.earned })) } }));
   }
   return out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 }
 // Players of record from the group side (golf-day teams, pickleball pairs): players = account ids, 24-hex member keys, 'g:<guest id>' or {name}.
-async function setPlayersOfRecord(id, lotId, players) { const c = await mutCalc(id, (c) => { if (!evLocal(c.ev)) throw bad(409, 'Players of record are only for local events'); const l = lotOf(c, String(lotId)); if (!l) throw bad(404, 'No such lot'); const s0 = c.sold[l.id]; if (s0 && s0.bb) throw bad(409, 'Remove the buy-back first'); l.por = cleanPor(players, c.members); audit(c, 'Group', 'Players of record for ' + l.name + ' set by the group'); c.rev++; return c; }); return { id: c.id, lot: lotId, count: lotOf(c, String(lotId)).por.length }; }
+async function setPlayersOfRecord(id, lotId, players) { const c = await mutCalc(id, (c) => { if (!evLocal(c.ev)) throw bad(409, 'Players of record are only for local events'); const l = lotOf(c, String(lotId)); if (!l) throw bad(404, 'No such lot'); if (c.sold[l.id] || c.startedAt || (c.rules.mode === 'live' && c.a.status !== 'setup')) throw bad(409, 'Players of record are locked once the lot is sold (or the live auction has started)'); l.por = cleanPor(players, c.members); audit(c, 'Group', 'Players of record for ' + l.name + ' set by the group'); notice(c, 'Group', 'Players of record for ' + l.name + ' set by the group', true); c.rev++; return c; }); await syncIdx(c); return { id: c.id, lot: lotId, count: lotOf(c, String(lotId)).por.length }; }
 const hooks = {}; // reserved for the manager (e.g. hooks.groupMember(groupId, mk) when membership moves into the group)
 module.exports = { handle, createCalc, attachToGroup, setPlayersOfRecord, evLocal, potSummary, statsFor, registerSource, limits, hooks, EVENTS, cleanRows, slotAmounts, money, teamResults, parseGames, settle, mkOf, _deps: D, _reset: () => { RL.clear(); RC.clear(); RES.clear(); GC.clear(); TEAMS.clear(); IDS.map = null; IDXC.at = 0; STARTED.clear(); NAMES = { at: 0, v: {} }; writes = 0; }, _writes: () => writes };

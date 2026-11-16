@@ -1353,3 +1353,4 @@ Source: `/home/claude/decks/Oddable-Playbook.md` Part F + manager decisions. Eac
 
 **Preview commit log** (newest last; reviewers: check out by hash)
 - 9c6d5c2 — first live build (heads: 9c10a65 / 5fac7bc / c3d6bea / 67c59e9 / cfb6dff / c084625), one service, demo data.
+- 667f815 — refresh 2 (heads: d7b044f / 486f127 / c3d6bea / 544803e / ab77696 / c084625): real G16, pairing.js, memberStats, registerGame, golf + events director forms; stand-ins removed.

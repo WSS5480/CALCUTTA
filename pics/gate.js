@@ -40,7 +40,7 @@
     if (!el) return;
     if (!g('odd-tok') || !me) {
       const em = mode === 'ein' || mode === 'eup', up = mode === 'up' || mode === 'eup';
-      el.innerHTML = '<div class="gb"><h1>Oddable</h1><p>Sign in to see picks, locked records and your bets. New accounts get a 7-day free trial.</p>' +
+      el.innerHTML = '<div class="gb"><h1>Oddable</h1><p>Sign in to see picks, locked records and your bets. New accounts get a 7-day free trial.</p><div id="ginv"></div>' +
         '<div class="tabs"><button class="' + (!up ? 'on' : 'alt') + '" id="gt-in">Sign in</button><button class="' + (up ? 'on' : 'alt') + '" id="gt-up">Create account</button></div>' +
         (up ? '<input id="gname" placeholder="Name or handle (required)" autocomplete="nickname" maxlength="24">' : '') + (em ? 
           '<input id="gemail" type="email" placeholder="Email" autocomplete="email" autocapitalize="none"><input id="gpw" type="password" placeholder="Password (8+ characters)" autocomplete="' + (up ? 'new-password' : 'current-password') + '">'
@@ -53,6 +53,7 @@
       $('gsw').onclick = () => { mode = em ? (up ? 'up' : 'in') : (up ? 'eup' : 'ein'); draw(); };
       const pf = $(em ? 'gpw' : 'gpn'); pf.onkeydown = (e) => { if (e.key === 'Enter') auth(); };
       $('gown').onclick = ownerIn; $('gpin').onkeydown = (e) => { if (e.key === 'Enter') ownerIn(); };
+      if (window.OddJoin) window.OddJoin.banner($('ginv')); // G14: "You're invited to join <title>" over the sign-in / sign-up screen
       return;
     }
     const m = me, dl = m.expires_on ? Math.ceil((new Date(m.expires_on + 'T23:59:59') - Date.now()) / 864e5) : 0;
@@ -97,7 +98,7 @@
   }
   function setMe(m) {
     me = m; if (!m) return; setTimeout(drawAcct, 0); try { const dg = document.getElementById('odiag'); if (dg) dg.textContent = (m.ownerDash || (m.role === 'owner' && m.source === 'owner')) ? ' · acct ' + (m.role || '?') + (m.ownerDash ? '+dash' : '') + ' ' + String(m.email || '').slice(-8) : ''; s('odd-dash', (m.role === 'owner' && m.source === 'owner') || m.ownerDash ? '1' : null); if (window.navRender) setTimeout(window.navRender, 0); } catch (e) {}
-    if (m.allowed) { s('odd-ok', String(Date.now())); hide(); soon(m); setTimeout(namePrompt, 1200); } else show();
+    if (m.allowed) { s('odd-ok', String(Date.now())); hide(); soon(m); setTimeout(namePrompt, 1200); if (window.OddJoin) setTimeout(() => window.OddJoin.run(), 400); } else show(); // G14: after sign-in go straight to a pending invite
   }
   // Everyone needs a name or handle. New accounts type one at sign-up; accounts made before that get asked once.
   async function namePrompt() {

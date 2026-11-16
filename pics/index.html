@@ -206,10 +206,10 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v251 -->
+<!-- Pics v252 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v251</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v252</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
   <div id="arbbar" class="arbbar" hidden onclick="arbBarTap()" role="button" aria-label="Arbitrage alert"><span class="mq" id="arbmq"></span></div>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">NCAA</button><button data-sp="nba">NBA</button><button data-sp="mlb">MLB</button><button data-sp="nhl">NHL</button><button data-sp="ncaab">NCAAB</button></div>
   <div class="srow"><input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team"><select id="conf" aria-label="Conference"><option value="">All</option></select></div>
@@ -217,7 +217,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v251 (field view)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v252 (Alert season tiles)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -236,7 +236,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </div>
 <div id="plb" hidden></div>
 <nav class="bn" id="bn"></nav>
-<script src="trophy.js?v=251"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
+<script src="trophy.js?v=252"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
 <script>
 const SC = document.getElementById('sc');
 // The page scrolls inside #sc so the banner and bottom bar (outside it) can never drift on iOS
@@ -1581,7 +1581,7 @@ function divDrill(k) {
 function divOpen(id) { const g = ALL[id], d = g && ddOf(g); if (!d) return; const ok = d.p >= DD_MIN; sheetOpen(`<div style="margin:6px 0"><b>${g.away.abbr} +${d.line}</b> at ${g.home.abbr}: road underdog in a division game. Model: <b>${ddPct(d.p)}%</b> to cover, so it is <b>${ok ? 'an Oddable Alert pick' : 'not picked'}</b> (53% needed).</div><div class="sub" style="margin:6px 0">2014-2025, road dogs that were not the week's Lock: picked (53%+) went 141-120 (54.0%, +8.2 units at -110); not picked went 198-173 (53.4%, +7.0 units). The two groups are close, so the filter mainly cuts the number of bets. A tracked rule, not a proven edge. Both groups are in the Results tab.</div>`); }
 function dogOpen(id) { const g = ALL[id], d = g && dogOff(g); if (!d) return; sheetOpen(`<div style="margin:6px 0"><b>${d.dog.abbr}</b> is the underdog and lost its last game by <b>${-d.margin}</b> to ${d.opp}.</div><div class="sub" style="margin:6px 0">Over 2004-2025, underdogs in this spot covered <b>53.1%</b> (652-577, with 28 pushes). Break-even at -110 is 52.4%, so this is about even after juice. It was 1 of 24 factors tested and does not hold up once that is counted. Information only: it does not change any pick or lock.</div>`); }
 // --- Locks: frozen factor model (trophy.js). #1 of the week = double trophy, #2 = single trophy. Spread picks. ---
-let TRL = false, TRC = null, TRS = {}, AFS = {}, ASN = 0, ASP = 0, ASQ = 0, ASOK = false, ALLW = false;
+let TRL = false, TRF = false, TRC = null, TRS = {}, AFS = {}, ASN = 0, ASP = 0, ASQ = 0, ASOK = false, ALLW = false;
 // Every phone must show the same picks. Per week, in this order: (1) alert-frozen.json shipped with the app (finished back-filled weeks), (2) the copy frozen on the server
 // (first phone to post the current week wins, never overwritten; cached here in 'asv26'), (3) this phone's own computation, only until the server answers.
 let ASV = (() => { try { const j = JSON.parse(localStorage.getItem('asv26')); return j && typeof j === 'object' && !Array.isArray(j) ? j : {}; } catch (e) { return {}; } })();
@@ -1597,7 +1597,7 @@ async function alertPush() {
   ASQ = Date.now();
   try { const r = await fetch(ALU, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': alertTok() }, body: JSON.stringify({ week: CUR, rec: { lock: a.lock, dogs: a.dogs, helper: { id: h.g.id, abbr: h.abbr, conf: h.conf } } }) }); if (!r.ok) return; const j = await r.json(); if (j && j.rec && j.week === CUR && alertTake(Object.assign({}, ASV, { [CUR]: j.rec }))) render(); } catch (e) {}
 }
-async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=251')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; } }
+async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=252')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
 const trGrade = (p) => { const g = ALL[p.id]; if (!g || g.state !== 'post') return null; const m = (g.home.abbr === p.abbr ? 1 : -1) * (g.home.score - g.away.score) + p.line; return m === 0 ? 'push' : m > 0 ? 'hit' : 'miss'; };
 function trophyData() {
   if (CFB || !window.Trophy || !Trophy.ready()) return null;
@@ -1665,7 +1665,30 @@ function alertBox(wk) {
   const A = alertAll(); if (!A.length) return ''; const cur = A.filter((x) => x.wk === wk), r = alertRec(A);
   return `<div style="border:2px solid #f5c542;border-radius:14px;padding:10px 12px;margin:8px 0;background:#f5c54210"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1;font-size:16px">📣 Oddable Alert of the week</b><i class="ibtn inl" style="float:none" onclick="infoOpen('alert')">ⓘ</i></div><div class="sub">Lock and division road dogs the model rates 53%+, ${cur.length} pick${cur.length === 1 ? '' : 's'} in week ${wk}</div>${cur.map(alertRow).join('') || '<div class="note">No alert picks this week yet.</div>'}${(() => { const h = helperOf(wk); if (!h) return ''; const H = helperAll(), w = H.filter((x) => x.res === 'hit').length, l = H.filter((x) => x.res === 'miss').length; return helperRow(h) + `<div class="sub" onclick="helperDrill()" style="cursor:pointer;padding-bottom:6px">Helper this season: <b>${w}-${l}</b> straight-up ›</div>`; })()}${(() => { const lk = new Set((trophyData()[wk] || { picks: [] }).picks.map((q) => String(q.id))), np = divDogs().filter((x) => x.wk === wk && !x.pick && !lk.has(String(x.g.id))); return np.length ? `<div class="sub" style="padding:6px 0;border-top:1px solid var(--line)">Not picked (under 53%): ${np.map((x) => `${x.g.away.abbr} +${x.line} ${ddPct(x.p)}%${x.res === 'hit' ? ' ✓' : x.res === 'miss' ? ' ✗' : ''}`).join(' · ')}</div>` : ''; })()}<div onclick="alertDrill()" style="cursor:pointer;border-top:1px solid var(--line);margin-top:6px;padding-top:8px;display:flex;justify-content:space-between"><span>This season <b>${r.w}-${r.l}</b>${r.pct === null ? '' : ' · ' + r.pct + '%'}</span><b>${r.u >= 0 ? '+' : ''}${r.u.toFixed(1)} units ›</b></div><div class="sub" style="margin-top:4px">${alertTypes(A, wk)}</div></div>`;
 }
-function alertDrill() { const A = alertAll(), r = alertRec(A); sheetOpen(`<div style="margin:4px 0"><b>📣 Oddable Alert · this season · ${r.w}-${r.l}</b></div><div class="sub">${r.u >= 0 ? '+' : ''}${r.u.toFixed(1)} units at -110.</div><div style="margin:6px 0">${alertTypes(A, A[0] ? Math.min(CUR || 99, A[0].wk) : CUR)}</div>${alertHistory()}` + A.map(alertRow).join('')); }
+// alertDrill(): the season list, opened from the Alert box. alertDrill(wk, mode): opened from a Stats/Results season tile (v252): wk = 0 for the season or one week, mode 'su' (won outright) or 'ats', with a ‹ Back button to the tiles.
+function alertDrill(wk, mode) {
+  const all = alertAll(), A = wk ? all.filter((x) => x.wk === wk) : all, r = alertRec(A), su = mode === 'su', s = alSu(A), bk = mode ? `<button onclick="sheetClose()" style="padding:8px 12px;border:1px solid var(--line);border-radius:9px;background:none;color:inherit;font-weight:700">‹ Back</button>` : '', when = wk ? 'week ' + wk + (TRC && TRC.A[wk] && TRC.A[wk].bf ? ' *' : '') : 'this season';
+  const head = su ? `<div style="margin:4px 0"><b>📣 Alert picks won outright · ${when} · ${alS(s)}</b></div><div class="sub">Did the picked team win the game, any score. Vs the spread: ${r.w}-${r.l}, ${r.u >= 0 ? '+' : ''}${r.u.toFixed(1)} units at -110.</div>` : `<div style="margin:4px 0"><b>📣 Oddable Alert · ${when} · ${r.w}-${r.l}</b></div><div class="sub">${r.u >= 0 ? '+' : ''}${r.u.toFixed(1)} units at -110.</div>`;
+  sheetOpen(bk + head + (su ? '' : `<div style="margin:6px 0">${alertTypes(all, wk || (all[0] ? Math.min(CUR || 99, all[0].wk) : CUR))}</div>${wk ? '' : alertHistory()}`) + (A.map(su ? alertRowSu : alertRow).join('') || '<div class="note">No Alert picks this week.</div>') + (mode && bfTxt() ? `<div class="note" style="text-align:left">* ${bfTxt()}</div>` : ''));
+}
+// --- v252: NFL Stats/Results season tiles count only the weekly 📣 Alert picks (🔒 Lock + 🏠 road dogs rated 53%+), read from alertAll(), the same record the Alert box shows ---
+const alSuOf = (x) => { const g = x.g; if (!g || g.state !== 'post') return ''; const m = (g.home.abbr === x.abbr ? 1 : -1) * (g.home.score - g.away.score); return m > 0 ? 'hit' : m < 0 ? 'miss' : 'push'; }; // picked team won the game outright (tie = push)
+const alTally = (L, f) => { const w = L.filter((x) => f(x) === 'hit').length, l = L.filter((x) => f(x) === 'miss').length, p = L.filter((x) => f(x) === 'push').length; return { w, l, p, n: w + l + p, u: w * 100 / 110 - l }; };
+const alSu = (L) => alTally(L, alSuOf), alAts = (L) => alTally(L, (x) => x.res);
+const alS = (r) => r.w + '-' + r.l + (r.p ? '-' + r.p : '');
+const alPc = (r) => (r.w + r.l ? pct(r.w / (r.w + r.l), 1) : '–');
+function alertRowSu(x) { const g = x.g, r = alSuOf(x), sc = g.state === 'pre' ? new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : `${g.away.abbr} ${g.away.score}–${g.home.abbr} ${g.home.score}`; return resCard(r, `<b>Wk ${x.wk} ${x.kind} ${x.abbr} ${x.line > 0 || x.kind === '🏠 Road dog' ? '+' : ''}${x.line}</b> <span class="sub">${g.away.abbr} at ${g.home.abbr}</span><small class="sub" style="display:block">${sc}</small>`, resPill(r, 'Won', 'Lost') + resPill(x.res, 'Covered', 'Missed')); }
+const ALT0 = Date.now(); setTimeout(() => { try { renderBg(); } catch (e) {} }, 30500); // after 30 s the tiles stop waiting for the last weeks to load
+// null = use the every-game tiles (NCAA, team or conference filter, or the model files failed); 'wait' = still loading; else the Alert record by week
+function alertTiles() {
+  if (CFB || TEAM || CONF) return null;
+  const late = Date.now() - ALT0 > 30000;
+  if (!window.Trophy || (!Trophy.ready() && (TRF || late))) return null; // model never arrived: old tiles, never stuck on loading
+  if (!Trophy.ready() || (!ALLW && !late)) return 'wait'; // the whole season must be in or the record would grow while you look at it
+  const A = alertAll(); if (!trophyData() || !TRC) return 'wait';
+  const ws = [...new Set(A.map((x) => x.wk))].filter((n) => n <= (CUR || 99) || A.some((x) => x.wk === n && x.res)).sort((a, b) => b - a);
+  return { A, weeks: ws.map((n) => { const L = A.filter((x) => x.wk === n), r = alAts(L); return { n, bf: !!(TRC.A[n] && TRC.A[n].bf), r, left: L.length - r.n, all: L.length }; }) };
+}
 function trophyChip(g) { const d = trophyData(); if (!d) return ''; const w = d[g.week]; if (!w) return ''; const p = w.picks.find((x) => x.id === g.id); if (!p) return ''; return `<span class="nw" style="border-color:#f5c542;color:#f5c542;font-weight:800">${p.rank === 1 ? '🔒🔒 Double lock' : '🔒 Lock'} ${p.abbr} ${p.line > 0 ? '+' : ''}${p.line}</span>${trDD(p, g) ? ' <span class="nw" style="border-color:#4fd18b;color:#4fd18b">🏠 + division road dog</span>' : ''}`; }
 const TRH = [[2014,8,9,12,5],[2015,9,8,10,7],[2016,9,8,9,8],[2017,10,7,9,8],[2018,9,8,10,7],[2019,9,8,11,6],[2020,6,11,8,9],[2021,10,8,10,8],[2022,9,9,10,8],[2023,10,8,8,10],[2024,11,7,8,10],[2025,8,10,5,13]]; // season, #1 W, #1 L, #2 W, #2 L (each season picked by a model trained only on earlier seasons)
 function trophyHistory() {
@@ -2027,6 +2050,7 @@ const INFO = {
   spread: ['How the spread pick works', "<p>The model's expected margin is compared with the line. If a team's starting QB is Out or Doubtful, its expected margin is cut by 5.5 first. If its margin beats the line it picks the home side, otherwise the away side.</p><p>The cover percentage is deliberately pulled toward 50%, because the line is usually smarter than the model. Expect 52-55%, not 70%. Treat spread picks as a small edge.</p>"],
   hit: ['What counts as a hit', "<p><b>Win pick hit</b> = the team we picked won the game outright. That is a moneyline bet: it wins if your team wins, by any score. It says nothing about the spread.</p><p><b>Spread pick hit</b> = our side beat the point spread. A -3 team must win by 4 or more; a +3 team can lose by 2 or less, or win. Exactly on the number is a push (money back).</p><p><b>Which to take?</b> Green cards are where the model is most sure. Moneyline on heavy favorites pays little, so the spread is often the better bet there. Picks are an edge, not a guarantee.</p>"],
   surv: ['How the Survivor page works', "<p><b>Using it.</b> Upload a screenshot of your picks (or tap Pick on a team) so the app knows who you have used. You make the real pick on Yahoo. Oddable shows who is still available and the best choice.</p><p><b>Goal.</b> Pick one team each week. If it loses you are out, and you can never use a team twice. So the best pick is not always the safest team this week.</p><p><b>Win chance.</b> For every team in every week: the Vegas spread (about 90%) blended with Oddable's own team ratings (about 10%: scores, yards per play, turnovers, home field). Weeks with no lines yet use the ratings alone, so far-off weeks are less certain.</p><p><b>The plan.</b> Using only teams you have not used, the app finds the one-team-per-week plan, no repeats, that gives the best chance of surviving every remaining week.</p><p><b>⭐ Strategic pick.</b> For each team available this week it asks: if I use this team now, then follow the best plan after, what is my chance to survive the whole season? The highest wins the star. A big favorite can lose the star when they are worth more in a later week.</p><p><b>Not included.</b> Injuries (like a quarterback out) and which teams the rest of your pool is picking. In a big pool, check how popular a team is on Yahoo before you lock in.</p><p><b>Result badges.</b> Your picks turn Survived or Lost on their own when the game ends. Everything is saved on this phone.</p>"],
+  altiles: ['📣 Alert season tiles', "<p>These two tiles count only the weekly <b>📣 Oddable Alert</b> picks: the 🔒 Lock and the 🏠 division road dogs the model rates 53% or better. They are the same picks and the same numbers as the Alert box on the Games board. Every other game is left out, and the 🤝 Helper is not counted.</p><p><b>Won outright</b> = the picked team won the game, by any score. <b>Vs spread</b> = the pick covered the line it was frozen at; exactly on the number is a push. Units are on the spread record at -110 (break-even 52.4%).</p><p>Each pick is graded at the line it was frozen at, the same on every phone. Weeks 1-9 of this season were back-filled: picked after the fact with the frozen model, marked *. Weeks frozen before their first kickoff are the real test.</p><p>Pick a week in the Showing list to see that week only. Tap a tile for the picks behind it.</p><p>NCAA, a team filter or a conference filter show the older tiles, which grade every game with today's ratings (hindsight, so they look better than real life).</p>"],
   lock: ['Lock', "<p>Each week the model's second most confident spread pick is the <b>🔒 Lock</b>. It is saved on this phone before the first kickoff of the week and never changed after. The old 🔒🔒 Double lock (the most confident pick) was retired: over 12 seasons it did worse than the Lock.</p><p>Break-even at -110 is 52.4%. See the Lock history box for how the same method did in past seasons.</p><p><b>🏠 + division road dog:</b> marks a Lock that is also the road underdog in a division game. It is information only and was found in the same data, so it is not a proven edge.</p>"]
 };
 function infoOpen(k) {
@@ -2427,13 +2451,27 @@ function renderInner() {
     return { n, h, t, ah, am, ap, hh, ht, lsh, lst, lah, lam, lk, rows };
   });
   // Tiles show the season, or just the picked week (SWK). Drop a picked week that isn't in this league's results.
-  if (SWK !== 'all' && !weeks.some((w) => w.n === SWK)) SWK = 'all';
-  const SW = SWK === 'all' ? null : weeks.find((w) => w.n === SWK);
+  // v252: NFL with no team / conference filter shows the 📣 Alert record (AT); NCAA or a filter keeps the every-game tiles below.
+  const AT = alertTiles(), AL = AT && AT !== 'wait' ? AT : null;
+  if (SWK !== 'all' && !(AL ? AL.weeks.some((w) => w.n === SWK) : weeks.some((w) => w.n === SWK))) SWK = 'all';
+  const SW = SWK === 'all' ? null : weeks.find((w) => w.n === SWK) || null;
   const T = SW ? { SH: SW.h, ST: SW.t, AH: SW.ah, AM: SW.am, AP: SW.ap, HH: SW.hh, HT: SW.ht, LSH: SW.lsh, LST: SW.lst, LAH: SW.lah, LAM: SW.lam, LK: SW.lk } : { SH, ST, AH, AM, AP, HH, HT, LSH, LST, LAH, LAM, LK };
   const wl = SW ? 'Wk ' + SW.n + ' ' : '';
   const atsN = AH + AM, tAts = T.AH + T.AM;
   const wkPick = weeks.length ? `<div class="swk"><label for="swksel">Showing</label><select id="swksel" onchange="swkSet(this.value)"><option value="all" ${SW ? '' : 'selected'}>Whole season · ${SH}-${ST - SH}</option>${weeks.map((w) => `<option value="${w.n}" ${SW && SW.n === w.n ? 'selected' : ''}>Week ${w.n} · ${w.h}-${w.t - w.h} picks</option>`).join('')}</select>${SW ? `<button onclick="swkSet('all')">Season</button>` : ''}</div>` : '';
-  $('#sums').innerHTML = wkPick + `
+  if (AL) {
+    const sw = SWK === 'all' ? null : AL.weeks.find((w) => w.n === SWK), L = sw ? AL.A.filter((x) => x.wk === sw.n) : AL.A, su = alSu(L), at = alAts(L), lk = L.filter((x) => x.kind === '🔒 Lock'), dg = L.filter((x) => x.kind === '🏠 Road dog');
+    const bf = sw ? sw.bf : AL.weeks.some((w) => w.bf && w.r.n), st = bf && !sw ? '*' : '', aw = sw ? 'Wk ' + sw.n + (bf ? '*' : '') + ' ' : '', dw = sw ? sw.n : 0; // * on the week label for one week, on the record for the season
+    const wr = (w) => (w.r.n ? alS(w.r) + (w.left ? ` (${w.left} to play)` : '') : 'pending'), sr = alAts(AL.A);
+    const pick = `<div class="swk"><label for="swksel">Showing</label><select id="swksel" onchange="swkSet(this.value)"><option value="all" ${sw ? '' : 'selected'}>Whole season · Alert ${alS(sr)} vs spread</option>${AL.weeks.map((w) => `<option value="${w.n}" ${sw && sw.n === w.n ? 'selected' : ''}>Week ${w.n}${w.bf ? '*' : ''} · Alert ${wr(w)}${w.r.n ? ' vs spread' : ''}</option>`).join('')}</select>${sw ? `<button onclick="swkSet('all')">Season</button>` : ''}</div>`;
+    const rec = (r) => (at.n ? alS(r) + st : 'pending'), toPlay = L.length - at.n && at.n ? ` · ${L.length - at.n} to play` : '';
+    $('#sums').innerHTML = pick + `
+    <div class="sum" style="cursor:pointer" onclick="alertDrill(${dw},'su')"><i class="ibtn" onclick="event.stopPropagation();infoOpen('altiles')">ⓘ</i><b>${alPc(su)}</b><span>${aw}📣 Alert picks won outright ›</span><small>${rec(su)}${toPlay}</small><small>🔒 Lock ${alS(alSu(lk))} · 🏠 Road dog ${alS(alSu(dg))}</small></div>
+    <div class="sum" style="cursor:pointer" onclick="alertDrill(${dw},'ats')"><i class="ibtn" onclick="event.stopPropagation();infoOpen('altiles')">ⓘ</i><b>${alPc(at)}</b><span>${aw}📣 Alert vs spread ›</span><small>${rec(at)}${toPlay}</small><small>🔒 Lock ${alS(alAts(lk))} · 🏠 Road dog ${alS(alAts(dg))} · <b style="display:inline;font-size:inherit;color:${at.u >= 0 ? '#4fd18b' : '#ff6b6b'}">${at.u >= 0 ? '+' : ''}${at.u.toFixed(1)}u</b></small></div>${bf ? `<div class="note" style="grid-column:1/-1;text-align:left;margin:0">* ${bfTxt()} Tap a tile for the picks.</div>` : ''}`;
+  } else if (AT === 'wait') $('#sums').innerHTML = `
+    <div class="sum"><b>…</b><span>📣 Alert picks won outright</span><small>Loading the Alert picks…</small></div>
+    <div class="sum"><b>…</b><span>📣 Alert vs spread</span><small>Loading the Alert picks…</small></div>`;
+  else $('#sums').innerHTML = wkPick + `
     <div class="sum"><i class="ibtn" onclick="event.stopPropagation();infoOpen('picks')">ⓘ</i><b>${T.ST ? pct(T.SH / T.ST, 1) : '–'}</b><span>${wl}Win picks (backtest)</span><small>${T.SH}-${T.ST - T.SH}${T.HT ? ` · 65%+ picks ${T.HH}-${T.HT - T.HH}` : ''}</small></div>
     <div class="sum"><i class="ibtn" onclick="event.stopPropagation();infoOpen('spread')">ⓘ</i><b>${tAts ? pct(T.AH / tAts, 1) : '–'}</b><span>${wl}Spread (backtest)</span><small>${T.AH}-${T.AM}${T.AP ? '-' + T.AP : ''}${tAts || SW ? '' : ' (loading lines…)'}</small></div>`;
 
@@ -2588,6 +2626,6 @@ if ('serviceWorker' in navigator) {
 })();
 </script>
 <script>setTimeout(()=>{const l=document.querySelector('.lg'),o=l&&l.querySelector('.on');if(o)l.scrollLeft=Math.max(0,o.offsetLeft-60);},500);</script>
-<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=251"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
+<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=252"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
 </body>
 </html>

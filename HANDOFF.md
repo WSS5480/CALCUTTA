@@ -649,3 +649,10 @@ Owner: "Make sure that every app shows same information. Fix all of these issues
 - Damaged saved records: `listEvents()` returns every `pb1-ev-` record; one that is not JSON, is null, has no id, or whose id doesn't match its key comes back as `{bad, key, name}` and shows the damaged-event card. The card and the event page use the REAL storage key for Delete (before: it removed `pb1-ev-`+ev.id, so a mismatched record couldn't be deleted, and no-id/bad-JSON records were silently hidden). The event page also shows the card for such a key instead of "not on this device".
 - Cache: `pickleball.html` loads `pickleball.js?v=253.2` so phones pick up the fix without a version bump (sw.js is network-first, so its cache name is unchanged). The next real bump puts it back to `?v=###`.
 - Tests: reviewer-cases test now 35 checks (adds finished-event lock, Reopen rebuild, fix-after-reopen, damaged keys listed + deleted on home and event page); v253 test 74 checks; both pass at 390 and 1280.
+
+## v253 ship — 2026-11-16: v252 + v253 to main
+- Shipped to main on 2026-11-16 at Steve's word ("Ship it all."): v252 (NFL season tiles count only the weekly Oddable Alert picks) and v253 (🏓 Pickleball) with both rounds of review fixes (commits c692798, bbfd113, 477704c, 68116e3). The PREVIEW-only commit (forced MIRROR mode + PREVIEW label) is NOT on main; main keeps normal mode (`MIRROR` only with `?mirror=1`) and the real `pics/sync.js`.
+- The oddable-preview site and the `season-preview` branch stay until Steve says to delete them.
+- No version bump for the ship (still v253; `pickleball.js?v=253.2`, `sw.js` `pics-v253`).
+- Checked before push in NORMAL mode at 390 and 1280 with every outside request mocked or blocked: pickleball test, reviewer-cases test, entry chip test, v252 Alert season tiles (tiles, drill-down with ‹ Back, ⓘ), floating My Bets banner covers nothing on index.html, sports.html and every pickleball screen, and sync.js/gate.js load with no page errors.
+- OPEN (unchanged from v253): whether pickleball.html should require the Oddable sign-in (today it is local-only and loads no gate).

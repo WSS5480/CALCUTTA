@@ -206,10 +206,10 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v250 -->
+<!-- Pics v251 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v250</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v251</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
   <div id="arbbar" class="arbbar" hidden onclick="arbBarTap()" role="button" aria-label="Arbitrage alert"><span class="mq" id="arbmq"></span></div>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">NCAA</button><button data-sp="nba">NBA</button><button data-sp="mlb">MLB</button><button data-sp="nhl">NHL</button><button data-sp="ncaab">NCAAB</button></div>
   <div class="srow"><input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team"><select id="conf" aria-label="Conference"><option value="">All</option></select></div>
@@ -217,7 +217,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v250 (win/loss banners)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v251 (field view)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -236,7 +236,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </div>
 <div id="plb" hidden></div>
 <nav class="bn" id="bn"></nav>
-<script src="trophy.js?v=250"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
+<script src="trophy.js?v=251"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
 <script>
 const SC = document.getElementById('sc');
 // The page scrolls inside #sc so the banner and bottom bar (outside it) can never drift on iOS
@@ -288,7 +288,7 @@ function parseEvents(j, week) {
     c.competitors.forEach((x) => { TEAMID[x.team.id] = ab(x.team.abbreviation); NAMES[ab(x.team.abbreviation)] = x.team.shortDisplayName || x.team.displayName || x.team.abbreviation; });
     cs.sort((a, b) => a.home - b.home);
     const o = c.odds && c.odds[0];
-    return { id: e.id, week: week || (j.week && j.week.number) || 0, start: +new Date(e.date), state: t.state, detail: t.shortDetail || '', away: cs[0], home: cs[1], neutral: !!c.neutralSite, tv: [...new Set((c.broadcasts || []).flatMap((b) => b.names || []).filter(Boolean))].slice(0, 3), line: o ? parseLine(o.details, cs[1].abbr, cs[0].abbr) : null, total: o && Number.isFinite(+o.overUnder) ? +o.overUnder : null, indoor: c.venue && c.venue.indoor !== undefined ? !!c.venue.indoor : null, sit: c.situation ? { down: c.situation.down, dist: c.situation.distance, yl: c.situation.yardLine, poss: TEAMID[c.situation.possession] || '', text: (c.situation.lastPlay && c.situation.lastPlay.text) || '', ptxt: c.situation.downDistanceText || '', rz: !!c.situation.isRedZone, wp: c.situation.lastPlay && c.situation.lastPlay.probability && Number.isFinite(c.situation.lastPlay.probability.homeWinPercentage) ? c.situation.lastPlay.probability.homeWinPercentage : null } : null };
+    return { id: e.id, week: week || (j.week && j.week.number) || 0, start: +new Date(e.date), state: t.state, detail: t.shortDetail || '', away: cs[0], home: cs[1], neutral: !!c.neutralSite, tv: [...new Set((c.broadcasts || []).flatMap((b) => b.names || []).filter(Boolean))].slice(0, 3), line: o ? parseLine(o.details, cs[1].abbr, cs[0].abbr) : null, total: o && Number.isFinite(+o.overUnder) ? +o.overUnder : null, indoor: c.venue && c.venue.indoor !== undefined ? !!c.venue.indoor : null, sit: c.situation ? { down: c.situation.down, dist: c.situation.distance, yl: c.situation.yardLine, poss: TEAMID[c.situation.possession] || '', text: (c.situation.lastPlay && c.situation.lastPlay.text) || '', ptxt: c.situation.downDistanceText || '', rz: !!c.situation.isRedZone, lp: c.situation.lastPlay && c.situation.lastPlay.start && c.situation.lastPlay.end ? { id: c.situation.lastPlay.id, type: c.situation.lastPlay.type, text: c.situation.lastPlay.text, start: c.situation.lastPlay.start, end: c.situation.lastPlay.end, scoringPlay: !!c.situation.lastPlay.scoreValue } : null, hto: Number.isFinite(c.situation.homeTimeouts) ? c.situation.homeTimeouts : null, ato: Number.isFinite(c.situation.awayTimeouts) ? c.situation.awayTimeouts : null, wp: c.situation.lastPlay && c.situation.lastPlay.probability && Number.isFinite(c.situation.lastPlay.probability.homeWinPercentage) ? c.situation.lastPlay.probability.homeWinPercentage : null } : null };
   });
 }
 
@@ -413,7 +413,7 @@ function nCard(g) {
     <div class="nbr"><i style="width:${p.pa * 100}%;background:#7c6ad8"></i><i style="width:${p.ph * 100}%;background:#4fd18b"></i></div>
     <div class="npr"><span>${g.away.abbr} ${pct(p.pa)}</span><span>${pct(p.ph)} ${g.home.abbr}</span></div>
     ${takeHtml(g, p)}<i class="ibtn inl" style="float:none;margin-left:4px" onclick="infoOpen('hit')">ⓘ what counts as a hit</i>
-    <div class="nft"><span>${bits.join(' · ') || 'No line posted'}</span>${(() => { const a = arbOf(g); return a ? `<button class="nw" style="border-color:#f5c542;color:#f5c542;font-weight:800" onclick="booksOpen('${g.id}')">${a.arb ? '💰 ARB' : '🟡 MIDDLE'}</button>` : ''; })()}${betGids().has(String(g.id)) ? '<button class="nw on" disabled>📌 My bet</button>' : `<button class="nw ${pinned ? 'on' : ''}" onclick="pinToggle('${g.id}')">${pinned ? '📌 Watching' : '📍 Watch'}</button>`}<span data-wind="${g.id}">${windChip(g)}</span>${tsChip(g)}${dogChip(g)}${divChip(g)}${trophyChip(g)}${tvChip(g)}${g.books ? `<button class="nw" onclick="booksOpen('${g.id}')">📚 ${g.books.n} books</button>` : ''}<button class="nw livebtn" onclick="liveOpen('football/'+(CFB?'college-football':'nfl'),'${g.id}')">📡 Live</button>${g.state === 'post' ? '' : `<button class="nw" onclick="aiOpen('${g.id}')">🤖 Ask</button>`}</div>
+    <div class="nft"><span>${bits.join(' · ') || 'No line posted'}</span>${(() => { const a = arbOf(g); return a ? `<button class="nw" style="border-color:#f5c542;color:#f5c542;font-weight:800" onclick="booksOpen('${g.id}')">${a.arb ? '💰 ARB' : '🟡 MIDDLE'}</button>` : ''; })()}${betGids().has(String(g.id)) ? '<button class="nw on" disabled>📌 My bet</button>' : `<button class="nw ${pinned ? 'on' : ''}" onclick="pinToggle('${g.id}')">${pinned ? '📌 Watching' : '📍 Watch'}</button>`}<span data-wind="${g.id}">${windChip(g)}</span>${tsChip(g)}${dogChip(g)}${divChip(g)}${trophyChip(g)}${tvChip(g)}${g.books ? `<button class="nw" onclick="booksOpen('${g.id}')">📚 ${g.books.n} books</button>` : ''}${live && !CFB ? `<button class="nw" style="font-weight:700" onclick="fvOpen('${g.id}')">🏟 Field view ›</button>` : ''}<button class="nw livebtn" onclick="liveOpen('football/'+(CFB?'college-football':'nfl'),'${g.id}')">📡 Live</button>${g.state === 'post' ? '' : `<button class="nw" onclick="aiOpen('${g.id}')">🤖 Ask</button>`}</div>
     ${g.state === 'post' ? '' : `<button class="nbet" onclick="event.stopPropagation();betFromGame('${g.id}')">＋ Add bet</button>`}</div>`;
 }
 function newBoard(games) {
@@ -504,7 +504,7 @@ const gameCard = (g, noBet) => {
     const btn = (t, v, d) => `<div class="${v < 0.5 ? 'lo' : ''}" style="background:${cc(t, d)}">${t.abbr} · ${pct(v)}</div>`;
     const open = DET['lp' + g.id];
     return `<div class="gc ${st ? 'lv-' + st : ''}" onclick="gcToggle('${g.id}')"><button class="gpin ${PIN.includes(g.id) ? 'on' : ''}" aria-label="Watch" onclick="event.stopPropagation();pinToggle('${g.id}')">${PIN.includes(g.id) ? '📌 Watching' : '📍 Watch'}</button><div class="gtop"><div class="gtm">${logo(g.away, '#1d4ed8')}<span>${g.away.rank ? '<sup>' + g.away.rank + '</sup>' : ''}${g.away.abbr}${ball(g.away)}</span></div><div class="gmid">${mid}</div><div class="gtm">${logo(g.home, '#7c3aed')}<span>${g.home.rank ? '<sup>' + g.home.rank + '</sup>' : ''}${g.home.abbr}${ball(g.home)}</span></div></div>
-      ${dd ? `<div class="gdd">${dd}${s.rz ? ' · red zone' : ''}</div>` : ''}${field}${s && s.text ? `<div class="gpl">${s.text}</div>` : ''}
+      ${dd ? `<div class="gdd">${dd}${s.rz ? ' · red zone' : ''}</div>` : ''}${field}${s && s.text ? `<div class="gpl">${s.text}</div>` : ''}${g.state === 'in' && !CFB ? `<div style="text-align:center;margin:6px 0"><button class="nw" style="min-height:44px;font-weight:700" onclick="event.stopPropagation();fvOpen('${g.id}')">🏟 Field view ›</button></div>` : ''}
       <div class="gbt">${btn(g.away, pa, '#1d4ed8')}${btn(g.home, ph, '#7c3aed')}</div>${predPanel(g)}
       <div class="gft"><span>${lineText(g)}</span><button class="nw livebtn" onclick="event.stopPropagation();liveOpen('football/'+(CFB?'college-football':'nfl'),'${g.id}')">📡 View live game</button><span>tap card for chart</span></div>
       ${noBet || g.state === 'post' ? '' : `<button class="gbet" onclick="event.stopPropagation();betFromGame('${g.id}')">＋ Add bet</button>`}
@@ -1597,7 +1597,7 @@ async function alertPush() {
   ASQ = Date.now();
   try { const r = await fetch(ALU, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': alertTok() }, body: JSON.stringify({ week: CUR, rec: { lock: a.lock, dogs: a.dogs, helper: { id: h.g.id, abbr: h.abbr, conf: h.conf } } }) }); if (!r.ok) return; const j = await r.json(); if (j && j.rec && j.week === CUR && alertTake(Object.assign({}, ASV, { [CUR]: j.rec }))) render(); } catch (e) {}
 }
-async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=250')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; } }
+async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=251')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; } }
 const trGrade = (p) => { const g = ALL[p.id]; if (!g || g.state !== 'post') return null; const m = (g.home.abbr === p.abbr ? 1 : -1) * (g.home.score - g.away.score) + p.line; return m === 0 ? 'push' : m > 0 ? 'hit' : 'miss'; };
 function trophyData() {
   if (CFB || !window.Trophy || !Trophy.ready()) return null;
@@ -2226,6 +2226,77 @@ function wpChart(g, arr) {
     ${lab(g.away.abbr, aw, C2, upper ? 16 : H - 34)}${lab(g.home.abbr, ha, hc, upper ? H - 34 : 16)}
   </svg>`;
 }
+// ---- Field view: Oddable's own bigger live screen (scoreboard, down and distance, last play drawn on a plain SVG field, drive, our picks). NFL only. No photos, no artwork, no libraries. ----
+const FVD = {}; let FVID = '', FVT = null;
+const fvNum = (x) => typeof x === 'number' && Number.isFinite(x);
+// Yards from the HOME goal line: the same convention as the small field strip in liveView (away end zone on the left, home on the right).
+// A play point normally carries yardLine in that convention; if it only has yardsToEndzone (distance to the goal the offense attacks) it is converted with the side that has the ball.
+function fvYL(pt, offHome) { if (!pt) return null; if (fvNum(pt.yardLine) && pt.yardLine >= 0 && pt.yardLine <= 100) return pt.yardLine; if (fvNum(pt.yardsToEndzone) && offHome !== null && pt.yardsToEndzone >= 0 && pt.yardsToEndzone <= 100) return offHome ? 100 - pt.yardsToEndzone : pt.yardsToEndzone; return null; }
+const fvX = (yl) => 10 + (100 - yl); // drawing x in yards: 0-10 away end zone, 10-110 the field, 110-120 home end zone
+const fvSpot = (yl, g) => { if (!fvNum(yl)) return ''; const y = Math.round(yl); return y === 50 ? 'midfield' : y < 50 ? g.home.abbr + ' ' + y : g.away.abbr + ' ' + (100 - y); };
+function fvKind(p) { const t = String((p.type && p.type.text) || '').toLowerCase(), x = String(p.text || '').toLowerCase(); if (/timeout|two-minute|end period|end of half|end of game|end of regulation|coin toss/.test(t)) return 'adm'; /* not a play: listed nowhere, never drawn */ if (p.isTurnover || /intercept|fumble recovery \(opponent\)|turnover/.test(t) || /\bintercepted\b/.test(x)) return 'to'; if (/punt/.test(t)) return 'punt'; if (/kickoff/.test(t)) return 'kick'; if (/field goal|extra point/.test(t)) return 'fg'; if (/sack/.test(t)) return 'sack'; if (/pass|reception|incompletion/.test(t)) return 'pass'; if (/rush/.test(t)) return 'run'; if (/penalty/.test(t)) return 'pen'; return 'other'; }
+const FVK = { adm: '', run: 'Run', pass: 'Pass', sack: 'Sack', punt: 'Punt', kick: 'Kickoff', fg: 'Kick', to: 'Turnover', pen: 'Penalty', other: 'Play' };
+function fvPlay(p, g, drvTeam) { const side = (pt) => { const id = pt && pt.team && pt.team.id, t = (id && TEAMID[id]) || drvTeam || ''; return t === g.home.abbr ? true : t === g.away.abbr ? false : null; }, sh = side(p.start); return { id: String(p.id || ''), text: String(p.text || ''), kind: fvKind(p), score: !!p.scoringPlay, offHome: sh, a: fvYL(p.start, sh), b: fvYL(p.end, p.end && p.end.team ? side(p.end) : sh), clock: String((p.clock && p.clock.displayValue) || ''), q: (p.period && p.period.number) || 0 }; }
+function fvParse(s, g) {
+  const d = (s && s.drives) || {}, mk = (dr) => { if (!dr || typeof dr !== 'object') return null; const team = dr.team && dr.team.abbreviation ? ab(String(dr.team.abbreviation)) : ''; return { team, desc: String(dr.description || ''), result: String(dr.displayResult || dr.result || ''), plays: (Array.isArray(dr.plays) ? dr.plays : []).map((p) => fvPlay(p, g, team)) }; };
+  const cur = mk(d.current), all = [], seen = {}; [...(Array.isArray(d.previous) ? d.previous : []).map(mk), cur].filter(Boolean).forEach((dr) => dr.plays.forEach((p) => { if (p.id && seen[p.id]) return; if (p.id) seen[p.id] = 1; if (p.text && p.kind !== 'adm') all.push(p); })); // ESPN repeats the current drive as the last 'previous' one
+  return { cur, recent: all.slice(-6).reverse(), last: all[all.length - 1] || null };
+}
+async function fvLoad(id) { const g = ALL[id]; if (!g) return; try { const s = await getJson(SB + 'summary?event=' + id); FVD[id] = { t: Date.now(), d: fvParse(s, g) }; } catch (e) { if (!FVD[id]) FVD[id] = { t: Date.now(), d: null }; } fvPaint(); }
+function fvPaint() { const el = document.getElementById('fvbody'), g = ALL[FVID]; if (el && g && el.dataset.fv === FVID) el.innerHTML = fvHtml(g); }
+function fvStop() { clearInterval(FVT); FVT = null; FVID = ''; }
+// Refresh only while the view is open and the tab is visible, every 30 s (the same pace as live props), and stop when it is closed or the game is over.
+function fvTick() { const el = document.getElementById('fvbody'), sh = document.getElementById('infosheet'), g = ALL[FVID]; if (!el || !sh || sh.hidden || el.dataset.fv !== FVID || !g) return fvStop(); if (document.hidden) return; if (g.state !== 'in') { fvPaint(); return fvStop(); } fvLoad(FVID); }
+function fvOpen(id) { id = String(id); const g = ALL[id]; if (!g || CFB) return; fvStop(); FVID = id; sheetOpen(`<div id="fvbody" data-fv="${id}" style="max-width:820px;margin:0 auto">${fvHtml(g)}</div>`); fvLoad(id); FVT = setInterval(fvTick, 30000); }
+function fvField(g, s, lp) {
+  const hex = (c, d) => (/^#[0-9a-fA-F]{6}$/.test(c || '') ? c : d), ca = hex(g.away.color, '#1d4ed8'), ch = hex(g.home.color, '#7c3aed'), o = [], cl = (x) => Math.max(1.5, Math.min(118.5, x));
+  o.push(`<rect x="0" y="0" width="120" height="54" fill="#1c5c36"/><rect x="0" y="0" width="10" height="54" fill="${ca}"/><rect x="110" y="0" width="10" height="54" fill="${ch}"/>`);
+  o.push(`<text transform="rotate(-90 5 27)" x="5" y="27" text-anchor="middle" dominant-baseline="central" font-size="5" font-weight="800" fill="#fff">${escH(g.away.abbr)}</text><text transform="rotate(90 115 27)" x="115" y="27" text-anchor="middle" dominant-baseline="central" font-size="5" font-weight="800" fill="#fff">${escH(g.home.abbr)}</text>`);
+  for (let y = 0; y <= 100; y += 5) o.push(`<line x1="${10 + y}" y1="0" x2="${10 + y}" y2="54" stroke="#fff" stroke-width="${y % 10 ? 0.15 : 0.3}" opacity="${y % 10 ? 0.25 : 0.6}"/>`);
+  for (let y = 10; y <= 90; y += 10) { const n = y <= 50 ? y : 100 - y; o.push(`<text x="${10 + y}" y="6.5" text-anchor="middle" font-size="3.6" font-weight="700" fill="#fff" opacity=".75">${n}</text><text x="${10 + y}" y="51" text-anchor="middle" font-size="3.6" font-weight="700" fill="#fff" opacity=".75">${n}</text>`); }
+  const offHome = s && s.poss ? (s.poss === g.home.abbr ? true : s.poss === g.away.abbr ? false : null) : null;
+  if (lp && fvNum(lp.a)) { // last play: start to end only
+    const x1 = cl(fvX(lp.a)), has = fvNum(lp.b), x2 = has ? cl(fvX(lp.b)) : x1, dx = x2 - x1, dir = dx >= 0 ? 1 : -1, k = lp.kind, col = k === 'to' || k === 'sack' ? '#f87171' : k === 'punt' || k === 'kick' || k === 'fg' ? '#e5e7eb' : '#fde68a';
+    const arc = k === 'pass' ? Math.min(16, 5 + Math.abs(dx) * 0.3) : k === 'punt' || k === 'kick' || k === 'fg' ? 22 : 0, dash = k === 'pass' ? ' stroke-dasharray="2 1.4"' : arc ? ' stroke-dasharray="0.6 1.6" stroke-linecap="round"' : '';
+    if (Math.abs(dx) >= 0.5) { o.push(`<path d="M${x1} 27 Q${(x1 + x2) / 2} ${27 - arc * 2} ${x2} 27" fill="none" stroke="${col}" stroke-width="1"${dash}/>`); if (k !== 'to') o.push(`<path d="M${x2} 27 l${-dir * 3} -1.9 l0 3.8 z" fill="${col}"/>`); }
+    o.push(`<circle cx="${x1}" cy="27" r="1.3" fill="${col}"/>`);
+    if (k === 'to' && has) o.push(`<path d="M${x2 - 2.2} 24.8 l4.4 4.4 M${x2 - 2.2} 29.2 l4.4 -4.4" stroke="#f87171" stroke-width="1.1" stroke-linecap="round"/>`);
+    if (lp.score && has) o.push(`<text x="${cl(x2 <= 12 ? 5 : x2 >= 108 ? 115 : x2)}" y="19" text-anchor="middle" font-size="7" fill="#facc15">★</text>`);
+  }
+  if (s && fvNum(s.yl)) { // where the ball is now
+    const xb = fvX(s.yl);
+    if (s.down && fvNum(s.dist) && offHome !== null) { const fy = offHome ? s.yl + s.dist : s.yl - s.dist; if (fy > 0 && fy < 100) o.push(`<line x1="${fvX(fy)}" y1="0" x2="${fvX(fy)}" y2="54" stroke="#facc15" stroke-width="0.7"/>`); }
+    o.push(`<line x1="${xb}" y1="0" x2="${xb}" y2="54" stroke="#60a5fa" stroke-width="0.7"/><ellipse cx="${xb}" cy="38" rx="2.4" ry="1.5" fill="#8b4513" stroke="#fff" stroke-width="0.4"/>`);
+    if (offHome !== null) { const dr = offHome ? -1 : 1; o.push(`<path d="M${xb + dr * 3.6} 38 l${dr * 3} 0 m${-dr * 1.4} -1.3 l${dr * 1.4} 1.3 l${-dr * 1.4} 1.3" fill="none" stroke="#fff" stroke-width="0.5" stroke-linecap="round"/>`); }
+  }
+  return `<svg viewBox="0 0 120 54" role="img" aria-label="Football field: ${escH(g.away.abbr)} end zone on the left, ${escH(g.home.abbr)} end zone on the right" style="display:block;width:100%;max-width:760px;margin:8px auto;border-radius:8px">${o.join('')}</svg>`;
+}
+// Our own picks on this game, with where they stand at this score. Uses the frozen line from the shared weekly record (same as the Alert). Shows only; changes nothing.
+function fvPicks(g) {
+  if (!trophyData() || !TRC || !TRC.A[g.week]) return ''; const a = TRC.A[g.week], hm = g.home.score - g.away.score, on = g.state === 'in', fin = g.state === 'post', o = [];
+  const pill = (m, yes, no) => (!on && !fin ? '' : m > 0 ? `<span class="b hit">${yes}${on ? ' now' : ''}</span>` : m < 0 ? `<span class="b miss">${no}${on ? ' now' : ''}</span>` : `<span class="b push">${on ? 'Level now' : 'Push'}</span>`), cls = (m) => (!on && !fin ? '' : m > 0 ? 'hit' : m < 0 ? 'miss' : '');
+  if (a.lock && a.lock.id === g.id) { const m = (g.home.abbr === a.lock.abbr ? 1 : -1) * hm + a.lock.line; o.push(resCard(cls(m), `<b>🔒 Lock ${a.lock.abbr} ${a.lock.line > 0 ? '+' : ''}${a.lock.line}</b><small class="sub" style="display:block">${on || fin ? `${m >= 0 ? 'ahead of' : 'behind'} the number by ${Math.abs(m)}` : 'not started'}</small>`, pill(m, 'Covering', 'Not covering'))); }
+  const d = a.dogs.find((x) => x.id === g.id); if (d) { const m = -hm + d.line; o.push(resCard(cls(m), `<b>🏠 ${d.p >= DD_MIN ? 'Road dog' : 'Road dog, not picked'} ${g.away.abbr} +${d.line}</b> <span class="sub">model ${ddPct(d.p)}%</span><small class="sub" style="display:block">${on || fin ? `${m >= 0 ? 'ahead of' : 'behind'} the number by ${Math.abs(m)}` : 'not started'}</small>`, pill(m, 'Covering', 'Not covering'))); }
+  const h = helperOf(g.week); if (h && h.g.id === g.id) { const m = (g.home.abbr === h.abbr ? 1 : -1) * hm; o.push(resCard(cls(m), `<b>🤝 Helper ${h.abbr} to win</b> <span class="sub">${Math.round(h.conf * 100)}%</span><small class="sub" style="display:block">moneyline, not the spread</small>`, on || fin ? (m > 0 ? `<span class="b hit">${on ? 'Leading now' : 'Won'}</span>` : m < 0 ? `<span class="b miss">${on ? 'Trailing now' : 'Lost'}</span>` : `<span class="b push">Tied</span>`) : '')); }
+  return o.length ? `<div style="margin:12px 0 2px"><b>Oddable picks on this game</b></div>${o.join('')}<div class="sub">Where each pick stands at this score, at the line it was picked at. Nothing is final until the game ends.</div>` : '';
+}
+function fvHtml(g) {
+  const s0 = g.state === 'in' ? g.sit : null, F = FVD[g.id], D = F && F.d, on = g.state === 'in', s = s0 && !s0.poss && D && D.cur && D.cur.team ? Object.assign({}, s0, { poss: D.cur.team }) : s0 /* the scoreboard drops possession at breaks: use the drive's team */, lpS = s0 && s0.lp ? fvPlay(s0.lp, g, '') : null, lp = (lpS && lpS.kind !== 'adm' && fvNum(lpS.a) ? lpS : null) || (D && D.last) /* the scoreboard's own last play first: it is fresher than the play-by-play (seen live Nov 15 2026) and matches the ball spot */, recent = D ? (lp && lp === lpS && lp.id && !D.recent.some((q) => q.id === lp.id) ? [lp, ...D.recent].slice(0, 6) : D.recent) : [], toGo = s && fvNum(s.yl) && s.poss ? (s.poss === g.home.abbr ? 100 - s.yl : s.poss === g.away.abbr ? s.yl : null) : null;
+  const to = (n) => (fvNum(n) ? `<small class="sub" style="display:block" aria-label="${n} timeouts left">TO ${'●'.repeat(Math.max(0, Math.min(3, n)))}${'○'.repeat(3 - Math.max(0, Math.min(3, n)))}</small>` : ''), team = (t, has, n, right) => `<div style="flex:1;min-width:0;text-align:${right ? 'right' : 'left'}"><b style="font-size:17px">${has ? '🏈 ' : ''}${escH(t.abbr)}</b><small class="sub" style="display:block;overflow-wrap:anywhere">${escH(nm(t.abbr))}</small>${to(n)}</div>`;
+  const dd = s && s.down ? `${ord(s.down)} & ${toGo !== null && s.dist >= toGo ? 'Goal' : s.dist}${fvNum(s.yl) ? ' at ' + fvSpot(s.yl, g) : ''}` : '', txt = (lp && lp.text) || (s && s.text) || '';
+  const props = BETS.filter((b) => b.pp && String(b.pp.gid) === String(g.id));
+  return `<button onclick="sheetClose()" style="padding:8px 12px;border:1px solid var(--line);border-radius:9px;background:none;color:inherit;font-weight:700">‹ Back</button>
+  <div style="display:flex;align-items:center;gap:8px;margin:10px 0 4px">${team(g.away, !!(s && s.poss === g.away.abbr), s ? s.ato : null)}<div style="text-align:center;white-space:nowrap"><b style="font-size:32px">${g.away.score} – ${g.home.score}</b><small class="sub" style="display:block">${on ? '● LIVE · ' : ''}${escH(g.detail || (g.state === 'post' ? 'Final' : ''))}</small></div>${team(g.home, !!(s && s.poss === g.home.abbr), s ? s.hto : null, 1)}</div>
+  ${dd ? `<div style="text-align:center;font-weight:800;font-size:16px;margin:8px 0 2px">${dd}${s.poss ? ` <span class="sub" style="font-weight:600">· ${escH(s.poss)} ball${s.rz ? ' · red zone' : ''}</span>` : ''}</div>` : on ? '' : `<div class="sub" style="text-align:center">${g.state === 'post' ? 'Game over.' : 'Not started yet.'}</div>`}
+  ${txt ? `<div style="text-align:center;margin:6px 0;font-size:14px;overflow-wrap:anywhere"><span class="sub">Last play${lp && lp.text === txt && FVK[lp.kind] ? ' · ' + FVK[lp.kind] : ''}:</span> ${escH(txt)}</div>` : ''}
+  ${fvField(g, s, lp)}
+  <div class="sub" style="font-size:11.5px">${escH(g.away.abbr)} attacks right, ${escH(g.home.abbr)} attacks left. Blue line = ball, yellow = first down. Solid = run, dashed arc = pass, dotted arc = punt or kick, red = sack or turnover (✕), ★ = score. The path is approximate: it only shows where the play started and ended.</div>
+  ${D && D.cur && (D.cur.desc || D.cur.plays.length) ? `<div style="margin:12px 0 2px"><b>Current drive</b>${D.cur.team ? ` <span class="sub">${escH(D.cur.team)}</span>` : ''}</div><div>${escH(D.cur.desc || D.cur.plays.length + ' plays')}${D.cur.result ? ` <span class="sub">· ${escH(D.cur.result)}</span>` : ''}</div>` : ''}
+  ${recent.length ? `<div style="margin:12px 0 2px"><b>Last plays</b> <span class="sub">newest first</span></div>${recent.map((p) => `<div style="padding:7px 0;border-top:1px solid var(--line);font-size:13px;overflow-wrap:anywhere"><b>${FVK[p.kind]}${p.score ? ' ★' : ''}</b>${p.q ? ` <span class="sub">Q${p.q}${p.clock ? ' ' + escH(p.clock) : ''}</span>` : ''}<div>${escH(p.text)}</div></div>`).join('')}` : `<div class="sub" style="margin-top:10px">${F ? (on ? 'Play-by-play is not available for this game right now. Score, down and ball spot still update.' : 'No play-by-play for this game.') : 'Loading play-by-play…'}</div>`}
+  ${fvPicks(g)}
+  ${props.length ? `<div style="margin:12px 0 2px"><b>Your player props on this game</b></div>${props.map((b) => pStatHtml(b)).join('')}` : ''}
+  <div class="sub" style="margin-top:10px;font-size:11.5px">Live data from ESPN${F ? ' · plays updated ' + new Date(F.t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : ''}${on ? ' · refreshes every 30 s while this is open' : ''}. Information only: it does not change any pick.</div>`;
+}
 function liveView(g) {
   const s = g.state === 'in' ? g.sit : null, p = pred(g), pre = g.state === 'pre', post = g.state === 'post';
   const arr = pre ? [p.ph, p.ph] : WPH[g.id];
@@ -2235,7 +2306,7 @@ function liveView(g) {
   return `<div class="lv" data-lv="${g.id}">
     <div class="lvh"><div class="lvt"><b>${rk(g.away)}${g.away.abbr}</b>${pre ? '' : `<em>${g.away.score}</em>`}</div><div class="lvm">${pre ? `<b>${new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</b><small>Kickoff</small>` : post ? '<b>FINAL</b>' : `${liveTag(g)}<small>${g.detail}</small>`}</div><div class="lvt">${pre ? '' : `<em>${g.home.score}</em>`}<b>${rk(g.home)}${g.home.abbr}</b></div></div>
     ${dd ? `<div class="lvd">${dd}${s.poss ? ' · ' + s.poss + ' ball' : ''}${s.rz ? ' · red zone' : ''}</div>` : ''}${field}
-    ${s && s.text ? `<div class="lvp">${s.text}</div>` : ''}
+    ${s && s.text ? `<div class="lvp">${s.text}</div>` : ''}${g.state === 'in' && !CFB ? `<div style="text-align:center;margin:6px 0"><button onclick="event.stopPropagation();fvOpen('${g.id}')" style="min-height:44px;padding:8px 16px;border:1px solid var(--line);border-radius:10px;background:none;color:inherit;font-weight:700">🏟 Field view ›</button></div>` : ''}
     ${arr ? wpChart(g, arr) : '<div class="sub">Loading win probability…</div>'}
     ${pre ? '<details class="dsc"><summary>ⓘ About this chart</summary><div class="sub">Pregame this shows our win chance (model + line). The line only moves once the game starts, so it is for watching live, not for betting.</div></details>' : ''}<div class="sub">${pre ? '' : (post ? 'Win chance through the game (ESPN)' : 'Live win chance from ESPN') + ' · our pregame pick ' + p.su.abbr + ' ' + pct(p.conf)}</div>
   </div>`;
@@ -2517,6 +2588,6 @@ if ('serviceWorker' in navigator) {
 })();
 </script>
 <script>setTimeout(()=>{const l=document.querySelector('.lg'),o=l&&l.querySelector('.on');if(o)l.scrollLeft=Math.max(0,o.offsetLeft-60);},500);</script>
-<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=250"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
+<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=251"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
 </body>
 </html>

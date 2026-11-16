@@ -480,3 +480,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v243 — Alert units: this week / season / 2014-26 by pick type
 - Alert box shows a Week | Season | 2014-26 grid per pick type (record, %, units). Week and Season are live from the app; 2014-26 is a fixed table (ALH: Double lock 116-103, Lock 116-102, tag-only road dog 327-277, through week 10 of 2026 from the Python walk-forward). Update ALH when the season ends. Correction logged: in history the road dogs earned more units than the locks (+20.3 vs +5.9) because there are far more of them; this season is the reverse.
+
+## v244 — Alert history = past 12 seasons (2014-2025)
+- User: "add the historical data stating over the past 12 seasons" / "model over 12 seasons". The Alert grid's history column is now "12 seasons" (2014-2025 only, no 2026): Double lock 108-101 (-2.8u), Lock 110-99 (+1.0u), tag-only road dog 315-267 (+19.4u), combined 533-467 (53.3%, +17.5u, ~83 picks/season). Season-by-season table (ALY) in a "Past 12 seasons" dropdown in the Alert drill sheet. Losing seasons: 2017, 2020, 2023, 2024, 2025. Static data; refresh at season end.

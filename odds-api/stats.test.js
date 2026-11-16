@@ -211,8 +211,9 @@ srv.listen(0, async () => {
     r = await call('ann', '/stats/course/admin', { op: 'ent', tag: SID.ann.slice(0, 8), on: true }); assert.strictEqual(r.s, 403, 'course admin is owner only');
     r = await call('owner', '/stats/course/admin', { op: 'ent', tag: SID.ann.slice(0, 8), on: true }); ok(r); r = await call('owner', '/stats/course/admin', { op: 'link', tag: SID.ann.slice(0, 8), courseId: 'cedar', name: 'Cedar Ridge' }); ok(r);
     r = await call('bob', '/stats/consent/get', { courseId: 'cedar' }); ok(r); assert.deepStrictEqual([r.j.ask, r.j.on, r.j.text], [true, null, 'Share my handicap and rounds with Cedar Ridge?']);
-    r = await call('bob', '/stats/consent/set', { courseId: 'cedar', on: true, via: { kind: 'league', id: 'L1', title: 'Tuesday league' }, myName: 'BobBirdie' }); ok(r); assert.strictEqual(r.j.on, true);
-    r = await call('cat', '/stats/consent/set', { courseId: 'cedar', on: true, via: { kind: 'event', id: 'E2', title: 'Member-guest' }, myName: 'CatCourt' }); ok(r);
+    r = await call('bob', '/stats/consent/set', { courseId: 'cedar', on: true, via: { kind: 'league', id: 'L1', title: 'Tuesday league' }, myName: 'BobBirdie' }); assert.strictEqual(r.s, 403, 'review 3: a phone cannot put itself on a course list; the engine that saw the join does');
+    await S.consentOnJoin(pe(SID.bob), 'cedar', { kind: 'league', id: 'L1', title: 'Tuesday league' }, false); r = await call('bob', '/stats/consent/set', { courseId: 'cedar', on: true }); ok(r); assert.strictEqual(r.j.on, true);
+    await S.consentOnJoin(pe(SID.cat), 'cedar', { kind: 'event', id: 'E2', title: 'Member-guest' }, true);
     r = await call('ann', '/stats/me'); assert.strictEqual(r.j.courseView, true); r = await call('bob', '/stats/me'); assert.strictEqual(r.j.courseView, false);
     r = await call('ann', '/stats/course/mine'); ok(r); assert.deepStrictEqual(r.j.courses, [{ id: 'cedar', name: 'Cedar Ridge', players: 2 }]);
     r = await call('ann', '/stats/course/players', { courseId: 'cedar' }); ok(r); assert.strictEqual(r.j.players.length, 2); assert.strictEqual(r.j.events.length, 2);
@@ -405,14 +406,14 @@ srv.listen(0, async () => {
   } catch (er) { fail(er); } try {
 
       // ---------- H1 + E-H: handicapFor / ratingFor, tournament-only overrides, real Oddable value always next to it ----------
-      S.register('golf', async (k) => k !== pe(SID.ann) ? [] : [1, 2, 3].map((i) => ({ src: 'golf', id: 'golf:GH' + i + ':round:p1', date: '2026-10-0' + i, sport: 'golf', kind: 'golf-round', contestId: i === 3 ? 'TOUR1' : 'GH' + i, title: 'Round ' + i, result: null, score: 88 + i, toPar: 16 + i, verified: true, extra: { course: 'Cedar Ridge', rating: 71.3, slope: 125, holes: 18, of: 18, format: 'stroke', final: true } })));
+      S.register('golf', async (k) => k !== pe(SID.ann) ? [] : [1, 2, 3].map((i) => ({ src: 'golf', id: 'golf:GH' + i + ':round:p1', date: '2026-10-0' + i, sport: 'golf', kind: 'golf-round', contestId: i === 3 ? 'TOUR1' : 'GH' + i, title: 'Round ' + i, result: null, score: 88 + i, toPar: 16 + i, verified: true, extra: { course: 'Cedar Ridge', rating: 71.3, slope: 125, holes: 18, of: 18, format: 'stroke', final: true, holeScores: Array.from({ length: 18 }, (_, k2) => 4 + (k2 < 16 + i ? 1 : 0)), card: { others: 3, by: 'a:marker00000' + i, byName: 'Marker ' + i } } })));
       S.register('events', async (k) => k !== pe(SID.ann) ? [] : [{ src: 'events', id: 'PB1:m1', date: '2026-10-05', sport: 'pickleball', kind: 'match', title: 'Open play', result: 'W', opponent: 'Zed', verified: true, extra: { game: 'pickleball' } }]); S.register('calcutta', async () => []); S._reset();
       var annK = pe(SID.ann), bobK = pe(SID.bob); var h = await S.handicapFor(annK, { casual: true }); r = await call('ann', '/stats/me'); const realIdx = r.j.golfHcp.index;
       assert.strictEqual(r.j.golfHcp.rounds, 4, 'the golf-day stroke rounds played in the app AND the self-logged round all count (H1)'); assert.strictEqual(r.j.golfHcp.label, 'Oddable Handicap Index'); assert.strictEqual(r.j.golfHcp.method, 'Calculated with the World Handicap System method.');
       assert.deepStrictEqual([h.oddable.index, h.event, h.setBy, h.use, h.label], [realIdx, null, null, realIdx, 'Oddable Handicap Index']); assert.ok(realIdx != null);
       { const hm = await S.handicapFor(annK); assert.deepStrictEqual([hm.rounds, hm.confirmedRounds, hm.use, hm.needsSet], [4, 3, hm.confirmedIndex, false], 'a money game / flight / tournament plays off the confirmed index (the three rounds scored in the app with other players)'); assert.ok(hm.confirmedIndex != null && hm.oddable.index === realIdx); assert.strictEqual(hm.text, realIdx.toFixed(1) + ' · 3 of 4 rounds confirmed'); }
-      var rt = await S.ratingFor(annK, 'pickleball'); assert.deepStrictEqual([rt.oddable.rating, rt.event, rt.setBy, rt.use, rt.label], [1516, null, null, 1516, 'Oddable rating']);
-      rt = await S.ratingFor(bobK, 'pickleball'); assert.deepStrictEqual([rt.oddable.rating, rt.use, rt.start], [null, 1500, true], 'no matches: starts at 1500');
+      var rt = await S.ratingFor(annK, 'pickleball'); assert.deepStrictEqual([rt.oddable.rating, rt.event, rt.setBy, rt.use, rt.seed, rt.label], [1516, null, null, null, 1500, 'Oddable rating'], 'review 3: an event match with nothing on it saying another account confirmed it does not seed'); assert.strictEqual((await S.ratingFor(annK, 'pickleball', { casual: true })).use, 1516);
+      rt = await S.ratingFor(bobK, 'pickleball'); assert.deepStrictEqual([rt.oddable.rating, rt.use, rt.seed, rt.start], [null, null, 1500, true], 'no matches: nothing to seed on, the 1500 start');
       var ch = await S.courseHandicapFor(annK, { slope: 131, cr: 72.4, par: 72 }, { casual: true }); assert.strictEqual(ch.courseHandicap, R.courseHandicap(realIdx, 131, 72.4, 72));
       for (const txt of [JSON.stringify(r.j.golfHcp), JSON.stringify(h), JSON.stringify(rt)]) assert.ok(!/USGA|GHIN|DUPR/i.test(txt), 'never called USGA / GHIN / DUPR');
       // only an Enterprise director; only before the start; that tournament only
@@ -435,7 +436,7 @@ srv.listen(0, async () => {
       r = await call('bob', '/stats/event/log', { eventId: 'TOUR1' }); ok(r); assert.deepStrictEqual([r.j.director, r.j.mine.hcp, r.j.log.length, r.j.log[0].player], [false, 18, 1, 'BobBirdie'], 'a player reads only the lines about their own number'); r = await call('owner', '/stats/event/log', { eventId: 'TOUR1' }); assert.strictEqual(r.s, 404, 'anyone else: 404');
       // pickleball rating works the same
       await S.eventSetup(catK, 'PBT1', { title: 'Fall Classic', sport: 'pickleball', lockAt: Z('2026-11-20T14:00:00Z') }); await S.eventOverride(catK, 'PBT1', annK, { rating: 1700, sport: 'pickleball', reason: 'Seeded', name: 'AnnAce' });
-      rt = await S.ratingFor(annK, 'pickleball', { eventId: 'PBT1' }); assert.deepStrictEqual([rt.oddable.rating, rt.event, rt.setBy, rt.use], [1516, 1700, 'tournament', 1700]); assert.strictEqual((await S.ratingFor(annK, 'pickleball')).use, 1516);
+      rt = await S.ratingFor(annK, 'pickleball', { eventId: 'PBT1' }); assert.deepStrictEqual([rt.oddable.rating, rt.event, rt.setBy, rt.use], [1516, 1700, 'tournament', 1700]); assert.strictEqual((await S.ratingFor(annK, 'pickleball', { casual: true })).use, 1516, 'outside the tournament the real rating is untouched');
       // clearing goes back to the Oddable value; after the start everything is locked
       ov = await S.eventOverride(catK, 'TOUR1', annK, { hcp: null, reason: 'Use Oddable' }); h = await S.handicapFor(annK, { eventId: 'TOUR1', casual: true }); assert.deepStrictEqual([h.event, h.setBy, h.use], [null, null, realIdx]);
       await S.eventOverride(catK, 'TOUR1', annK, { hcp: 11, reason: 'Final', name: 'AnnAce' }); NOW = Z('2026-11-20T14:00:01Z');
@@ -452,7 +453,7 @@ srv.listen(0, async () => {
       assert.ok(urls[0][0].startsWith('https://api.opengolfapi.org/v1/courses/search?q=cedar') && urls[0][1] === 'Bearer KEY1', 'OPENGOLFAPI_KEY sent when set');
       r = await call('ann', '/stats/coursedetail', { extId: 'c77' }); ok(r); assert.deepStrictEqual([r.j.course.tees[0].name, r.j.course.tees[0].rating, r.j.course.tees[0].slope, r.j.course.tees[0].holes.length], ['Blue', 71.3, 125, 18]);
       r = await call('ann', '/stats/courses', { q: 'c' }); assert.strictEqual(r.s, 400); CS._reset(); CS._deps.fetch = async () => { throw new Error('offline'); }; CS._deps.key = () => '';
-      r = await call('ann', '/stats/courses', { q: 'cedar' }); assert.strictEqual(r.s, 502); assert.ok(/Type the course/.test(r.j.error), 'API down: type it in'); r = await call(null, '/stats/courses', { q: 'cedar' }); assert.strictEqual(r.s, 401);
+      r = await call('ann', '/stats/courses', { q: 'cedar' }); ok(r); assert.deepStrictEqual([r.j.api.ok, r.j.api.error], [false, "Couldn't reach the course list. Try again."], 'API down: a clear message'); assert.ok(r.j.api.results.length > 0 && r.j.api.results.every((c) => c.sample) && /Sample courses/.test(r.j.api.fallback), 'and the labelled sample list (ported from the preview)'); r = await call(null, '/stats/courses', { q: 'cedar' }); assert.strictEqual(r.s, 401);
       assert.ok(urls.every(([u]) => u.startsWith('https://api.opengolfapi.org/')), 'only OpenGolfAPI called');
       t('course search: OpenGolfAPI through the server (key optional), names cleaned, attribution, tee rating / slope / holes; API down -> type it in; signed-out refused');
   } catch (er) { fail(er); } try {

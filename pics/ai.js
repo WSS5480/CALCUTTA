@@ -92,5 +92,5 @@ async function aiOpen(gid, auto) {
   o.querySelectorAll('#aipre button').forEach((b) => (b.onclick = () => go(b.dataset.q)));
   o.querySelector('#aigo').onclick = () => go(o.querySelector('#aiq').value.trim());
   o.querySelector('#aiq').onkeydown = (e) => { if (e.key === 'Enter') go(e.target.value.trim()); };
-  if (!(await aiReady())) document.getElementById('aiout').textContent = 'Claude is not connected yet. Add ANTHROPIC_API_KEY to the calcutta-odds service in Render.'; else if (auto) go(auto);
+  if (!(await aiReady())) document.getElementById('aiout').textContent = 'Ask AI is not available right now.' + (window.oddPreview ? ' It is switched off in this test copy.' : ' Try again later.'); else if (auto) go(auto);
 }

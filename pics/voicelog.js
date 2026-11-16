@@ -16,13 +16,13 @@
   const chiDay = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date());
   function css() {
     if (document.getElementById('ovlcss')) return; const st = document.createElement('style'); st.id = 'ovlcss';
-    st.textContent = '#ovoice{--sv:var(--blue);--sv2:var(--blue);position:fixed;inset:0;z-index:120;background:rgba(5,8,16,.8);display:flex;align-items:flex-end;justify-content:center;font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink)}html.cb #ovoice{--sv:#003594;--sv2:#c6cbd7}'
+    st.textContent = '#ovoice{--sv:var(--blue);--sv2:var(--blue);--svt:var(--onblue,#fff);position:fixed;inset:0;z-index:120;background:rgba(5,8,16,.8);display:flex;align-items:flex-end;justify-content:center;font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink)}body.dark #ovoice{--svt:var(--onblue,#16102b)}html.cb #ovoice{--sv:#003594;--sv2:#c6cbd7;--svt:#fff}' // text on the brand colour is a theme variable: 4.5:1 or better in every theme (the "Read it" button was white on #a78bfa, 2.7:1)
       + '#ovoice *{box-sizing:border-box}#ovoice .vb{background:var(--panel);border:1px solid var(--line);border-radius:22px 22px 0 0;width:100%;max-width:560px;max-height:92vh;overflow:auto;padding:14px 16px calc(18px + env(safe-area-inset-bottom))}'
       + '#ovoice .vh{display:flex;justify-content:space-between;align-items:center;gap:8px}#ovoice .vh b{font-size:19px}#ovoice button{font:inherit;color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}'
       + '#ovoice .vx{background:none;border:0;color:var(--muted);min-height:44px;min-width:44px;font-weight:600}#ovoice .vd{color:var(--muted);font-size:13.5px;margin:4px 0 10px}'
-      + '#ovoice .vmic{width:100%;min-height:72px;border-radius:999px;border:2px solid var(--sv2);background:var(--panel2);font-weight:800;font-size:18px;touch-action:none;user-select:none;-webkit-user-select:none}#ovoice .vmic.on{background:var(--sv);color:#fff}'
+      + '#ovoice .vmic{width:100%;min-height:72px;border-radius:999px;border:2px solid var(--sv2);background:var(--panel2);font-weight:800;font-size:18px;touch-action:none;user-select:none;-webkit-user-select:none}#ovoice .vmic.on{background:var(--sv);color:var(--svt)}'
       + '#ovoice textarea{width:100%;min-height:76px;margin-top:10px;background:var(--bg);border:1px solid var(--line);border-radius:14px;color:var(--ink);font:600 16px system-ui;padding:10px 12px;resize:vertical}'
-      + '#ovoice .vrow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}#ovoice .vp,#ovoice .vs{min-height:48px;border-radius:14px;font-weight:700;font-size:16px;padding:8px 12px}#ovoice .vp{background:var(--sv);border:1px solid var(--sv2);color:#fff;border-radius:999px}#ovoice .vs{background:var(--panel2);border:1px solid var(--line);border-radius:999px}#ovoice .vp:disabled{opacity:.6}'
+      + '#ovoice .vrow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}#ovoice .vp,#ovoice .vs{min-height:48px;border-radius:14px;font-weight:700;font-size:16px;padding:8px 12px}#ovoice .vp{background:var(--sv);border:1px solid var(--sv2);color:var(--svt);border-radius:999px}#ovoice .vs{background:var(--panel2);border:1px solid var(--line);border-radius:999px}#ovoice .vp:disabled{opacity:.6}'
       + '#ovoice .vmsg{min-height:22px;color:var(--muted);font-size:14px;margin:8px 0 0}#ovoice .verr{background:#d93a2e14;border:1px solid var(--red);border-radius:10px;padding:10px 12px;margin-top:10px}#ovoice .vask{border:2px solid #f5c542;background:linear-gradient(135deg,rgba(245,197,66,.22),rgba(255,226,140,.08));border-radius:10px;padding:10px 12px;margin-top:10px}'
       + '#ovoice .vcard{background:#16915a14;border:2px solid var(--green);border-radius:16px;padding:14px;margin-top:12px}#ovoice .vcard small{display:block;color:var(--green);font-weight:700;font-size:12.5px;letter-spacing:.06em;text-transform:uppercase}#ovoice .vcard b{display:block;font-size:19px;margin:4px 0;overflow-wrap:anywhere}#ovoice .vcard i{display:block;font-style:normal;color:var(--muted);font-size:13px;overflow-wrap:anywhere}';
     document.head.appendChild(st);
@@ -42,8 +42,8 @@
     }
     o.innerHTML = h + '</div>';
     const mic = o.querySelector('#vlmic'), ta = o.querySelector('#vltext'), say = (t) => { S.say = t; const m = o.querySelector('#vlmsg'); if (m) m.textContent = t; };
-    if (ta) ta.oninput = () => { S.heard = ta.value; };
-    if (mic && typeof window.aiPTT === 'function') window.aiPTT(mic, { say, idle: '🎤 Hold to talk', live: (t) => { if (ta) ta.value = t; S.heard = t; }, done: (t) => { if (ta) ta.value = t; S.heard = t; if (t) read(); } });
+    if (ta) ta.oninput = () => { if (S) S.heard = ta.value; }; // the sheet can be closed while a late input / voice event still arrives
+    if (mic && typeof window.aiPTT === 'function') window.aiPTT(mic, { say, idle: '🎤 Hold to talk', live: (t) => { if (!S) return; if (ta) ta.value = t; S.heard = t; }, done: (t) => { if (!S) return; if (ta) ta.value = t; S.heard = t; if (t) read(); } });
     else if (mic) mic.onclick = () => say('Voice needs the Ask Claude module (ai.js). Type it instead.');
   }
   async function read() {

@@ -81,6 +81,7 @@ async function handle(req, res) {
       const pe = phoneEmail(v.id), pw = crypto.createHmac('sha256', KEY()).update('phone|' + v.id).digest('hex').slice(0, 32);
       let r = await ma('/api/v1/auth/register', { email: pe, password: pw, name: b.create && nm0 ? nm0 : 'Phone ' + v.id.slice(0, 4) });
       if (b.create && nm0) { try { await namesSet(String(v.id).slice(0, 8), nm0); } catch (er) {} }
+      if (v.created) { try { await sinceSet(pe); } catch (er) {} } // server-stamped sign-up time (stats: an account's start never comes from anything the phone can write)
       if (!r.ok && r.status === 409) r = await ma('/api/v1/auth/login', { email: pe, password: pw });
       if (!r.ok) { send(res, 502, { error: r.j.error || 'Could not open your account' }); return true; }
       CACHE.delete(pe);
@@ -93,6 +94,7 @@ async function handle(req, res) {
       const r = await ma(path === '/acct/login' ? '/api/v1/auth/login' : '/api/v1/auth/register', { email, password: b.password, name: cleanName(b.name) });
       if (!r.ok) { send(res, r.status === 401 || r.status === 409 || r.status === 400 ? r.status : 502, { error: r.j.error || 'Could not sign in' }); return true; }
       CACHE.delete(email);
+      if (path === '/acct/register') { try { await sinceSet(email); } catch (er) {} } // server-stamped sign-up time
       const me = await shape(email, true);
       send(res, 200, { token: mint(email), me }); return true;
     }
@@ -120,7 +122,7 @@ async function handle(req, res) {
       try { await namesSet(k, name); send(res, 200, { ok: true, name }); } catch (er) { send(res, 502, { error: 'Could not save the name: ' + er.message }); } return true;
     }
     if (path === '/acct/dash' && ((e === 'owner' && OWNER_PIN()) || isOwnerPhone(e))) {
-  { try { const us = await require('./sync').adminUsers(null); const nm = await namesGet().catch(() => ({})); send(res, 200, { users: us.map((u) => ({ k: String(u.id).slice(0, 8), name: (isOwnerPhone(phoneEmail(u.id)) ? OWNER_NAME() : nm[String(u.id).slice(0, 8)]) || '', tag: u.tag, updated: u.updated, bets: u.bets, w: u.w, l: u.l, p: u.p, risk: u.risk, pl: u.pl, open: u.open, placed: u.placed, list: u.list, days: u.days })) }); } catch (er) { send(res, 502, { error: 'Could not read players: ' + er.message }); } return true; }
+  { try { const us = await require('./sync').adminUsers(null); const nm = await namesGet().catch(() => ({})); send(res, 200, { users: us.map((u) => ({ k: String(u.id).slice(0, 8), name: (isOwnerPhone(phoneEmail(u.id)) ? OWNER_NAME() : nm[String(u.id).slice(0, 8)]) || '', tag: u.tag, updated: u.updated, bets: u.bets, w: u.w, l: u.l, p: u.p, risk: u.risk, pl: u.pl, unk: u.unk || 0, open: u.open, placed: u.placed, list: u.list, days: u.days })) }); } catch (er) { send(res, 502, { error: 'Could not read players: ' + er.message }); } return true; }
     }
     if (e === 'owner') { if (!OWNER_PIN()) { send(res, 401, { error: 'Sign in again' }); return true; }
       if (path === '/acct/me') { send(res, 200, { me: OWNER_ME }); return true; } send(res, 400, { error: 'Owner has full access' }); return true; }
@@ -158,6 +160,19 @@ async function namesSet(k, name) {
     if (await syncMod.dbPatchIf('lock:names', r.updated, { names }, Date.now())) return names;
   } throw new Error('Busy, try again');
 }
+// SIGN-UP TIME (stats review 3, M2). Stamped by THIS server when an account is created, kept in the row 'lock:acctsince' { t: { <account hash>: ms } }.
+// It is set once and never moved; the phone cannot write it (it is not part of the synced data). Stats reads it through since(accountId) to decide the
+// earliest day an account may log a round for. Accounts made before this existed have no stamp (stats falls back to other server-written stamps).
+const SINCE = 'lock:acctsince', sinceKey = (e) => crypto.createHash('sha256').update('oddable-since|' + String(e)).digest('hex').slice(0, 20);
+async function since(e) { const r = await syncMod.dbGet(SINCE); const v = r && r.data && r.data.t && r.data.t[sinceKey(e)]; return Number(v) > 0 ? Number(v) : null; }
+async function sinceSet(e, at) {
+  const k = sinceKey(e), now = Number(at) > 0 ? Number(at) : Date.now();
+  for (let i = 0; i < 5; i++) {
+    let r = await syncMod.dbGet(SINCE); if (!r) { await syncMod.dbPut({ id: SINCE, salt: 'x', pinhash: 'x', data: { t: {} }, updated: 1 }, true); r = await syncMod.dbGet(SINCE); if (!r) continue; }
+    const t = { ...((r.data && r.data.t) || {}) }; if (Number(t[k]) > 0) return Number(t[k]); t[k] = now; // set once: the first stamp stays
+    if (await syncMod.dbPatchIf(SINCE, r.updated, { t }, Math.max(Date.now(), Number(r.updated || 0) + 1))) return now;
+  } throw new Error('Busy, try again');
+}
 const OWNER_PHONES = () => String(process.env.OWNER_PHONE || '').split(',').map((x) => syncMod.normPhone(x)).filter((x) => x.length === 10);
 const isOwnerPhone = (e) => /@phone\.oddable$/.test(String(e)) && OWNER_PHONES().some((p) => phoneEmail(crypto.createHash('sha256').update('oddable|' + p).digest('hex')) === e);
 // Second factor for owner-phone dashboards: the phone PIN alone is not enough, the owner PIN is entered once per device (30 days).
@@ -169,4 +184,4 @@ const phoneEmail = (id) => crypto.createHmac('sha256', KEY()).update('phoneid|' 
 function ownerOk(req) { const e = verify(req.headers['x-token']); return !!e && dashOk(e, req); }
 // Groups (groups.js): who is signed in (the account id inside a valid token, or null). Never sent to other players.
 function who(req) { if (!on()) return null; const e = verify(req.headers['x-token']); if (!e) return null; if (e === 'owner' && !OWNER_PIN()) return null; return e; }
-module.exports = { handle, check, on, phoneEmail, ownerOk, who, isOwnerPhone, namesGet, ownerName: OWNER_NAME };
+module.exports = { handle, check, on, phoneEmail, ownerOk, who, isOwnerPhone, namesGet, ownerName: OWNER_NAME, since, sinceSet };

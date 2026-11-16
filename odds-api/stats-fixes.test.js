@@ -2,6 +2,8 @@
 // One group of checks per fix from the independent review of stats-v1 (c084625) and the complete review of the preview (Nov 16 2026).
 // Every group FAILS on c084625 and passes after the fixes:   STATS_DIR=<a checkout of c084625>/odds-api node odds-api/stats-fixes.test.js
 // Each group runs on its own; a failure is recorded and the rest still run.
+// REVIEW 3 (Nov 16 2026): the groups below that touch confirmation, account dates, consent, tournament set-up and pairing were moved to the manager's
+// CONFIRMED rule and the review-3 contracts (see stats-r3.test.js for the new rules themselves). On c084625 they still fail, as before.
 const assert = require('assert'), http = require('http'), path = require('path'), crypto = require('crypto');
 process.env.SUPABASE_URL = 'https://fake.supabase.co'; process.env.SUPABASE_KEY = 'x';
 const B = (process.env.STATS_DIR ? path.resolve(process.env.STATS_DIR) : __dirname) + '/';
@@ -33,7 +35,9 @@ const ent = (n) => { db['lock:ent'] = db['lock:ent'] || { id: 'lock:ent', update
 const entOff = (n) => { db['lock:ent'].data.acct[crypto.createHash('sha256').update('oddable-acct|' + K(n)).digest('hex').slice(0, 24)] = { on: false }; };
 const golfItem = (date, total, o) => Object.assign({ type: 'golf', date, course: 'Palm View', tees: 'Blue', holes: 18, par: 72, cr: 71.2, slope: 128, total }, o || {});
 const mk = (i, total, o) => Object.assign({ id: 'r' + String(i).padStart(3, '0'), date: new Date(Date.UTC(2026, 0, 1 + i)).toISOString().slice(0, 10), total, cr: 72, slope: 113, par: 72 }, o || {});
-const engineRound = (id, date, score, o) => ({ src: 'golf', id, date, sport: 'golf', kind: 'golf-round', title: 'Golf day', result: null, score, toPar: score - 72, verified: true, extra: Object.assign({ course: 'Palm View', rating: 71.2, slope: 128, par: 72, holes: 18, of: 18, format: 'stroke', solo: false }, o || {}) });
+const engineRound = (id, date, score, o) => ({ src: 'golf', id, date, sport: 'golf', kind: 'golf-round', title: 'Golf day', result: null, score, toPar: score - 72, verified: true, extra: Object.assign({ course: 'Palm View', rating: 71.2, slope: 128, par: 72, holes: 18, of: 18, format: 'stroke', solo: false, holeScores: Array.from({ length: 18 }, (_, i) => Math.floor(score / 18) + (i < score % 18 ? 1 : 0)), card: { others: 3, by: 'a:' + crypto.createHash('sha256').update('marker|' + id).digest('hex').slice(0, 12), byName: 'Card Marker' } }, o || {}) });
+// "recorded as having played": the logger adds the friend to their players list and the friend claims that row (once)
+const pal = async (logger, friend) => { const g = ok(await call(logger, 'guest/create', { name: friend })).guest; ok(await call(friend, 'guest/claim', { code: g.code })); return g.gid; };
 const V = (r) => { const v = S.validate(r, r.src); if (!v.ok) throw new Error(v.why + ' ' + JSON.stringify(r)); return v.rec; };
 let pass = 0; const fails = [];
 const check = async (name, fn) => { fresh(); try { await fn(); pass++; console.log('  ok  ' + name); } catch (er) { fails.push(name); console.log('  FAIL ' + name + '\n       ' + String((er && er.message) || er).split('\n').slice(0, 6).join('\n       ')); } };
@@ -89,17 +93,17 @@ srv.listen(0, async () => {
   });
 
   await check('2d. a self-logged round counts as confirmed only after ANOTHER player confirms it; an edit drops the confirmation', async () => {
-    const ids = []; for (let i = 1; i <= 3; i++) ids.push(ok(await call('ann', 'self/save', { item: golfItem('2026-11-1' + i, 84 + i) })).record.id);
+    const gs = [await pal('ann', 'bob'), await pal('ann', 'cat'), await pal('ann', 'dir')], ids = []; for (let i = 1; i <= 3; i++) ids.push(ok(await call('ann', 'self/save', { item: golfItem('2026-11-1' + i, 84 + i, { withGuests: gs }) })).record.id);
     const L = ok(await call('ann', 'confirm/link', { id: ids[0] })); assert.ok(/^[a-z0-9]{12}-[a-z0-9]{24}$/.test(L.code) && L.link.endsWith('?join=confirm.' + L.code));
     no(await call('ann', 'confirm/do', { code: L.code }), 400, /own entry/, 'nobody confirms their own round');
     no(await call('bob', 'confirm/do', { code: L.code.slice(0, 13) + 'z'.repeat(24) }), 403, null, 'a wrong link');
     j = ok(await call('bob', 'confirm/get', { code: L.code })); assert.deepStrictEqual([j.loggedBy, j.entry.score, j.entry.date, j.mine, j.confirmed], ['Ann Real', 85, '2026-11-11', false, false]);
     ok(await call('bob', 'confirm/do', { code: L.code })); no(await call('cat', 'confirm/do', { code: L.code }), 409, /already/, 'one confirmer');
-    for (const id of ids.slice(1)) ok(await call('bob', 'confirm/do', { code: ok(await call('ann', 'confirm/link', { id })).code }));
+    ok(await call('cat', 'confirm/do', { code: ok(await call('ann', 'confirm/link', { id: ids[1] })).code })); ok(await call('dir', 'confirm/do', { code: ok(await call('ann', 'confirm/link', { id: ids[2] })).code })); // three different players who were there
     let h = await S.handicapFor(K('ann')); assert.deepStrictEqual([h.confirmedRounds, h.use != null, h.use], [3, true, h.oddable.index]);
     j = ok(await call('ann', 'me')); assert.strictEqual(j.records.find((x) => x.id === ids[0]).extra.confirmedBy.name, 'Bob Real', 'the confirmer is named from their own account');
     ok(await call('ann', 'self/save', { id: ids[0], item: golfItem('2026-11-11', 70) }), 'edit inside 48 hours'); S._reset();
-    h = await S.handicapFor(K('ann')); assert.deepStrictEqual([h.confirmedRounds, h.use], [2, null], 'the edited round is no longer confirmed'); no(await call('bob', 'confirm/get', { code: L.code }), 409, /changed/, 'the old link is dead');
+    h = await S.handicapFor(K('ann')); assert.deepStrictEqual([h.confirmedRounds, h.use], [2, null], 'the edited round is no longer confirmed'); no(await call('bob', 'confirm/get', { code: L.code }), 409, /changed/, 'the old link is dead'); assert.ok(/3 confirmed rounds/.test(h.why));
   });
 
   await check('2e. sanity limits on typed rounds: Rating 55-85, Slope 55-155, not more than 15 under the Rating, index floor +10', async () => {
@@ -113,9 +117,9 @@ srv.listen(0, async () => {
 
   await check('2f. no dates before the account existed or in the future; edits and deletes lock 48 hours after entry; edit history kept', async () => {
     db[SID.eve].created_at = '2026-11-01T15:00:00Z';
-    no(await call('eve', 'self/save', { item: golfItem('2026-10-31', 88) }), 400, /before your Oddable account/); no(await call('eve', 'self/save', { item: golfItem('2019-01-01', 70) }), 400, /before your Oddable account/);
+    j = ok(await call('eve', 'self/save', { item: golfItem('2026-10-31', 88) }), 'up to 30 days before joining is allowed'); assert.strictEqual(j.record.extra.preAcct, true, 'and marked'); no(await call('eve', 'self/save', { item: golfItem('2019-01-01', 70) }), 400, /30 days before you joined/); no(await call('eve', 'self/save', { item: golfItem('2026-10-01', 70) }), 400, /30 days before you joined/);
     no(await call('eve', 'self/save', { item: golfItem('2026-11-17', 88) }), 400, /future/); ok(await call('eve', 'self/save', { item: golfItem('2026-11-01', 88) }), 'the day the account began');
-    delete db[SID.dir2].created_at; no(await call('dir2', 'self/save', { item: golfItem('2026-11-15', 88) }), 400, /before your Oddable account/, 'no proof the account existed yesterday'); ok(await call('dir2', 'self/save', { item: golfItem('2026-11-16', 88) }));
+    delete db[SID.dir2].created_at; ok(await call('dir2', 'self/save', { item: golfItem('2026-11-15', 88) }), 'a brand-new account can log yesterday'); no(await call('dir2', 'self/save', { item: golfItem('2026-10-10', 88) }), 400, /30 days before you joined/);
     const id = ok(await call('ann', 'self/save', { item: golfItem('2026-11-14', 90) })).record.id, at0 = db[S.selfKey(K('ann'))].data.items[0].extra.at;
     NOW = T0 + 47 * 36e5; j = ok(await call('ann', 'self/save', { id, item: golfItem('2026-11-14', 86) }), 'edit at 47 hours'); assert.strictEqual(j.record.extra.at, at0, 'an edit keeps the entry time'); assert.strictEqual(j.record.extra.rev, 1);
     j = ok(await call('ann', 'me')); assert.deepStrictEqual(j.edits[id].map((x) => [x.was.score, x.at]), [[90, NOW]], 'the old score is kept in the history'); assert.strictEqual(j.records.find((x) => x.id === id).extra.locked, false);
@@ -130,7 +134,7 @@ srv.listen(0, async () => {
     const base = []; for (let i = 0; i < 20; i++) base.push(mk(i, 86)); assert.strictEqual(R.handicap(base).index, 14);
     let h = R.handicap(base.concat([mk(20, 41, { holes: 9, cr: 33.8, slope: 113, par: 36 })])); assert.strictEqual(h.diffs[0].diff, 15.7, 'USGA example: 9-hole differential 7.2 + expected 8.5 = 15.7'); assert.strictEqual(h.diffs[0].exp9, 8.5); assert.strictEqual(h.rounds, 21);
     const nines = [0, 1, 2, 3, 4].map((i) => mk(i, 45, { holes: 9, cr: 35, slope: 113, par: 36 })); h = R.handicap(nines); assert.deepStrictEqual([h.index, h.rounds, h.waiting9, h.need], [null, 0, 5, 1], 'no index yet: nines wait until 54 holes are posted');
-    h = R.handicap(nines.concat([mk(5, 45, { holes: 9, cr: 35, slope: 113, par: 36 })])); assert.deepStrictEqual([h.rounds, h.waiting9, h.index], [6, 0, 19], '54 holes posted: six differentials of 20.0, lowest two minus 1.0');
+    h = R.handicap(nines.concat([mk(5, 45, { holes: 9, cr: 35, slope: 113, par: 36 })])); assert.deepStrictEqual([h.rounds, h.waiting9, h.index], [6, 0, 20.1], '54 holes posted: six differentials of 21.1 (10.0 + expected 11.1 off the provisional 19.0), lowest two minus 1.0');
     for (let i = 1; i <= 3; i++) ok(await call('ann', 'self/save', { item: golfItem('2026-11-0' + i, 88) }));
     ok(await call('ann', 'self/save', { item: golfItem('2026-11-04', 44, { holes: 9, par: 36, cr: 35.4, slope: 124 }) })); ok(await call('ann', 'self/save', { item: { type: 'golf', date: '2026-11-05', course: 'Muni', total: 99 } }));
     j = ok(await call('ann', 'me')); assert.strictEqual(j.golfHcp.rounds, 4, 'the 9-hole round counts'); assert.strictEqual(j.golfHcp.nine, 1); assert.strictEqual(j.golfHcp.missing, 1);
@@ -139,7 +143,7 @@ srv.listen(0, async () => {
 
   await check('2h. hole scores without stroke index are capped at par + 5 per hole; ONE copy of the maths (ratings.js)', async () => {
     const pars = Array(18).fill(4), si = Array.from({ length: 18 }, (_, i) => i + 1), tens = Array(18).fill(10);
-    let a = R.adjustedGross({ strokes: tens, pars, total: 180 }, 18); assert.deepStrictEqual([a.ags, a.how, a.cut], [162, 'par+5', 18], 'with an index but no stroke indexes: par + 5, not "as entered"');
+    let a = R.adjustedGross({ strokes: tens, pars, total: 180 }, 18); assert.deepStrictEqual([a.ags, a.how, a.cut], [126, 'par+5', 18], 'with an index but no stroke indexes: par + 5 a hole, and the round held to net double bogey as a whole (72 + 36 + 18)'); assert.strictEqual(R.adjustedGross({ strokes: tens, pars, total: 180 }, null).ags, 162, 'no index: par + 5 a hole');
     a = R.adjustedGross({ strokes: tens, pars, si, total: 180 }, 18); assert.deepStrictEqual([a.ags, a.how], [126, 'ndb'], 'with stroke indexes: net double bogey');
     const src = require('fs').readFileSync(B + 'stats.js', 'utf8'); assert.ok(/R\.handicapSet\(/.test(src) && /R\.eloSet\(/.test(src), 'stats.js calls the one calculation'); assert.ok(!/113\s*\/\s*/.test(src.replace(/\/\/.*$/gm, '')), 'no handicap maths of its own in stats.js');
     ['handicapSet', 'eloSet', 'order', 'expected9', 'hcpText'].forEach((f) => assert.strictEqual(typeof R[f], 'function', 'ratings.js exports ' + f + ' (golf calls it)'));
@@ -148,25 +152,25 @@ srv.listen(0, async () => {
   await check('3a. rating integrity: a self-logged match does not move the seeding rating until the opponent confirms; ratingFor returns {oddable, confirmedGames, event, setBy, use}', async () => {
     for (let i = 0; i < 10; i++) ok(await call('ann', 'self/save', { item: { type: 'pickleball', date: '2026-11-0' + (1 + (i % 9)), fmt: 'singles', opp: ['Nobody ' + i], games: [[11, 0]] } }));
     let rt = await S.ratingFor(K('ann')); ['oddable', 'confirmedGames', 'event', 'setBy', 'use'].forEach((k) => assert.ok(k in rt, 'ratingFor has ' + k));
-    assert.ok(rt.oddable.rating > 1600, 'the full Oddable rating moves (' + rt.oddable.rating + ')'); assert.deepStrictEqual([rt.confirmedGames, rt.use, rt.start], [0, 1500, true], 'ten self-logged wins move nothing used for seeding');
+    assert.ok(rt.oddable.rating > 1600, 'the full Oddable rating moves (' + rt.oddable.rating + ')'); assert.deepStrictEqual([rt.confirmedGames, rt.use, rt.seed, rt.start], [0, null, 1500, true], 'ten self-logged wins move nothing used for seeding');
     assert.strictEqual(rt.text, rt.oddable.rating + ' · 0 of 10 games confirmed'); assert.strictEqual((await S.ratingFor(K('ann'), 'pickleball', { casual: true })).use, rt.oddable.rating);
-    const id = ok(await call('ann', 'self/save', { item: { type: 'pickleball', date: '2026-11-15', fmt: 'singles', opp: ['Bob'], games: [[11, 7], [11, 9]] } })).record.id;
+    const gB = await pal('ann', 'bob'), id = ok(await call('ann', 'self/save', { item: { type: 'pickleball', date: '2026-11-15', fmt: 'singles', opp: ['x'], oppGuest: [gB], games: [[11, 7], [11, 9]] } })).record.id;
     ok(await call('bob', 'confirm/do', { code: ok(await call('ann', 'confirm/link', { id })).code }));
-    rt = await S.ratingFor(K('ann')); assert.deepStrictEqual([rt.confirmedGames, rt.use, rt.start], [1, 1516, false], 'the confirmed win counts: 1500 + 16');
-    const rb = await S.ratingFor(K('bob')); assert.deepStrictEqual([rb.confirmedGames, rb.use], [1, 1484], 'the opponent who confirmed gets the same match from their side');
+    rt = await S.ratingFor(K('ann')); j = ok(await call('ann', 'me')); assert.deepStrictEqual([rt.confirmedGames, j.ratings.pickleball.confirmedRating, rt.use, rt.why], [1, 1516, null, 'needs games confirmed by 3 different players'], 'the confirmed win counts (1500 + 16); seeding waits for three different confirmers');
+    const rb = await S.ratingFor(K('bob')); j = ok(await call('bob', 'me')); assert.deepStrictEqual([rb.confirmedGames, j.ratings.pickleball.confirmedRating], [1, 1484], 'the opponent who confirmed gets the same match from their side');
     j = ok(await call('bob', 'me')); const mr = j.records.find((x) => x.kind === 'match'); assert.deepStrictEqual([mr.result, mr.extra.scoreText, mr.extra.loggedBy, mr.opponent], ['L', '7-11, 9-11', 'Ann Real', 'Ann Real']);
   });
 
   await check('3b. opponent / partner ratings are used when supplied; two accounts trading wins get diminishing weight', async () => {
-    S.register('events', async (k) => (k === K('ann') ? [{ src: 'events', id: 'E1:m1', date: '2026-11-01', sport: 'pickleball', kind: 'match', title: 'Ladder', result: 'W', opponent: 'Strong', verified: true, extra: { fmt: 'singles', oppRating: [1900], opp: [{ id: 'g1', name: 'Strong' }] } },
-      { src: 'events', id: 'E1:m2', date: '2026-11-20', sport: 'pickleball', kind: 'match', title: 'Ladder', result: 'W', opponent: 'A / B', verified: true, extra: { fmt: 'doubles', partnerRating: 1300, oppRating: [1700, null], opp: [{ id: 'g2', name: 'A' }, { id: 'g3', name: 'B' }] } }] : [])); S._reset(); NOW = Z('2026-11-25T18:00:00Z');
-    const rt = await S.ratingFor(K('ann')), d1 = 32 * (1 - R.expected(1500, 1900)), r1 = 1500 + d1, d2 = 32 * (1 - R.expected((r1 + 1300) / 2, (1700 + 1500) / 2));
+    S.register('events', async (k) => (k === K('ann') ? [{ src: 'events', id: 'E1:m1', date: '2026-11-01', sport: 'pickleball', kind: 'match', title: 'Ladder', result: 'W', opponent: 'Strong', verified: true, extra: { fmt: 'singles', oppRating: [1900], opp: [{ id: 'g1', name: 'Strong', account: true }], confirmed: true, confirmedBy: { name: 'Strong', at: 1 }, oppKey: 'e:strong00000001' } },
+      { src: 'events', id: 'E1:m2', date: '2026-11-20', sport: 'pickleball', kind: 'match', title: 'Ladder', result: 'W', opponent: 'A / B', verified: true, extra: { fmt: 'doubles', partnerRating: 1300, oppRating: [1700, null], opp: [{ id: 'g2', name: 'A', account: true }, { id: 'g3', name: 'B' }], confirmed: true, confirmedBy: { name: 'A', at: 2 }, oppKey: 'e:pairab00000001' } }] : [])); S._reset(); NOW = Z('2026-11-25T18:00:00Z');
+    const rt = await S.ratingFor(K('ann'), 'pickleball', { casual: true }), d1 = 32 * (1 - R.expected(1500, 1900)), r1 = 1500 + d1, d2 = 32 * (1 - R.expected((r1 + 1300) / 2, (1700 + 1500) / 2));
     assert.strictEqual(rt.use, Math.round(r1 + d2), 'a win over a 1900 player is worth ' + d1.toFixed(1) + ', and the doubles uses the partner and both opponents (null = 1500)'); assert.strictEqual(rt.confirmedGames, 2);
-    const farm = Array.from({ length: 12 }, (_, i) => ({ id: 'f' + String(i).padStart(2, '0'), date: '2026-11-10', result: 'W', confirmed: true, extra: { at: i, oppKey: 'a:puppet', fmt: 'singles' } }));
+    const farm = Array.from({ length: 12 }, (_, i) => ({ id: 'f' + String(i).padStart(2, '0'), date: '2026-11-10', result: 'W', confirmed: true, extra: { at: T0 + i * 13 * 36e5, oppKey: 'a:puppet', fmt: 'singles' } })); // entered 13 hours apart: the weekly halving, without the 2-in-24-hours stop
     const f = R.eloSet(farm); assert.ok(f.rating < 1500 + 32, '12 wins over the same account in a week are worth less than two normal wins (' + f.rating + ')'); assert.deepStrictEqual(f.history.slice(0, 3).map((x) => x.w), [1, 0.5, 0.25]);
-    const spread = farm.map((m, i) => Object.assign({}, m, { date: new Date(Date.UTC(2026, 0, 1 + i * 8)).toISOString().slice(0, 10) })); assert.ok(R.eloSet(spread).history.every((x) => x.w === 1), 'the same opponent once a week or less is full weight');
-    const ids = []; for (let i = 0; i < 3; i++) { const id = ok(await call('bob', 'self/save', { item: { type: 'pickleball', date: '2026-11-2' + i, fmt: 'singles', opp: ['Cat ' + i], games: [[11, 2]] } })).record.id; ids.push(id); ok(await call('cat', 'confirm/do', { code: ok(await call('bob', 'confirm/link', { id })).code })); }
-    j = ok(await call('bob', 'me')); assert.deepStrictEqual(j.ratings.pickleball.history.map((x) => x.w), [1, 0.5, 0.25], 'whatever name was typed, the confirming ACCOUNT is the opponent');
+    const spread = farm.map((m, i) => Object.assign({}, m, { date: new Date(Date.UTC(2026, 0, 1 + i * 8)).toISOString().slice(0, 10), extra: Object.assign({}, m.extra, { at: Date.UTC(2026, 0, 1 + i * 8, 18) }) })); assert.ok(R.eloSet(spread).history.every((x) => x.w === 1), 'the same opponent once a week or less (by ENTRY time) is full weight');
+    const gC = await pal('bob', 'cat'), ids = []; for (let i = 0; i < 3; i++) { NOW += 30 * 36e5; const id = ok(await call('bob', 'self/save', { item: { type: 'pickleball', date: S.chiDay(NOW), fmt: 'singles', opp: ['x'], oppGuest: [gC], games: [[11, 2]] } })).record.id; ids.push(id); ok(await call('cat', 'confirm/do', { code: ok(await call('bob', 'confirm/link', { id })).code })); }
+    S._reset(); j = ok(await call('bob', 'me')); assert.deepStrictEqual(j.ratings.pickleball.history.map((x) => x.w), [1, 0.5, 0.25], 'the confirming ACCOUNT is the opponent');
   });
 
   await check('4. same-day play is processed in entry order: My stats and the engines get the same handicap and rating', async () => {
@@ -198,7 +202,7 @@ srv.listen(0, async () => {
 
   await check('5b. ONE tournament override store and log: the "Set by tournament" card is filled as soon as a director sets a number; /stats/event/log answers for the director and the player', async () => {
     ent('dir'); const dir = K('dir'); for (let i = 1; i <= 3; i++) ok(await call('ann', 'self/save', { item: golfItem('2026-11-0' + i, 88) }));
-    ok(await call('dir', 'event/setup', { eventId: 'MG26', title: 'Member-Guest', sport: 'golf', lockAt: NOW + 864e5 }), 'the director registers the tournament over HTTP'); no(await call('bob', 'event/setup', { eventId: 'X1', title: 'x', lockAt: NOW + 864e5 }), 403, /Enterprise/);
+    await S.eventSetup(dir, 'MG26', { title: 'Member-Guest', sport: 'golf', lockAt: NOW + 864e5 }); ok(await call('dir', 'event/setup', { eventId: 'MG26', title: 'Member-Guest', sport: 'golf' }), 'the director reaches the tournament the engine registered, over HTTP'); no(await call('bob', 'event/setup', { eventId: 'X1', title: 'x', lockAt: NOW + 864e5 }), 403, /Enterprise/);
     await S.eventOverride(dir, 'MG26', K('ann'), { hcp: 9, reason: 'Club handicap' });
     j = ok(await call('ann', 'me')); assert.deepStrictEqual(j.tournaments.map((x) => [x.eventId, x.title, x.hcp, x.oddableHcp, x.reason, x.log.length, x.log[0].by]), [['MG26', 'Member-Guest', 9, j.golfHcp.index, 'Club handicap', 1, 'Dir Real']], 'the card has the tournament number, the real Oddable number and the log line, with no round played in it yet');
     j = ok(await call('ann', 'event/log', { eventId: 'MG26' })); assert.deepStrictEqual([j.director, j.mine.hcp, j.log.length], [false, 9, 1]); j = ok(await call('dir', 'event/log', { eventId: 'MG26' })); assert.deepStrictEqual([j.director, j.set.length, j.log.length], [true, 1, 2]);
@@ -259,7 +263,7 @@ srv.listen(0, async () => {
 
   await check('7. course consent uses the account\'s own name and identity', async () => {
     ok(await call('owner', 'course/admin', { op: 'ent', tag: SID.dir.slice(0, 8), on: true })); ok(await call('owner', 'course/admin', { op: 'link', tag: SID.dir.slice(0, 8), courseId: 'pv1', name: 'Palm View' }));
-    ok(await call('bob', 'consent/set', { courseId: 'pv1', on: true, myName: 'Ann', e: K('ann'), userKey: K('ann') }));
+    await S.consentOnJoin(K('bob'), 'pv1', { kind: 'league', id: 'L1', title: 'League' }, false); ok(await call('bob', 'consent/set', { courseId: 'pv1', on: true, myName: 'Ann', e: K('ann'), userKey: K('ann') }));
     j = ok(await call('dir', 'course/players', { courseId: 'pv1' })); assert.deepStrictEqual(j.players.map((p) => p.name), ['Bob Real'], 'Bob appears as himself, whatever name he sent');
     j = ok(await call('ann', 'consent/list')); assert.deepStrictEqual(j.consents, [], 'Ann consented to nothing'); assert.ok(!JSON.stringify(db['lock:cshare']).includes('"Ann"'), 'the typed name is not stored');
     await S.consentOnJoin(K('cat'), 'pv1', { kind: 'event', id: 'E1', title: 'Open' }, true, 'The Club Pro'); j = ok(await call('dir', 'course/players', { courseId: 'pv1' })); assert.deepStrictEqual(j.players.map((p) => p.name).sort(), ['Bob Real', 'Cat Real'], 'the exported consentOnJoin ignores a name too');
@@ -269,7 +273,7 @@ srv.listen(0, async () => {
     db['lock:ent'] = { id: 'lock:ent', updated: 1, data: { keys: { [K('dir')]: true }, courses: { [K('dir')]: ['cedar'] } } }; db['lock:golf:courses'] = { id: 'lock:golf:courses', updated: 1, data: { courses: { cedar: { name: 'Cedar Ridge' } } } };
     j = ok(await call('ann', 'consent/get', { courseId: 'cedar' })); assert.deepStrictEqual([j.ask, j.text], [true, 'Share my handicap and rounds with Cedar Ridge?'], 'the prompt finds the golf-side link');
     S.register('golf', async (k) => (k === K('ann') ? [1, 2, 3].map((i) => engineRound('golf:D' + i + ':round:p', '2026-11-0' + i, 85 + i, { course: 'Cedar Ridge', courseId: 'cedar' })) : [])); ok(await call('ann', 'self/save', { item: golfItem('2026-11-10', 99) })); for (let i = 1; i <= 3; i++) ok(await call('bob', 'self/save', { item: golfItem('2026-11-0' + i, 80) }));
-    ok(await call('ann', 'consent/set', { courseId: 'cedar', on: true, via: { kind: 'event', id: 'MG', title: 'Member-Guest' } })); ok(await call('bob', 'consent/set', { courseId: 'cedar', on: true }));
+    await S.consentOnJoin(K('ann'), 'cedar', { kind: 'event', id: 'MG', title: 'Member-Guest' }, true); await S.consentOnJoin(K('bob'), 'cedar', null, true); // the engine saw them join
     j = ok(await call('dir', 'course/mine')); assert.deepStrictEqual(j.courses, [{ id: 'cedar', name: 'Cedar Ridge', players: 2 }], 'the director\'s course list reads the same store');
     const m = await S.courseMembers(K('dir'), 'cedar'), a = m.players.find((p) => p.name === 'Ann Real'), b = m.players.find((p) => p.name === 'Bob Real'), want = Math.round((R.differential(86, 71.2, 128) - 2) * 10) / 10;
     assert.deepStrictEqual([a.confirmedIndex, a.confirmedRounds, a.rounds, a.text], [want, 3, 4, a.index.toFixed(1) + ' · 3 of 4 rounds confirmed'], 'the director sees the confirmed index'); assert.deepStrictEqual([b.confirmedIndex, b.selfLogged, b.text], [null, 3, b.index.toFixed(1) + ' · 0 of 3 rounds confirmed'], 'and who is self-logged only');
@@ -280,9 +284,9 @@ srv.listen(0, async () => {
 
   await check('8. pairingProfile(accountId, sport) for the pairing screen, respecting the sharing switch', async () => {
     assert.strictEqual(typeof S.pairingProfile, 'function'); S.register('golf', async (k) => (k === K('ann') ? [1, 2, 3].map((i) => engineRound('golf:D' + i + ':round:p', '2026-11-0' + i, 85 + i)) : []));
-    let p = await S.pairingProfile(K('ann'), 'golf'); assert.deepStrictEqual([p.sport, p.shared, p.show, p.use != null, p.needsSet, 'text' in p, 'oddable' in p, 'lifetime' in p], ['golf', false, false, true, false, false, false, false], 'sharing off: only the number the pairing needs');
+    let p = await S.pairingProfile(K('ann'), 'golf'); assert.deepStrictEqual([p.sport, p.shared, p.show, p.pairOn != null, p.print, 'use' in p, p.needsSet, 'text' in p, 'oddable' in p, 'lifetime' in p], ['golf', false, false, true, false, false, false, false, false, false], 'sharing off: only the number the pairing needs, marked not for printing');
     ok(await call('ann', 'share', { on: true })); p = await S.pairingProfile(K('ann'), 'golf'); assert.deepStrictEqual([p.show, p.text, p.oddable.rounds, p.lifetime.rounds], [true, p.oddable.index.toFixed(1) + ' · 3 of 3 rounds confirmed', 3, 3], 'sharing on: the handicap line and lifetime totals');
-    p = await S.pairingProfile(K('bob'), 'pickleball'); assert.deepStrictEqual([p.sport, p.use, p.start, p.show], ['pickleball', 1500, true, false]); p = await S.pairingProfile(K('bob'), 'golf'); assert.deepStrictEqual([p.use, p.needsSet], [null, true]);
+    p = await S.pairingProfile(K('bob'), 'pickleball'); assert.deepStrictEqual([p.sport, p.pairOn, p.start, p.show], ['pickleball', 1500, true, false]); p = await S.pairingProfile(K('bob'), 'golf'); assert.deepStrictEqual([p.pairOn, p.needsSet], [null, true]);
   });
 
   await check('9. writes are queued per row: a burst of 30 saves at once all land (no "Busy, try again")', async () => {

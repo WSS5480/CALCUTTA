@@ -116,7 +116,7 @@ async function handle(req, res) {
   if (req.method !== 'POST' || path !== '/voice/parse') { send(res, 404, { error: 'not found' }); return true; }
   try {
     if (!(await D.acct().check(req))) throw bad(401, 'Sign in to use voice scoring');
-    if (!D.key()) throw bad(503, 'Voice scoring is not set up (ANTHROPIC_API_KEY missing)');
+    if (!D.key()) throw bad(503, 'Voice scoring is not available right now.');
     const who = D.acct().who(req) || 'ip:' + D.ip(req);
     if (limited('v|' + who, 30, 3600e3)) throw bad(429, 'Voice limit reached for this hour. Type it instead.');
     if (D.ai().limited(D.ip(req))) throw bad(429, 'Hourly limit reached, try later');

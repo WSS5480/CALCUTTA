@@ -111,6 +111,18 @@ async function handle(req, res) {
     send(res, 404, { error: 'not found' }); return true;
   } catch (e) { send(res, e.status || 500, { error: e.status ? e.message : 'Sync error: ' + e.message }); return true; }
 }
+// D7 ("actual prices only, never assume -110") for the OWNER totals, the same rule My stats uses (stats.js betPL), so the two always agree:
+// the money of a settled bet is what was stored for it (a Kalshi sale, else finPL); a WON bet with no stored P/L counts only when it carries a real
+// price (American odds of 100 or more either way, or a parlay multiplier); with no price its winnings are NOT KNOWN: left out of every net and counted
+// in `unk` ("not known"). A lost bet with no stored P/L lost its stake. Returns { pl, known }.
+function settledPL(b) {
+  const N = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0), st = N(b.stake), r2 = (x) => Math.round(x * 100) / 100;
+  if (b.cash !== undefined && b.cash !== null && st) return { pl: r2(N(b.cash) - st), known: true };
+  if (b.finPL !== null && b.finPL !== undefined && b.finPL !== '' && Number.isFinite(Number(b.finPL))) return { pl: Number(b.finPL), known: true };
+  if (b.fin === 'lost') return { pl: -st, known: true }; if (b.fin !== 'won') return { pl: 0, known: true };
+  const m = N(b.mult) > 1 ? N(b.mult) - 1 : Math.abs(N(b.odds)) >= 100 ? (N(b.odds) > 0 ? N(b.odds) / 100 : 100 / -N(b.odds)) : null;
+  return m == null ? { pl: 0, known: false } : { pl: r2(st * m), known: true };
+}
 async function adminUsers(emailOf) {
   const { url, key } = cfg();
   const r = await fetch(`${url}/rest/v1/oddable_sync?select=id,updated,data&limit=2000`, { headers: hdr(key) });
@@ -126,17 +138,17 @@ async function adminUsers(emailOf) {
     let dayKeys = Object.keys(days).filter((k) => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
     const lbl = (b) => String(b.text || (b.kind === 'parlay' ? arr(b.legs).length + '-leg parlay' : (b.side || '?') + ' ' + (b.line ? (b.line > 0 ? '+' : '') + b.line : 'ML') + (b.away && b.home ? ' (' + b.away + '@' + b.home + ')' : ''))).slice(0, 90);
     const open = bets.filter((b) => b && !b.fin && !b.res && (N(b.stake) || b.text || b.side || b.kind === 'parlay')).sort((a, c) => N(c.t) - N(a.t)).slice(0, 60).map((b) => ({ day: String(b.day || '').slice(0, 10), what: lbl(b), stake: N(b.stake), odds: N(b.odds) || null }));
-    const placed = {}; bets.forEach((b) => { if (!b || !/^\d{4}-\d{2}-\d{2}$/.test(String(b.day || '').slice(0, 10))) return; if (!N(b.stake) && !b.text && !b.side) return; const k = String(b.day).slice(0, 10), o = placed[k] || (placed[k] = { n: 0, w: 0, l: 0, p: 0, risk: 0, pl: 0, o: 0 }); o.n++; o.risk += N(b.stake); if (b.fin === 'won') { o.w++; o.pl += N(b.finPL); } else if (b.fin === 'lost') { o.l++; o.pl += N(b.finPL); } else if (b.fin === 'push') { o.p++; } else o.o++; });
+    const placed = {}; bets.forEach((b) => { if (!b || !/^\d{4}-\d{2}-\d{2}$/.test(String(b.day || '').slice(0, 10))) return; if (!N(b.stake) && !b.text && !b.side) return; const k = String(b.day).slice(0, 10), o = placed[k] || (placed[k] = { n: 0, w: 0, l: 0, p: 0, risk: 0, pl: 0, o: 0, unk: 0 }); o.n++; o.risk += N(b.stake); if (b.fin === 'won' || b.fin === 'lost') { const m = settledPL(b); if (b.fin === 'won') o.w++; else o.l++; if (m.known) o.pl += m.pl; else o.unk++; } else if (b.fin === 'push') { o.p++; } else o.o++; });
     Object.keys(placed).forEach((k) => { placed[k].risk = Math.round(placed[k].risk * 100) / 100; placed[k].pl = Math.round(placed[k].pl * 100) / 100; });
     // v220 win/loss fix: the daily log keeps results of deleted bets (so it can be higher than the bets) but it skips today and can go stale; the bets are current but miss deleted ones.
     // For each day take the bets unless the log has MORE settled bets (a tie goes to the bets: they hold the actual settled money, the log is figured from displayed odds), then add them up. Deleted bets keep counting (Steve, Nov 15), today and stale days are no longer missed.
-    Object.keys(placed).forEach((k) => { const pd = placed[k], d = days[k], ps = pd.w + pd.l + pd.p; if (!d) { if (ps) days[k] = { n: pd.n, w: pd.w, l: pd.l, p: pd.p, risk: pd.risk, pl: pd.pl }; } else if (ps > 0 && ps >= d.w + d.l + d.p) days[k] = { n: Math.max(d.n, pd.n), w: pd.w, l: pd.l, p: pd.p, risk: Math.max(d.risk, pd.risk), pl: pd.pl }; });
-    w = l = p = risk = pl = 0; Object.keys(days).forEach((k) => { const d = days[k]; w += d.w; l += d.l; p += d.p; risk += d.risk; pl += d.pl; });
-    bets.forEach((x) => { if (x && x.fin && !/^\d{4}-\d{2}-\d{2}$/.test(String(x.day || '').slice(0, 10))) { if (x.fin === 'won') w++; else if (x.fin === 'lost') l++; else if (x.fin === 'push') p++; pl += N(x.finPL); } }); // settled bets with no day recorded
+    Object.keys(placed).forEach((k) => { const pd = placed[k], d = days[k], ps = pd.w + pd.l + pd.p; if (!d) { if (ps) days[k] = { n: pd.n, w: pd.w, l: pd.l, p: pd.p, risk: pd.risk, pl: pd.pl, unk: pd.unk }; } else if (ps > 0 && ps >= d.w + d.l + d.p) days[k] = { n: Math.max(d.n, pd.n), w: pd.w, l: pd.l, p: pd.p, risk: Math.max(d.risk, pd.risk), pl: pd.pl, unk: pd.unk }; });
+    let unk = 0; w = l = p = risk = pl = 0; Object.keys(days).forEach((k) => { const d = days[k]; w += d.w; l += d.l; p += d.p; risk += d.risk; pl += d.pl; unk += d.unk || 0; });
+    bets.forEach((x) => { if (x && x.fin && !/^\d{4}-\d{2}-\d{2}$/.test(String(x.day || '').slice(0, 10))) { if (x.fin === 'won') w++; else if (x.fin === 'lost') l++; else if (x.fin === 'push') p++; if (x.fin !== 'push') { const m = settledPL(x); if (m.known) pl += m.pl; else unk++; } } }); // settled bets with no day recorded
     dayKeys = Object.keys(days).filter((k) => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
-    const list = bets.filter((b) => b && /^\d{4}-\d{2}-\d{2}$/.test(String(b.day || '').slice(0, 10)) && (N(b.stake) || b.text || b.side)).sort((a, c) => N(c.t) - N(a.t)).slice(0, 300).map((b) => ({ day: String(b.day).slice(0, 10), what: lbl(b), stake: N(b.stake), odds: N(b.odds) || null, fin: b.fin === 'won' || b.fin === 'lost' || b.fin === 'push' ? b.fin : (b.res ? 'res' : ''), pl: b.fin === 'won' || b.fin === 'lost' ? N(b.finPL) : 0 }));
+    const list = bets.filter((b) => b && /^\d{4}-\d{2}-\d{2}$/.test(String(b.day || '').slice(0, 10)) && (N(b.stake) || b.text || b.side)).sort((a, c) => N(c.t) - N(a.t)).slice(0, 300).map((b) => ({ day: String(b.day).slice(0, 10), what: lbl(b), stake: N(b.stake), odds: N(b.odds) || null, fin: b.fin === 'won' || b.fin === 'lost' || b.fin === 'push' ? b.fin : (b.res ? 'res' : ''), pl: b.fin === 'won' || b.fin === 'lost' ? (settledPL(b).known ? settledPL(b).pl : null) : 0, unk: (b.fin === 'won' || b.fin === 'lost') && !settledPL(b).known ? true : undefined }));
     const openC = open.filter((b) => b.stake || !/^ \?/.test(b.what));
-    return { id: String(x.id).slice(0, 20), placed, list, open: openC, acct: emailOf ? emailOf(String(x.id)) : null, tag: String(x.id).slice(0, 4), updated: x.updated || 0, bets: bets.length, picks: Object.keys(d.locks || {}).length, w, l, p, pct: w + l ? Math.round((w / (w + l)) * 1000) / 10 : null, risk: Math.round(risk * 100) / 100, pl: Math.round(pl * 100) / 100, first: dayKeys[0] || null, last: dayKeys[dayKeys.length - 1] || null, days: dayKeys.slice(-400).reverse().map((k) => Object.assign({ day: k }, days[k])) };
+    return { id: String(x.id).slice(0, 20), placed, list, open: openC, acct: emailOf ? emailOf(String(x.id)) : null, tag: String(x.id).slice(0, 4), updated: x.updated || 0, bets: bets.length, picks: Object.keys(d.locks || {}).length, w, l, p, pct: w + l ? Math.round((w / (w + l)) * 1000) / 10 : null, risk: Math.round(risk * 100) / 100, pl: Math.round(pl * 100) / 100, unk, first: dayKeys[0] || null, last: dayKeys[dayKeys.length - 1] || null, days: dayKeys.slice(-400).reverse().map((k) => Object.assign({ day: k }, days[k])) };
   }).sort((a, b) => b.updated - a.updated);
 }
 
@@ -170,4 +182,4 @@ async function dbIds() {
   if (!r.ok) throw new Error('db read ' + r.status);
   return (await r.json()).map((x) => String(x.id)).filter((id) => !id.startsWith('lock:'));
 }
-module.exports = { handle, merge, normPhone, verifyLogin, adminUsers, dbGet, dbPut, dbPatchIf, dbIds };
+module.exports = { handle, merge, normPhone, verifyLogin, adminUsers, settledPL, dbGet, dbPut, dbPatchIf, dbIds };

@@ -220,6 +220,15 @@ srv.listen(0, async () => {
       NOW = K1 - 59 * MIN; await A.tick(); NOW = KS - 59 * MIN; await A.tick(); w = stored(2); assert.ok(w.lock.id === '403' && !w.lock.final && w.lock.part === 1 && w.lockWait === '403', 'held: inputs incomplete at the mark');
       CONF[405] = 0.85; NOW = KS - 30 * MIN; await A.tick(); w = stored(2); assert.ok(w.lock.id === '403' && !w.lock.final, 'a game already past its mark stays the Lock while it waits (another game now ranks above it)');
       NOW = KS + MIN; await A.tick(); w = stored(2); assert.ok(w.lock.final && w.lock.id === '403' && w.lock.pre === false && w.lock.part === 1, 'frozen at kickoff, flagged'); assert.ok(!w.lockWait); g108.st = 'post';
+      // --- 20 (v253 re-review fixes 1, 2) ---
+      // fix 2: a game with no line at its mark that gets a line later (here ESPN, 30 minutes after the mark) is not ranked, so it cannot move the live Lock
+      fresh16(); set('401', null); CONF = { 401: 0.95, 405: 0.9, 403: 0.8, 402: 0.7, 404: 0.6 }; NOW = K1 - 3 * 3600e3; await A.tick(); NOW = K1 - 59 * MIN; await A.tick(); w = stored(2); assert.strictEqual(w.lock.id, '403'); assert.ok(w.lockOut.includes('401'));
+      set('401', 'NYG -3'); NOW = K1 - 30 * MIN; await A.tick(); w = stored(2); assert.ok(w.gl['401'] && w.gl['401'].lt > K1 - 60 * MIN, 'the line was read after the mark'); assert.strictEqual(w.lock.id, '403', 'a line that appears after the mark does not move the live Lock');
+      set('401', 'NYG -3');
+      // fix 1: the live Lock is the last game in contention and its line goes to pick'em at its mark -> frozen at the last line and side it held, flagged nl
+      fresh16(); CONF = { 402: 0.9, 405: 0.8, 403: 0.7, 404: 0.6, 401: 0.5 }; NOW = K1 - 59 * MIN; await A.tick(); NOW = KS - 59 * MIN; await A.tick(); w = stored(2); assert.strictEqual(w.lock.id, '405');
+      set('405', 'EVEN'); NOW = KN - 61 * MIN; await A.tick(); NOW = KN - 59 * MIN; await A.tick(); w = stored(2);
+      assert.ok(w.lock && w.lock.final && w.lock.id === '405' && w.lock.line === 9.5 && w.lock.nl === 1, 'never a week without a Lock: frozen at its last live line, flagged "line at mark unavailable"'); set('405', 'SEA -9.5');
     } finally { TR.pickOf = keepT.pickOf; TR.dogCover = keepT.dogCover; H.win = keepW; }
     // --- 17 (v252 review fixes) ---
     const OLD = { lock: { id: '911', abbr: 'KC', line: 3, conf: 0.6 }, dogs: [], helper: null, t: 1, pre: true };

@@ -149,19 +149,31 @@ function compute(weeks, games, cur, nv, bx, now, ll) {
     if (!(rec.lock && rec.lock.final)) {
       // v253 review fix 1: each game is ranked at the line FROZEN at its mark (rec.gl[id].f), never at a closing line read later, so a finished game cannot move or
       // remove the Lock (and the Lock and that game's road dog share one line on every path). Games not yet frozen use the line the server holds now.
-      const atMark = (g) => { const e = rec.gl[g.id], x = byId[g.id]; return e && e.f && half(e.l) && e.l !== x.line ? Object.assign({}, x, { line: e.l }) : x; };
-      const out = new Set(rec.lockOut || []), picks = wg.map(atMark).filter((g) => g.line !== null && g.line !== undefined).map((g) => Trophy.pickOf(g, rows, SEASON)).filter(Boolean).sort((a, b) => b.conf - a.conf);
+      // v253 re-review fix 2: a game past its mark whose line was first read AFTER the mark (late ESPN line, or the nflverse close) is left out of the ranking, so a line
+      // that appears late cannot move the live Lock. A line read before the mark still counts (the sleep path: frozen later with the line read in time).
+      // This applies once there has been a live Lock; a week the server first sees after its games (asleep or down all week) is still ranked after the fact, flagged *.
+      const prevL = rec.lock && !rec.lock.final ? rec.lock : null; // the live Lock as of the last tick
+      const lateLine = (g) => { const e = rec.gl[g.id]; return !!prevL && now >= g.start - MARK && (!e || e.s === 'close' || !(e.lt <= g.start - MARK + GRACE)); };
+      const atMark = (g) => { const e = rec.gl[g.id], x = byId[g.id]; if (lateLine(g)) return null; return e && e.f && half(e.l) && e.l !== x.line ? Object.assign({}, x, { line: e.l }) : x; };
+      const out = new Set(rec.lockOut || []), picks = wg.map(atMark).filter((g) => g && g.line !== null && g.line !== undefined).map((g) => Trophy.pickOf(g, rows, SEASON)).filter(Boolean).sort((a, b) => b.conf - a.conf);
       // owner (Nov 16 2026): never a week without a Lock: if no game after the #1 is still in contention, the top game still in contention is the Lock.
       // v253 review fix 4: a game that was the Lock at its mark but had to wait for missing inputs (rec.lockWait) stays the Lock until its kickoff.
       const held = rec.lockWait && picks.find((x) => String(x.id) === String(rec.lockWait));
       const cand = () => held || picks.slice(1).find((x) => !out.has(String(x.id))) || picks.find((x) => !out.has(String(x.id))) || null, mk = (x) => Object.assign({ id: String(x.id), rank: 2, abbr: x.abbr, other: x.other, line: x.line, conf: r4(x.conf), dog: !!x.dog }, lockPrice(rec, byId[x.id], x));
       let L = null, wait = false;
       for (const g of wg) {
-        if (out.has(g.id) || now < g.start - MARK) continue; const c = cand(); if (!c) break;
+        if (out.has(g.id) || now < g.start - MARK) continue;
+        // v253 re-review fix 1 (manager, applying the owner's "never a week without a Lock" + D9): the live Lock's game reaches its mark but cannot be ranked there
+        // (pick'em or no line): the Lock is frozen at the last line and side it held before the mark (with its stored price), flagged nl ("line at mark unavailable").
+        if (prevL && String(prevL.id) === g.id && !picks.some((x) => String(x.id) === g.id)) { const x = Object.assign({}, prevL, { nl: 1 }); delete x.part; if (!full) x.part = 1; L = stamp(x, g.start, now < g.start); delete rec.lockWait; rec.t = now; rec.pre = L.pre; D.log(`week ${w} LOCK final at its last live line (line at the mark unavailable): ${L.abbr} ${L.line > 0 ? '+' : ''}${L.line}${L.o ? ' ' + L.o : ' no price'}`); break; }
+        const c = cand(); if (!c) break;
         if (String(c.id) === g.id) { if (full || now >= g.start) { const x = mk(c); if (!full) x.part = 1; L = stamp(x, g.start, now < g.start); delete rec.lockWait; rec.t = now; rec.pre = L.pre; D.log(`week ${w} LOCK final: ${L.abbr} ${L.line > 0 ? '+' : ''}${L.line}${L.o ? ' ' + L.o : ' no price'} ${Math.round(L.conf * 100)}%${L.pre ? '' : ' AFTER KICKOFF'}${L.late ? ' late' : ''}${L.part ? ' (inputs incomplete)' : ''}`); } else { wait = true; rec.lockWait = g.id; } break; } // inputs incomplete at the mark: held as the Lock, frozen at kickoff, flagged
         out.add(g.id); D.log(`week ${w} ${g.away.abbr}@${g.home.abbr} reached its mark while not the Lock: out of contention`);
       }
-      if (!L) { const c = cand(); L = c ? mk(c) : null; if (L && (!full || wait)) L.part = 1; }
+      if (!L) { // no candidate in contention: only if there never was a live Lock, the top-ranked game that has not kicked off
+        const c = cand() || (!prevL ? picks.find((x) => byId[x.id] && byId[x.id].start > now) : null);
+        L = c ? mk(c) : prevL; if (L && (!full || wait)) L.part = 1;
+      }
       rec.lockOut = [...out]; rec.lock = L;
     }
     const old = {}; (rec.dogs || []).forEach((d) => (old[d.id] = d));

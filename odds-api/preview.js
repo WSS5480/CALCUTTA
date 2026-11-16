@@ -64,6 +64,7 @@ const pub = (u) => ({ role: u.role, label: u.label, name: u.name, blurb: u.blurb
 async function handle(req, res) {
   const path = req.url.split('?')[0];
   if (path === '/preview/status') { send(res, 200, { preview: true, seeded: STATE.done, at: STATE.at, steps: STATE.steps, users: USERS.slice(0, 3).map(pub), others: USERS.slice(3).map(pub), store: 'memory', note: 'Test data only. It is rebuilt whenever this test server restarts.' }); return true; }
+  if (path === '/preview/coursecheck') { const CC = require('./preview-coursecheck'); send(res, 200, { lines: /[?&]run=1/.test(req.url) ? await CC.run() : CC.last() }); return true; }
   if (req.method !== 'POST') return false;
   let b; try { b = await body(req); } catch (e) { send(res, 400, { error: 'bad request' }); return true; }
   if (path === '/preview/as') {
@@ -89,6 +90,7 @@ async function boot(again) {
     const seed = require('./preview-seed');
     await seed.run({ step, call, ok, USERS, byRole, emailOf, STATE, S, A });
     STATE.done = true; STATE.at = Date.now();
+    if (!again) require('./preview-coursecheck').run().catch((e) => console.error('coursecheck:', e && e.message));
     console.log('preview seeded:', STATE.steps.map((s) => (s.ok ? 'ok ' : 'FAIL ') + s.name + (s.err ? ' (' + s.err + ')' : '')).join(' | '));
   })().finally(() => { BOOTING = null; });
   return BOOTING;

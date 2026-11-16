@@ -56,25 +56,31 @@ function aiConvListen() {
 function aiMicInit(o, gid) {
   const cb = o.querySelector('#aiconv'); if (cb) cb.onclick = () => { if (AICONV.on) { aiStopTalk(); aiConvEnd('Conversation ended.'); return; } AICONV.on = true; AICONV.empty = 0; AICONV.gid = gid; AICONV.hist = []; cb.classList.add('on'); cb.textContent = '⏹ End conversation'; aiUnlock(); aiConvListen(); };
   const sb = o.querySelector('#aistop'), vb = o.querySelector('#aivoice'); sb.onclick = () => { aiStopTalk(); aiConvEnd('Stopped.'); }; vb.onclick = () => { const on = !aiVoiceOn(); try { localStorage.setItem('ai-voice', on ? '1' : '0'); } catch (e) {} vb.textContent = on ? '🔊 Voice replies: on' : '🔇 Voice replies: off'; if (!on) aiStopTalk(); else { aiUnlock(); aiSpeak('Voice replies are on. Can you hear me?'); } };
-  const mic = o.querySelector('#aimic'), msg = o.querySelector('#aimsg'), SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  let rec = null, text = '', held = false, started = 0;
-  const say = (t) => { msg.textContent = t; };
-  if (!SR) { mic.onclick = () => say('Voice input is not available in this browser. On iPhone use Safari; or tap the text box and use the keyboard microphone.'); return; }
+  const mic = o.querySelector('#aimic'), msg = o.querySelector('#aimsg'), q = o.querySelector('#aiq');
+  aiPTT(mic, { say: (t) => { msg.textContent = t; }, idle: '🎤 Hold to talk (one question)', onStart: () => aiConvEnd(), live: (t) => { msg.textContent = '🎤 ' + (t || 'Listening…'); },
+    done: (t) => { if (!t) { msg.textContent = 'I did not catch that. Hold the button, talk, then let go.'; return; } q.value = t; msg.textContent = 'You said: ' + t; aiAsk(t, gid, true); },
+    none: 'Voice input is not available in this browser. On iPhone use Safari; or tap the text box and use the keyboard microphone.' });
+}
+// Push-to-talk on any button (Ask Claude above; "Log my score" in pics/voicelog.js reuses it). o: {say(text), idle (button label), onStart(), live(text so far), done(final text), none (message when unsupported)}.
+function aiPTT(mic, o) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition, say = o.say || (() => {});
+  let rec = null, text = '', held = false;
+  if (!SR) { mic.onclick = () => say(o.none || 'Voice input is not available in this browser. Type it instead.'); return false; }
   const start = (e) => {
-    e.preventDefault(); if (held) return; aiConvEnd(); held = true; text = ''; aiStopTalk();
+    e.preventDefault(); if (held) return; if (o.onStart) o.onStart(); held = true; text = ''; aiStopTalk();
     aiUnlock();
     try { rec = new SR(); rec.lang = 'en-US'; rec.interimResults = true; rec.continuous = true; rec.maxAlternatives = 1; } catch (x) { held = false; say('Could not start the microphone.'); return; }
-    rec.onresult = (ev) => { let t = ''; for (let i = 0; i < ev.results.length; i++) t += ev.results[i][0].transcript + ' '; text = t.trim(); say('🎤 ' + (text || 'Listening…')); };
-    rec.onerror = (ev) => { held = false; mic.classList.remove('on'); say(ev.error === 'not-allowed' || ev.error === 'service-not-allowed' ? 'Microphone is blocked. Allow the microphone for this site in your browser settings.' : ev.error === 'no-speech' ? 'I did not hear anything. Hold the button and talk.' : 'Voice error: ' + ev.error); };
+    rec.onresult = (ev) => { let t = ''; for (let i = 0; i < ev.results.length; i++) t += ev.results[i][0].transcript + ' '; text = t.trim(); if (o.live) o.live(text); };
+    rec.onerror = (ev) => { held = false; mic.classList.remove('on'); mic.textContent = o.idle; say(ev.error === 'not-allowed' || ev.error === 'service-not-allowed' ? 'Microphone is blocked. Allow the microphone for this site in your browser settings.' : ev.error === 'no-speech' ? 'I did not hear anything. Hold the button and talk.' : 'Voice error: ' + ev.error); };
     rec.onend = () => { if (held) { try { rec.start(); } catch (x) {} } }; // some browsers stop on a pause; keep listening while the finger is down
-    try { rec.start(); started = Date.now(); mic.classList.add('on'); mic.textContent = '🎤 Listening… let go to send'; say('Listening…'); } catch (x) { held = false; say('Could not start the microphone.'); }
+    try { rec.start(); mic.classList.add('on'); mic.textContent = '🎤 Listening… let go to send'; say('Listening…'); } catch (x) { held = false; say('Could not start the microphone.'); }
   };
   const end = (e) => {
-    if (e) e.preventDefault(); if (!held) return; held = false; mic.classList.remove('on'); mic.textContent = '🎤 Hold to talk (one question)';
-    const finish = () => { const q = text.trim(); if (!q) { say('I did not catch that. Hold the button, talk, then let go.'); return; } o.querySelector('#aiq').value = q; say('You said: ' + q); aiAsk(q, gid, true); };
-    try { rec.onend = null; rec.stop(); } catch (x) {} setTimeout(finish, 450); // the last words arrive just after release
+    if (e) e.preventDefault(); if (!held) return; held = false; mic.classList.remove('on'); mic.textContent = o.idle;
+    try { rec.onend = null; rec.stop(); } catch (x) {} setTimeout(() => { if (o.done) o.done(text.trim()); }, 450); // the last words arrive just after release
   };
   mic.addEventListener('pointerdown', start); ['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) => mic.addEventListener(ev, end)); mic.addEventListener('contextmenu', (e) => e.preventDefault());
+  return true;
 }
 async function aiOpen(gid, auto) {
   let o = document.getElementById('aisheet');

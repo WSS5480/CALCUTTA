@@ -477,3 +477,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v242 — Units by pick type in the Oddable Alert
 - Alert banner and drill sheet show record, % and units for 🔒🔒 Double lock, 🔒 Lock and 🏠 Road dog separately (alertTypes). User asked if it makes sense; it shows which pick type earns the units.
+
+## v243 — Alert units: this week / season / 2014-26 by pick type
+- Alert box shows a Week | Season | 2014-26 grid per pick type (record, %, units). Week and Season are live from the app; 2014-26 is a fixed table (ALH: Double lock 116-103, Lock 116-102, tag-only road dog 327-277, through week 10 of 2026 from the Python walk-forward). Update ALH when the season ends. Correction logged: in history the road dogs earned more units than the locks (+20.3 vs +5.9) because there are far more of them; this season is the reverse.

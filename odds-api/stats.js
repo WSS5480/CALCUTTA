@@ -210,11 +210,15 @@ const ownRound = (r) => r.kind === 'golf-round' && r.score != null && !teamFmt(r
 // NEVER confirmed: extra.confirmed === false (a forfeit, an engine-marked unrated match: always believed), a one-player game, a typed-in guest, an account
 // that only joined the game, a link confirmer who did not play, an entry dated before the account existed.
 // COUNTING LIMITS (confirmMarks below, worked out in play order over a player's own records):
-//   - no more than 2 of any 20 confirmed entries in a row may be confirmed by the same account (the 3rd shows "not counted: same player confirmed 2 already");
+//   - LINK confirmations: no more than 2 of any 20 confirmable entries in a row from the same confirmer (the 3rd says why it does not count);
+//   - GAME rounds (scored hole by hole in an Oddable game, another account's scored card, card confirmed by another team): one confirmer may account
+//     for up to 8 of any 20 (manager change, Nov 16 2026: a regular foursome must not be held to 6 counting rounds);
+//   - GAME matches (an event the engine marked confirmed: 3 or more accounts, the other side confirmed): no per-confirmer limit here; the
+//     repeat-opponent weights in ratings.js (7-day halving, 2 rated per pair per rolling 24 hours) are the guard;
 //   - typed totals (no hole scores) are confirmable by link only, and at most 5 of any 20 count.
 // DIVERSITY: the money-game number needs at least 3 DIFFERENT confirming accounts across the counting entries (the last 20 confirmed); otherwise
 // `use` is null, needsSet is true and the organizer / director sets the number ("needs rounds confirmed by 3 different players").
-const CONF = { perBy: 2, win: 20, typedMax: 5, needBy: 3, linkDays: 7, linkLife: 7 * DAY, backDays: 30 };
+const CONF = { perBy: 2, gamePerBy: 8, win: 20, typedMax: 5, needBy: 3, linkDays: 7, linkLife: 7 * DAY, backDays: 30 }; // perBy = by LINK; gamePerBy = golf rounds scored in a game
 const isSelfLogged = (r) => r.src === 'self';
 const holeScored = (r) => { const x = r.extra || {}, hs = x.holeScores || x.strokes, n = Number(x.of) === 9 || (!x.of && Number(x.holes) === 9) ? 9 : 18; return Array.isArray(hs) && hs.filter((v) => Number.isFinite(Number(v)) && Number(v) > 0 && v !== null && v !== '').length >= n; };
 const refList = (v) => (Array.isArray(v) ? v : [v]).map((x) => (typeof x === 'string' ? x : '')).filter((x) => /^[\w:.-]{6,40}$/.test(x)).slice(0, 8);
@@ -245,11 +249,12 @@ function confirmMarks(list, meRef) {
   list.slice().sort(order).forEach((r) => {
     const c = confInfo(r, meRef), m = { cand: c.ok, confirmed: false, by: null, name: c.name, typed: c.typed, how: c.how, why: c.why };
     if (c.ok) {
-      const ref = c.by.find((b) => win.filter((w) => w.by === b).length < CONF.perBy);
-      if (!ref) m.why = 'Not counted: ' + c.name + ' already confirmed ' + CONF.perBy + ' of your last ' + CONF.win;
+      const game = c.how === 'game', cap = !game ? CONF.perBy : r.kind === 'match' ? Infinity : CONF.gamePerBy; // link: 2; a golf round scored in a game: 8; an event match: no limit here
+      const ref = c.by.find((b) => win.filter((w) => w.by === b && w.how === c.how).length < cap);
+      if (!ref) m.why = 'Not counted: ' + c.name + ' already confirmed ' + cap + ' of your last ' + CONF.win + (game ? ' rounds scored in games' : ' by link');
       else if (c.typed && win.filter((w) => w.typed && w.by).length >= CONF.typedMax) m.why = 'Not counted: only ' + CONF.typedMax + ' typed totals count in any ' + CONF.win + ' confirmed rounds';
       else { m.confirmed = true; m.by = ref; }
-      win.push({ by: m.by, typed: c.typed }); if (win.length > CONF.win - 1) win.shift();
+      win.push({ by: m.by, typed: c.typed, how: c.how }); if (win.length > CONF.win - 1) win.shift();
     }
     out.set(r.id, m);
   });
@@ -912,7 +917,7 @@ async function handle(req, res) {
       }
       const P = periods(M.recs, today), sh = await shareGet(mk).catch(() => null), sd = M.sd, since = await acctSince(e, sd, now);
       send(res, 200, { today, from: P.from, periods: P.periods, records: M.recs.slice(0, MAXREC), total: M.recs.length, more: Math.max(0, M.recs.length - MAXREC), page: PAGE, sources: sources(), errors: M.errors, share: !!sh, owner: !!D.acct().ownerOk(req),
-        golfHcp: M.H, ratings: M.E, guests: (sd.guests || []).length, tournaments: M.events, edits: M.edits, gone: (sd.gone || []).slice(-50).reverse().map((g) => ({ at: g.at, was: g.was })), lockHours: LOCKMS / 36e5, since: chiDay(since), logFrom: dayAdd(chiDay(since), -CONF.backDays), confirmRules: { linkDays: CONF.linkDays, needBy: CONF.needBy, perBy: CONF.perBy, typedMax: CONF.typedMax },
+        golfHcp: M.H, ratings: M.E, guests: (sd.guests || []).length, tournaments: M.events, edits: M.edits, gone: (sd.gone || []).slice(-50).reverse().map((g) => ({ at: g.at, was: g.was })), lockHours: LOCKMS / 36e5, since: chiDay(since), logFrom: dayAdd(chiDay(since), -CONF.backDays), confirmRules: { linkDays: CONF.linkDays, needBy: CONF.needBy, perBy: CONF.perBy, gamePerBy: CONF.gamePerBy, typedMax: CONF.typedMax },
         courseView: (await ownedCourses(e).catch(() => [])).length > 0 }); return true;
     }
     if (op === 'self/save' || op === 'self/delete' || op === 'share' || op.startsWith('guest/') || op.startsWith('confirm/')) {

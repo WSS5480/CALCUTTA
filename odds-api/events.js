@@ -13,8 +13,13 @@ const D = {
   now: () => Date.now(),
   ip: (req) => require('./ip').clientIp(req),
   enterprise: async (accountKey) => false, // STAND-IN: the Groups branch owns the real owner-granted `enterprise` flag (odds-api/limits.js)
-  oddRating: async (accountKey, sport) => null, // STAND-IN: the stats branch supplies the unofficial Oddable rating (account key = acct.who id; kept server-side only)
+  // H1 / E-H (owner Nov 16 2026): the rating module. The stats branch's own (odds-api/stats.js: ratingFor, eventSetup, eventOverride, eventLog) when it is
+  // in the build, else the STAND-IN at the bottom of this file with the same names, arguments and result shapes.
+  rt: () => { const m = realMod('./stats'); return m && ['ratingFor', 'eventSetup', 'eventOverride', 'eventLog'].every((f) => typeof m[f] === 'function') ? m : STAND; },
+  pairing: () => realFn('./pairing', 'suggestPartners'), // P1 shared contract suggestPartners(players, {mode, teamSize, history}) (odds-api/pairing.js; stand-in in this branch)
 };
+function realMod(mod) { try { return require(mod); } catch (e) { return null; } }
+function realFn(mod, fn) { try { const m = require(mod); return m && typeof m[fn] === 'function' ? m[fn] : null; } catch (e) { return null; } }
 // STAND-IN for the Groups branch's shared `limits` module (same names and signature: maxPeople(accountKey, groupOrGameId), ENTERPRISE_TEXT).
 // Standard accounts: 8 people per game, organizer included. Enterprise (owner-granted: courses, clubs, leagues) lifts the cap.
 // At merge: `const limits = require('./limits')` and call `limits.maxPeople(limits.keyOf(evt.ce), evt.id)` in capFor() below (limits.js hashes the account id).
@@ -104,8 +109,11 @@ function checkGames(R, games) {
 function seedOrder(P) { let a = [1, 2]; while (a.length < P) { const n = a.length * 2 + 1, x = []; a.forEach((s) => x.push(s, n - s)); a = x; } return a.slice(0, P); }
 function seedList(evt) {
   const E = evt.entrants.slice(), R = evt.rules;
-  const rt = (e) => (R.seeding === 'oddable' && e.or != null ? e.or : e.rating != null ? e.rating : -1); // 'oddable' = unofficial Oddable rating where known, else the typed number (e.g. DUPR, display only)
-  if (R.seeding === 'rating' || R.seeding === 'oddable') E.sort((a, b) => rt(b) - rt(a) || a.at - b.at);
+  const typed = (e) => (e.rating != null ? e.rating : -1), odd = R.seeding === 'oddable' || (evt.sport === 'pickleball' && R.seeding === 'rating'); // H1: pickleball "by rating" = the Oddable rating
+  // Seeds come from the rating module's `use` (tournament rating, else Oddable rating, else the 1500 start). Equal numbers: real results before a new player's 1500, then the typed number (e.g. DUPR, shown only).
+  const u = (e) => (odd && Number.isFinite(e.or) ? e.or : null);
+  if (odd) E.sort((a, b) => (u(b) != null) - (u(a) != null) || (u(a) != null ? u(b) - u(a) : 0) || (b.orReal ? 1 : 0) - (a.orReal ? 1 : 0) || typed(b) - typed(a) || a.at - b.at);
+  else if (R.seeding === 'rating') E.sort((a, b) => typed(b) - typed(a) || a.at - b.at);
   else if (R.seeding === 'random') { for (let i = E.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); [E[i], E[j]] = [E[j], E[i]]; } }
   return E.map((e) => e.eid); // manual = the order the commissioner entered (or moved) them
 }
@@ -173,7 +181,7 @@ function draw(evt, now) {
     evt.matches = buildElim(ids.length, 'x', evt.fmt === 'de').M; advance(evt); courtsElim(evt);
   } else if (evt.fmt === 'ladder') evt.ladder = { order: ids.slice() };
   else if (evt.fmt === 'solo') evt.solo = evt.solo || {};
-  audit(evt, now, 'Commissioner', 'draw', null, (evt.fmt === 'ladder' ? 'Ladder set: ' : 'Draw made: ') + ids.length + ' entries, seeded ' + (R.seeding === 'rating' ? 'by rating' : R.seeding === 'random' ? 'at random' : 'as entered'));
+  audit(evt, now, 'Commissioner', 'draw', null, (evt.fmt === 'ladder' ? 'Ladder set: ' : 'Draw made: ') + ids.length + ' entries, seeded ' + (R.seeding === 'oddable' || (evt.sport === 'pickleball' && R.seeding === 'rating') ? 'by Oddable rating' : R.seeding === 'rating' ? 'by rating' : R.seeding === 'random' ? 'at random' : 'as entered'));
 }
 function courtsElim(evt) { const by = {}; evt.matches.filter((m) => m.fa && !m.court).forEach((m) => { const k = m.st + m.r; (by[k] = by[k] || []).push(m); }); Object.values(by).forEach((l) => placeCourts(l, evt.rules.courts)); }
 
@@ -305,8 +313,23 @@ async function mutateRow(rowId, init, fn) {
   }
   throw bad(409, 'Busy, try again');
 }
-// Seeding by the unofficial Oddable rating (Elo-style, computed by the stats module): average of the known ratings of an entry's players.
-async function prepRatings(evt) { if (evt.drawn || !evt.rules || evt.rules.seeding !== 'oddable') return; for (const e of evt.entrants) { const rs = []; for (const p of e.players || []) { const m = p.pid && evt.members.find((x) => x.pid === p.pid); if (m) { try { const v = await D.oddRating(m.ak, evt.sport); if (Number.isFinite(v)) rs.push(v); } catch (x) {} } } e.or = rs.length ? Math.round(rs.reduce((a, x) => a + x, 0) / rs.length) : null; } }
+// H1: the Oddable rating (Elo from app play, unofficial) is THE rating for pickleball seeding, pairings and fair matches; other sports use it when the
+// commissioner picks "By Oddable rating". Every seat asks the rating module: ratingFor(userKey, sport, {eventId}) -> {oddable: {rating, matches}, event,
+// setBy, use}. Events seeds and pairs from `use` (the director's tournament rating when one is set, else the Oddable rating, else the 1500 start) and keeps
+// both numbers on the seat so the real-results rating is always shown next to a tournament rating (E-H addendum). Refreshed on every read / write until the
+// draw, then frozen (what the draw used). userKey = the account id, or 'guest:<seat id>' for a player typed in by name.
+const usesOdd = (evt) => !!evt.rules && evt.fmt !== 'solo' && (evt.sport === 'pickleball' || evt.rules.seeding === 'oddable');
+const ratingSport = (evt) => STAT_SPORT[evt.sport] || 'other';
+const seatKey = (evt, p) => { const m = p.pid && evt.members.find((x) => x.pid === p.pid); return m ? m.ak : 'guest:' + String(p.gid).toLowerCase(); };
+const useR = (p) => (Number.isFinite(p.use) ? p.use : null);
+function entryRatings(evt) { evt.entrants.forEach((e) => { const ps = (e.players || []).filter((p) => !isBlank(p)), rs = ps.map(useR).filter(Number.isFinite); e.or = rs.length ? Math.round(rs.reduce((a, x) => a + x, 0) / rs.length) : null; e.orReal = ps.some((p) => Number.isFinite(p.or) || Number.isFinite(p.tv)); }); }
+async function prepRatings(evt) {
+  if (evt.drawn || !usesOdd(evt)) return; const RT = D.rt();
+  for (const e of evt.entrants) for (const p of e.players || []) { if (isBlank(p)) { delete p.or; delete p.use; delete p.tv; continue; } let r = null; try { r = await RT.ratingFor(seatKey(evt, p), ratingSport(evt), { eventId: evt.id }); } catch (x) { r = null; }
+    const od = (r && r.oddable) || {}, num = (v) => (v != null && Number.isFinite(Number(v)) ? Math.round(Number(v)) : null);
+    p.or = num(od.rating); p.orn = Number(od.matches) || 0; p.tv = r && r.setBy === 'tournament' ? num(r.event) : null; p.tat = p.tv != null ? r.at || null : null; p.treason = p.tv != null ? cleanName(r.reason, 120) : null; p.use = r ? num(r.use) : null; }
+  entryRatings(evt);
+}
 const mutate = (id, fn) => mutateRow(ROW(id), null, async (data) => { const now = D.now(); await prepRatings(data); const t = tick(data, now); const out = await fn(data, now); if (out && out.nochange) { if (t) { data.u = now; return out.v; } return out; } tick(data, now); data.u = now; return out; });
 const idxSet = (id, f) => mutateRow(IDX, () => ({ ev: {} }), async (data) => { data.ev = data.ev || {}; const r = f(data.ev[id] ? clone(data.ev[id]) : null); if (r === undefined) return { nochange: true }; if (r === null) delete data.ev[id]; else data.ev[id] = r; return {}; });
 const idxEntry = (evt) => ({ c: evt.code, t: evt.title, mk: evt.members.map((m) => m.mk), s: evt.start, e: evt.endDay || null, f: evt.fin || 0, g: evt.group ? evt.group.gid : null });
@@ -331,9 +354,11 @@ function pub(evt, now) {
 function full(evt, mk, now, cap) {
   const o = pub(evt, now), me = memberOf(evt, mk), comm = isComm(evt, mk); o.role = comm ? 'comm' : me ? me.role : 'none'; o.me = me ? me.pid : null; o.code = evt.code; o.cap = cap; o.u = evt.u || 0;
   o.myEntries = me ? evt.entrants.filter((e) => pidsOf(e).includes(me.pid)).map((e) => e.eid) : [];
-  const seedIx = (id) => (evt.seeds || []).indexOf(id);
+  const seedIx = (id) => (evt.seeds || []).indexOf(id), odd = usesOdd(evt);
   o.entrants = evt.entrants.map((e) => ({ eid: e.eid, name: e.name, rating: e.rating == null ? null : e.rating, seed: seedIx(e.eid) + 1 || null, linked: pidsOf(e).length, open: (e.players || []).filter((p) => !p.pid).length, oddRating: e.or == null ? null : e.or,
-    players: (e.players || []).map((p) => Object.assign({ gid: p.gid, name: p.name, guest: !p.pid, me: !!(me && p.pid === me.pid) }, comm && !p.pid ? { claim: evt.code + '.' + p.ct } : {})) }));
+    players: (e.players || []).map((p) => Object.assign({ gid: p.gid, name: p.name, guest: !p.pid, me: !!(me && p.pid === me.pid), blank: isBlank(p) }, comm && !p.pid ? { claim: evt.code + '.' + p.ct } : {},
+      odd && !isBlank(p) ? { odd: Number.isFinite(p.or) ? { rating: p.or, matches: p.orn || 0 } : null, trn: Number.isFinite(p.tv) ? { v: p.tv, at: p.tat || null, reason: p.treason || '' } : null, use: useR(p) } : {})) }));
+  o.odd = odd; o.ent = cap > 8; o.tlog = (evt.tlog || []).slice(-100).reverse(); o.teams = UNITS[evt.rules.unit] > 1 && evt.fmt !== 'solo';
   o.members = evt.members.map((m) => ({ pid: m.pid, name: m.name, role: m.role, paid: !!m.paid, comm: m.mk === evt.comm }));
   o.matches = evt.matches.map((m) => { const s = sideOf(evt, mk, m); return { id: m.id, st: m.st, r: m.r, pool: m.pool, court: m.court, wave: m.wave, a: m.a, b: m.b, an: nameOf(evt, m.a), bn: nameOf(evt, m.b), state: m.state, games: m.games, win: m.win, v: m.v, live: !!m.live, start: m.start || null, exp: m.exp || null, forfeit: !!m.forfeit, reset: !!m.reset,
     sub: m.sub ? { side: m.sub.side, games: m.sub.games, by: m.sub.by, at: m.sub.at, note: m.sub.note || '' } : null, mine: s, canScore: canScore(evt, mk, m, now).ok, canConfirm: canConfirm(evt, mk, m).ok, needsComm: m.state === 'disputed' || (m.state === 'pending' && !linked(evt, m.sub && m.sub.side === 'a' ? m.b : m.a)) }; });
@@ -434,7 +459,8 @@ async function handle(req, res) {
       const list = Array.isArray(b.entrants) ? b.entrants.slice(0, ENT_MAX) : []; list.forEach((x) => addEntrant(evt, x && x.name, x && x.rating, u.mk, now));
       if (b.playIn) { const e = addEntrant(evt, b.entryName || nm, b.myRating, u.mk, now); e.players[0].pid = evt.members[0].pid; e.players[0].name = nm; }
       if (people(evt) > cap) throw bad(403, fullMsg(cap));
-      audit(evt, now, nm, 'create', null, 'Event created'); tick(evt, now);
+      if (cap > 8 && usesOdd(evt)) { try { await D.rt().eventSetup(u.e, id, { title: evt.title, sport: ratingSport(evt), lockAt: evt.start }); } catch (x) { if (!x.status) console.error('events eventSetup:', x.message); } } // E-H: register the Enterprise tournament with the rating module
+      await prepRatings(evt); audit(evt, now, nm, 'create', null, 'Event created'); tick(evt, now);
       await D.S.dbPut({ id: ROW(id), salt: 'x', pinhash: 'x', data: evt, updated: now }, true); await idxSet(id, () => idxEntry(evt));
       send(res, 200, { event: full(evt, u.mk, now, cap) }); return true;
     }
@@ -484,7 +510,7 @@ async function handle(req, res) {
     const ok = (evt) => { send(res, 200, { event: full(evt, u.mk, D.now(), cap) }); return true; };
     const comm = (evt) => { if (!isComm(evt, u.mk)) throw bad(403, 'Only the commissioner can do that'); };
     const notLocked = (evt, now) => { if (now >= evt.start || evt.drawn) throw bad(409, 'Rules are locked. The event has started.'); };
-    if (op === 'edit') { const evt = await mutate(id, (evt, now) => { comm(evt); notLocked(evt, now); const R = cleanRules(b, now); Object.assign(evt, R); if (people(evt) > cap) throw bad(403, fullMsg(cap)); audit(evt, now, 'Commissioner', 'edit', null, 'Rules changed'); return evt; }); await idxSet(id, () => idxEntry(evt)); return ok(evt); }
+    if (op === 'edit') { const evt = await mutate(id, (evt, now) => { comm(evt); notLocked(evt, now); const R = cleanRules(b, now); Object.assign(evt, R); if (people(evt) > cap) throw bad(403, fullMsg(cap)); audit(evt, now, 'Commissioner', 'edit', null, 'Rules changed'); return evt; }); if (cap > 8 && usesOdd(evt)) { try { await D.rt().eventSetup(u.e, id, { title: evt.title, sport: ratingSport(evt), lockAt: evt.start }); } catch (x) {} } await idxSet(id, () => idxEntry(evt)); return ok(evt); }
     if (op === 'entrant') { // commissioner adds / renames / re-rates / removes / moves an entry, before the draw
       const evt = await mutate(id, (evt, now) => { comm(evt); notLocked(evt, now);
         if (b.do === 'add') { addEntrant(evt, b.name, b.rating, u.mk, now); if (people(evt) > cap) throw bad(403, fullMsg(cap)); }
@@ -496,7 +522,7 @@ async function handle(req, res) {
         audit(evt, now, 'Commissioner', 'entries', null, 'Entries changed (' + evt.entrants.length + ')'); return evt; });
       return ok(evt);
     }
-    if (op === 'draw') { const evt = await mutate(id, (evt, now) => { comm(evt); if (evt.drawn) return { nochange: true, v: evt }; draw(evt, now); return evt; }); return ok(evt); }
+    if (op === 'draw') { if (cap > 8 && usesOdd(r0.data) && !r0.data.drawn && now < r0.data.start) { try { await D.rt().eventSetup(u.e, id, { title: r0.data.title, sport: ratingSport(r0.data), lockAt: now }); } catch (x) {} } /* an early draw locks the tournament ratings in the rating module too */ const evt = await mutate(id, (evt, now) => { comm(evt); if (evt.drawn) return { nochange: true, v: evt }; draw(evt, now); return evt; }); return ok(evt); }
     if (op === 'leave') { const evt = await mutate(id, (evt, now) => { const m = memberOf(evt, u.mk); if (isComm(evt, u.mk)) throw bad(409, 'The commissioner cannot leave. Delete the event instead (before it starts).'); const inE = evt.entrants.some((e) => pidsOf(e).includes(m.pid)); if (inE && (now >= evt.start || evt.drawn)) throw bad(409, 'The event has started. Players stay to the end.'); evt.entrants.forEach((e) => (e.players || []).forEach((p, i) => { if (p.pid === m.pid) { p.pid = null; p.name = p.orig || (p.blank ? 'Partner ' + (i + 1) : 'Open seat'); p.ct = rnd(10); delete p.claimed; delete p.orig; } })); /* review fix 9: the guest gets its name back and a NEW claim code */ evt.entrants = evt.entrants.filter((e) => !(e.by === u.mk && !pidsOf(e).length && !isComm(evt, e.by))); evt.members = evt.members.filter((x) => x !== m); delete evt.picks[m.pid]; return evt; }); await idxSet(id, () => idxEntry(evt)); send(res, 200, { ok: true }); return true; }
     if (op === 'delete') { await mutate(id, (evt, now) => { comm(evt); notLocked(evt, now); evt.deleted = now; evt.code = ''; return evt; }); await idxSet(id, () => null); send(res, 200, { ok: true }); return true; }
     if (op === 'paid') { const evt = await mutate(id, (evt, now) => { comm(evt); const m = evt.members.find((x) => x.pid === String(b.pid || '')); if (!m) throw bad(404, 'Not in the event'); if (!!m.paid === !!b.paid) return { nochange: true, v: evt }; m.paid = !!b.paid; audit(evt, now, 'Commissioner', 'paid', null, m.name + (m.paid ? ' marked paid' : ' marked not paid')); return evt; }); return ok(evt); }
@@ -513,6 +539,40 @@ async function handle(req, res) {
     const vOk = (m) => { if (b.v != null && Number(b.v) !== m.v) throw bad(409, 'This match changed on another phone. It has been reloaded.'); };
     const opSeen = (evt) => { const k = String(b.op || '').slice(0, 40); if (!k) return false; const key = u.mk.slice(0, 8) + ':' + k; if ((evt.ops || []).includes(key)) return true; evt.ops = (evt.ops || []).concat(key).slice(-300); return false; };
     const myName = (evt) => (memberOf(evt, u.mk) || {}).name || 'Player';
+    // E-H (owner Nov 16 2026): in an Enterprise tournament the director (the event's commissioner on an enterprise account) can enter a rating for a player
+    // with no Oddable rating, or change anyone's rating, for THIS event only. Logged (who, when, old, new, reason), shown as "Set by tournament" next to the
+    // player's real-results Oddable rating (never hidden). Locked when the event starts or the draw is made. The lifetime rating is never touched.
+    if (op === 'trate') { // storage, rules and the log live in the rating module (eventSetup / eventOverride / eventLog); this is the director's form's route
+      const e0 = r0.data, RT = D.rt(); comm(e0); if (!(cap > 8)) throw bad(403, 'Tournament ratings are for Enterprise events (courses, clubs and leagues). ' + limits.ENTERPRISE_TEXT); if (!usesOdd(e0)) throw bad(409, 'This event does not use the Oddable rating');
+      if (now >= e0.start || e0.drawn) throw bad(409, 'Ratings are locked. The event has started.');
+      let seat = null; e0.entrants.forEach((e) => (e.players || []).forEach((p) => { if (p.gid === String(b.gid || '')) seat = p; })); if (!seat || isBlank(seat)) throw bad(404, 'That player is not in the event');
+      const clear = b.rating === '' || b.rating == null, v = clear ? null : Math.round(Number(b.rating)); if (!clear && !(Number.isFinite(Number(b.rating)) && Number(b.rating) >= 100 && v <= 3500)) throw bad(400, 'Tournament rating: a whole number from 100 to 3500 (Oddable scale: new players start at 1500)');
+      const reason = cleanName(b.reason, 120); if (reason.length < 2) throw bad(400, 'Give a reason (it is logged and shown to the players)');
+      const by = myName(e0); await RT.eventSetup(u.e, id, { title: e0.title, sport: ratingSport(e0), lockAt: e0.start });
+      const out = await RT.eventOverride(u.e, id, seatKey(e0, seat), { rating: v, sport: ratingSport(e0), reason, name: seat.name, byName: by }); RC.clear();
+      const log = out && out.changed === false ? null : ((await RT.eventLog(u.e, id)) || {}).log || [];
+      const evt = await mutate(id, (evt, now) => { if (!log) return { nochange: true, v: evt }; evt.tlog = log.slice(-100).map((x) => ({ at: x.at, by: x.by, player: x.player, old: x.old == null ? null : x.old, new: x.new == null ? null : x.new, oddable: x.oddable == null ? null : x.oddable, reason: x.reason }));
+        audit(evt, now, by + ' (director)', 'rating', null, seat.name + ': tournament rating ' + (v == null ? 'removed (Oddable rating used)' : 'set to ' + v) + ' · ' + reason); return evt; });
+      return ok(evt);
+    }
+    // P1 (owner Nov 16 2026): "Suggest partners" for doubles / team events. Any member may look; only the commissioner applies a split, before the start.
+    if (op === 'partners') {
+      const evt = await mutate(id, (evt) => ({ nochange: true, v: evt })) || r0.data; const size = UNITS[evt.rules.unit] || 1; if (size < 2 || evt.fmt === 'solo') throw bad(409, 'Partner suggestions are for doubles and team events');
+      const seatsAll = []; evt.entrants.forEach((e) => (e.players || []).forEach((p) => { if (!isBlank(p)) seatsAll.push(p); }));
+      const players = seatsAll.map((p) => ({ id: p.gid, name: p.name, rating: Number.isFinite(p.tv) ? p.tv : Number.isFinite(p.or) ? p.or : null })) /* the module's `use`; a new player's 1500 start goes in as "no games yet" so the reason can say so */, history = await pairHistory(evt);
+      const mode = ['balanced', 'rotate', 'hot'].includes(b.mode) ? b.mode : 'balanced', fn = D.pairing() || require('./pairing').suggestPartners;
+      send(res, 200, { mode, teamSize: size, players: players.length, history: history.length, locked: now >= evt.start || !!evt.drawn, suggestions: fn(players, { mode, teamSize: size, history }) }); return true;
+    }
+    if (op === 'teams') { // the commissioner applies a split they chose (from the suggestions or their own)
+      const evt = await mutate(id, (evt, now) => { comm(evt); notLocked(evt, now); const size = UNITS[evt.rules.unit] || 1; if (size < 2 || evt.fmt === 'solo') throw bad(409, 'Not a doubles or team event');
+        const bySeat = {}; evt.entrants.forEach((e) => (e.players || []).forEach((p) => { if (!isBlank(p)) bySeat[p.gid] = p; }));
+        const T = Array.isArray(b.teams) ? b.teams.map((t) => (Array.isArray(t) ? t.map(String) : [])) : []; const flat = [].concat(...T);
+        if (!T.length || T.some((t) => t.length < 1 || t.length > size) || new Set(flat).size !== flat.length || flat.some((g) => !bySeat[g]) || flat.length !== Object.keys(bySeat).length) throw bad(400, 'Every player must be on exactly one team of up to ' + size);
+        const old = evt.entrants.slice(); evt.entrants = T.map((t, i) => { const e = old[i] || { eid: newEid(evt), at: now, by: u.mk }; const pl = t.map((g) => bySeat[g]); while (pl.length < size) pl.push({ gid: 'g' + rnd(8), ct: rnd(10), name: 'Partner ' + (pl.length + 1), pid: null, blank: true });
+          return Object.assign(e, { name: cleanName(t.map((g) => bySeat[g].name).join(' / '), 40) || e.name, rating: null, players: pl }); });
+        entryRatings(evt); if (people(evt) > cap) throw bad(403, fullMsg(cap)); audit(evt, now, myName(evt), 'teams', null, 'Teams set: ' + evt.entrants.map((e) => e.name).join(' · ') + (b.mode ? ' (from "Suggest partners": ' + String(b.mode).replace(/[^a-z]/g, '') + ')' : '')); return evt; });
+      return ok(evt);
+    }
     if (op === 'score') {
       rate('score', u.mk, ip); const evt = await mutate(id, (evt, now) => {
         if (opSeen(evt)) return { nochange: true, v: evt }; // offline queue resend: already saved
@@ -576,16 +636,77 @@ async function statsFor(userKey, opt) {
       const side = mySide(m.pp); if (!side) return; const opp = side === 'a' ? m.b : m.a, mine = m.pp[side], theirs = m.pp[side === 'a' ? 'b' : 'a'], meSeat = mine.find((p) => myGids.has(p.gid));
       const games = m.games.map(([x, y]) => (side === 'a' ? [x, y] : [y, x])), diff = games.reduce((t, [x, y]) => t + x - y, 0), partner = mine.filter((p) => p !== meSeat).map((p) => p.name)[0];
       out.push(Object.assign({}, base, { id: evt.id + ':' + m.id, date: chiDay(m.at || evt.start), kind: 'match', title: evt.title + ' · ' + matchLabel(m), result: m.win === side ? 'W' : 'L', opponent: nameOf(evt, opp), verified: !!(m.sub && m.sub.side !== 'comm' && !m.forfeit && theirs.some((p) => p.pid)),
-        extra: { scoreText: m.forfeit ? 'forfeit' : games.map((g) => g.join('-')).join(', '), games, partner: partner || undefined, pointDiff: diff, guestId: meSeat.gid, side: mine.map((p) => ({ id: p.gid, name: p.name, account: !!p.pid })), opp: theirs.map((p) => ({ id: p.gid, name: p.name, account: !!p.pid })), forfeit: !!m.forfeit || undefined } }));
+        extra: { place: null, entry: 0, payout: 0, net: 0, moneyOn: evt.id + ':event', scoreText: m.forfeit ? 'forfeit' : games.map((g) => g.join('-')).join(', '), games, partner: partner || undefined, pointDiff: diff, guestId: meSeat.gid, side: mine.map((p) => ({ id: p.gid, name: p.name, account: !!p.pid })), opp: theirs.map((p) => ({ id: p.gid, name: p.name, account: !!p.pid })), forfeit: !!m.forfeit || undefined } }));
     });
     const myE = evt.entrants.filter((e) => (e.players || []).some((p) => myGids.has(p.gid)));
-    if (evt.fin && evt.places) { const ps = myE.map((e) => evt.places[e.eid]).filter(Boolean); if (ps.length) { const sr = evt.fmt === 'solo' ? soloRows(evt).find((x) => myE.some((e) => e.eid === x.eid)) : null;
-      out.push(Object.assign({}, base, { id: evt.id + ':event', date: chiDay(evt.fin), kind: 'event', title: evt.title + (evt.fmt === 'solo' ? ' · ' + FMTN.solo : ''), result: null, place: { n: Math.min(...ps), of: Object.keys(evt.places).length }, score: sr ? sr.score : undefined, verified: sr ? sr.ver : true, extra: { guestId: [...myGids][0], solo: evt.fmt === 'solo' || undefined, scoreText: sr ? sr.score + ' ' + evt.rules.unitLabel : undefined, unit: sr ? evt.rules.unitLabel : undefined } })); } }
-    if (evt.rules.pickem && evt.fin && evt.picks[m0.pid]) { const t = pickTable(evt).rows, row = t.find((x) => x.pid === m0.pid); if (row) out.push(Object.assign({}, base, { id: evt.id + ':pickem', date: chiDay(evt.fin), kind: 'contest', title: evt.title + " · bracket pick'em", result: null, place: { n: row.place, of: t.length }, verified: true, extra: { pickem: true, right: row.right, of: row.n, pts: row.pts, scoreText: row.right + ' of ' + row.n + ' right' } })); }
+    // S-ALL (owner Nov 16 2026): every play is in the player's dashboard, running or finished: one 'event' record per event they have an entry in, with the
+    // money (entry, payout, net; information only). Running: result null + extra.live (an open play); finished: place + payout + net.
+    if (myE.length) { const fin = !!(evt.fin && evt.places), ps = fin ? myE.map((e) => evt.places[e.eid]).filter(Boolean) : [], bestE = fin && ps.length ? myE.find((e) => evt.places[e.eid] === Math.min(...ps)) : myE[0];
+      const sr = fin && evt.fmt === 'solo' ? soloRows(evt).find((x) => myE.some((e) => e.eid === x.eid)) : null, mo = moneyFor(evt, bestE.eid), paid = !!m0.paid;
+      if (!fin || ps.length) out.push(Object.assign({}, base, { id: evt.id + ':event', date: chiDay(fin ? evt.fin : evt.start), kind: 'event', title: evt.title + (evt.fmt === 'solo' ? ' · ' + FMTN.solo : ''), result: null, place: fin ? { n: Math.min(...ps), of: Object.keys(evt.places).length } : undefined, score: sr ? sr.score : undefined, verified: sr ? sr.ver : true,
+        stake: mo.entry || undefined, won: fin && mo.entry ? mo.payout : fin && mo.payout ? mo.payout : undefined, pl: fin && (mo.entry || mo.payout) ? mo.net : undefined,
+        extra: { guestId: [...myGids][0], fmt: evt.fmt, live: !fin || undefined, ended: fin || undefined, entry: mo.entry, payout: fin ? mo.payout : null, net: fin ? mo.net : null, paid, moneyNote: 'Information only: Oddable never collects or pays.', solo: evt.fmt === 'solo' || undefined, scoreText: sr ? sr.score + ' ' + evt.rules.unitLabel : fin ? ord(Math.min(...ps)) + ' of ' + Object.keys(evt.places).length : 'In progress', unit: sr ? evt.rules.unitLabel : undefined } })); }
+    if (evt.rules.pickem && evt.fin && evt.picks[m0.pid]) { const t = pickTable(evt).rows, row = t.find((x) => x.pid === m0.pid); if (row) out.push(Object.assign({}, base, { id: evt.id + ':pickem', date: chiDay(evt.fin), kind: 'contest', title: evt.title + " · bracket pick'em", result: null, place: { n: row.place, of: t.length }, verified: true, extra: { pickem: true, entry: 0, payout: 0, net: 0, right: row.right, of: row.n, pts: row.pts, scoreText: row.right + ' of ' + row.n + ' right' } })); }
   }
-  out.forEach((x) => { x.extra = Object.assign({ game: x.game }, x.extra || {}); delete x.game; if (x.groupId === undefined) delete x.groupId; if (x.contestId === undefined) delete x.contestId; });
+  out.forEach((x) => { x.extra = Object.assign({ game: x.game }, x.extra || {}); delete x.game; Object.keys(x).forEach((k) => { if (x[k] === undefined) delete x[k]; }); Object.keys(x.extra).forEach((k) => { if (x.extra[k] === undefined) delete x.extra[k]; }); });
   return out.filter((x) => x.date >= from && x.date <= to).sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
 }
+// P1 history: games two players of THIS event played on the same team, from their lifetime events (accounts, matched by member key) and this event
+// (guests too, by seat). -> [{ids: [gid, gid...], result, at}] for suggestPartners. Server-side only; member keys never leave the server.
+async function pairHistory(evt) {
+  const gidOfMk = {}; evt.entrants.forEach((e) => (e.players || []).forEach((p) => { const m = p.pid && evt.members.find((x) => x.pid === p.pid); if (m) gidOfMk[m.mk] = p.gid; }));
+  const out = [], mks = Object.keys(gidOfMk), ix = await D.S.dbGet(IDX), ev = (ix && ix.data && ix.data.ev) || {};
+  const sideRes = (m, side) => (m.win === side ? 'W' : 'L');
+  evt.matches.filter((m) => m.state === 'confirmed' && m.pp).forEach((m) => ['a', 'b'].forEach((sd) => { const ids = m.pp[sd].map((p) => p.gid).filter((g) => evt.entrants.some((e) => (e.players || []).some((p) => p.gid === g))); if (ids.length > 1) out.push({ ids, result: sideRes(m, sd), at: m.at || 0 }); }));
+  if (mks.length < 2) return out;
+  let n = 0; for (const id of Object.keys(ev)) { if (id === evt.id) continue; const hit = (ev[id].mk || []).filter((k) => k in gidOfMk); if (hit.length < 2) continue; if (++n > 60) break; const r = await load(id); if (!r) continue; const o = r.data, mkOfPid = {}; o.members.forEach((m) => (mkOfPid[m.pid] = m.mk));
+    o.matches.filter((m) => m.state === 'confirmed' && m.pp).forEach((m) => ['a', 'b'].forEach((sd) => { const ids = m.pp[sd].map((p) => p.pid && gidOfMk[mkOfPid[p.pid]]).filter(Boolean); if (ids.length > 1) out.push({ ids, result: sideRes(m, sd), at: m.at || 0 }); })); }
+  return out;
+}
+// STAND-IN for the stats module (stats-v1: odds-api/stats.js), same names, arguments and result shapes; D.rt() uses the real one when it is in the build.
+//   ratingFor(userKey, sport, {eventId}) -> { sport, oddable: {rating, matches, label}, event, setBy: 'tournament' | null, use, start, label, reason?, at?, locked? }
+//   eventSetup(directorKey, eventId, {title, sport, lockAt})   Enterprise accounts only
+//   eventOverride(directorKey, eventId, userKey, {rating, sport, reason, name, byName})   null clears; refused after lockAt; logged
+//   eventLog(directorKey, eventId) -> { ok, title, locked, lockAt, log: [{at, by, player, field, old, new, oddable, reason}] }
+// Oddable rating here = Elo from the player's own confirmed matches in local events (start 1500, K 32; ratings.js eloFor when present). Storage: row
+// 'lock:evr:<eventId>' like stats.js. A tournament rating lives only in that row: nobody's lifetime rating or records are changed by it.
+const RC = new Map(), EVR = (id) => 'lock:evr:' + id, RLABEL = 'Oddable rating (unofficial, from app play)';
+const pkey = (userKey) => { const m = /^guest:([a-z0-9]{6,24})$/.exec(String(userKey || '')); return m ? 'g:' + m[1] : mkOf(userKey); };
+const evrLocked = (d) => !!(d && d.lockAt && D.now() >= d.lockAt);
+async function oddableOf(userKey, sport) {
+  if (/^guest:/.test(String(userKey))) return { rating: null, matches: 0 }; const key = userKey + '|' + sport, c = RC.get(key); if (c && D.now() - c.at < 30e3 && D.now() >= c.at) return c.v;
+  const recs = (await statsFor(userKey, {})).filter((r) => r.kind === 'match' && r.sport === sport && (r.result === 'W' || r.result === 'L')), R = realMod('./ratings');
+  let v; if (R && typeof R.eloFor === 'function') { const x = R.eloFor(recs); v = { rating: x.matches ? x.rating : null, matches: x.matches }; }
+  else { let r = 1500; const exp = (a, b) => 1 / (1 + Math.pow(10, (b - a) / 400)); recs.forEach((m) => { r += 32 * ((m.result === 'W' ? 1 : 0) - exp(r, 1500)); }); v = { rating: recs.length ? Math.round(r) : null, matches: recs.length }; }
+  RC.set(key, { at: D.now(), v }); if (RC.size > 5000) RC.clear(); return v;
+}
+const STAND = {
+  standIn: true,
+  ratingFor: async (userKey, sport, opts) => { const sp = sport && sport !== 'golf' ? sport : 'pickleball', o = opts || {}, od = await oddableOf(userKey, sp); let d = null; if (o.eventId) { const r = await D.S.dbGet(EVR(o.eventId)); d = (r && r.data) || null; }
+    const s = d && d.set && d.set[pkey(userKey)] && d.set[pkey(userKey)].rating != null ? d.set[pkey(userKey)] : null;
+    return { sport: sp, oddable: { rating: od.rating, matches: od.matches, label: RLABEL }, event: s ? s.rating : null, setBy: s ? 'tournament' : null, use: s ? s.rating : od.rating != null ? od.rating : 1500, start: !s && od.rating == null, label: RLABEL, reason: s ? s.reason : undefined, at: s ? s.at : undefined, locked: d ? evrLocked(d) : undefined }; },
+  eventSetup: async (directorE, eventId, o) => { if (!(await D.enterprise(directorE))) throw bad(403, 'Only Enterprise tournaments can set ratings'); const x = o || {}, dk = mkOf(directorE);
+    await mutateRow(EVR(eventId), () => ({ dir: dk, set: {}, log: [] }), async (d) => { if (d.dir !== dk) throw bad(403, 'Not your tournament'); if (evrLocked(d)) throw bad(409, 'The tournament has started; ratings are locked'); d.title = cleanName(x.title, 60) || d.title || 'Tournament'; d.sport = x.sport || d.sport || 'pickleball'; d.lockAt = Number(x.lockAt) > 0 ? Number(x.lockAt) : d.lockAt || null; return {}; }); return { ok: true }; },
+  eventOverride: async (directorE, eventId, userKey, o) => { const x = o || {}, raw = x.rating, val = raw == null || raw === '' ? null : Math.round(Number(raw)); if (val != null && !(val >= 100 && val <= 3500)) throw bad(400, 'Rating must be 100 to 3500');
+    const dk = mkOf(directorE), pk = pkey(userKey), real = (await oddableOf(userKey, x.sport && x.sport !== 'golf' ? x.sport : 'pickleball')).rating;
+    return mutateRow(EVR(eventId), null, async (d) => { if (d.dir !== dk) throw bad(403, "Only this tournament's director can change ratings"); if (evrLocked(d)) throw bad(409, 'The tournament has started; ratings are locked');
+      d.set = d.set || {}; d.log = d.log || []; const cur = d.set[pk] || {}, old = cur.rating != null ? cur.rating : real; if ((cur.rating == null && val == null) || cur.rating === val) return { nochange: true, v: { ok: true, changed: false } };
+      const nx = Object.assign({}, cur, { at: D.now(), reason: cleanName(x.reason, 120), name: cleanName(x.name, 30) || cur.name || '' }); if (val == null) delete d.set[pk]; else { nx.rating = val; d.set[pk] = nx; }
+      d.log.push({ at: D.now(), by: cleanName(x.byName, 30) || 'Tournament director', player: nx.name || 'Player', field: 'rating', old: old == null ? null : old, new: val, oddable: real == null ? null : real, reason: cleanName(x.reason, 120) }); if (d.log.length > 2000) d.log = d.log.slice(-2000);
+      return { ok: true, changed: true, old: old == null ? null : old, new: val }; }); },
+  eventLog: async (directorE, eventId) => { const r = await D.S.dbGet(EVR(eventId)), d = r && r.data; if (!d || d.dir !== mkOf(directorE)) throw bad(404, 'Tournament not found'); return { ok: true, title: d.title, locked: evrLocked(d), lockAt: d.lockAt || null, log: (d.log || []).slice(-500) }; },
+};
+const ratingFor = (userKey, sport, opts) => D.rt().ratingFor(userKey, sport, opts);
+// S-ALL money for one player in one event (information only; Oddable never collects or pays): entry = the event's entry, payout = their share of the
+// prize for their entry's place (tied places share the prizes of the places they cover, in cents), net = payout - entry.
+function moneyFor(evt, eid) {
+  const entry = Number(evt.money.entry) || 0, pl = evt.places || null; if (!pl || !pl[eid]) return { entry, payout: pl ? 0 : null, net: pl ? -entry : null };
+  const pot = potSummary(evt), place = pl[eid], tied = Object.keys(pl).filter((k) => pl[k] === place).length;
+  let c = 0; for (let i = place; i < place + tied; i++) { const x = pot.places.find((y) => y.place === i); if (x) c += Math.round(x.amt * 100); }
+  const e = evt.entrants.find((x) => x.eid === eid), heads = Math.max(1, ((e && e.players) || []).filter((p) => !isBlank(p)).length), payout = Math.floor(c / tied / heads) / 100;
+  return { entry, payout, net: Math.round((payout - entry) * 100) / 100 };
+}
+const ord = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th');
 function matchLabel(m) { return m.st === 'pool' ? 'Pool round ' + m.r : m.st === 'po' ? 'Playoff round ' + m.r : m.st === 'w' ? 'Round ' + m.r : m.st === 'l' ? 'Losers round ' + m.r : m.st === 'gf' ? (m.reset ? 'Final (reset)' : 'Final') : m.st === 'lad' ? 'Ladder challenge' : m.st === 'side' ? 'Side match' : 'Heads-up'; }
 
 // ---------- ADAPTER: contest type 'local-event' inside a Group (for the Groups contests[] restructure and the Calcutta engine) ----------
@@ -600,4 +721,4 @@ const ADAPTER = {
   lots: async (evtId) => { const r = await load(evtId); if (!r) return []; const evt = r.data; return evt.entrants.map((e) => ({ id: e.eid, name: e.name, rating: e.rating, seed: (evt.seeds || []).indexOf(e.eid) + 1 || null, size: UNITS[evt.rules.unit] || 1 })); },
   lotResults: async (evtId) => { const r = await load(evtId); if (!r) return {}; const evt = r.data, now = D.now(); tick(evt, now); const pl = evt.places || places(evt, now) || {}, o = {}; evt.entrants.forEach((e) => { const ms = evt.matches.filter((m) => m.state === 'confirmed' && (m.a === e.eid || m.b === e.eid)); o[e.eid] = { place: pl[e.eid] || null, wins: ms.filter((m) => winnerOf(m) === e.eid).length, losses: ms.filter((m) => loserOf(m) === e.eid).length, alive: !pl[e.eid] && !ms.some((m) => loserOf(m) === e.eid && (m.st === 'po' || (m.st === 'w' && evt.fmt === 'se') || m.st === 'l')), final: !!evt.fin }; }); return o; },
 };
-module.exports = { handle, statsFor, ADAPTER, limits, SPORTS, FMTN, cleanRules, checkGames, roundRobin, buildElim, seedOrder, poolTable, places, potSummary, people, _deps: D, _mkOf: mkOf, _reset: () => { RL.clear(); } };
+module.exports = { handle, statsFor, ratingFor, STAND, moneyFor, pairHistory, ADAPTER, limits, SPORTS, FMTN, cleanRules, checkGames, roundRobin, buildElim, seedOrder, poolTable, places, potSummary, people, _deps: D, _mkOf: mkOf, _reset: () => { RL.clear(); RC.clear(); } };

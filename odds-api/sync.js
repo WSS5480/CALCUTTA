@@ -113,7 +113,7 @@ async function handle(req, res) {
 }
 async function adminUsers(emailOf) {
   const { url, key } = cfg();
-  const r = await fetch(`${url}/rest/v1/oddable_sync?select=id,updated,data&limit=2000`, { headers: hdr(key) });
+  const r = await fetch(`${url}/rest/v1/oddable_sync?select=id,updated,data&id=not.like.lock:*&limit=2000`, { headers: hdr(key) });
   if (!r.ok) throw new Error('db read ' + r.status);
   const rows = (await r.json()).filter((x) => !String(x.id).startsWith('lock:')); // shared lock rows are not players
   return rows.map((x) => {
@@ -166,8 +166,15 @@ async function verifyLogin(phone, pin, ip, create) {
 // Groups (groups.js): every player row id (no data), to find a signed-in phone account's own synced bets row. Shared 'lock:' rows are left out.
 async function dbIds() {
   const { url, key } = cfg();
-  const r = await fetch(`${url}/rest/v1/oddable_sync?select=id&limit=5000`, { headers: hdr(key), signal: AbortSignal.timeout(15000) });
+  const r = await fetch(`${url}/rest/v1/oddable_sync?select=id&id=not.like.lock:*&limit=5000`, { headers: hdr(key), signal: AbortSignal.timeout(15000) });
   if (!r.ok) throw new Error('db read ' + r.status);
   return (await r.json()).map((x) => String(x.id)).filter((id) => !id.startsWith('lock:'));
 }
-module.exports = { handle, merge, normPhone, verifyLogin, adminUsers, dbGet, dbPut, dbPatchIf, dbIds };
+// Groups (groups.js): every shared row whose id starts with a prefix (e.g. 'lock:grp:'), with its data. PostgREST 'like' with * as the wildcard.
+async function dbList(prefix, limit) {
+  const { url, key } = cfg();
+  const r = await fetch(`${url}/rest/v1/oddable_sync?select=id,updated,data&id=like.${encodeURIComponent(prefix)}*&limit=${Math.min(Number(limit) || 1000, 5000)}`, { headers: hdr(key), signal: AbortSignal.timeout(15000) });
+  if (!r.ok) throw new Error('db read ' + r.status);
+  return (await r.json()).filter((x) => String(x.id).startsWith(prefix));
+}
+module.exports = { handle, merge, normPhone, verifyLogin, adminUsers, dbGet, dbPut, dbPatchIf, dbIds, dbList };

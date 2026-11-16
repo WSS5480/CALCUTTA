@@ -62,6 +62,8 @@ const PL = require('./pricelog.js'); const plTick = () => PL.tick(LINES, require
 setInterval(plTick, 20 * 60 * 1000); setTimeout(plTick, 90 * 1000);
 // Oddable Alert (v252): the server itself computes the weekly picks and freezes them 30 minutes before kickoff, every minute while it is awake (GET /alert also runs it), so no phone has to be open
 const ALERT = require('./alert'); ALERT._deps.lines = () => LINES; setInterval(() => ALERT.tick(), 60 * 1000); setTimeout(() => ALERT.tick(), 15 * 1000);
+// Groups (groups.js): light tick so the server sees members' new bets before kickoff (every 5 min during game windows, else every 30 min). Needs Supabase.
+if (process.env.SUPABASE_URL) { setInterval(() => { try { require('./groups').tick().catch((e) => console.error('groups tick:', e && e.message)); } catch (e) { console.error('groups tick:', e && e.message); } }, 5 * 60 * 1000); }
 // Free Render services sleep when idle; ping our own public URL so the tick keeps running (set KEEP_AWAKE=0 to turn off)
 if (process.env.RENDER_EXTERNAL_URL && process.env.KEEP_AWAKE !== '0') {
   setInterval(() => fetch(process.env.RENDER_EXTERNAL_URL + '/health').catch(() => {}), 10 * 60 * 1000);

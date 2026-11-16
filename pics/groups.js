@@ -87,6 +87,7 @@
     const s = stack[stack.length - 1], gr = s.gr; if (!gr) return '<div class="gcard">Loading…</div>';
     const comm = gr.role === 'comm', P = gr.pots, running = gr.contests.filter((c) => c.started && !c.ended).length;
     let h = '<div class="grow"><h1>' + esc(gr.name) + '</h1>' + (comm ? '<span class="gbadge">Commissioner</span>' : '') + '</div><div class="gmeta">' + gr.count + ' member' + (gr.count === 1 ? '' : 's') + ' · ' + gr.contests.length + ' contest' + (gr.contests.length === 1 ? '' : 's') + (running ? ' · ' + running + ' running' : '') + '</div>';
+    if (gr.contests.some((c) => c.kind !== 'ext' && !c.ended)) h += '<div class="gcard"><b>How to play</b><div class="gmut" style="margin:4px 0 10px">Add your bets in My Bets. A bet you add while a contest is running is saved to the group right away and locks.</div><button class="gpri" style="width:100%" data-a="addbet">➕ Add a bet</button></div>'; /* integration (merged build, Nov 16 2026; see HANDOFF "Port to component branches") */ 
     gr.contests.forEach((c) => {
       const m = s.mineC && s.mineC[c.cid], inC = c.pot !== 'side' || c.in;
       h += '<div class="gcc' + (c.kind !== 'picks' ? ' gcalc' : '') + '"><button class="gccb" data-a="' + (c.kind === 'picks' ? 'open' : 'ext') + '" data-cid="' + att(c.cid) + '"><span class="grow"><b class="gct">' + esc(c.name) + '</b>' + potBadge(c) + '</span>';
@@ -99,7 +100,8 @@
     });
     if (comm) { // only the commissioner adds contests; engines not built yet show "Coming soon" (they attach later through groups.js attachGame)
       h += '<button class="gadd gadd2" data-a="addc">+ Add a picks contest</button>';
-      [['Calcutta', 'calc'], ['golf contest', 'golf'], ['local event', 'event']].forEach(([n, k]) => { h += '<button class="gadd" disabled aria-disabled="true" data-soon="' + k + '">+ Add a ' + n + '<small>Coming soon</small></button>'; });
+      /* integration (merged build, Nov 16 2026; see HANDOFF "Port to component branches") */ 
+      [['Calcutta', 'calc'], ['golf contest', 'golf'], ['local event', 'event']].forEach(([n, k]) => { h += window.OddGames && window.OddGames.startFor ? '<button class="gadd" data-a="addgame" data-k="' + k + '">+ Add a ' + n + '</button>' : '<button class="gadd" disabled aria-disabled="true" data-soon="' + k + '">+ Add a ' + n + '<small>Coming soon</small></button>'; });
     }
     const sides = P.sides || [];
     h += '<div class="gcard gpotc"><button class="gkvb" data-a="pot" data-w="main"><span class="gmut">Main pot ›</span><b class="ggold gbig">' + usd(P.main.total != null ? P.main.total : P.main.pot) + '</b></button><div class="gnote">' + esc(P.main.parts.map((x) => x.name + ' ' + usd(x.entries)).join(' + ') + (P.main.take ? ' · take ' + usd(P.main.take) : '') + (P.main.shares.length > 1 ? ' · split ' + P.main.shares.map((x) => x.pct).join('/') : '')) + '</div>';
@@ -392,7 +394,8 @@
     const e = el(); if (!e) return; const s = stack[stack.length - 1], prev = stack[stack.length - 2];
     const back = stack.length > 1 ? (prev.t === 'home' ? 'Groups' : 'Back') : '';
     const V = { home, hub: hubV, join: joinV, create1, create2, rules: rulesV, members: membersV, stand: standV, pot: potV, player: playerV, gedit: geditV, contact: contactV, partners: partnersV }[s.t];
-    e.querySelector('.gin0').innerHTML = top(back) + (err ? '<div class="gerr" role="alert">' + esc(err) + '</div>' : '') + (V ? V() : '');
+    const hd0 = top(back), err0 = err ? '<div class="gerr" role="alert">' + esc(err) + '</div>' : '', body0 = V ? V() : ''; /* integration (one look / merged build, Nov 16 2026; see HANDOFF "Port to component branches") */ 
+    e.querySelector('.gin0').innerHTML = window.OddLook ? window.OddLook.head(hd0, body0, err0) : hd0 + err0 + body0;
   }
   function push(o) { readDraft(); err = ''; stack.push(o); paint(); const e = el(); if (e) e.scrollTop = 0; }
   async function loadHome() { try { H = await post('mine', {}); err = ''; blSet(H.betLock); } catch (e) { err = errText(e); if (!H) H = { groups: [], open: [], pending: [] }; } if (!LIMS) post('limits', {}).then((j) => { LIMS = j; }).catch(() => {}); if (stack[stack.length - 1].t === 'home') paint(); }
@@ -407,6 +410,7 @@
 
   function click(ev) {
     const t = ev.target.closest('button,a,[data-a]'); if (!t || t.disabled) return; const a = t.getAttribute('data-a'), id = t.getAttribute('data-id'), pid = t.getAttribute('data-pid'), cid = t.getAttribute('data-cid');
+    if (CHT) { clearTimeout(CHT); CHT = 0; readDraft(); } // a tap wins over the delayed redraw of a just-edited field
     if (a === 'close') { readDraft(); try { sessionStorage.removeItem('ogrp-open'); } catch (x) {} el().remove(); return; }
     if (a === 'back') { readDraft(); err = ''; if (stack.length > 1) stack.pop(); const s = cur(); if (s.t === 'home') loadHome(); else if (s.t === 'hub' || s.t === 'members' || s.t === 'rules') loadGroup(s); else if (s.t === 'stand') loadStand(s); paint(); return; }
     if (t.hasAttribute('data-fmt')) { readDraft(); DR.fmt = t.getAttribute('data-fmt'); paint(); return; }
@@ -444,7 +448,7 @@
     if (a === 'pot') { const s = { t: 'pot', id: id || gid(), w: t.getAttribute('data-w') || 'main' }; const hg = (H && H.groups.find((x) => x.id === s.id)); if (!curGroup() && hg) s.gr = hg; push(s); if (!curGroup()) loadGroup(s); return; }
     if (a === 'player') { const c0 = cur(); const s = { t: 'player', id: id || gid(), cid: cid || gcid(), pid, scope: t.getAttribute('data-week') ? 'week' : (c0.t === 'stand' && c0.tab === 'week' ? 'week' : 'season'), week: +t.getAttribute('data-week') || (c0.data && c0.data.week) || undefined }; const hg = H && H.groups.find((x) => x.id === s.id); if (!curGroup() && hg) s.gr = hg; push(s); loadPlayer(s); return; }
     if (a === 'preview') { const s = cur(); s.code = (document.getElementById('gcode') || {}).value || ''; act('preview', { code: s.code }, async (j) => { s.pre = j.group; paint(); }); return; }
-    if (a === 'dojoin') { const s = cur(); act('join', { code: s.code }, async (j) => { await toHub(j.group.id); }); return; }
+    if (a === 'dojoin') { const s = cur(); act('join', { code: s.code }, async (j) => { await toHub(j.group.id); if (window.OddLook) window.OddLook.toast('You are in. Tap “Add a bet” to make your first pick.'); }); return; }
     if (a === 'request') { act('request', { id: id || gid() }, async () => { stack = [{ t: 'home' }]; await loadHome(); paint(); }); return; }
     if (a === 'cancel') { act('cancel', { id }, async () => { await loadHome(); }); return; }
     if (a === 'sidein' || a === 'sideout') { const s = cur(); act('sidepot', { id: s.id, cid, on: a === 'sidein' }, async (j) => { s.gr = j.group; paint(); }); return; }
@@ -454,6 +458,8 @@
     if (a === 'invite') { const gr = curGroup(); if (gr && window.OddJoin) window.OddJoin.share({ type: 'g', code: gr.code, title: gr.name }); return; }
     if (a === 'copy') { const c = curGroup() && curGroup().code; try { navigator.clipboard.writeText(c); t.textContent = 'Copied'; } catch (x) { t.textContent = c; } return; }
     if (a === 'contact') { push({ t: 'contact' }); return; }
+    if (a === 'addgame') { const gr = curGroup(); if (gr && window.OddGames) window.OddGames.startFor({ id: gr.id, name: gr.name }, t.getAttribute('data-k')); return; } /* integration (merged build, Nov 16 2026; see HANDOFF "Port to component branches") */ 
+    if (a === 'addbet') { try { sessionStorage.removeItem('ogrp-open'); } catch (x) {} el().remove(); if (typeof window.setView === 'function') { window.setView('bets'); setTimeout(() => { try { window.addMenu(true); const m = document.getElementById('addmenu'); if (!m || m.hidden) window.betsRender(); } catch (x) {} }, 150); } return; }
     if (a === 'partners') { const s = { t: 'partners', id: gid(), sport: 'golf', size: 2, mode: 'balanced', vals: {}, off: {}, guests: [] }; push(s); loadPartners(s); return; }
     if (t.hasAttribute('data-psport') || t.hasAttribute('data-psize') || t.hasAttribute('data-pmode')) { const s = cur(); readPartners(s); if (t.hasAttribute('data-psport')) { s.sport = t.getAttribute('data-psport'); s.vals = {}; s.guests.forEach((x) => { x.val = ''; }); } if (t.hasAttribute('data-psize')) s.size = +t.getAttribute('data-psize'); if (t.hasAttribute('data-pmode')) s.mode = t.getAttribute('data-pmode'); loadPartners(s); return; }
     if (a === 'ptoggle') { const s = cur(); readPartners(s); s.off[pid] = !s.off[pid]; loadPartners(s); return; }
@@ -465,16 +471,20 @@
     if (a === 'leave') { if (!confirm('Leave this group?')) return; act('leave', { id: cur().id }, async () => { stack = [{ t: 'home' }]; await loadHome(); paint(); }); return; }
     if (a === 'delete') { if (!confirm('Delete this group for everyone? This cannot be undone.')) return; act('delete', { id: cur().id }, async () => { stack = [{ t: 'home' }]; await loadHome(); paint(); }); return; }
   }
+  let CHT = 0;
   function change(ev) {
     const id = ev.target && ev.target.id; if (!id) return; const s = cur();
     if (id === 'gweek') { s.week = +ev.target.value; loadStand(s); return; }
-    if (['gstart', 'gruns', 'gsd', 'ged', 'gtake', 'gentry', 'gtv', 'gmax', 'glegs', 'gsport', 'gms'].includes(id)) { readDraft(); paint(); }
+    if (['gstart', 'gruns', 'gsd', 'ged', 'gtake', 'gentry', 'gtv', 'gmax', 'glegs', 'gsport', 'gms'].includes(id)) { readDraft(); /* integration (merged build, Nov 16 2026; see HANDOFF "Port to component branches") */ 
+      // A typed field (entry, take, dates) fires `change` when it loses focus, i.e. at the moment the next button is being tapped: redrawing then
+      // swallowed that tap ("Create group" needed two taps). Dropdowns redraw at once; typed fields redraw a moment later, and never under a tap.
+      if (ev.target.tagName === 'SELECT') { paint(); return; } clearTimeout(CHT); CHT = setTimeout(() => { CHT = 0; const f = document.activeElement, e = el(); if (e && f && e.contains(f) && /^(INPUT|TEXTAREA)$/.test(f.tagName)) return; if (e) paint(); }, 250); }
   }
   function css() {
     if (document.getElementById('ogcss')) return; const st = document.createElement('style'); st.id = 'ogcss';
     st.textContent = '/* Oddable look (owner, Nov 16 2026: "Render the Oddable look to these plays"): the app\'s own variables from pics/index.html (:root / body.dark / html.cb),'
       + "   the navy header gradient, 14px cards, .chips-style segments, Alert-gold highlight cards and the app's .res / .res.hit / .res.miss result rows. No separate palette. */"
-      + '#ogrp{--gv:var(--blue);--gvb:var(--blue);--gvt:#fff;--gy:#f5c542;position:fixed;inset:0;z-index:95;background:var(--bg);color:var(--ink);overflow:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}'
+      + '#ogrp{--gv:var(--blue);--gvb:var(--blue);--gvt:#fff;--gy:var(--gold,#f5c542);position:fixed;inset:0;z-index:95;background:var(--bg);color:var(--ink);overflow:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}'
       + 'html.cb #ogrp{--gv:#003594;--gvb:#c6cbd7}'
       + '#ogrp .gin0{max-width:560px;margin:0 auto;padding:0 12px calc(48px + env(safe-area-inset-bottom))}#ogrp.gbusy{cursor:progress}#ogrp.gbusy .gpri,#ogrp.gbusy .gout{opacity:.6}'
       + '#ogrp *{box-sizing:border-box}#ogrp h1{font-size:26px;line-height:1.15;margin:12px 0 6px;color:var(--ink)}#ogrp h2{font-size:17px;margin:0 0 10px}#ogrp .gsub{color:var(--muted);margin:0 0 14px}'
@@ -557,7 +567,7 @@
     if (!(Number(bet.stake) > 0)) return 'Group bets need a stake. Enter it and add the bet again.';
     const r = await place(bet); if (!r.ok) return r.error; bet.gl = r.gl; bet.sa = r.sa; return true;
   }
-  window.OddGroups = { gate, place, ask, status: blStatus, active: () => BL.n > 0, locked: (b) => !!(b && Number(b.gl) > 0), NOTSAVED, LOCKNOTE };
+  window.OddGroups = { refresh: () => { const s = cur(); if (!el() || !s) return; if (s.t === 'hub') loadGroup(s); else if (s.t === 'home') loadHome(); }, contact: () => { if (!el()) window.oddGroups(); push({ t: 'contact' }); }, gate, place, ask, status: blStatus, active: () => BL.n > 0, locked: (b) => !!(b && Number(b.gl) > 0), NOTSAVED, LOCKNOTE };
   if (g('odd-tok')) setTimeout(() => { blStatus(); }, 4000);
   // G14: invite links ?join=g.<code> land here (pics/join.js calls this once the person is signed in).
   if (window.OddJoin) window.OddJoin.register('g', (code) => openJoin(code));

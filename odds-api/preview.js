@@ -53,7 +53,7 @@ async function makeUsers() {
   const names = {};
   for (const u of USERS) {
     const salt = crypto.createHash('sha256').update('pv|' + u.phone).digest('hex').slice(0, 32);
-    await S.dbPut({ id: u.id, salt, pinhash: crypto.scryptSync(PIN, salt, 32).toString('hex'), data: { bets: [], log: {}, pins: [] }, updated: Date.now() - 30 * 864e5 }, true);
+    await S.dbPut({ id: u.id, salt, pinhash: crypto.scryptSync(PIN, salt, 32).toString('hex'), data: { bets: [], log: {}, pins: [] }, updated: Date.now() - 30 * 864e5, created_at: new Date(Date.now() - 200 * 864e5).toISOString() }, true); // demo people have been members since spring: stats only accepts plays dated after the account existed
     names[u.id.slice(0, 8)] = u.name;
   }
   await S.dbPut({ id: 'lock:names', salt: 'x', pinhash: 'x', data: { names }, updated: 1 });

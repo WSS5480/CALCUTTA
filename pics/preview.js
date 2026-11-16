@@ -1,5 +1,6 @@
 // TEST PREVIEW ONLY (branch `preview`). Not part of the live app.
-//  - "TEST PREVIEW, not live" ribbon in its own strip above everything (the app and every overlay start below it, so it never covers UI)
+//  - "TEST PREVIEW, not live" strip above everything. It reserves its own space: <body> starts below it and contains every fixed element, so no
+//    screen (today's or a future one) can end up under it
 //  - Demo user switcher (commissioner / player / tournament director): POST /preview/as on the preview server, then reload as that person
 //  - 🎮 Play hub (#opv): one door to Groups, Calcutta, Golf, Start a game, My events, My stats, My handicap, Partner suggestions, Tournament handicaps
 //  - Anything not finished says "Preview: in progress"
@@ -20,8 +21,11 @@
   st.textContent = ':root{--pvh:calc(30px + env(safe-area-inset-top))}'
     + '#pvrib{position:fixed;top:0;left:0;right:0;height:var(--pvh);box-sizing:border-box;padding:env(safe-area-inset-top) 8px 0;z-index:1000;background:#f5c542;color:#1a1300;font:700 12px/30px system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:space-between;gap:8px;white-space:nowrap;transform:translate3d(0,0,0)}'
     + '#pvrib span{overflow:hidden;text-overflow:ellipsis}#pvrib button{flex:none;height:24px;min-width:44px;padding:0 10px;border-radius:999px;border:1px solid #1a1300;background:#1a1300;color:#f5c542;font:700 12px system-ui;max-width:55vw;overflow:hidden;text-overflow:ellipsis}'
-    + '#sc{top:var(--pvh)!important}#plb{top:calc(var(--pvh) + 10px)!important}#ogrp,#ocalc,#ogolf,#oevt,#ocat,#odash,#opv,#gate,#oddwarn,#gnm{top:var(--pvh)!important}@media(min-width:900px){.bn{top:var(--pvh)!important}}'
-    + '#opv,#pvpick{position:fixed;inset:0;background:var(--bg,#0b1020);color:var(--ink,#eee);overflow:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;font:15px/1.4 system-ui,-apple-system,sans-serif}#opv{z-index:94}#pvpick{z-index:900;top:var(--pvh)}'
+    // The strip RESERVES its own space for everything, present and future: it lives outside <body> (a child of <html>), and <body> is a box that
+    // starts below it and is the containing block of every fixed element inside it (transform). No overlay has to be listed here any more.
+    + 'html{background:#f5c542}body{position:fixed!important;top:var(--pvh)!important;left:0!important;right:0!important;bottom:0!important;height:auto!important;min-height:0!important;margin:0!important;transform:translate3d(0,0,0);overflow:hidden}'
+    + 'body.pvscroll{overflow-y:auto!important;-webkit-overflow-scrolling:touch}'
+    + '#opv,#pvpick{position:fixed;inset:0;background:var(--bg,#0b1020);color:var(--ink,#eee);overflow:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;font:15px/1.4 system-ui,-apple-system,sans-serif}#opv{z-index:94}#pvpick{z-index:900}'
     + '.pvin{max-width:560px;margin:0 auto;padding:0 14px calc(48px + env(safe-area-inset-bottom))}.pvtop{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:10px;min-height:52px;margin:0 -14px 10px;padding:6px 14px;background:#041e42;color:#fff}'
     + '.pvtop b{font-size:18px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pvtop button{min-height:44px;min-width:44px;padding:0 12px;border-radius:10px;border:1px solid rgba(255,255,255,.4);background:none;color:#fff;font:700 14px system-ui}'
     + '.pvc{display:block;width:100%;box-sizing:border-box;text-align:left;margin:0 0 10px;padding:12px 14px;border-radius:14px;border:1px solid var(--line,#2b3f66);background:var(--panel,#121a33);color:inherit;font:inherit}button.pvc{min-height:56px}'
@@ -40,7 +44,7 @@
   // ---------- ribbon + demo user ----------
   const ROLE = () => g('pv-role'), WHO = () => { try { return JSON.parse(g('pv-user') || 'null'); } catch (e) { return null; } };
   function ribbon() {
-    let r = document.getElementById('pvrib'); if (!r) { r = document.createElement('div'); r.id = 'pvrib'; document.body.appendChild(r); }
+    let r = document.getElementById('pvrib'); if (!r) { r = document.createElement('div'); r.id = 'pvrib'; document.documentElement.appendChild(r); if (!document.getElementById('sc')) document.body.classList.add('pvscroll'); /* pages that scroll the body itself (sports.html) */ }
     const u = WHO(); r.innerHTML = '<span>TEST PREVIEW, not live</span><button id="pvsw" aria-label="Switch demo user">' + (u ? '👤 ' + esc(u.name) + ' · ' + esc(u.label) + ' ▾' : '👤 Demo user ▾') + '</button>';
     document.getElementById('pvsw').onclick = () => picker(true);
   }

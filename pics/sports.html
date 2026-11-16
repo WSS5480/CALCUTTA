@@ -116,12 +116,12 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 <div id="plb"></div><iframe id="mir" aria-hidden="true" tabindex="-1"></iframe><script>setTimeout(function(){var f=document.getElementById("mir");if(f)f.src="./?mirror=1"},3500)</script>
 <div id="sc">
 <header>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="location.href='./?add=1'">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v127</span></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="location.href='./?add=1'">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v254</span></div></div>
   <div class="lg" id="lg"></div>
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div class="sub" id="upd">Loading…</div>
   <div class="sub" id="mc" style="margin-top:2px;cursor:pointer" onclick="mcToggle()"></div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v140 (one look · sports model v4)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v254 (other sports · sports model v4)</div>
   <div class="sub" style="font-size:11px"><a style="color:inherit;text-decoration:underline;cursor:pointer" onclick="themeSet(document.documentElement.classList.contains('cb') ? 'violet' : 'cowboys')">Switch colors: Cowboys / original violet</a></div>
   </details>
 </header>
@@ -134,8 +134,8 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </div>
 <nav class="bn" id="bn"></nav>
 <script>
-const NAVI = [['all', '🏠', 'Games'], ['livepg', '📡', 'Live'], ['bets', '🧾', 'My Bets'], ['win', '✅', 'Winning'], ['lose', '🔻', 'Losing']];
-function navGo(k) { if (k === 'all') { document.getElementById('sc').scrollTo({ top: 0, behavior: 'smooth' }); return; } try { localStorage.setItem('pics-view', k === 'livepg' ? 'live' : k === 'bets' ? 'bets' : 'main'); if (k === 'win' || k === 'lose') localStorage.setItem('pics-filt', k); } catch (e) {} location.href = './'; }
+const NAVI = [['all', '🏠', 'Games'], ['livepg', '📡', 'Live'], ['bets', '🧾', 'My Bets'], ['groups', '👥', 'Groups'], ['more', '☰', 'More']]; // integration (screens review): the same five-button bar as the main page; Groups and More open on the main page
+function navGo(k) { if (k === 'all') { document.getElementById('sc').scrollTo({ top: 0, behavior: 'smooth' }); return; } if (k === 'groups' || k === 'more') { location.href = './?go=' + k; return; } try { localStorage.setItem('pics-view', k === 'livepg' ? 'live' : k === 'bets' ? 'bets' : 'main'); if (k === 'win' || k === 'lose') localStorage.setItem('pics-filt', k); } catch (e) {} location.href = './'; }
 document.getElementById('bn').innerHTML = NAVI.map(([k, i, l]) => `<button class="${k === 'all' ? 'on' : ''}" onclick="navGo('${k}')"><span>${i}</span>${l}</button>`).join('');
 const $ = (s) => document.querySelector(s);
 function plbFit() { const pb = $('#plb'), lg = document.querySelector('header .lg'); if (!pb || !lg || pb.hidden) return; const under = lg.getBoundingClientRect().top < pb.offsetTop + pb.offsetHeight + 6; pb.classList.toggle('away', under); if (under && window.__plbo) { window.__plbo = false; const d = $('#plbd'); if (d) d.hidden = true; } }
@@ -463,5 +463,6 @@ function aiCtx(gid) {
 }
 </script>
 <script src="sync.js"></script>
+<script src="preview.js?v=254"></script><!-- PREVIEW-ONLY (never merge to main): the test-copy strip and demo-person switcher -->
 </body>
 </html>

@@ -23,7 +23,7 @@ async function seed(C) {
   await S.dbPut({ id: 'lock:ent', salt: 'x', pinhash: 'x', data: { acct: { [dk]: { on: true, name: 'Tierra Verde Golf Club (demo)', at: REAL - 10 * DAY } }, seats: {} }, updated: 1 }); reset();
   const sat = next - DAY; setNow(REAL - 2 * HOUR);
   let g = (await ok('golf', 'director', '/golf/create', { kind: 'day', title: 'Member-Guest Scramble', course: COURSE, pot: { entry: 40, take: { kind: 'none', v: 0 } }, myName: byRole('director').name,
-    day: { fmt: 'scramble4', teams: 3, teamSize: 4, net: 'net', date: chiDay(sat), extras: { skins: { on: true, net: false, amt: 10 }, ctp: [7, 12], ld: [9], ctpAmt: 20, ldAmt: 20 }, hu: { on: false } } })).game;
+    day: { fmt: 'scramble4', teams: 3, teamSize: 4, net: 'net', date: chiDay(sat), teeTime: sat + 14.5 * HOUR, extras: { skins: { on: true, net: false, amt: 10 }, ctp: [7, 12], ld: [9], ctpAmt: 20, ldAmt: 20 }, hu: { on: false } } })).game;
   ids.tour = g.id; ids.tourCode = g.code; const pid = { director: g.me };
   for (const r of ['commish', 'player', 'p4', 'p5', 'p6', 'p7', 'p8']) { const j = await ok('golf', r, '/golf/join', { code: g.code, myName: byRole(r).name }); pid[r] = j.game.me; }
   for (const nm of ['Guest Gus', 'Walk-on Wendy']) { const j = await X.call('golf', 'director', '/golf/team', { id: g.id, op: 'guest', name: nm }); if (j.s !== 200) ids.tourGuestNote = (j.j && j.j.error) || 'guest add refused'; }

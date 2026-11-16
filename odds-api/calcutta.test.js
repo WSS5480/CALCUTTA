@@ -29,6 +29,11 @@ let urls = [], feedOn = false; // the score feed stays empty until the event "st
 D.fetch = async (u) => { urls.push(u); if (/\/teams\?/.test(u)) return { ok: true, json: async () => ({ sports: [{ leagues: [{ teams: TEAMS.map((t) => ({ team: t })) }] }] }) };
   const m = /seasontype=3&week=(\d+)/.exec(u); return { ok: true, json: async () => ({ events: feedOn && m && PO[m[1]] ? PO[m[1]] : [] }) }; };
 let NOW = Z('2026-11-17T18:00:00Z'); D.now = () => NOW;
+// ---- the shared people limits (Groups coder's odds-api/limits.js: the real file when it is in this branch or in the Groups worktree, else a stand-in with the same signature) ----
+let LIM = null; for (const p of ['./limits', '/home/claude/calcutta-groups/odds-api/limits.js']) { if (!LIM) { try { LIM = require(p); } catch (e) {} } }
+const SHARED = !!LIM; if (LIM) { LIM._deps.S = D.S; LIM._deps.now = () => NOW; } else { const ent = new Set(); LIM = { keyOf: (e) => 'a' + C.mkOf(e).slice(1), maxPeople: async (k) => (ent.has(k) ? 500 : 8), admin: async (b) => { if (b.on) ent.add(b.key); else ent.delete(b.key); }, _reset: () => {} }; }
+D.limits = () => LIM;
+const enterprise = async (who, on) => { await LIM.admin({ op: 'enterprise', key: LIM.keyOf(pe(SID[who])), on }); NOW += 31e3; }; // the owner's Enterprise flag on an ACCOUNT (the answer is cached 30 s)
 // ---- server ----
 const srv = http.createServer(async (req, res) => { if (!(await C.handle(req, res))) { res.statusCode = 404; res.end('{}'); } });
 let P, raw = [];
@@ -74,7 +79,7 @@ srv.listen(0, async () => {
     // --- people cap: 8 (commissioner included), enterprise uncapped ---
     for (const w of ['eve', 'fay', 'gus', 'hal']) { r = await call(w, 'join', { code: c1.code }); ok(r); }
     r = await call('ivy', 'join', { code: c1.code }); assert.strictEqual(r.s, 409); assert.ok(/up to 8 people/.test(r.j.error) && r.j.error.includes('Need more than 8? Oddable for courses, clubs and leagues: $500/month + $20 per player per game. Contact us.'), r.j.error); assert.strictEqual(r.j.code, 'cap');
-    C.limits.enterprise.add(C.mkOf(pe(SID.ann))); r = await call('ivy', 'join', { code: c1.code }); ok(r, 'enterprise commissioner is uncapped'); C.limits.enterprise.clear();
+    await enterprise('ann', true); r = await call('ivy', 'join', { code: c1.code }); ok(r, 'enterprise commissioner is uncapped (shared limits.maxPeople)'); assert.strictEqual(r.j.calc.max, 500, 'Enterprise ceiling from the shared helper'); await enterprise('ann', false);
     r = await call('ivy', 'bid', { id: c1.id, lot: 'L1', amt: 5 }); assert.strictEqual(r.s, 403, '9th person cannot bid once the cap is back to 8');
     t('people cap: 9th person refused with the shared pricing text; enterprise flag lifts it; cap also enforced on bids');
     // --- auction ---
@@ -181,15 +186,15 @@ srv.listen(0, async () => {
     r = await call('ann', 'create', { name: 'Office pool', ev: 'custom', lots: [{ teams: [{ name: 'Red' }] }, { teams: [{ name: 'Blue' }] }, { teams: [{ name: 'Green' }, { name: 'Gold' }] }], rows: [{ k: 'win', n: 3, pct: 20 }, { k: 'champ', n: 1, pct: 40 }], minBid: 5, inc: 5, timer: 10, take: { kind: 'none' }, order: 'listed', mode: 'manual' }); ok(r); const c5 = r.j.calc;
     assert.deepStrictEqual(c5.lots.map((l) => l.teams.map((x) => x.id)), [['x1'], ['x2'], ['x3', 'x4']]);
     ok(await call('ann', 'enter', { id: c5.id, lot: 'L1', name: 'Al', amt: 50 })); ok(await call('ann', 'enter', { id: c5.id, lot: 'L2', name: 'Bo', amt: 30 })); ok(await call('ann', 'enter', { id: c5.id, lot: 'L3', name: 'Cy', amt: 20 }));
-    r = await call('bob', 'result', { id: c5.id, team: 'x1', wins: 2 }); assert.strictEqual(r.s, 404, 'not a member: cannot even see it');
-    ok(await call('ann', 'result', { id: c5.id, team: 'x1', wins: 2, champ: true })); ok(await call('ann', 'result', { id: c5.id, team: 'x4', wins: 1 })); ok(await call('ann', 'result', { id: c5.id, team: 'x2', out: true }));
+    r = await call('bob', 'result', { confirm: true, id: c5.id, team: 'x1', wins: 2 }); assert.strictEqual(r.s, 404, 'not a member: cannot even see it');
+    ok(await call('ann', 'result', { confirm: true, id: c5.id, team: 'x1', wins: 2, champ: true })); ok(await call('ann', 'result', { confirm: true, id: c5.id, team: 'x4', wins: 1 })); ok(await call('ann', 'result', { confirm: true, id: c5.id, team: 'x2', out: true }));
     r = await call('ann', 'board', { id: c5.id }); const L = {}; r.j.board.lots.forEach((l) => { L[l.id] = l.earned; }); assert.deepStrictEqual(L, { L1: 80, L2: 0, L3: 20 }); assert.strictEqual(r.j.board.paidOut, 100);
     assert.ok(r.j.audit.filter((a) => /^Result for/.test(a.what)).length === 3);
-    ok(await call('ann', 'result', { id: c5.id, team: 'x1', clear: true })); r = await call('ann', 'board', { id: c5.id }); assert.strictEqual(r.j.board.lots[0].earned, 0); assert.ok(r.j.audit.some((a) => /Cleared/.test(a.what)));
+    ok(await call('ann', 'result', { confirm: true, id: c5.id, team: 'x1', clear: true })); r = await call('ann', 'board', { id: c5.id }); assert.strictEqual(r.j.board.lots[0].earned, 0); assert.ok(r.j.audit.some((a) => /Cleared/.test(a.what)));
     t('manual results (custom event): wins / champion / out by the commissioner, payouts follow, every change in the audit trail, clear goes back');
     // --- manual override on top of the ESPN feed ---
-    ok(await call('ann', 'result', { id: c2.id, team: '5', wins: 1 })); r = await call('ann', 'board', { id: c2.id }); assert.ok(r.j.board.rows[0].over, 'a 14th win is flagged (13 slots)'); assert.strictEqual(r.j.board.lots.find((l) => l.id === 'L5').earned, 0);
-    ok(await call('ann', 'result', { id: c2.id, team: '5', clear: true }));
+    ok(await call('ann', 'result', { confirm: true, id: c2.id, team: '5', wins: 1 })); r = await call('ann', 'board', { id: c2.id }); assert.ok(r.j.board.rows[0].over, 'a 14th win is flagged (13 slots)'); assert.strictEqual(r.j.board.lots.find((l) => l.id === 'L5').earned, 0);
+    ok(await call('ann', 'result', { confirm: true, id: c2.id, team: '5', clear: true }));
     t('manual override on an ESPN event; more wins than slots are flagged, never over-paid');
     // --- series sports: a series counts once ---
     const SG = (id, t0, a, b, wa, wb, done, head) => ({ id, t: t0, done: true, st: 3, week: 0, head, teams: [{ id: a, score: 100, winner: true }, { id: b, score: 90, winner: false }], series: { done, wins: { [a]: wa, [b]: wb } } });
@@ -215,7 +220,7 @@ srv.listen(0, async () => {
     r = await call('bob', 'buyback', { id: c7.id, lot: 'L2' }); assert.strictEqual(r.s, 409, 'only once');
     r = await call('dan', 'buyback', { id: c7.id, lot: 'L2', clear: true }); assert.strictEqual(r.s, 403); ok(await call('bob', 'buyback', { id: c7.id, lot: 'L2', clear: true }), 'the buyer can undo their own buy-back'); ok(await call('bob', 'buyback', { id: c7.id, lot: 'L2' }));
     ok(await call('ann', 'buyback', { id: c7.id, lot: 'L1', who: 0 }), 'commissioner records it for the player of record (here: herself)');
-    tick(1000); ok(await call('ann', 'result', { id: c7.id, team: 'x2', wins: 1 })); tick(1000); ok(await call('ann', 'result', { id: c7.id, team: 'x1', wins: 2, champ: true }));
+    tick(1000); ok(await call('ann', 'result', { confirm: true, id: c7.id, team: 'x2', wins: 1 })); tick(1000); ok(await call('ann', 'result', { confirm: true, id: c7.id, team: 'x1', wins: 2, champ: true }));
     r = await call('ann', 'board', { id: c7.id }); const b7 = r.j.board, o7 = {}; b7.owners.forEach((o) => { o7[o.name] = [o.spent, o.won]; });
     assert.deepStrictEqual([b7.pot, b7.take, b7.pool, b7.paidOut], [284, 19.88, 264.12, 264.12]);
     assert.deepStrictEqual(b7.lots.map((l) => l.earned), [211.29, 52.83, 0], 'Blue first win $52.83 (extra cent), Red 2 wins + champion $211.29');

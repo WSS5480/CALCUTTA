@@ -32,6 +32,11 @@ let feedFail = false; // simulates ESPN down
 D.fetch = async (u) => { urls.push(u); if (feedFail && !/\/teams\?/.test(u)) throw new Error('ESPN down'); if (/\/teams\?/.test(u)) return { ok: true, json: async () => ({ sports: [{ leagues: [{ teams: TEAMS.map((t) => ({ team: t })) }] }] }) };
   const m = /seasontype=3&week=(\d+)/.exec(u); return { ok: true, json: async () => ({ events: feedOn && m && PO[m[1]] ? PO[m[1]] : [] }) }; };
 let NOW = Z('2026-11-17T18:00:00Z'); D.now = () => NOW;
+// ---- the shared people limits (Groups coder's odds-api/limits.js: the real file when it is in this branch or in the Groups worktree, else a stand-in with the same signature) ----
+let LIM = null; for (const p of ['./limits', '/home/claude/calcutta-groups/odds-api/limits.js']) { if (!LIM) { try { LIM = require(p); } catch (e) {} } }
+const SHARED = !!LIM; if (LIM) { LIM._deps.S = D.S; LIM._deps.now = () => NOW; } else { const ent = new Set(); LIM = { keyOf: (e) => 'a' + C.mkOf(e).slice(1), maxPeople: async (k) => (ent.has(k) ? 500 : 8), admin: async (b) => { if (b.on) ent.add(b.key); else ent.delete(b.key); }, _reset: () => {} }; }
+D.limits = () => LIM;
+const enterprise = async (who, on) => { await LIM.admin({ op: 'enterprise', key: LIM.keyOf(pe(SID[who])), on }); NOW += 31e3; }; // the owner's Enterprise flag on an ACCOUNT (the answer is cached 30 s)
 // ---- server ----
 const srv = http.createServer(async (req, res) => { if (!(await C.handle(req, res))) { res.statusCode = 404; res.end('{}'); } });
 let P, raw = [];
@@ -75,7 +80,7 @@ srv.listen(0, async () => {
     startEvent(); r = await call('ann', 'ctl', { id: c.id, op: 'undo' }); assert.strictEqual(r.s, 409, 'undo sale after start -> ' + r.s + ' ' + r.j.error); });
   await chk('1d a hand-entered result freezes ownership (events without a feed) and buy-back', async () => { fresh();
     r = await call('ann', 'create', { name: 'Golf day', ev: 'custom', lots: [{ teams: [{ name: 'Red' }], playersOfRecord: [{ me: true }] }, { teams: [{ name: 'Blue' }] }], rows: [{ k: 'champ', n: 1, pct: 100 }], minBid: 5, inc: 5, timer: 10, buyBack: true, take: { kind: 'none' }, order: 'listed', mode: 'manual' }); ok(r); const g = r.j.calc;
-    ok(await call('ann', 'enter', { id: g.id, lot: 'L1', name: 'Cy', amt: 40 })); ok(await call('ann', 'enter', { id: g.id, lot: 'L2', name: 'Di', amt: 30 })); ok(await call('ann', 'result', { id: g.id, team: 'x1', champ: true }));
+    ok(await call('ann', 'enter', { id: g.id, lot: 'L1', name: 'Cy', amt: 40 })); ok(await call('ann', 'enter', { id: g.id, lot: 'L2', name: 'Di', amt: 30 })); ok(await call('ann', 'result', { confirm: true, id: g.id, team: 'x1', champ: true }));
     r = await call('ann', 'enter', { id: g.id, lot: 'L2', name: 'Ed', amt: 30 }); assert.strictEqual(r.s, 409, 'enter'); r = await call('ann', 'buyback', { id: g.id, lot: 'L1', self: true }); assert.strictEqual(r.s, 409, 'buy-back after a result'); });
   // 6 MED: undo of a sale keeps the bids
   await chk('6 undo of a sale reopens the lot with its winning bid still standing', async () => { fresh();
@@ -96,7 +101,7 @@ srv.listen(0, async () => {
   await chk('7 hand-entered champion (and biggest win) replace the feed ones', async () => { fresh();
     r = await call('ann', 'create', base({ lots: lotsOf([1, 2, 8]), rows: [{ k: 'champ', n: 1, pct: 100 }], take: { kind: 'none' }, mode: 'manual' })); const m = r.j.calc;
     for (let i = 1; i <= 3; i++) ok(await call('ann', 'enter', { id: m.id, lot: 'L' + i, name: 'P' + i, amt: 10 })); startEvent();
-    ok(await call('ann', 'result', { id: m.id, team: '8', champ: true })); r = await call('ann', 'board', { id: m.id }); const b = r.j.board;
+    ok(await call('ann', 'result', { confirm: true, id: m.id, team: '8', champ: true })); r = await call('ann', 'board', { id: m.id }); const b = r.j.board;
     assert.strictEqual(b.lots.find((l) => l.id === 'L1').teams[0].r.champ, false, 'feed champion cleared'); assert.strictEqual(b.rows[0].hits, 1); assert.strictEqual(b.lots.find((l) => l.id === 'L3').earned, 30);
     const g = (id, a, b2, sa, sb) => ({ id, t: 1, done: true, state: 'post', st: 2, week: 1, head: '', teams: [{ id: a, score: sa, winner: true }, { id: b2, score: sb, winner: false }] }); void g; });
   // 4 MED: public peek limit is per IP
@@ -128,7 +133,7 @@ srv.listen(0, async () => {
     r = await call('ann', 'create', { name: 'Places', ev: 'custom', lots: [{ teams: [{ name: 'A' }] }, { teams: [{ name: 'B' }] }], rows: [{ k: 'place', r: 1, n: 1, pct: 70 }, { k: 'place', r: 2, n: 1, pct: 30 }], minBid: 5, inc: 5, timer: 10, take: { kind: 'none' }, order: 'listed', mode: 'manual' }); ok(r); const g = r.j.calc;
     ok(await call('ann', 'enter', { id: g.id, lot: 'L1', name: 'Al', amt: 10 })); ok(await call('ann', 'enter', { id: g.id, lot: 'L2', name: 'Bo', amt: 10 }));
     r = await call('ann', 'board', { id: g.id }); assert.strictEqual(r.j.board.over, false); assert.ok(r.j.board.lots.every((l) => l.alive));
-    ok(await call('ann', 'result', { id: g.id, team: 'x1', place: 1 })); ok(await call('ann', 'result', { id: g.id, team: 'x2', place: 2 })); r = await call('ann', 'board', { id: g.id }); assert.strictEqual(r.j.board.over, true); });
+    ok(await call('ann', 'result', { confirm: true, id: g.id, team: 'x1', place: 1 })); ok(await call('ann', 'result', { confirm: true, id: g.id, team: 'x2', place: 2 })); r = await call('ann', 'board', { id: g.id }); assert.strictEqual(r.j.board.over, true); });
   // ===== round 2 (re-review @cc82efc) =====
   const manual3 = async () => { r = await call('ann', 'create', base({ lots: lotsOf([1, 2, 8]), rows: [{ k: 'champ', n: 1, pct: 100 }], take: { kind: 'none' }, mode: 'manual' })); ok(r); const m = r.j.calc; for (let i = 1; i <= 3; i++) ok(await call('ann', 'enter', { id: m.id, lot: 'L' + i, name: 'P' + i, amt: 10 })); return m; };
   await chk('D1a the freeze survives a restart and a feed outage (sticky startedAt on the row)', async () => { fresh(); const m = await manual3();
@@ -148,7 +153,7 @@ srv.listen(0, async () => {
     r = await call('bob', 'get', { id: c.id }); assert.strictEqual(r.j.calc.a.status, 'closed'); assert.ok(r.j.calc.notices.some((n) => /event (has )?started/i.test(n.what)), JSON.stringify(r.j.calc.notices)); assert.strictEqual(r.j.calc.started, true); });
   await chk('D3 clearing a hand-entered result does not unfreeze', async () => { fresh();
     r = await call('ann', 'create', { name: 'Golf day', ev: 'custom', lots: [{ teams: [{ name: 'Red' }] }, { teams: [{ name: 'Blue' }] }], rows: [{ k: 'champ', n: 1, pct: 100 }], minBid: 5, inc: 5, timer: 10, take: { kind: 'none' }, order: 'listed', mode: 'manual' }); const g = r.j.calc;
-    ok(await call('ann', 'enter', { id: g.id, lot: 'L1', name: 'Cy', amt: 40 })); ok(await call('ann', 'enter', { id: g.id, lot: 'L2', name: 'Di', amt: 30 })); ok(await call('ann', 'result', { id: g.id, team: 'x1', champ: true })); ok(await call('ann', 'result', { id: g.id, team: 'x1', clear: true }));
+    ok(await call('ann', 'enter', { id: g.id, lot: 'L1', name: 'Cy', amt: 40 })); ok(await call('ann', 'enter', { id: g.id, lot: 'L2', name: 'Di', amt: 30 })); ok(await call('ann', 'result', { confirm: true, id: g.id, team: 'x1', champ: true })); ok(await call('ann', 'result', { confirm: true, id: g.id, team: 'x1', clear: true }));
     r = await call('ann', 'enter', { id: g.id, lot: 'L2', name: 'Ed', amt: 30 }); assert.strictEqual(r.s, 409); });
   await chk('D4 players of record lock once the lot is sold; changes before that are announced', async () => { fresh();
     r = await call('ann', 'create', { name: 'Golf day', ev: 'custom', lots: [{ teams: [{ name: 'Red' }] }, { teams: [{ name: 'Blue' }] }], rows: [{ k: 'champ', n: 1, pct: 100 }], minBid: 5, inc: 5, timer: 10, buyBack: true, take: { kind: 'none' }, order: 'listed', mode: 'manual' }); const g = r.j.calc; ok(await call('cat', 'join', { code: g.code }));
@@ -169,7 +174,7 @@ srv.listen(0, async () => {
     for (const w of ['bob', 'cat', 'eve']) ok(await call(w, 'join', { code: g.code }));
     await C.setPlayersOfRecord(g.id, 'L1', [pe(SID.cat), pe(SID.dan)]); // dan plays on Red but never joined the Calcutta
     ok(await call('ann', 'enter', { id: g.id, lot: 'L1', pid: await pidOf('bob', g.id), amt: 40 })); ok(await call('ann', 'enter', { id: g.id, lot: 'L2', pid: await pidOf('ann', g.id), amt: 30 }));
-    ok(await call('cat', 'buyback', { id: g.id, lot: 'L1' })); ok(await call('ann', 'result', { id: g.id, team: 'x1', champ: true }));
+    ok(await call('cat', 'buyback', { id: g.id, lot: 'L1' })); ok(await call('ann', 'result', { confirm: true, id: g.id, team: 'x1', champ: true }));
     const recOf = async (w) => (await C.statsFor(pe(SID[w]), {})).find((x) => x.id === g.id);
     const bob = await recOf('bob'), cat = await recOf('cat'), dan = await recOf('dan'), ann = await recOf('ann'), eve = await recOf('eve');
     assert.ok(bob && cat && dan && ann, 'records: ' + [!!bob, !!cat, !!dan, !!ann]); assert.ok(!eve, 'a member who bought nothing and plays on no team has no record');

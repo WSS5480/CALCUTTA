@@ -1,7 +1,8 @@
-/* Oddable 🏓 Pickleball (v253). Social pools and games for a pickleball group.
+/* Oddable 🏓 Pickleball (v253, court search v254). Social pools and games for a pickleball group.
    POINTS ONLY: nobody bets money here. Oddable never takes, holds or pays money.
    Local-only: events live in this device's localStorage (keys start with 'pb1-').
-   No server calls of any kind. Groups pass an event around with a share code. */
+   No Oddable server calls. The only outside calls are the court search (OpenStreetMap's Nominatim + Overpass),
+   and only when the user taps Search / Near me / a radius / Try again. Groups pass an event around with a share code. */
 (function () {
   'use strict';
   const PFX = 'pb1-ev-';
@@ -67,6 +68,7 @@
     const ev = { v: 1, id, name: o.name, date: o.date || '', fmt: o.fmt, courts: Math.max(1, Math.min(20, o.courts | 0 || 1)), timed: !!(o.timed && o.fmt === 'rr'), team: FMT[o.fmt].ind ? 'r' : (o.team === 's' ? 's' : 'd'), maxW: Math.max(1, Math.min(9, o.maxW | 0 || 3)), ps, us: [], alt: [], g: [], seq: 0, done: false, cr: Date.now(),
       add: { calc: !!o.calc, skins: !!o.skins, pick: !!o.pick },
       ms: [], calc: { st: Math.max(1, o.start | 0 || 100), sp: o.split && o.split.length ? o.split : [50, 30, 20], b: {} }, sk: { pts: Math.max(1, o.skinPts | 0 || 1) }, pk: { w: {}, g: {} } };
+    const L = cleanLoc(o.loc); if (L) ev.loc = L;
     const names = ps.map((p) => p.n).concat(o.extra || []); const seen = {};
     names.forEach((n) => { const k = n.toLowerCase(); if (!seen[k]) { seen[k] = 1; ev.ms.push({ id: 'm' + (ev.ms.length + 1), n }); } });
     if (ev.team === 'd') { // fixed doubles pairs, balanced by DUPR (best with lowest)
@@ -389,6 +391,7 @@
       if (g.nx != null && !(typeof g.nx === 'string' && hasOwn(at, g.nx) && at[g.nx] > at[g.id])) return false;
       if (g.snap != null) { if (!g.snap || !Array.isArray(g.snap.q) || !g.snap.q.every((x) => U.has(x) && x !== 'BYE')) return false; g.snap = { q: g.snap.q.slice(), st: num(g.snap.st, 0) }; } }
     ev.alt = Array.isArray(ev.alt) ? ev.alt.filter((x) => PS.has(x)) : [];
+    if (ev.loc != null) { const L = cleanLoc(ev.loc); if (L) ev.loc = L; else delete ev.loc; } // v254 court; older codes have none
     ev.ms = (Array.isArray(ev.ms) ? ev.ms : []).filter((m) => m && ID.test(m.id)).map((m) => ({ id: m.id, n: str(m.n) }));
     ev.add = { calc: !!(ev.add && ev.add.calc), skins: !!(ev.add && ev.add.skins), pick: !!(ev.add && ev.add.pick) };
     const c = ev.calc || {}; ev.calc = { st: Math.max(1, num(c.st, 100)), sp: (Array.isArray(c.sp) ? c.sp : [50, 30, 20]).map(Number).filter((x) => x > 0), b: {} };
@@ -459,7 +462,7 @@
     const R = route(), main = $('#main'); let h = '';
     try {
       if (!R.length) h = viewHome();
-      else if (R[0] === 'new') h = viewNew();
+      else if (R[0] === 'new') h = R[1] === 'court' ? viewCourt(null) : viewNew();
       else if (R[0] === 'join') h = viewJoin();
       else if (R[0] === 'e') { const ev = load(R[1]), raw = lsGet(PFX + R[1]); if (!ev && raw == null) h = back('', 'My events') + '<div class="card">This event is not on this device.</div>';
         else if (!ev || typeof ev !== 'object' || ev.id !== R[1]) h = back('', 'My events') + badCard(ev && typeof ev === 'object' ? ev : null, R[1]); else { try { RES = ev.bk ? resolve(ev) : null; h = viewEvent(ev, R.slice(2)); } catch (x) { h = back('', 'My events') + badCard(ev, R[1]); } } }
@@ -481,19 +484,21 @@
     L.forEach((ev) => { if (ev.bad) { h += badCard(ev, ev.key); return; } try { RES = ev.bk ? resolve(ev) : null; const f = FMT[ev.fmt], d = isDone(ev), G = realGames(ev), sc = G.filter(isSc).length;
       const top = finish(ev)[0] || []; const adds = Object.keys(ADDON).filter((k) => ev.add[k]).map((k) => ADDON[k].ico + ' ' + ADDON[k].n).join(' · ');
       h += `<a class="card ev" href="#/e/${esc(ev.id)}"><div class="row"><b>${esc(ev.name)}</b><span class="b ${d ? 'hit' : ''}">${d ? 'Final' : sc ? 'In progress' : 'Not started'}</span></div>
-<div class="sub2">${f.ico} ${esc(f.n)} · ${ev.date ? esc(ev.date) + ' · ' : ''}${ev.us.length} ${f.ind || ev.team === 's' ? 'players' : 'teams'}</div>${adds ? `<div class="sub2">${adds}</div>` : ''}
+<div class="sub2">${f.ico} ${esc(f.n)} · ${ev.date ? esc(ev.date) + ' · ' : ''}${ev.us.length} ${f.ind || ev.team === 's' ? 'players' : 'teams'}</div>${ev.loc && ev.loc.n ? `<div class="sub2">📍 ${esc(ev.loc.n)}</div>` : ''}${adds ? `<div class="sub2">${adds}</div>` : ''}
 ${sc && top.length ? `<div class="sub2">${d ? '🏆 ' : 'Leading: '}${esc(top.slice(0, 2).map((u) => uName(ev, u)).join(' & ') + (top.length > 2 ? ' +' + (top.length - 2) : ''))}</div>` : ''}</a>`; } catch (e) { h += badCard(ev, ev.id); } });
     return h;
   }
 
   function badCard(ev, key) { const id = String(key); return `<div class="card err bad" data-id="${esc(id)}"><b>${esc((ev && ev.name) || 'An event')}</b> can't be shown (its data is damaged). <div class="btns"><button class="pill dang" data-act="delbad" data-id="${esc(id)}">Delete it</button></div></div>`; }
+  function newForm() { return { name: '', date: new Date().toISOString().slice(0, 10), courts: 2, players: '', fmt: 'rr', team: 'd', timed: false, rounds: '', calc: false, skins: false, pick: false, extra: '', start: 100, split: '50,30,20', skinPts: 1, maxW: 3, loc: '', court: null }; }
   function viewNew() {
-    const f = FORM || { name: '', date: new Date().toISOString().slice(0, 10), courts: 2, players: '', fmt: 'rr', team: 'd', timed: false, rounds: '', calc: false, skins: false, pick: false, extra: '', start: 100, split: '50,30,20', skinPts: 1, maxW: 3 };
+    const f = FORM || newForm();
     FORM = f; const ind = FMT[f.fmt].ind;
     let h = back('', 'My events') + `<h2>New event</h2>${ERR ? `<div class="card err" data-focus tabindex="-1">${esc(ERR)}</div>` : ''}
 <form id="nf" class="card frm" onsubmit="return false">
 <label>Event name<input name="name" maxlength="60" value="${esc(f.name)}" placeholder="Tuesday night mixer"></label>
 <div class="two"><label>Date<input type="date" name="date" value="${esc(f.date)}"></label><label>Courts<input type="number" inputmode="numeric" name="courts" min="1" max="20" value="${esc(f.courts)}"></label></div>
+${f.court ? `<div class="lbl">Court / location</div>${locLine(f.court, '')}<div class="btns"><a class="pill" href="#/new/court">🔎 Find a court</a><button class="pill" type="button" data-act="locclear">Remove</button></div>` : `<label>Court / location <small>optional</small><input name="loc" maxlength="80" value="${esc(f.loc)}" placeholder="Riverside Park courts"></label><div class="btns"><a class="pill" href="#/new/court">🔎 Find a court</a></div>`}
 <label>Players <small>one per line, DUPR rating optional: <i>Ana 4.25</i></small><textarea name="players" rows="7" placeholder="Ana 4.25&#10;Ben 3.9&#10;Cara&#10;Dev 3.5">${esc(f.players)}</textarea></label>
 <div class="lbl">Format</div><div class="fmts">`;
     Object.keys(FMT).forEach((k) => { const x = FMT[k]; h += `<div class="fopt ${f.fmt === k ? 'on' : ''}"><label class="frad"><input type="radio" name="fmt" value="${k}" ${f.fmt === k ? 'checked' : ''}> ${x.ico} ${esc(x.n)}</label>${infoBox(x.info, 'How ' + x.n + ' is played')}</div>`; });
@@ -513,13 +518,13 @@ ${sc && top.length ? `<div class="sub2">${d ? '🏆 ' : 'Leading: '}${esc(top.sl
   }
   function readForm() {
     const fm = $('#nf'); if (!fm) return FORM; const v = (n) => (fm.elements[n] ? fm.elements[n].value : undefined), c = (n) => (fm.elements[n] ? fm.elements[n].checked : undefined);
-    const f = Object.assign({}, FORM); ['name', 'date', 'courts', 'players', 'rounds', 'extra', 'start', 'split', 'skinPts', 'maxW', 'team'].forEach((n) => { if (v(n) !== undefined) f[n] = v(n); });
+    const f = Object.assign({}, FORM); ['name', 'date', 'courts', 'players', 'rounds', 'extra', 'start', 'split', 'skinPts', 'maxW', 'team', 'loc'].forEach((n) => { if (v(n) !== undefined) f[n] = v(n); });
     const r = fm.querySelector('input[name=fmt]:checked'); if (r) f.fmt = r.value; ['timed', 'calc', 'skins', 'pick'].forEach((n) => { if (c(n) !== undefined) f[n] = c(n); });
     FORM = f; return f;
   }
   function createFromForm() {
     const f = readForm(); const o = { name: String(f.name || '').trim().slice(0, 60), date: f.date, courts: +f.courts || 1, players: parsePlayers(f.players), fmt: f.fmt, team: f.team, timed: f.timed, rounds: +f.rounds || 0, calc: f.calc, skins: f.skins, pick: f.pick,
-      extra: String(f.extra || '').split('\n').map((x) => x.trim().slice(0, 40)).filter(Boolean), start: +f.start || 100, split: String(f.split || '').split(/[,\s/]+/).filter(Boolean).map(Number), skinPts: +f.skinPts || 1, maxW: +f.maxW || 3 };
+      extra: String(f.extra || '').split('\n').map((x) => x.trim().slice(0, 40)).filter(Boolean), start: +f.start || 100, split: String(f.split || '').split(/[,\s/]+/).filter(Boolean).map(Number), skinPts: +f.skinPts || 1, maxW: +f.maxW || 3, loc: f.court || (String(f.loc || '').trim() ? { n: String(f.loc) } : null) };
     const e = checkNew(o); if (e) { ERR = e; render(); return; }
     const ev = makeEvent(o); if (save(ev)) { FORM = null; go('e/' + ev.id); } else render();
   }
@@ -540,12 +545,14 @@ ${sc && top.length ? `<div class="sub2">${d ? '🏆 ' : 'Leading: '}${esc(top.sl
     if (sub === 'pick') return viewPick(ev, base, R.slice(1));
     if (sub === 'share') return viewShare(ev, base);
     if (sub === 'players') return viewPlayers(ev, base);
+    if (sub === 'court') return viewCourt(ev);
     return viewEventHome(ev, base);
   }
   function viewEventHome(ev, base) {
     const f = FMT[ev.fmt], done = isDone(ev), G = realGames(ev), sc = G.filter(isSc).length, fin = finish(ev), top = fin[0] || [];
     let h = back('', 'My events') + `<div class="card evh"><div class="row"><h2>${esc(ev.name)}</h2><span class="b ${done ? 'hit' : ''}">${done ? 'Final' : sc ? 'In progress' : 'Not started'}</span></div>
 <div class="sub2">${f.ico} ${esc(f.n)} · ${ev.date ? esc(ev.date) + ' · ' : ''}${f.ind ? ev.courts + ' court' + (ev.courts > 1 ? 's' : '') + ' · ' : ''}${ev.us.length} ${f.ind || ev.team === 's' ? 'players' : 'teams'}${ev.alt.length ? ' · alternate: ' + ev.alt.map((p) => esc(ev.ps.find((x) => x.id === p).n)).join(', ') : ''}</div>
+${ev.loc ? locLine(ev.loc, base + '/court') : `<a class="lnk addloc" href="#/${base}/court">📍 Add a court</a>`}
 ${infoBox(f.info, 'How ' + f.n + ' is played')}</div>`;
     const gtot = ev.fmt === 'chal' || ev.fmt === 'ladder' ? '' : ' of ' + G.length;
     h += `<div class="sums">` + tile(base + '/games', sc + gtot, 'Games scored', ev.fmt === 'rr' || ev.fmt === 'king' ? 'Round ' + curRound(ev) + ' of ' + ev.rounds : '');
@@ -713,6 +720,159 @@ ${ERR ? `<div class="err">${esc(ERR)}</div>` : ''}<div class="btns"><button clas
 <textarea id="scode" rows="6" readonly>${esc(code)}</textarea><button class="pill pri wide" data-act="copy">Copy code</button><div id="cpmsg" class="note"></div><p class="note">${code.length.toLocaleString()} characters. Nothing is uploaded: the code is the only copy that leaves this phone.</p></div>`;
   }
 
+  /* ---------------- court search (v254) ----------------
+     The ONLY outside calls on this page, and only when the user taps Search, Near me, a radius or Retry:
+     Nominatim (place -> point; never as-you-type, at most 1 request a second, cached) and Overpass
+     (pickleball courts around the point, cached a day per rounded point + radius). Both are OpenStreetMap,
+     free, no key. Event data never leaves the phone. Every OSM string is escaped before it is shown. */
+  const NOM = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=us&q=';
+  const OVP = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+  const RADS = [5, 15, 30], MAXRES = 30, DAY = 864e5;
+  const SRCH = { q: '', typed: null, rad: RADS.includes(+lsGet('pb1-rad')) ? +lsGet('pb1-rad') : 15, ctr: null, st: '', msg: '', retry: null, res: [], more: 0, tok: 0 };
+  const txt = (v, n) => (typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n) : '');
+  const okLL = (la, lo) => typeof la === 'number' && typeof lo === 'number' && Number.isFinite(la) && Number.isFinite(lo) && Math.abs(la) <= 90 && Math.abs(lo) <= 180;
+  function cleanLoc(x) { // a saved / shared court: text capped, coordinates finite and in range, OSM id plain
+    if (!x || typeof x !== 'object' || Array.isArray(x)) return null;
+    const o = { n: txt(x.n, 80), a: txt(x.a, 120) }; if (!o.n && !o.a) return null; if (!o.n) { o.n = o.a; o.a = ''; }
+    if (okLL(x.lat, x.lon)) { o.lat = Math.round(x.lat * 1e6) / 1e6; o.lon = Math.round(x.lon * 1e6) / 1e6; if (typeof x.id === 'string' && /^(node|way|relation)\/\d{1,15}$/.test(x.id)) o.id = x.id; }
+    return o;
+  }
+  function miles(a, b) { const R = 3958.8, r = Math.PI / 180, dLa = (b.lat - a.lat) * r, dLo = (b.lon - a.lon) * r; const h = Math.sin(dLa / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLo / 2) ** 2; return 2 * R * Math.asin(Math.min(1, Math.sqrt(h))); }
+  const mapUrl = (L) => 'https://www.openstreetmap.org/?mlat=' + (+L.lat).toFixed(5) + '&mlon=' + (+L.lon).toFixed(5) + '#map=17/' + (+L.lat).toFixed(5) + '/' + (+L.lon).toFixed(5);
+  const fmtMi = (d) => (d < 10 ? d.toFixed(1) : String(Math.round(d))) + ' mi';
+  function jget(k) { try { return JSON.parse(lsGet(k)); } catch (e) { return null; } }
+  function cachePut(pfx, k, v, cap) { // keep at most cap entries under pfx; the oldest go first
+    try { const ks = []; for (let i = 0; i < localStorage.length; i++) { const x = localStorage.key(i); if (x && x.indexOf(pfx) === 0 && x !== k) ks.push(x); }
+      if (ks.length >= cap) ks.map((x) => [x, (jget(x) || {}).t || 0]).sort((a, b) => a[1] - b[1]).slice(0, ks.length - cap + 1).forEach(([x]) => localStorage.removeItem(x)); } catch (e) {}
+    lsSet(k, JSON.stringify(v));
+  }
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  async function tfetch(url, opt, ms) { const ac = typeof AbortController === 'function' ? new AbortController() : null, tm = setTimeout(() => { if (ac) ac.abort(); }, ms);
+    try { return await fetch(url, Object.assign({ credentials: 'omit', referrerPolicy: 'strict-origin-when-cross-origin' }, opt, ac ? { signal: ac.signal } : {})); } finally { clearTimeout(tm); } }
+  let NOMQ = Promise.resolve();
+  function nomFetch(url) { // one Nominatim request at a time, at least 1.1 s apart (also across reloads)
+    const p = NOMQ.then(async () => { const w = 1100 - (Date.now() - (+lsGet('pb1-nomt') || 0)); if (w > 0) await sleep(Math.min(w, 1100)); lsSet('pb1-nomt', String(Date.now())); return tfetch(url, {}, 15000); });
+    NOMQ = p.catch(() => {}); return p;
+  }
+  async function geocode(q) {
+    const k = 'pb1-geo-' + q.toLowerCase(), hit = jget(k);
+    if (hit && (hit.none ? Date.now() - hit.t < DAY : okLL(hit.lat, hit.lon))) return hit.none ? null : hit;
+    const r = await nomFetch(NOM + encodeURIComponent(q)); if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json(), f = Array.isArray(j) && j[0], lat = f ? +f.lat : NaN, lon = f ? +f.lon : NaN;
+    if (!f || !okLL(lat, lon)) { cachePut('pb1-geo-', k, { none: 1, t: Date.now() }, 40); return null; }
+    const v = { lat, lon, label: txt(f.display_name, 100) || q, t: Date.now() }; cachePut('pb1-geo-', k, v, 40); return v;
+  }
+  function parseCourts(els) { // Overpass elements -> court entries; separate pitches with the same name close together count as one place
+    const one = []; (Array.isArray(els) ? els : []).forEach((e) => {
+      if (!e || typeof e !== 'object' || !['node', 'way', 'relation'].includes(e.type) || !Number.isInteger(e.id)) return;
+      const c = e.center && typeof e.center === 'object' ? e.center : e, lat = c.lat, lon = c.lon; if (!okLL(lat, lon)) return;
+      const t = e.tags && typeof e.tags === 'object' ? e.tags : {}, g = (k, n) => txt(t[k], n || 80);
+      const kn = ['courts', 'pickleball:courts', 'capacity:courts'].map((k) => g(k)).find((v) => /^\d{1,3}$/.test(v) && +v > 0);
+      const leis = g('leisure'), ind = g('indoor'), cov = g('covered'), acc = g('access'), lit = g('lit');
+      const io = ind === 'yes' || ind === 'room' || leis === 'sports_hall' || g('building') ? 'Indoor' : ind === 'no' || cov === 'no' || leis === 'pitch' ? (cov === 'yes' ? 'Covered' : 'Outdoor') : cov === 'yes' ? 'Covered' : '';
+      const street = [g('addr:housenumber', 10), g('addr:street')].filter(Boolean).join(' '), city = [g('addr:city', 40), g('addr:state', 20)].filter(Boolean).join(', ');
+      one.push({ id: e.type + '/' + e.id, n: g('name') || g('name:en'), ctx: g('addr:street') || g('operator'), a: [street, city].filter(Boolean).join(', ').slice(0, 120), lat, lon,
+        k: kn ? +kn : null, io, lit: lit === 'yes' || lit === '24/7' || lit === 'automatic' ? 1 : lit === 'no' ? 0 : null,
+        acc: ['yes', 'public', 'permissive'].includes(acc) ? 'Public' : acc === 'private' ? 'Private' : acc === 'members' ? 'Members only' : acc === 'customers' ? 'Customers only' : '' });
+    });
+    const out = []; one.forEach((c) => { const m = out.find((x) => x.n.toLowerCase() === c.n.toLowerCase() && miles(x, c) < 0.12);
+      if (!m) { out.push(Object.assign({ m: 1, kk: c.k || 1 }, c)); return; }
+      m.m++; m.kk += c.k || 1; m.lat = (m.lat * (m.m - 1) + c.lat) / m.m; m.lon = (m.lon * (m.m - 1) + c.lon) / m.m;
+      ['io', 'acc', 'a', 'ctx'].forEach((k) => { if (!m[k] && c[k]) m[k] = c[k]; }); if (c.lit === 1 || m.lit == null) m.lit = c.lit; });
+    return out.slice(0, 300).map((c) => { const k = c.m > 1 ? c.kk : c.k; delete c.m; delete c.kk; c.k = k; return c; });
+  }
+  async function overpass(ctr, rad) {
+    const la = +ctr.lat.toFixed(2), lo = +ctr.lon.toFixed(2), k = 'pb1-ovp-' + la + ',' + lo + ',' + rad, hit = jget(k);
+    if (hit && Date.now() - hit.t < DAY && Array.isArray(hit.c)) return hit.c;
+    const q = '[out:json][timeout:25];nwr["sport"~"pickleball"](around:' + Math.round(rad * 1609.344) + ',' + la + ',' + lo + ');out center tags;';
+    let err = null;
+    for (const u of OVP) {
+      try { const r = await tfetch(u, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }, body: 'data=' + encodeURIComponent(q) }, 30000);
+        if (!r.ok) throw new Error('HTTP ' + r.status); const j = await r.json();
+        if (!j || !Array.isArray(j.elements) || (!j.elements.length && typeof j.remark === 'string' && /error/i.test(j.remark))) throw new Error('bad answer');
+        const c = parseCourts(j.elements); cachePut('pb1-ovp-', k, { t: Date.now(), c }, 20); return c;
+      } catch (e) { err = e; }
+    }
+    throw err || new Error('no server');
+  }
+  const onCourt = () => { const R = route(); return (R[0] === 'new' && R[1] === 'court') || (R[0] === 'e' && R[2] === 'court'); };
+  const show = () => { if (onCourt()) render(); };
+  async function courtsAt(tok) {
+    SRCH.st = 'busy'; SRCH.msg = 'Looking for pickleball courts…'; show();
+    try { const c = await overpass(SRCH.ctr, SRCH.rad); if (tok !== SRCH.tok) return;
+      const L = c.filter((x) => okLL(x.lat, x.lon)).map((x) => Object.assign({}, x, { d: miles(SRCH.ctr, x) })).filter((x) => x.d <= SRCH.rad + 0.5).sort((a, b) => a.d - b.d);
+      SRCH.res = L.slice(0, MAXRES); SRCH.more = Math.max(0, L.length - MAXRES); SRCH.st = 'ok'; SRCH.msg = ''; SRCH.retry = null;
+    } catch (e) { if (tok !== SRCH.tok) return; SRCH.st = 'err'; SRCH.res = []; SRCH.retry = 'o'; SRCH.msg = e && e.name === 'AbortError' ? 'The court map took too long to answer (it may be busy). Try again in a minute.' : 'Couldn\'t reach the court map right now (no connection, or it is busy). Try again in a minute.'; }
+    show();
+  }
+  async function courtSearch() {
+    const q = txt(SRCH.q, 120); SRCH.q = q; const tok = ++SRCH.tok;
+    if (!q) { SRCH.st = 'err'; SRCH.msg = 'Type a city, address or ZIP first.'; SRCH.retry = null; SRCH.res = []; return show(); }
+    SRCH.st = 'busy'; SRCH.msg = 'Finding ' + q + '…'; show(); let c;
+    try { c = await geocode(q); } catch (e) { if (tok !== SRCH.tok) return; SRCH.st = 'err'; SRCH.res = []; SRCH.retry = 'q'; SRCH.msg = 'Couldn\'t reach the map search right now. Check your connection and try again.'; return show(); }
+    if (tok !== SRCH.tok) return;
+    if (!c) { SRCH.st = 'err'; SRCH.res = []; SRCH.retry = null; SRCH.msg = 'Couldn\'t find “' + q + '”. Try a city and state (Austin, TX) or a ZIP code.'; return show(); }
+    SRCH.ctr = { lat: c.lat, lon: c.lon, label: c.label }; return courtsAt(tok);
+  }
+  function courtNear() {
+    const tok = ++SRCH.tok;
+    if (!navigator.geolocation) { SRCH.st = 'err'; SRCH.res = []; SRCH.retry = null; SRCH.msg = 'This browser can\'t share your location. Type a city or ZIP instead.'; return show(); }
+    SRCH.st = 'busy'; SRCH.msg = 'Getting your location…'; show();
+    navigator.geolocation.getCurrentPosition((p) => { if (tok !== SRCH.tok) return; const lat = p.coords.latitude, lon = p.coords.longitude;
+      if (!okLL(lat, lon)) { SRCH.st = 'err'; SRCH.msg = 'Couldn\'t read your location. Type a city or ZIP instead.'; return show(); }
+      SRCH.ctr = { lat, lon, label: 'your location' }; courtsAt(tok); },
+    (e) => { if (tok !== SRCH.tok) return; SRCH.st = 'err'; SRCH.res = [];
+      if (e && e.code === 1) { SRCH.retry = null; SRCH.msg = 'Location is turned off for this page. Allow location for this site in your browser settings, or type a city or ZIP.'; }
+      else { SRCH.retry = 'me'; SRCH.msg = 'Couldn\'t get your location (it timed out or isn\'t available). Try again, or type a city or ZIP.'; }
+      show(); }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 });
+  }
+  const courtTitle = (c) => c.n || 'Unnamed courts' + (c.ctx ? ', ' + c.ctx : '');
+  function locLine(L, href) { // the chosen court on the event page / New event form
+    return `<div class="loc"><span>📍 <b>${esc(L.n)}</b>${L.a ? `<small>${esc(L.a)}</small>` : ''}</span><span class="la">${L.lat != null ? `<a class="lnk" href="${esc(mapUrl(L))}" target="_blank" rel="noopener">Map</a>` : ''}${href ? `<a class="lnk" href="#/${href}">Change</a>` : ''}</span></div>`;
+  }
+  function viewCourt(ev) {
+    const isNew = !ev, base = isNew ? 'new' : 'e/' + ev.id, cur0 = isNew ? FORM && (FORM.court || (FORM.loc ? { n: FORM.loc } : null)) : ev.loc, busy = SRCH.st === 'busy';
+    if (SRCH.typed == null) SRCH.typed = cur0 ? cur0.n : '';
+    let h = back(base, isNew ? 'New event' : ev.name) + `<h2>🔎 Find a court</h2><p class="note">Pickleball courts near a place, from OpenStreetMap: free map data that anyone can add to, so a court can be missing or out of date.</p>`;
+    if (cur0) h += `<div class="card"><div class="lbl" style="margin-top:0">Court now</div>${locLine(cur0, '')}<div class="btns"><button class="pill" data-act="locclear">Remove</button></div></div>`;
+    h += `<form id="cf" class="card frm" onsubmit="return false"><label>City, address or ZIP<input id="cq" type="search" enterkeyhint="search" autocomplete="off" maxlength="120" value="${esc(SRCH.q)}" placeholder="McAllen, TX or 78501"></label>
+<div class="btns two"><button class="pill pri" type="submit" data-act="csearch" ${busy ? 'disabled' : ''}>Search</button><button class="pill" type="button" data-act="cnear" ${busy ? 'disabled' : ''}>📍 Near me</button></div>
+<div class="lbl">Within</div><div class="btns rads">${RADS.map((r) => `<button class="pill ${SRCH.rad === r ? 'on' : ''}" type="button" data-act="crad" data-r="${r}" ${busy ? 'disabled' : ''}>${r} miles</button>`).join('')}</div>
+<p class="note">📍 Near me asks for your location only when you tap it.</p></form>`;
+    if (busy) h += `<div class="card note" role="status">${esc(SRCH.msg)}</div>`;
+    else if (SRCH.st === 'err') h += `<div class="card err" role="alert">${esc(SRCH.msg)}${SRCH.retry ? `<div class="btns"><button class="pill" data-act="cretry">Try again</button></div>` : ''}</div>`;
+    else if (SRCH.st === 'ok') {
+      const near = SRCH.ctr.label === 'your location' ? 'you' : SRCH.ctr.label;
+      if (!SRCH.res.length) h += `<div class="card note cnone">No pickleball courts are mapped within ${SRCH.rad} miles of ${esc(near)}. ${SRCH.rad < 30 ? 'Try 30 miles, or ' : ''}type the court in yourself.<div class="btns">${SRCH.rad < 30 ? '<button class="pill" data-act="crad" data-r="30">Search 30 miles</button>' : ''}<button class="pill" data-act="ctypeopen">Type it in instead</button></div></div>`;
+      else {
+        h += `<div class="gh">${SRCH.res.length} place${SRCH.res.length > 1 ? 's' : ''} within ${SRCH.rad} mi <small>of ${esc(near)}${SRCH.more ? ' · closest ' + MAXRES + ' shown' : ''}</small></div>`;
+        h += SRCH.res.map((c, i) => { const chips = [c.k ? c.k + ' court' + (c.k > 1 ? 's' : '') : '', c.io, c.lit === 1 ? 'Lights' : c.lit === 0 ? 'No lights' : '', c.acc].filter(Boolean);
+          return `<div class="card court"><div class="row"><b>${esc(courtTitle(c))}</b><span class="mi">${fmtMi(c.d)}</span></div>${c.a && c.a !== c.ctx ? `<div class="sub2">${esc(c.a)}</div>` : ''}${chips.length ? `<div class="chips">${chips.map((x) => `<span class="b">${esc(x)}</span>`).join('')}</div>` : ''}
+<div class="btns"><button class="pill pri" data-act="cuse" data-i="${i}">Use this court</button><a class="pill" href="${esc(mapUrl(c))}" target="_blank" rel="noopener">Map</a></div></div>`; }).join('');
+      }
+    }
+    h += `<details class="inf" data-k="ctype" id="ctype"><summary>✏️ Type it in instead</summary><div class="card frm"><label>Court or location<input id="loctxt" maxlength="80" value="${esc(SRCH.typed)}" placeholder="Riverside Park, courts 3-4"></label><div class="btns"><button class="pill pri" data-act="locsave">Save location</button></div></div></details>`;
+    h += `<p class="note attr">Court data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>. Place search by Nominatim.</p>`;
+    return h;
+  }
+  function setLoc(L) { // L = cleaned location or null; saves to the New event form or to the event on screen
+    const R = route();
+    if (R[0] === 'new') { FORM = FORM || newForm(); FORM.court = L && L.lat != null ? L : null; FORM.loc = L ? L.n : ''; SRCH.typed = null; go('new'); return; }
+    const ev = cur(); if (!ev) return; if (L) ev.loc = L; else delete ev.loc; SRCH.typed = null; if (save(ev)) go('e/' + ev.id); else render();
+  }
+  function courtAct(a, t) { // returns true when it handled a court action
+    if (a === 'csearch') { const i = $('#cq'); if (i) SRCH.q = i.value; courtSearch(); return true; }
+    if (a === 'cnear') { courtNear(); return true; }
+    if (a === 'crad') { const r = +t.getAttribute('data-r'); if (RADS.includes(r)) { SRCH.rad = r; lsSet('pb1-rad', String(r)); } if (SRCH.ctr && SRCH.st !== 'busy') courtsAt(++SRCH.tok); else render(); return true; }
+    if (a === 'cretry') { if (SRCH.retry === 'q') courtSearch(); else if (SRCH.retry === 'me') courtNear(); else if (SRCH.ctr) courtsAt(++SRCH.tok); return true; }
+    if (a === 'cuse') { const c = SRCH.res[+t.getAttribute('data-i')]; if (!c) return true; setLoc(cleanLoc({ n: courtTitle(c), a: c.a || (c.n ? c.ctx : ''), lat: c.lat, lon: c.lon, id: c.id })); return true; }
+    if (a === 'ctypeopen') { DOPEN.add('ctype'); render(); const i = $('#loctxt'); if (i) { i.focus(); i.scrollIntoView({ block: 'center' }); } return true; }
+    if (a === 'locsave') { const i = $('#loctxt'); setLoc(cleanLoc({ n: i ? i.value : '' })); return true; }
+    if (a === 'locclear') { SRCH.typed = null; if (route()[0] === 'new') { FORM = FORM || newForm(); FORM.court = null; FORM.loc = ''; render(); return true; }
+      const ev = cur(); if (ev) { delete ev.loc; save(ev); } render(); return true; }
+    return false;
+  }
+
   /* ---- events ---- */
   function cur() { const R = route(); if (R[0] !== 'e') return null; const ev = load(R[1]); if (ev) RES = ev.bk ? resolve(ev) : null; return ev; }
   document.addEventListener('click', (e) => {
@@ -726,6 +886,7 @@ ${ERR ? `<div class="err">${esc(ERR)}</div>` : ''}<div class="btns"><button clas
     if (a === 'delbad') { const id = t.getAttribute('data-id'), box = t.closest('.btns'); box.innerHTML = `<button class="pill dang" data-act="delbadyes" data-id="${esc(id)}">Yes, delete</button><button class="pill" data-act="delbadno">Keep</button>`; return; }
     if (a === 'delbadyes') { remove(t.getAttribute('data-id')); if (route()[0] === 'e') go(''); else render(); return; }
     if (a === 'delbadno') return render();
+    if (courtAct(a, t)) return;
     let ev = null; try { ev = cur(); } catch (x) { ev = null; } if (!ev) return;
     if (a === 'gopen') { OPEN = OPEN === gid ? null : gid; ERR = ''; render(); const i = $('#sa'); if (i) { i.focus(); i.scrollIntoView({ block: 'center' }); } return; }
     if (a === 'gclose') { OPEN = null; ERR = ''; return render(); }
@@ -754,12 +915,12 @@ ${ERR ? `<div class="err">${esc(ERR)}</div>` : ''}<div class="btns"><button clas
     if (t.id === 'pkw') { const ev = cur(); if (!ev || started(ev)) return render(); if (t.value) ev.pk.w[PICKAS] = t.value; else delete ev.pk.w[PICKAS]; save(ev); render(); return; }
     if (t.id === 'lch') fillDef();
   });
-  document.addEventListener('input', (e) => { if (e.target.closest && e.target.closest('#nf')) readForm(); });
+  document.addEventListener('input', (e) => { const t = e.target; if (t.id === 'cq') SRCH.q = t.value; else if (t.id === 'loctxt') SRCH.typed = t.value; else if (t.closest && t.closest('#nf')) readForm(); }); // typing never searches
   function fillDef() { const s = $('#ldf'), c = $('#lch'); if (!s || !c) return; let ev = null; try { ev = cur(); } catch (x) { return; } if (!ev) return; s.innerHTML = defOpts(ev, c.value).map((u) => `<option value="${esc(u)}">${ladderOrder(ev).indexOf(u) + 1}. ${esc(uName(ev, u))}</option>`).join('') || '<option value="">Nobody free within 3 spots</option>'; }
   document.addEventListener('toggle', (e) => { const d = e.target; if (d.matches && d.matches('details[data-k]')) { if (d.open) DOPEN.add(d.getAttribute('data-k')); else DOPEN.delete(d.getAttribute('data-k')); } }, true);
-  window.addEventListener('hashchange', () => { OPEN = null; ERR = ''; render(); window.scrollTo(0, 0); });
+  window.addEventListener('hashchange', () => { OPEN = null; ERR = ''; SRCH.typed = null; render(); window.scrollTo(0, 0); });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', render); else render();
 
   // test hook (read-only helpers; nothing here talks to a server)
-  window.PB = { makeEvent, checkNew, parsePlayers, saveScore, clearScore, finish, table, calcutta, skins, pickem, toCode, fromCode, load, save, listEvents, resolve, champion, ladderOrder, isDone: (ev) => { RES = ev.bk ? resolve(ev) : null; return isDone(ev); }, setRes: (ev) => { RES = ev.bk ? resolve(ev) : null; }, sides: (ev, g) => sides(ev, g) };
+  window.PB = { makeEvent, checkNew, parsePlayers, saveScore, clearScore, finish, table, calcutta, skins, pickem, toCode, fromCode, load, save, listEvents, resolve, champion, ladderOrder, isDone: (ev) => { RES = ev.bk ? resolve(ev) : null; return isDone(ev); }, setRes: (ev) => { RES = ev.bk ? resolve(ev) : null; }, sides: (ev, g) => sides(ev, g), cleanLoc, parseCourts, miles };
 })();

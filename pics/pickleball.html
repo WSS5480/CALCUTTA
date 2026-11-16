@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<!-- Pickleball v253 (part of Oddable; local-only, points only) -->
+<!-- Pickleball v254 (part of Oddable; local-only, points only; court search uses OpenStreetMap) -->
 <script>try{if(localStorage.getItem('pics-theme')!=='violet')document.documentElement.classList.add('cb')}catch(e){document.documentElement.classList.add('cb')}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Pickleball · Oddable</title>
@@ -74,6 +74,14 @@ details.inf>summary::-webkit-details-marker{display:none}details.inf p{margin:4p
 .champ{border-color:var(--green);font-size:17px}
 .bid .two{margin-top:2px}
 .foot{color:var(--muted);font-size:12px;margin:24px 0 8px;text-align:center}
+.pill:disabled{opacity:.55;cursor:default}
+.loc{display:flex;justify-content:space-between;align-items:center;gap:6px 10px;flex-wrap:wrap;margin-top:6px;font-size:14px}.loc>span:first-child{min-width:0;flex:1 1 180px}.loc small{display:block;color:var(--muted);font-size:12px}
+.loc .la{display:flex;gap:4px;flex-wrap:wrap}.loc .lnk,a.lnk{display:inline-flex;align-items:center;color:var(--blue)}
+a.addloc{margin-top:4px;padding:0}
+.court .row b{flex:1;min-width:0}.court .mi{font-weight:700;white-space:nowrap;text-align:right}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.rads .pill{flex:1 1 0;padding:8px 10px}
+.attr a{color:var(--blue)}
 @media(min-width:900px){main{max-width:760px}.sums{grid-template-columns:repeat(3,1fr)}}
 </style>
 </head>
@@ -84,8 +92,8 @@ details.inf>summary::-webkit-details-marker{display:none}details.inf p{margin:4p
   <div class="sub">Pools, brackets and side games for your group. Points only, no money.</div>
 </header>
 <main id="main"></main>
-<div class="foot">Oddable v253 · Pickleball · saved on this device only</div>
+<div class="foot">Oddable v254 · Pickleball · saved on this device only</div>
 <script>try{if(localStorage.getItem('pics-dark')!=='0')document.body.classList.add('dark')}catch(e){document.body.classList.add('dark')}</script>
-<script src="pickleball.js?v=253.2"></script>
+<script src="pickleball.js?v=254"></script>
 </body>
 </html>

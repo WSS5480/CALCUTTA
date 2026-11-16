@@ -80,7 +80,7 @@
       h += '<div class="emeta">' + fmtLine(e) + '</div><div class="emeta">' + (e.fin ? 'Final' + (e.myPlace ? ' · you finished ' + ord(e.myPlace) : '') : e.started ? 'Under way' : 'Starts ' + esc(fmtTime(e.start))) + ' · ' + e.people + ' ' + (e.people === 1 ? 'person' : 'people') + (e.money.pot === 'side' ? ' · side pot' : '') + '</div>';
       if (e.todo) h += '<div class="eyel">' + e.todo + ' match' + (e.todo > 1 ? 'es need' : ' needs') + ' you ›</div>'; h += '</button>';
     });
-    return h + '<div class="enote">' + esc(CAPLINE) + '</div>';
+    return h + '<div class="enote">' + esc(CAPLINE) + ' Spectators count toward the 8.</div><div class="enote">' + esc(ENTTEXT) + '</div>';
   }
   function joinCodeV() { const s = cur(); return '<h1>Join with a code</h1><label class="elab">Invite code<input id="ecode" class="ein ecodein" autocomplete="off" autocapitalize="characters" maxlength="14" placeholder="ABCD-1234" value="' + esc(s.code || '') + '"></label><button class="epri efull" data-a="lookup">Look it up</button><label class="elab">Have a guest claim code from the commissioner?<input id="eclaim" class="ein" autocomplete="off" autocapitalize="characters" maxlength="24" placeholder="ABCD-1234.XXXXXXXXXX"></label><button class="esec efull" data-a="claim">Claim my results</button><div class="enote">A claim code moves the results the commissioner typed in under your name into your account (lifetime stats).</div>'; }
   function previewV() {

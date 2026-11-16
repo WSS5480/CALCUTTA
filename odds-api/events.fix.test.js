@@ -180,3 +180,13 @@ T.pollSeesLastDay = async () => {
   NOW = Z('2026-11-27T12:00:00Z'); const r = ok(await call('ann', 'get', { id, since: ev.u }));
   assert.ok(r.event && r.event.fin, 'poll after the last day returns the finished event, not "same"');
 };
+// Owner rule (Nov 16 2026): spectators count toward the 8; the refusal says so and offers the contact line; the game list carries the exact pricing text
+T.capWording = async () => {
+  const PRICE = 'Need more than 8? Oddable for courses, clubs and leagues: $500/month + $20 per player per game. Contact us.';
+  const ev = ok(await call('ann', 'create', base({ entrants: ['B', 'C', 'D', 'E', 'F', 'G'].map((n) => ({ name: n })) }))).event; ok(await call('s1', 'join', { code: ev.code, as: 'spectator', myName: 'S1' }));
+  const r = await call('s2', 'join', { code: ev.code, as: 'spectator', myName: 'S2' }); no(r, 403, 'the 9th person (a spectator)');
+  assert.ok(/spectators/i.test(r.j.error) && r.j.error.includes(PRICE), 'message: ' + r.j.error);
+  const fs = require('fs'), path = require('path'), CAT = JSON.parse(fs.readFileSync(path.join(__dirname, '../pics/games-catalog.json'), 'utf8'));
+  assert.strictEqual(CAT.entLine, PRICE); const cj = fs.readFileSync(path.join(__dirname, '../pics/catalog.js'), 'utf8');
+  assert.ok(/function list\(\)[\s\S]*?C\.entLine[\s\S]*?function detail/.test(cj), 'the game list shows the pricing line');
+};

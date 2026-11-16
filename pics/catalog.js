@@ -27,7 +27,7 @@
       h += '<div class="ecard' + (g.gold ? ' egoldc' : g.status !== 'now' ? ' esoon' : '') + '"><div class="erow"><button class="egame" style="flex:1;min-width:0;background:none;border:0;padding:0;min-height:44px" data-g="' + i + '"><b>' + esc(gameName(g)) + '</b></button><button class="eib" aria-label="How ' + esc(gameName(g)) + ' works" data-g="' + i + '">ⓘ</button></div>';
       h += '<button class="egame" style="width:100%;background:none;border:0;padding:0" data-g="' + i + '"><span class="emut">' + esc(C.games[g.key].line) + '</span><span class="erow" style="justify-content:flex-start;margin-top:6px">' + badge(g.status) + rbadge(g.results) + '</span></button></div>';
     });
-    return h + '<p class="enote">' + esc(C.potLine) + '</p><p class="enote">' + esc(C.capLine) + '</p>';
+    return h + '<p class="enote">' + esc(C.potLine) + '</p><p class="enote">' + esc(C.capLine) + '</p><p class="enote">' + esc(C.entLine) + '</p>';
   }
   function detail() {
     const sp = S(), g = sp.games[view];

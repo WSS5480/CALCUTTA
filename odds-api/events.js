@@ -24,7 +24,7 @@ const limits = {
   ENTERPRISE_TEXT: 'Need more than 8? Oddable for courses, clubs and leagues: $500/month + $20 per player per game. Contact us.',
 };
 const capFor = (accountId, gameId) => limits.maxPeople(accountId, gameId || '');
-const fullMsg = (cap) => 'This game is full: up to ' + cap + ' people (organizer included). ' + limits.ENTERPRISE_TEXT;
+const fullMsg = (cap) => 'This game is full: ' + cap + ' people max, counting the organizer, players and spectators. ' + limits.ENTERPRISE_TEXT; // owner: "8 people per group, all games"
 const ROW = (id) => 'lock:evt:' + id, IDX = 'lock:evtidx', DAY = 864e5;
 const send = (res, code, o) => { res.statusCode = code; res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json'); res.setHeader('Cache-Control', 'no-store'); res.end(JSON.stringify(o)); };
 const bad = (status, error) => Object.assign(new Error(error), { status });

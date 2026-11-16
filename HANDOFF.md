@@ -498,3 +498,13 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v247 — 🤝 Helper
 - User: "Add the highest probability team to the list... call it the helper". Each week's highest win-chance team (app win pick, pred().conf), straight-up/moneyline. Row in the Alert with ✓/✗ and a season W-L line that drills to all weeks (helperDrill). Saved per phone before the week's first kickoff (`hlp26-wN`); earlier weeks back-filled from current ratings. NOT counted in Alert units (no moneyline prices; heavy favorites are expensive). Local test wk1-9: 6-3 (losses: DAL 76%, LA 81%, HOU 77%).
+
+## Session rotation — Nov 15 2026, evening (owner called it: "Reviewer")
+- The session that built v220-v247 is now FIRST REVIEWER and stops coding. Owner flagged repeated unit-calculation confusion in chat (parlay comparisons). Next session is the coder; start from this file.
+- Review findings for the next coder (not yet fixed):
+  1. Lock and road-dog picks are frozen per phone (localStorage `trk26-wN`, `ddp26-<id>`, `hlp26-wN`), so records differ by device and from the Python backtest (e.g. week 8 Lock is TEN on the owner's browser, KC in the backtest). Needs server-side freezing so every device shows the same picks and record.
+  2. v232-v247 were tested locally with mocked/2026 data only. Not yet checked on the live site on a phone: the floating My Bets banner must not cover the Alert banner, Multiview, Results boxes or drill sheets (owner's standing rule).
+  3. ALH/ALY (12-season history) and TRH are static tables; refresh at season end. The Helper has no moneyline prices, so its parlay payouts quoted in chat were estimates.
+  4. Parlay math was chat-only analysis; nothing about parlays is in the app. If built, payouts must come from real prices, with the rule stated on screen (owner's rule: Lock + one dog, Helper only when there is a single pick).
+  5. DD_START = 11 but the owner's "today" was week 10; decide whether week 10 counts as live.
+  6. odds-api: /cfbd/* routes use CFBD_API_KEY; acct.js name checks need the redeploy noted earlier.

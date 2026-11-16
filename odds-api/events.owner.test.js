@@ -158,25 +158,26 @@ T.ehDirectorRatings = async () => {
 };
 
 // ---------- P1: Suggest partners (Balanced default, Rotate, Hot pairs), one-line reason each; it only suggests ----------
+// PREVIEW MERGE: ONE pairing.js (the Groups file). The reason-line checks below follow ITS wording; teams, strengths, order and behaviour checks are unchanged.
 T.p1Contract = async () => {
   const S = PAIR.suggestPartners, P8 = [1900, 1750, 1650, 1600, 1500, 1450, 1300, 1150].map((r, i) => ({ id: 'p' + i, name: 'P' + i, rating: r }));
   const all = (s) => [].concat(...s.teams).sort().join(); const brute = (() => { let best = Infinity; const go = (left, teams) => { if (!left.length) { const a = teams.map((t) => (t[0].rating + t[1].rating) / 2); best = Math.min(best, Math.max(...a) - Math.min(...a)); return; } const [h, ...rest] = left; rest.forEach((x, i) => go(rest.filter((_, j) => j !== i), teams.concat([[h, x]]))); }; go(P8, []); return best; })();
   const bal = S(P8, { teamSize: 2 }); assert.strictEqual(bal[0].mode, 'balanced', 'Balanced is the default'); assert.ok(bal.length >= 2 && bal.length <= 3, 'ranked alternatives');
   assert.strictEqual(bal[0].spread, Math.round(brute), 'the top suggestion is the fairest possible split'); assert.ok(bal[0].spread <= bal[bal.length - 1].spread, 'best first');
   bal.forEach((s) => { assert.strictEqual(all(s), P8.map((p) => p.id).sort().join(), 'everyone exactly once'); assert.ok(s.teams.every((t) => t.length === 2)); assert.ok(typeof s.reason === 'string' && s.reason.length > 10 && !s.reason.includes('\n'), 'a one-line reason'); assert.strictEqual(s.notes.length, 4); });
-  assert.ok(/fairest/.test(bal[0].reason)); assert.strictEqual(new Set(bal.map((s) => JSON.stringify(s.teams.map((t) => t.slice().sort()).sort()))).size, bal.length, 'different splits');
+  assert.ok(/Fairest split|Dead even/.test(bal[0].reason)); assert.strictEqual(new Set(bal.map((s) => JSON.stringify(s.teams.map((t) => t.slice().sort()).sort()))).size, bal.length, 'different splits');
   assert.deepStrictEqual(S(P8, { teamSize: 2 }), bal, 'same input, same answer');
   // Rotate: nobody repeats a recent partner
   const H = [['p0', 'p7'], ['p1', 'p6'], ['p2', 'p5'], ['p3', 'p4']].map((ids) => ({ ids, result: 'W', at: 1e12 })); const rot = S(P8, { mode: 'rotate', teamSize: 2, history: H });
-  rot[0].teams.forEach((t) => assert.ok(!H.some((h) => h.ids.slice().sort().join() === t.slice().sort().join()), 'repeat pair ' + t)); assert.ok(/not played with before/.test(rot[0].reason));
+  rot[0].teams.forEach((t) => assert.ok(!H.some((h) => h.ids.slice().sort().join() === t.slice().sort().join()), 'repeat pair ' + t)); assert.ok(/All new partners/.test(rot[0].reason));
   const P4 = P8.slice(0, 4), rot4 = S(P4, { mode: 'rotate', teamSize: 2, history: [{ ids: ['p0', 'p1'], result: 'W', at: 2e12 }, { ids: ['p0', 'p1'], result: 'L', at: 2e12 }, { ids: ['p0', 'p2'], result: 'W', at: 1e12 }, { ids: ['p0', 'p3'], result: 'W', at: 1e12 }, { ids: ['p0', 'p3'], result: 'W', at: 1e12 }, { ids: ['p0', 'p3'], result: 'W', at: 1e12 }] });
-  assert.ok(rot4[0].teams.some((t) => t.includes('p0') && t.includes('p2')), 'the least-played partner'); assert.ok(/Fewest repeats/.test(rot4[0].reason));
+  assert.ok(rot4[0].teams.some((t) => t.includes('p0') && t.includes('p2')), 'the least-played partner'); assert.ok(/One repeat/.test(rot4[0].reason));
   // Hot pairs: best record together
   const hot = S(P8, { mode: 'hot', teamSize: 2, history: [].concat(Array(5).fill({ ids: ['p0', 'p1'], result: 'W' }), [{ ids: ['p0', 'p1'], result: 'L' }], Array(3).fill({ ids: ['p4', 'p6'], result: 'W' }), Array(4).fill({ ids: ['p2', 'p3'], result: 'L' })) });
-  assert.ok(hot[0].teams.some((t) => t.includes('p0') && t.includes('p1')) && hot[0].teams.some((t) => t.includes('p4') && t.includes('p6')) && !hot[0].teams.some((t) => t.includes('p2') && t.includes('p3')), JSON.stringify(hot[0].teams)); assert.ok(/P0 & P1 are 5-1 together/.test(hot[0].reason));
-  assert.ok(/No partner history yet/.test(S(P8, { mode: 'hot', teamSize: 2 })[0].reason));
+  assert.ok(hot[0].teams.some((t) => t.includes('p0') && t.includes('p1')) && hot[0].teams.some((t) => t.includes('p4') && t.includes('p6')) && !hot[0].teams.some((t) => t.includes('p2') && t.includes('p3')), JSON.stringify(hot[0].teams)); assert.ok(/P0 \+ P1 are 5-1 as partners|P4 \+ P6 are 3-0 as partners/.test(hot[0].reason));
+  assert.ok(/No results together yet/.test(S(P8, { mode: 'hot', teamSize: 2 })[0].reason));
   // odd counts, unknown ratings, teams of 4, junk
-  const odd = S(P8.slice(0, 5).concat([{ id: 'n', name: 'New', rating: null }, { id: 'm', name: 'Mo' }]), { teamSize: 2 }); assert.strictEqual(odd[0].teams.length, 3); assert.strictEqual(odd[0].leftover.length, 1); assert.ok(/2 with no games yet counted at 1500/.test(odd[0].reason));
+  const odd = S(P8.slice(0, 5).concat([{ id: 'n', name: 'New', rating: null }, { id: 'm', name: 'Mo' }]), { teamSize: 2 }); assert.strictEqual(odd[0].teams.length, 3); assert.strictEqual(odd[0].leftover.length, 1); assert.ok(/2 players have no rating yet/.test(odd.note));
   const four = S(P8, { teamSize: 4 }); assert.strictEqual(four[0].teams.length, 2); assert.ok(four[0].teams.every((t) => t.length === 4)); assert.ok(four[0].spread <= 25);
   assert.deepStrictEqual(S([], {}), []); assert.deepStrictEqual(S([{ id: 'a', name: 'A', rating: 1 }], { teamSize: 2 }), []); assert.strictEqual(S(P8, { mode: 'nonsense' })[0].mode, 'balanced');
 };
@@ -196,7 +197,7 @@ T.p1EventStep = async () => {
   const bal = ok(await call('ann', 'partners', { id })); assert.strictEqual(bal.mode, 'balanced', 'Balanced by default'); assert.strictEqual(bal.players, 4); assert.strictEqual(bal.history, 4);
   assert.ok(!/Bob\+Cy|Di\+Ed/.test(names(bal.suggestions[0])), 'winners (higher Oddable rating) split up: ' + names(bal.suggestions[0]) + ' ' + JSON.stringify(bal.suggestions[0].ratings)); assert.strictEqual(bal.suggestions[0].spread, 0);
   const rot = ok(await call('bob', 'partners', { id, mode: 'rotate' })); assert.ok(!/Bob\+Cy|Di\+Ed/.test(names(rot.suggestions[0])), 'a player may look too; no repeat of last time'); assert.ok(rot.suggestions[0].reason.length > 10);
-  const hotRaw = await call('ann', 'partners', { id, mode: 'hot' }), hot = ok(hotRaw); assert.strictEqual(names(hot.suggestions[0]), 'Bob+Cy | Di+Ed'); assert.ok(/Bob & Cy are 2-0 together|Cy & Bob are 2-0 together/.test(hot.suggestions[0].reason), hot.suggestions[0].reason);
+  const hotRaw = await call('ann', 'partners', { id, mode: 'hot' }), hot = ok(hotRaw); assert.strictEqual(names(hot.suggestions[0]), 'Bob+Cy | Di+Ed'); assert.ok(/Bob \+ Cy are 2-0 as partners|Cy \+ Bob are 2-0 as partners/.test(hot.suggestions[0].reason), hot.suggestions[0].reason);
   assert.ok(!hotRaw.txt.includes('acct-') && !/"mk"/.test(hotRaw.txt));
   // it only suggests: nothing changed until the commissioner chooses
   ev = ok(await call('ann', 'get', { id })).event; assert.strictEqual(JSON.stringify(ev.entrants.map((e) => e.players.map((p) => p.name))), before, 'looking changes nothing');

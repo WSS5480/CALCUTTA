@@ -1,0 +1,17 @@
+// Run: node odds-api/preview-courses.test.js  (course search fix, Nov 16 2026: paging, courses near a typed city, tees + holes merged from three answers, labelled sample list when the API is down). Fake fetch in the REAL response shapes; no network.
+const CO = require('./golf-courses');
+const MC = { id: '1e21fcc6', name: 'McAllen Country Club', course_name: 'McAllen Country Club', latitude: 26.1764531, longitude: -98.2276562, state: 'TX', city: 'McAllen', type: 'private', par: 71 };
+const NEAR = [{ id: 'b3e21874', name: 'Tierra Del Sol Golf Club', course_name: 'Tierra Del Sol Golf Club', latitude: 26.16, longitude: -98.17, state: 'TX', city: 'Pharr', par: 72, distance_mi: 4.3 }, Object.assign({ distance_mi: 1.9 }, MC), { id: 'pv', course_name: 'Palm View Golf Course', city: 'McAllen', state: 'TX', par: 72, distance_mi: 3.1 }];
+let calls = [], down = false;
+CO._deps.fetch = async (u) => { calls.push(u); if (down) throw new Error('ENOTFOUND'); const U = new URL(u), p = U.pathname, q = U.searchParams; const J = (j) => ({ ok: true, status: 200, json: async () => j });
+  if (p.endsWith('/courses/search')) { if (q.get('lat')) return J({ courses: NEAR, total: 3 }); if (q.get('q') === 'golf') { const off = +q.get('offset') || 0; return J({ courses: Array.from({ length: Math.min(25, 60 - off) }, (_, i) => ({ id: 'g' + (off + i), course_name: 'Golf ' + (off + i), city: 'X', state: 'TX', par: 72 })), total: 60 }); } return J({ courses: /mcallen/i.test(q.get('q')) ? [MC] : [], total: /mcallen/i.test(q.get('q')) ? 1 : 0 }); }
+  if (p.endsWith('/holes')) return J({ holes: Array.from({ length: 18 }, (_, i) => ({ number: i + 1, par: 4, handicap_index: 18 - i, yardages: { red: 249 + i, blue: 271 + i, white: 270 + i } })) });
+  if (p.endsWith('/tees')) return J({ tees: [{ tee_key: 'white-male', tee_name: 'White', tee_color: 'white', gender: 'Male', course_rating: 67.4, slope: 115, par: 71, yardage: 6528 }, { tee_key: 'gold-male', tee_name: 'Gold', tee_color: 'gold', gender: 'Male', course_rating: 71.9, slope: 122, par: 71, yardage: 6454 }] });
+  if (/\/courses\/[\w-]+$/.test(p)) return J(Object.assign({}, MC, { holes: 18, scorecard: Array.from({ length: 18 }, (_, i) => ({ hole: i + 1, par: 4 })) }));
+  return { ok: false, status: 404, json: async () => ({}) }; };
+(async () => { const A = require('assert');
+  let r = await CO.searchSafe('McAllen', '', '', 0); A.ok(r.ok); A.deepStrictEqual(r.results.map((c) => c.name), ['McAllen Country Club', 'Palm View Golf Course', 'Tierra Del Sol Golf Club']); A.strictEqual(r.near, 'McAllen'); A.ok(!('lat' in r.results[0]));
+  r = await CO.searchSafe('golf', 'TX', '', 0); A.strictEqual(r.results.length, 25); A.strictEqual(r.next, 25); A.strictEqual(r.total, 60); r = await CO.searchSafe('golf', 'TX', '', 50); A.strictEqual(r.results.length, 10); A.strictEqual(r.next, null);
+  const d = await CO.detail('1e21fcc6'); A.strictEqual(d.tees.length, 2); A.strictEqual(d.tees[0].holes.length, 18); A.strictEqual(d.tees[0].holes[0].yards, 270); A.strictEqual(d.tees[0].holes[0].hcp, 18); A.strictEqual(d.tees[0].rating, 67.4); A.strictEqual(d.tees[1].holes[0].yards, null);
+  CO._reset(); down = true; r = await CO.searchSafe('McAllen', '', '', 0); A.strictEqual(r.ok, false); A.strictEqual(r.error, "Couldn't reach the course list. Try again."); console.log('down ->', r.results.length, 'sample courses', r.fallback);
+  console.log('course search checks passed'); })().catch((e) => { console.error(e); process.exit(1); });

@@ -11,18 +11,19 @@
 'use strict';
 const D = { fetch: (...a) => fetch(...a), now: () => Date.now(), key: () => String(process.env.OPENGOLFAPI_KEY || '').trim() };
 const BASES = ['https://api.opengolfapi.org/v1', 'https://api.opengolfapi.org/api/v1'];
-const TTL = 24 * 3600e3, C = new Map(); let down = 0;
+const TTL = 24 * 3600e3, C = new Map(), NONE = new Map(); let down = 0;
 const t = (s, n) => String(s == null ? '' : s).replace(/<[^>]*>/g, '').replace(/[<>`\\\u0000-\u001f]/g, '').trim().slice(0, n || 60); // keeps apostrophes (Pete Dye's); consumers escape
 const n0 = (v) => { const x = Number(v); return Number.isFinite(x) ? x : null; };
 const ATTR = 'Course data: OpenGolfAPI contributors (ODbL)';
 
 async function get(path) {
   const hit = C.get(path); if (hit && D.now() - hit.at < TTL) return hit.v;
+  const gone = NONE.get(path); if (gone && D.now() - gone < TTL) throw new Error('404'); // a path the directory does not have (e.g. no /tees for a course) is remembered too
   if (down && D.now() - down < 5 * 6e4) { if (hit) return hit.v; throw new Error('course API unavailable'); }
   const h = { 'user-agent': 'oddable-golf/1' }; if (D.key()) h.authorization = 'Bearer ' + D.key();
   let last = null, only404 = true;
   for (const b of BASES) { try { const r = await D.fetch(b + path, { headers: h, signal: AbortSignal.timeout(8000) }); if (r.status === 404) { last = new Error('404'); continue; } if (!r.ok) throw new Error('HTTP ' + r.status); const v = await r.json(); C.set(path, { at: D.now(), v }); if (C.size > 500) C.delete(C.keys().next().value); down = 0; return v; } catch (e) { last = e; only404 = false; } }
-  if (!only404) down = D.now(); if (hit) return hit.v; throw last || new Error('course API unavailable'); // a plain 404 (no such path/course) does not mark the API down
+  if (!only404) down = D.now(); else { NONE.set(path, D.now()); if (NONE.size > 2000) NONE.delete(NONE.keys().next().value); } if (hit) return hit.v; throw last || new Error('course API unavailable'); // a plain 404 (no such path/course) does not mark the API down
 }
 function normList(j, cap) { const a = Array.isArray(j) ? j : (j && (j.courses || j.results || j.data)) || []; return a.slice(0, cap || 30).map((c) => ({ extId: t(c.id ?? c.course_id, 40), name: t(c.course_name || c.name, 60), city: t(c.city, 40), state: t(c.state, 20), holes: n0(c.holes_count ?? (typeof c.holes === 'number' ? c.holes : null)), par: n0(c.par_total ?? c.par), lat: n0(c.latitude ?? c.lat), lng: n0(c.longitude ?? c.lng), mi: n0(c.distance_mi) })).filter((c) => c.extId && c.name); }
 // One course -> tees, each with its own 18 (or 9) holes: par, stroke index, yards for that tee.
@@ -51,7 +52,7 @@ const PAGE = 25;
 const CITIES = { mcallen: [26.2034, -98.23], edinburg: [26.3017, -98.1633], mission: [26.2159, -98.3253], pharr: [26.1948, -98.1836], weslaco: [26.1595, -97.9908], harlingen: [26.1906, -97.6961], brownsville: [25.9017, -97.4975], 'san juan': [26.1892, -98.1553], alamo: [26.1837, -98.123], donna: [26.1704, -98.0519], mercedes: [26.1498, -97.9136], 'san benito': [26.1326, -97.6311], 'rio grande city': [26.3798, -98.8203], 'south padre island': [26.1118, -97.1681], 'rio grande valley': [26.2034, -98.23], rgv: [26.2034, -98.23],
   houston: [29.7604, -95.3698], 'san antonio': [29.4241, -98.4936], dallas: [32.7767, -96.797], austin: [30.2672, -97.7431], 'fort worth': [32.7555, -97.3308], 'corpus christi': [27.8006, -97.3964], laredo: [27.5306, -99.4803], 'el paso': [31.7619, -106.485] };
 const norm = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
-const pub = (c) => ({ extId: c.extId, name: c.name, city: c.city, state: c.state, holes: c.holes, par: c.par, mi: c.mi == null ? undefined : Math.round(c.mi * 10) / 10 });
+const pub = (c) => Object.assign({ extId: c.extId, name: c.name, city: c.city, state: c.state, holes: c.holes, par: c.par }, c.mi == null ? {} : { mi: Math.round(c.mi * 10) / 10 });
 // One page of results: { results, total, next (offset of the next page, or null), near (the place the "nearby" rows are around, or null) }.
 async function searchPage(q, state, near, offset) {
   const st = state && /^[A-Za-z]{2}$/.test(state) ? state.toUpperCase() : '', off = Math.max(0, Math.round(Number(offset) || 0)), qq = String(q || '').trim().slice(0, 60);
@@ -96,4 +97,4 @@ async function searchSafe(q, state, near, offset) {
   try { const r = await searchPage(q, state, near, offset); return { ok: true, results: r.results, total: r.total, next: r.next, near: r.near, attribution: ATTR }; }
   catch (e) { const fb = Number(offset) > 0 ? [] : fallbackSearch(q, state); return { ok: false, down: true, error: DOWN_TEXT, results: fb, fallback: fb.length ? SAMPLE_TEXT : '', total: fb.length, next: null, near: null, attribution: fb.length ? ATTR : '' }; }
 }
-module.exports = { search, searchPage, searchSafe, fallbackSearch, fallbackAll, DOWN_TEXT, SAMPLE_TEXT, detail, normList, normCourse, ATTR, _deps: D, _reset: () => { C.clear(); down = 0; } };
+module.exports = { search, searchPage, searchSafe, fallbackSearch, fallbackAll, DOWN_TEXT, SAMPLE_TEXT, detail, normList, normCourse, ATTR, _deps: D, _reset: () => { C.clear(); NONE.clear(); down = 0; FB = null; } };

@@ -107,9 +107,10 @@ function suggestPartners(players, opt) {
   // Rotate: a pair that teamed up on the most recent day costs 1, the day before 1/2, then 1/3 ... plus a little for every game together.
   const repeatCost = (teams) => pairsOf(teams).reduce((a, [x, y]) => { const s = ps(x, y); return a + (s ? 1 / (1 + s.ago) + 0.05 * s.g : 0); }, 0);
   // Hot: each pair's smoothed win rate together (wins + 1) / (decided games + 2); pairs with no games together sit at 0.5.
+  const hotBest = (teams) => pairsOf(teams).reduce((m, [x, y]) => { const s = ps(x, y); return Math.max(m, s && s.w + s.l + s.t > 0 ? (s.w + 0.5 * s.t + 1) / (s.w + s.l + s.t + 2) : 0); }, 0);
   const hotOf = (teams) => { const pr = pairsOf(teams); return pr.length ? pr.reduce((a, [x, y]) => { const s = ps(x, y); return a + (s ? (s.w + 0.5 * s.t + 1) / (s.w + s.l + s.t + 2) : 0.5); }, 0) / pr.length : 0.5; };
   const range = Math.max(1e-9, Math.max(...S.val) - Math.min(...S.val));
-  const cost = (teams) => (mode === 'balanced' ? spreadOf(teams) / range + 0.001 * repeatCost(teams) : mode === 'rotate' ? repeatCost(teams) + 0.01 * spreadOf(teams) / range : -hotOf(teams) + 0.001 * spreadOf(teams) / range);
+  const cost = (teams) => (mode === 'balanced' ? spreadOf(teams) / range + 0.001 * repeatCost(teams) : mode === 'rotate' ? repeatCost(teams) + 0.01 * spreadOf(teams) / range : -hotOf(teams) - 0.01 * hotBest(teams) + 0.001 * spreadOf(teams) / range); // PREVIEW MERGE FIX (for the Groups coder): when two splits have the same average record, the one that keeps the single best-record pair together wins (owner P1: "Hot pairs: best record together"); before, a 2-0 pair plus a 0-2 pair tied with two pairs that never played and lost the tie on spread
   // who sits out (odd count, pairs): try each player sitting, keep the best; with history, the one who sat least recently is not known here, so cost decides.
   const idxAll = P.map((_, i) => i), cands = [];
   const sitSets = sit ? idxAll.map((i) => [i]) : [[]];

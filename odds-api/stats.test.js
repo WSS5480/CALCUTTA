@@ -1,7 +1,7 @@
 // Run: node odds-api/stats.test.js   (no network, no database: Supabase, ESPN, sign-in and Claude are in-memory fakes)
 const assert = require('assert'), http = require('http');
 process.env.SUPABASE_URL = 'https://fake.supabase.co'; process.env.SUPABASE_KEY = 'x';
-const S = require('./stats'), D = S._deps, G = require('./groups'), GD = G._deps, R = require('./ratings'), V = require('./voicelog'), VD = V._deps, SYNC = require('./sync');
+const S = require('./stats'), D = S._deps, G = require('./groups.stage1.fixture') /* PREVIEW MERGE: the Groups stage-1 engine this suite was written against (see that file's header); the v254 engine has its own suites */, GD = G._deps, R = require('./ratings'), V = require('./voicelog'), VD = V._deps, SYNC = require('./sync');
 let db = {};
 const FDB = {
   dbGet: async (id) => (db[id] ? JSON.parse(JSON.stringify(db[id])) : null),
@@ -14,6 +14,7 @@ const pe = (id) => 'pe' + id.slice(0, 18) + '@phone.oddable';
 const NAMES = { a1a1a1a1: 'AnnAce', b2b2b2b2: 'BobBirdie', c3c3c3c3: 'CatCourt' };
 const who = (req) => { const w = String(req.headers['x-token'] || '').replace(/^t-/, ''); return SID[w] ? pe(SID[w]) : w === 'owner' ? 'owner' : null; };
 const ACCT = { who, phoneEmail: pe, isOwnerPhone: () => false, namesGet: async () => NAMES, ownerName: () => 'Sir Oddable', ownerOk: (req) => who(req) === 'owner', check: async (req) => !!who(req) };
+D.groups = () => G; D.auto = false; // PREVIEW MERGE: this suite checks stats.js on its own ("missing providers are harmless"); in the merged tree calcutta.js / golf.js / events.js sit next to it and would be picked up
 D.S = FDB; D.acct = () => ACCT; GD.S = FDB; GD.acct = () => ACCT; VD.acct = () => ACCT;
 const Z = (s) => Date.parse(s); let NOW = Z('2026-11-10T18:00:00Z'); D.now = GD.now = VD.now = () => NOW; D.ip = GD.ip = VD.ip = (req) => String(req.headers['x-ip'] || '1.1.1.1');
 const KICK = { 601: Z('2026-11-15T18:00:00Z'), 602: Z('2026-11-16T19:00:00Z') };
@@ -420,7 +421,7 @@ srv.listen(0, async () => {
       assert.ok(urls[0][0].startsWith('https://api.opengolfapi.org/v1/courses/search?q=cedar') && urls[0][1] === 'Bearer KEY1', 'OPENGOLFAPI_KEY sent when set');
       r = await call('ann', '/stats/coursedetail', { extId: 'c77' }); ok(r); assert.deepStrictEqual([r.j.course.tees[0].name, r.j.course.tees[0].rating, r.j.course.tees[0].slope, r.j.course.tees[0].holes.length], ['Blue', 71.3, 125, 18]);
       r = await call('ann', '/stats/courses', { q: 'c' }); assert.strictEqual(r.s, 400); CS._reset(); CS._deps.fetch = async () => { throw new Error('offline'); }; CS._deps.key = () => '';
-      r = await call('ann', '/stats/courses', { q: 'cedar' }); assert.strictEqual(r.s, 502); assert.ok(/Type the course/.test(r.j.error), 'API down: type it in'); r = await call(null, '/stats/courses', { q: 'cedar' }); assert.strictEqual(r.s, 401);
+      r = await call('ann', '/stats/courses', { q: 'cedar' }); assert.strictEqual(r.s, 502); assert.ok(/Couldn't reach the course list/.test(r.j.error), 'PREVIEW course-search fix (owner, Nov 16 2026): API down says so and offers Try again, it no longer sends people to type the course in'); r = await call(null, '/stats/courses', { q: 'cedar' }); assert.strictEqual(r.s, 401);
       assert.ok(urls.every(([u]) => u.startsWith('https://api.opengolfapi.org/')), 'only OpenGolfAPI called');
       t('course search: OpenGolfAPI through the server (key optional), names cleaned, attribution, tee rating / slope / holes; API down -> type it in; signed-out refused');
     }

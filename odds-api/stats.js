@@ -436,8 +436,8 @@ const LIMSTAND = {
 };
 const GOLFSTAND = { coursesOwnedBy: async (key) => { const r = await D.S.dbGet(ENTC).catch(() => null); return ((r && r.data && r.data.own && r.data.own[key]) || []).slice(0, 20); } };
 const realOr = (mod, fn, stand) => { try { const m = require(mod); if (m && typeof m[fn] === 'function') return m; } catch (er) {} return stand; };
-D.limits = () => realOr('./limits', 'isEnterprise', LIMSTAND);
-D.golf = () => realOr('./golf', 'coursesOwnedBy', GOLFSTAND);
+D.limits = () => (D.auto === false ? LIMSTAND : realOr('./limits', 'isEnterprise', LIMSTAND)); // PREVIEW MERGE: `auto === false` (tests only) = this file's own fallbacks
+D.golf = () => (D.auto === false ? GOLFSTAND : realOr('./golf', 'coursesOwnedBy', GOLFSTAND));
 const okCid = (v) => { const x = String(v || ''); return /^[\w-]{1,40}$/.test(x) ? x : ''; };
 const cpid = (cid, mk) => sha('oddable-cpid|' + cid + '|' + mk).slice(0, 12); // a player's id inside one course's view only
 async function ownedCourses(e) { const L = D.limits(), k = L.keyOf(e); if (!(await L.isEnterprise(k))) return []; return ((await D.golf().coursesOwnedBy(k)) || []).map((c) => ({ id: okCid(c.id), name: clean(c.name, 60) })).filter((c) => c.id); }
@@ -570,7 +570,7 @@ register('bets', betsProvider); register('groups', groupsProvider); register('se
 // Engines merged later (calcutta.js, golf.js, events.js) export statsFor(userKey, {from, to}); collect() picks them up on its own unless the manager called
 // register() for that src. A module that is not in this build is simply absent.
 const MODS = { calcutta: './calcutta', golf: './golf', events: './events' }, AUTO = {};
-function autoProv(src) { if (src in AUTO) return AUTO[src]; let f = null; try { const m = require(MODS[src]); if (m && typeof m.statsFor === 'function') f = (k, o) => m.statsFor(k, o); } catch (er) {} AUTO[src] = f; return f; }
+function autoProv(src) { if (D.auto === false) return null; /* PREVIEW MERGE: a test switch (stats.test.js checks this file on its own; `_deps.auto = false` = do not pick up the engines that sit next to it in the merged tree). Never set in the app. */ if (src in AUTO) return AUTO[src]; let f = null; try { const m = require(MODS[src]); if (m && typeof m.statsFor === 'function') f = (k, o) => m.statsFor(k, o); } catch (er) {} AUTO[src] = f; return f; }
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error('timeout')), ms))]);
 // Every provider for one player: validated records + which providers failed (names only) + how many records were dropped as invalid.
 async function collect(userKey, opts) {

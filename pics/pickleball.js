@@ -7,25 +7,26 @@
   const PFX = 'pb1-ev-';
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
   const NOMONEY = 'Points only. Oddable never takes, holds or pays money, and points can\'t be bought or cashed. They are for bragging rights.';
 
   const FMT = {
     rr: { n: 'Round robin', ico: '🔄', ind: 1, info: 'Everyone gets a number and plays doubles in groups of four, with a new partner and new opponents every round. Each player keeps their own wins and points. If the numbers don\'t fit the courts, a player or two sits out a round (a bye) and the byes rotate.' },
-    king: { n: 'King of the Court', ico: '👑', ind: 1, info: 'Courts are seeded by skill (DUPR): best players start on court 1. After each round the winners move up a court and split up, the losers move down and split up. Whoever wins on court 1 in the last round is King or Queen of the Court.' },
-    chal: { n: 'Challenge court', ico: '⚔️', ind: 1, info: 'The winning pair stays on the court and the losers go to the back of the line. The next two in line challenge. A pair that wins 3 in a row (you can change this) steps off too, so everyone keeps playing.' },
+    king: { n: 'King of the Court', ico: '👑', ind: 1, info: 'Courts are seeded by skill (DUPR): best players start on court 1. After each round the winners move up a court and split up, the losers move down and split up. Whoever wins on court 1 in the last round is King or Queen of the Court. Extra players wait and come in on the bottom court, whoever has played the fewest games first; on a single court the winners hold the court.' },
+    chal: { n: 'Challenge court', ico: '⚔️', ind: 1, info: 'The winning pair stays on the court and the losers go to the back of the line. The next two in line challenge. A pair that wins 3 in a row (you can change this) steps off too, so everyone keeps playing. With no one waiting in line, the losers rematch the winners.' },
     ladder: { n: 'Ladder', ico: '🪜', ind: 0, info: 'A ranked list that runs for weeks. You may challenge anyone up to 3 spots above you. If the challenger wins, the two swap places; if the challenger loses, nothing changes.' },
     se: { n: 'Single elimination', ico: '🏆', ind: 0, info: 'A bracket seeded by DUPR: the top seed plays the lowest seed. Lose once and you are out. Top seeds get byes when the field isn\'t a full bracket.' },
     de: { n: 'Double elimination', ico: '🥈', ind: 0, info: 'A seeded bracket where you are out only after two losses. A first loss drops you to the losers bracket. The losers-bracket winner meets the winners-bracket winner in the final and has to beat them twice.' }
   };
   const ADDON = {
-    calc: { n: 'Calcutta', ico: '💰', info: 'Before play, the group auctions off the players (or teams). Everyone starts with 100 bragging points and bids points. All bids go into the pot, and the pot goes to the owners of the best finishers (50/30/20 by default). ' + NOMONEY },
+    calc: { n: 'Calcutta', ico: '🏅', info: 'Before play, the group auctions off the players (or teams). Everyone starts with 100 bragging points and bids points. All bids go into the points pot, and the points are awarded to the owners of the best finishers (50/30/20 by default). ' + NOMONEY },
     skins: { n: 'Skins', ico: '🎯', info: 'Every game is worth a skin. The players who win the game collect it. A tied game (only possible in timed round robin games) carries its skin over to the next game, so the next winner takes both.' },
     pick: { n: 'Pick\'em', ico: '🔮', info: 'Members pick the event winner before play starts (5 points if right) and each game before it is scored (1 point each). The picks leaderboard shows who called it best.' }
   };
 
   /* ---------------- storage ---------------- */
   let MSG = '';
-  function load(id) { try { return JSON.parse(localStorage.getItem(PFX + id)); } catch (e) { return null; } }
+  function load(id) { let ev = null; try { ev = JSON.parse(localStorage.getItem(PFX + id)); } catch (e) { return null; } try { if (ev && Array.isArray(ev.g) && migrate(ev)) localStorage.setItem(PFX + id, JSON.stringify(ev)); } catch (e) {} return ev; }
   function save(ev) { ev.up = Date.now(); try { localStorage.setItem(PFX + ev.id, JSON.stringify(ev)); return true; } catch (e) { MSG = 'Could not save on this device (storage is full or blocked).'; return false; } }
   function remove(id) { try { localStorage.removeItem(PFX + id); } catch (e) {} }
   function listEvents() { const out = []; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.indexOf(PFX) === 0) { const e = load(k.slice(PFX.length)); if (e && e.id) out.push(e); } } } catch (e) {} return out.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || (b.up || 0) - (a.up || 0)); }
@@ -52,8 +53,9 @@
   /* ---------------- create ---------------- */
   function parsePlayers(txt) {
     return String(txt || '').split(/\n|;/).map((l) => l.trim()).filter(Boolean).map((l) => {
-      const m = /^(.*?)[\s,]+(\d(?:\.\d{1,3})?)$/.exec(l); let n = l, d = null;
-      if (m && +m[2] >= 1 && +m[2] <= 8) { n = m[1].replace(/[,\s]+$/, ''); d = +m[2]; }
+      // a DUPR rating is a trailing decimal between 2.0 and 8.0 (3.5, 4.25); "Mike 1" or "Court 2 Sam" stays a name
+      const m = /^(.*?\S)[\s,]+(\d\.\d{1,3})$/.exec(l); let n = l, d = null;
+      if (m && +m[2] >= 2 && +m[2] <= 8) { n = m[1].replace(/[,\s]+$/, ''); d = +m[2]; }
       return { n: n.slice(0, 40), d };
     }).filter((p) => p.n);
   }
@@ -79,7 +81,7 @@
   }
   function checkNew(o) {
     if (!o.name) return 'Give the event a name.';
-    if (!FMT[o.fmt]) return 'Pick a format.';
+    if (!hasOwn(FMT, o.fmt)) return 'Pick a format.';
     const n = o.players.length;
     if (FMT[o.fmt].ind && n < 4) return 'This format needs at least 4 players.';
     if (!FMT[o.fmt].ind && o.team !== 's' && n < 4) return 'Doubles needs at least 4 players (2 teams).';
@@ -91,39 +93,62 @@
     return '';
   }
 
+  function newGid(ev) { // next unused g<number>; ids never come back after a game is removed
+    const n = ev.g.reduce((m, g) => { const x = /^g(\d+)$/.exec(g.id); return x ? Math.max(m, +x[1]) : m; }, 0); return 'g' + (n + 1);
+  }
+  function migrate(ev) { // events saved before the v253 review fixes could hold two ladder games with the same id
+    const seen = new Set(); let changed = false;
+    ev.g.forEach((g) => { if (seen.has(g.id)) { if (ev.pk && ev.pk.g) delete ev.pk.g[g.id]; g.id = newGid(ev); changed = true; } seen.add(g.id); });
+    return changed;
+  }
+
   /* ---------------- round robin (rotating partners) ---------------- */
   function genRR(ev) {
-    // Partners come from the circle method (every pair partners once per cycle; with an odd count a "ghost" seat
-    // gives each player one bye per cycle). Who sits out is picked by fewest byes so far (keeping circle pairs
-    // together when it can); anyone left without a partner is paired with the least-repeated partner.
-    // Opponents are then matched to keep repeat match-ups low.
+    // When everyone plays each round (or one sits with an odd count), partners come from the circle method: every
+    // pair partners once per cycle and the "ghost" seat gives each player one bye. When the courts force more people
+    // to sit, each round is searched instead: the sitters are the players with the fewest byes so far, then the
+    // playing set is paired to avoid repeat partners first and repeat opponents second (greedy + swaps, many tries).
     const r = rng(hash(ev.id)), P = shuffle(ev.us.map((u) => u.id), r), N = P.length, play = playN(N, ev.courts);
-    const seats = N % 2 ? P.concat([null]) : P.slice(), M = seats.length, opp = {}, part = {}, byes = {}; P.forEach((p) => { byes[p] = 0; });
+    const opp = {}, part = {}, byes = {}; P.forEach((p) => { byes[p] = 0; });
+    const pc = (x, y) => part[pk2(x, y)] || 0, oc = (x, y) => opp[pk2(x, y)] || 0;
+    const gameCost = (A, B) => oc(A[0], B[0]) + oc(A[0], B[1]) + oc(A[1], B[0]) + oc(A[1], B[1]);
+    const useCircle = N - play <= N % 2;
+    const seats = N % 2 ? P.concat([null]) : P.slice(), M = seats.length;
     for (let rd = 1; rd <= ev.rounds; rd++) {
-      const k = (rd - 1) % (M - 1), rest = seats.slice(1), rot = [seats[0]].concat(rest.slice(k), rest.slice(0, k)), pairs = [];
-      for (let i = 0; i < M / 2; i++) pairs.push([rot[i], rot[M - 1 - i]]);
-      const mate = {}; pairs.forEach((p) => { if (p[0] != null) mate[p[0]] = p[1]; if (p[1] != null) mate[p[1]] = p[0]; });
-      const sit = [], tie = {}; P.forEach((p) => { tie[p] = r(); });
-      while (sit.length < N - play) {
-        const c = P.filter((p) => !sit.includes(p)); const mb = Math.min(...c.map((p) => byes[p]));
-        const pref = (p) => (mate[p] == null ? 0 : sit.includes(mate[p]) ? 1 : 2);
-        sit.push(c.filter((p) => byes[p] === mb).sort((a, b) => pref(a) - pref(b) || tie[a] - tie[b])[0]);
+      let sit = [], pairs = [];
+      if (useCircle) {
+        const k = (rd - 1) % (M - 1), rest = seats.slice(1), rot = [seats[0]].concat(rest.slice(k), rest.slice(0, k));
+        for (let i = 0; i < M / 2; i++) { const x = rot[i], y = rot[M - 1 - i]; if (x == null || y == null) sit.push(x == null ? y : x); else pairs.push([x, y]); }
+      } else {
+        let best = null, bc = Infinity;
+        for (let t = 0; t < 60 && bc > 0; t++) {
+          const ord = shuffle(P, r).sort((a, b) => byes[a] - byes[b]), sv = ord.slice(0, N - play), act = shuffle(ord.slice(N - play), r), pr = [];
+          while (act.length) { const x = act.shift(); let bi = 0, bv = Infinity; act.forEach((y, i) => { const v = pc(x, y) * 10 + r(); if (v < bv) { bv = v; bi = i; } }); pr.push([x, act.splice(bi, 1)[0]]); }
+          for (let pass = 0, moved = true; moved && pass < 6; pass++) { moved = false;
+            for (let i = 0; i < pr.length; i++) for (let j = i + 1; j < pr.length; j++) { const [a1, b1] = pr[i], [a2, b2] = pr[j], now = pc(a1, b1) + pc(a2, b2);
+              if (pc(a1, a2) + pc(b1, b2) < now) { pr[i] = [a1, a2]; pr[j] = [b1, b2]; moved = true; } else if (pc(a1, b2) + pc(b1, a2) < now) { pr[i] = [a1, b2]; pr[j] = [b1, a2]; moved = true; } } }
+          const c = pr.reduce((acc, q) => acc + pc(q[0], q[1]), 0);
+          if (c < bc) { bc = c; best = { sv, pr }; }
+        }
+        sit = best.sv; pairs = best.pr;
       }
       sit.forEach((p) => { byes[p]++; });
-      const real = [], orph = [];
-      pairs.forEach((p) => { const a = p[0] != null && !sit.includes(p[0]), b = p[1] != null && !sit.includes(p[1]); if (a && b) real.push(p.slice()); else if (a) orph.push(p[0]); else if (b) orph.push(p[1]); });
-      while (orph.length) { const x = orph.shift(); let bi = 0; orph.forEach((y, i) => { if ((part[pk2(x, y)] || 0) < (part[pk2(x, orph[bi])] || 0)) bi = i; }); real.push([x, orph.splice(bi, 1)[0]]); }
-      real.forEach((p) => { const q = pk2(p[0], p[1]); part[q] = (part[q] || 0) + 1; });
-      let best = null, bc = Infinity;
-      for (let t = 0; t < 300 && bc > 0; t++) {
-        const s = shuffle(real, r); let c = 0;
-        for (let i = 0; i < s.length; i += 2) s[i].forEach((x) => s[i + 1].forEach((y) => { c += opp[pk2(x, y)] || 0; }));
-        if (c < bc) { bc = c; best = s; }
+      pairs.forEach((q) => { part[pk2(q[0], q[1])] = pc(q[0], q[1]) + 1; });
+      // match pairs into games: fewest repeat opponents (greedy over random orders + swaps)
+      let gb = null, gc = Infinity;
+      for (let t = 0; t < 40 && gc > 0; t++) {
+        const L = shuffle(pairs, r), G = [];
+        while (L.length) { const A = L.shift(); let bi = 0, bv = Infinity; L.forEach((B, i) => { const v = gameCost(A, B) + r() / 10; if (v < bv) { bv = v; bi = i; } }); G.push([A, L.splice(bi, 1)[0]]); }
+        for (let pass = 0, moved = true; moved && pass < 4; pass++) { moved = false;
+          for (let i = 0; i < G.length; i++) for (let j = i + 1; j < G.length; j++) { const now = gameCost(G[i][0], G[i][1]) + gameCost(G[j][0], G[j][1]);
+            if (gameCost(G[i][0], G[j][0]) + gameCost(G[i][1], G[j][1]) < now) { const x = G[i][1]; G[i][1] = G[j][0]; G[j][0] = x; moved = true; }
+            else if (gameCost(G[i][0], G[j][1]) + gameCost(G[i][1], G[j][0]) < now) { const x = G[i][1]; G[i][1] = G[j][1]; G[j][1] = x; moved = true; } } }
+        const c = G.reduce((acc, g) => acc + gameCost(g[0], g[1]), 0); if (c < gc) { gc = c; gb = G; }
       }
-      for (let i = 0; i < best.length; i += 2) {
-        best[i].forEach((x) => best[i + 1].forEach((y) => { const q = pk2(x, y); opp[q] = (opp[q] || 0) + 1; }));
-        ev.g.push({ id: 'g' + (ev.g.length + 1), r: rd, c: i / 2 + 1, a: best[i].slice(), b: best[i + 1].slice(), sa: null, sb: null });
-      }
+      gb.forEach((g, i) => {
+        g[0].forEach((x) => g[1].forEach((y) => { opp[pk2(x, y)] = oc(x, y) + 1; }));
+        ev.g.push({ id: 'g' + (ev.g.length + 1), r: rd, c: i + 1, a: g[0].slice(), b: g[1].slice(), sa: null, sb: null });
+      });
       if (sit.length) ev.g.push({ id: 'y' + rd, r: rd, bye: sit });
     }
   }
@@ -136,7 +161,7 @@
     kingPush(ev, 1, L);
   }
   function kingPush(ev, rd, L) {
-    L.forEach((pair, i) => ev.g.push({ id: 'g' + (ev.g.length + 1), r: rd, c: i + 1, a: pair[0], b: pair[1], sa: null, sb: null }));
+    L.forEach((pair, i) => ev.g.push({ id: newGid(ev), r: rd, c: i + 1, a: pair[0], b: pair[1], sa: null, sb: null }));
     if (ev.kg.bench.length) { ev.kg.bench.forEach((p) => { ev.kg.byes[p] = (ev.kg.byes[p] || 0) + 1; }); ev.g.push({ id: 'y' + rd, r: rd, bye: ev.kg.bench.slice() }); }
   }
   const lastRound = (ev) => ev.g.reduce((m, g) => Math.max(m, g.r || 0), 0);
@@ -147,12 +172,14 @@
     G.forEach((g, i) => { const w = winSide(g) === 'a' ? g.a : g.b, l = winSide(g) === 'a' ? g.b : g.a; nx[i === 0 ? 0 : i - 1].push(w); nx[i === cc - 1 ? cc - 1 : i + 1].push(l); });
     // court 1 winners and the winners coming up both land on the higher court; order inside a court: [stay/up pair, other pair]
     let bench = ev.kg.bench.slice();
-    if (bench.length) { // bench players come in on the bottom court; who sits = bottom-court losers with the fewest byes
-      const bottom = nx[cc - 1], lastBottom = G[cc - 1], lost = winSide(lastBottom) === 'a' ? lastBottom.b : lastBottom.a;
-      const flat = [].concat(bottom[0], bottom[1]); const k = Math.min(bench.length, 4);
-      const out = flat.slice().sort((a, b) => (ev.kg.byes[a] || 0) - (ev.kg.byes[b] || 0) || (lost.includes(b) ? 1 : 0) - (lost.includes(a) ? 1 : 0)).slice(0, k);
-      const inn = bench.slice(0, k); bench = bench.slice(k).concat(out);
-      nx[cc - 1] = bottom.map((pair) => pair.map((p) => (out.includes(p) ? inn[out.indexOf(p)] : p)));
+    if (bench.length) { // waiting players come in on the bottom court: on one court the winners hold it; open spots go to whoever has played the fewest games
+      const bottom = nx[cc - 1], keep = cc === 1 ? bottom[0].slice() : [], pool = (cc === 1 ? bottom[1].slice() : bottom[0].concat(bottom[1])).concat(bench);
+      const gp = {}; ev.g.forEach((g) => { if (!g.bye && isSc(g)) g.a.concat(g.b).forEach((p) => { gp[p] = (gp[p] || 0) + 1; }); });
+      const w = (p) => (bench.includes(p) ? bench.indexOf(p) : 1000 + pool.indexOf(p));
+      const chosen = pool.slice().sort((x, y) => (gp[x] || 0) - (gp[y] || 0) || w(x) - w(y)).slice(0, 4 - keep.length);
+      const four = keep.concat(pool.filter((p) => chosen.includes(p)));
+      bench = bench.filter((p) => !chosen.includes(p)).concat(pool.filter((p) => !chosen.includes(p) && !bench.includes(p)));
+      nx[cc - 1] = [[four[0], four[1]], [four[2], four[3]]];
     }
     ev.kg.bench = bench;
     kingPush(ev, r + 1, nx.map((two) => [[two[0][0], two[1][0]], [two[0][1], two[1][1]]]));
@@ -162,14 +189,15 @@
   function chalStart(ev) {
     const q = ev.us.map((u) => u.id), cc = Math.max(1, Math.min(ev.courts, Math.floor(q.length / 4)));
     ev.cq = { q: q.slice(cc * 4), st: {} };
-    for (let c = 1; c <= cc; c++) { const x = q.slice((c - 1) * 4, c * 4); ev.cq.st[c] = 0; ev.g.push({ id: 'g' + (ev.g.length + 1), c, n: 1, a: [x[0], x[1]], b: [x[2], x[3]], sa: null, sb: null }); }
+    for (let c = 1; c <= cc; c++) { const x = q.slice((c - 1) * 4, c * 4); ev.cq.st[c] = 0; ev.g.push({ id: newGid(ev), c, n: 1, a: [x[0], x[1]], b: [x[2], x[3]], sa: null, sb: null }); }
   }
   function chalAfter(ev, g) {
     if (g.nx || ev.done) return; const ws = winSide(g), W = ws === 'a' ? g.a : g.b, L = ws === 'a' ? g.b : g.a, q = ev.cq.q;
+    g.snap = { q: q.slice(), st: ev.cq.st[g.c] || 0 }; // lets the last result be fixed while the next game is unscored
     q.push(L[0], L[1]); let st = ws === 'a' ? (ev.cq.st[g.c] || 0) + 1 : 1; let a, b;
     if (st >= ev.maxW) { q.push(W[0], W[1]); a = [q.shift(), q.shift()]; b = [q.shift(), q.shift()]; st = 0; } else { a = W.slice(); b = [q.shift(), q.shift()]; }
     ev.cq.st[g.c] = st; const n = ev.g.filter((x) => x.c === g.c).length + 1;
-    const ng = { id: 'g' + (ev.g.length + 1), c: g.c, n, a, b, sa: null, sb: null, hs: st }; ev.g.push(ng); g.nx = ng.id;
+    const ng = { id: newGid(ev), c: g.c, n, a, b, sa: null, sb: null, hs: st }; ev.g.push(ng); g.nx = ng.id;
   }
 
   /* ---------------- brackets ---------------- */
@@ -241,17 +269,27 @@
     ev.g.forEach((g) => { if (g.bye) g.bye.forEach((u) => { if (T[u]) T[u].bye++; }); });
     return T;
   }
-  const byRecord = (T, ev) => (a, b) => { const x = T[a], y = T[b]; const px = x.gp ? (x.w + x.t / 2) / x.gp : 0, py = y.gp ? (y.w + y.t / 2) / y.gp : 0;
-    return (y.w + y.t / 2) - (x.w + x.t / 2) || py - px || (y.pf - y.pa) - (x.pf - x.pa) || y.pf - x.pf || uName(ev, a).localeCompare(uName(ev, b)); };
+  // ranking keys (bigger is better). Round robin ranks by win % so byes never cost a place; challenge court by wins.
+  const pct = (x) => (x.gp ? (x.w + x.t / 2) / x.gp : -1);
+  const rrKey = (x) => [Math.round(pct(x) * 1e6), x.pf - x.pa, x.pf];
+  const chKey = (x) => [x.w * 2 + x.t, Math.round(pct(x) * 1e6), x.pf - x.pa];
+  const cmpKey = (ka, kb) => { for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return kb[i] - ka[i]; return 0; };
+  function grouped(ids, key, ev) { // order by key; equal keys = one tie group (names only order inside a group)
+    const s = ids.slice().sort((a, b) => cmpKey(key(a), key(b)) || uName(ev, a).localeCompare(uName(ev, b))), out = [];
+    s.forEach((u) => { const last = out[out.length - 1]; if (last && !cmpKey(key(last[0]), key(u))) last.push(u); else out.push([u]); }); return out;
+  }
+  const byRecord = (T, ev) => (a, b) => cmpKey(rrKey(T[a]), rrKey(T[b])) || uName(ev, a).localeCompare(uName(ev, b));
   function finish(ev) { // ordered groups of unit ids (a group = tied for that place)
     const T = table(ev), ids = ev.us.map((u) => u.id);
-    if (ev.fmt === 'rr' || ev.fmt === 'chal') return ids.sort(byRecord(T, ev)).map((u) => [u]);
+    if (ev.fmt === 'rr') return grouped(ids, (u) => rrKey(T[u]), ev);
+    if (ev.fmt === 'chal') return grouped(ids, (u) => chKey(T[u]), ev);
     if (ev.fmt === 'ladder') return ladderOrder(ev).map((u) => [u]);
     if (ev.fmt === 'king') {
       let r = lastRound(ev); while (r > 0 && roundGames(ev, r).some((g) => !isSc(g))) r--;
-      if (!r) return ids.sort(byRecord(T, ev)).map((u) => [u]);
-      const pos = {}; roundGames(ev, r).forEach((g, i) => { const ws = winSide(g); (ws === 'a' ? g.a : g.b).forEach((u) => { pos[u] = i * 2; }); (ws === 'a' ? g.b : g.a).forEach((u) => { pos[u] = i * 2 + 1; }); });
-      const rec = byRecord(T, ev); return ids.sort((a, b) => (pos[a] == null ? 999 : pos[a]) - (pos[b] == null ? 999 : pos[b]) || rec(a, b)).map((u) => [u]);
+      if (!r) return grouped(ids, (u) => rrKey(T[u]), ev);
+      // last full round: court-1 winners share 1st, court-1 losers share the next place, and so on; anyone waiting goes after, by record
+      const out = []; roundGames(ev, r).forEach((g) => { const ws = winSide(g); out.push((ws === 'a' ? g.a : g.b).slice()); out.push((ws === 'a' ? g.b : g.a).slice()); });
+      const on = new Set([].concat(...out)); return out.concat(grouped(ids.filter((u) => !on.has(u)), (u) => rrKey(T[u]), ev));
     }
     // brackets: alive first (by record, then seed), eliminated grouped by how far they got
     const M = RES, bk = ev.bk, champ = champion(ev, M), st = {};
@@ -316,7 +354,7 @@
   function fromCode(c) {
     c = String(c || '').replace(/\s+/g, ''); const m = /PB1:([A-Za-z0-9+/=]+)/.exec(c); if (!m) throw new Error('That is not a pickleball event code (it starts with PB1:).');
     let ev; try { ev = JSON.parse(decodeURIComponent(escape(atob(m[1])))); } catch (e) { throw new Error('The code is cut off or damaged. Copy the whole code and try again.'); }
-    if (!ev || ev.v !== 1 || !ev.id || !FMT[ev.fmt] || !Array.isArray(ev.us) || !Array.isArray(ev.g) || !Array.isArray(ev.ps)) throw new Error('The code did not hold a pickleball event.');
+    if (!ev || typeof ev !== 'object' || ev.v !== 1 || !ev.id || !hasOwn(FMT, ev.fmt) || !Array.isArray(ev.us) || !Array.isArray(ev.g) || !Array.isArray(ev.ps)) throw new Error('The code did not hold a pickleball event.');
     if (!clean(ev)) throw new Error('The code did not hold a pickleball event.');
     return ev;
   }
@@ -325,14 +363,25 @@
     const ID = /^[A-Za-z0-9-]{1,24}$/, num = (x, d) => (Number.isFinite(+x) ? Math.round(+x) : d), str = (x) => String(x == null ? '' : x).slice(0, 60);
     if (!ID.test(ev.id) || !/^e[a-z0-9]{3,23}$/.test(ev.id)) return false;
     ev.name = str(ev.name) || 'Event'; ev.date = /^\d{4}-\d{2}-\d{2}$/.test(ev.date) ? ev.date : ''; ev.courts = Math.max(1, Math.min(20, num(ev.courts, 1))); ev.rounds = Math.max(0, Math.min(30, num(ev.rounds, 0))); ev.maxW = Math.max(1, Math.min(9, num(ev.maxW, 3))); ev.seq = num(ev.seq, 0); ev.timed = !!ev.timed; ev.done = !!ev.done;
-    if (!['r', 's', 'd'].includes(ev.team)) return false;
+    if (!hasOwn(FMT, ev.fmt) || !['r', 's', 'd'].includes(ev.team) || !ev.ps.length || !ev.us.length) return false;
     for (const p of ev.ps) { if (!p || !ID.test(p.id)) return false; p.n = str(p.n); p.d = p.d == null ? null : +p.d; if (p.d != null && !Number.isFinite(p.d)) p.d = null; }
     for (const u of ev.us) { if (!u || !ID.test(u.id) || !Array.isArray(u.p) || !u.p.every((x) => ID.test(x))) return false; u.n = str(u.n); u.d = u.d == null || !Number.isFinite(+u.d) ? null : +u.d; }
+    const PS = new Set(ev.ps.map((p) => p.id)); if (PS.size !== ev.ps.length || new Set(ev.us.map((u) => u.id)).size !== ev.us.length) return false;
+    if (!ev.us.every((u) => u.p.length >= 1 && u.p.length <= 2 && u.p.every((x) => PS.has(x)))) return false;
     const U = new Set(ev.us.map((u) => u.id).concat(['BYE'])), ok = (a) => !a || (Array.isArray(a) && a.every((x) => U.has(x)));
+    if (!ev.g.every((g) => g && typeof g === 'object' && typeof g.id === 'string')) return false;
+    migrate(ev); const at = {}; ev.g.forEach((g, i) => { if (g && typeof g.id === 'string') at[g.id] = i; });
+    const side = (a) => Array.isArray(a) && a.length >= 1 && a.length <= 2 && a.every((x) => U.has(x) && x !== 'BYE');
     for (const g of ev.g) { if (!g || !ID.test(g.id) || !ok(g.a) || !ok(g.b) || !ok(g.bye)) return false; ['r', 'c', 'n', 'wk', 'hs', 'k', 'i'].forEach((k) => { if (g[k] != null) g[k] = num(g[k], 0); });
       if (g.bye) { delete g.sa; delete g.sb; } else { g.sa = g.sa == null ? null : num(g.sa, null); g.sb = g.sb == null ? null : num(g.sb, null); if (g.sa == null || g.sb == null) g.sa = g.sb = null; }
-      if (g.src && !(Array.isArray(g.src) && g.src.every((s) => s && (s.s != null ? Number.isInteger(+s.s) : ID.test(s.w || s.l))))) return false; if (g.nx && !ID.test(g.nx)) return false; }
-    ev.alt = Array.isArray(ev.alt) ? ev.alt.filter((x) => ID.test(x)) : [];
+      if (g.src) { // bracket links must point at an EARLIER game (no missing targets, no loops) or a real seed
+        if (!Array.isArray(g.src) || g.src.length !== 2 || !ev.bk) return false;
+        for (const x of g.src) { if (!x || typeof x !== 'object') return false; if (x.s != null) { if (!Number.isInteger(+x.s) || +x.s < 1 || +x.s > 64) return false; x.s = +x.s; continue; }
+          const t = x.w != null ? x.w : x.l; if (typeof t !== 'string' || !hasOwn(at, t) || at[t] >= at[g.id] || !ev.g[at[t]].src) return false; }
+      } else if (!g.bye && !(side(g.a) && side(g.b))) return false;
+      if (g.nx != null && !(typeof g.nx === 'string' && hasOwn(at, g.nx) && at[g.nx] > at[g.id])) return false;
+      if (g.snap != null) { if (!g.snap || !Array.isArray(g.snap.q) || !g.snap.q.every((x) => U.has(x) && x !== 'BYE')) return false; g.snap = { q: g.snap.q.slice(), st: num(g.snap.st, 0) }; } }
+    ev.alt = Array.isArray(ev.alt) ? ev.alt.filter((x) => PS.has(x)) : [];
     ev.ms = (Array.isArray(ev.ms) ? ev.ms : []).filter((m) => m && ID.test(m.id)).map((m) => ({ id: m.id, n: str(m.n) }));
     ev.add = { calc: !!(ev.add && ev.add.calc), skins: !!(ev.add && ev.add.skins), pick: !!(ev.add && ev.add.pick) };
     const c = ev.calc || {}; ev.calc = { st: Math.max(1, num(c.st, 100)), sp: (Array.isArray(c.sp) ? c.sp : [50, 30, 20]).map(Number).filter((x) => x > 0), b: {} };
@@ -341,12 +390,22 @@
     ev.sk = { pts: Math.max(1, num(ev.sk && ev.sk.pts, 1)) };
     const pk = ev.pk || {}; ev.pk = { w: {}, g: {} }; Object.keys(pk.w || {}).forEach((m) => { if (ID.test(m) && U.has(pk.w[m])) ev.pk.w[m] = pk.w[m]; });
     Object.keys(pk.g || {}).forEach((gid) => { if (!ID.test(gid)) return; const P = pk.g[gid] || {}; ev.pk.g[gid] = {}; Object.keys(P).forEach((m) => { if (ID.test(m) && P[m] && ['a', 'b'].includes(P[m].s)) ev.pk.g[gid][m] = { s: P[m].s, sig: String(P[m].sig || '') }; }); });
-    if (ev.kg) { ev.kg = { cc: Math.max(1, num(ev.kg.cc, 1)), bench: (ev.kg.bench || []).filter((x) => U.has(x)), byes: Object.assign({}, ev.kg.byes) }; }
+    if (ev.kg) { if (num(ev.kg.cc, 0) < 1 || num(ev.kg.cc, 0) * 4 > ev.us.length) return false; ev.kg = { cc: num(ev.kg.cc, 1), bench: (ev.kg.bench || []).filter((x) => U.has(x)), byes: Object.assign({}, ev.kg.byes) }; }
     if (ev.cq) { ev.cq = { q: (ev.cq.q || []).filter((x) => U.has(x)), st: Object.assign({}, ev.cq.st) }; }
-    if (ev.lad) { ev.lad = { o: (ev.lad.o || []).filter((x) => U.has(x)), wk: Math.max(1, num(ev.lad.wk, 1)) }; }
-    if (ev.bk) { ev.bk = { S: num(ev.bk.S, 2), RW: num(ev.bk.RW, 1), LR: num(ev.bk.LR, 0), de: !!ev.bk.de, seeds: (ev.bk.seeds || []).filter((x) => U.has(x)) }; }
+    if (ev.lad) { const o = Array.isArray(ev.lad.o) ? ev.lad.o : []; if (o.length !== ev.us.length || new Set(o).size !== o.length || !o.every((x) => U.has(x) && x !== 'BYE')) return false; ev.lad = { o: o.slice(), wk: Math.max(1, num(ev.lad.wk, 1)) }; }
+    if (ev.bk) { ev.bk = { S: num(ev.bk.S, 2), RW: num(ev.bk.RW, 1), LR: num(ev.bk.LR, 0), de: !!ev.bk.de, seeds: (ev.bk.seeds || []).filter((x) => U.has(x) && x !== 'BYE') };
+      if (![2, 4, 8, 16, 32, 64].includes(ev.bk.S) || ev.bk.RW !== Math.log2(ev.bk.S) || ev.bk.seeds.length !== ev.us.length || new Set(ev.bk.seeds).size !== ev.us.length) return false;
+      if (!ev.g.some((g) => g.src && g.br === 'W' && g.r === ev.bk.RW)) return false; if (ev.bk.de && !(hasOwn(at, 'F1-0') && hasOwn(at, 'F2-0'))) return false;
+      if (!ev.g.every((g) => !g.src || (['W', 'L', 'F'].includes(g.br) && Number.isInteger(g.r)))) return false; }
+    if ((ev.fmt === 'rr' || ev.fmt === 'king') && ev.rounds < 1) return false;
     if ((ev.fmt === 'se' || ev.fmt === 'de') && !ev.bk) return false; if (ev.fmt === 'king' && !ev.kg) return false; if (ev.fmt === 'chal' && !ev.cq) return false; if (ev.fmt === 'ladder' && !ev.lad) return false;
     return true;
+  }
+
+  function chalUndo(ev, g) { // take back the game set up from g's result; only for the newest result, next game unscored
+    if (!g.nx) return ''; const nx = ev.g.find((x) => x.id === g.nx), maxK = ev.g.reduce((m, x) => Math.max(m, x.k || 0), 0);
+    if (!nx || isSc(nx) || !g.snap || g.k !== maxK) return 'The next game on this court already depends on this result (or a later game was scored), so the winner can\'t change now. You can still fix the points.';
+    ev.cq.q = g.snap.q.slice(); ev.cq.st[g.c] = g.snap.st; ev.g = ev.g.filter((x) => x !== nx); delete ev.pk.g[nx.id]; delete g.nx; delete g.snap; return '';
   }
 
   /* ---------------- saving a score ---------------- */
@@ -359,7 +418,7 @@
     const oldW = isSc(g) ? winSide(g) : null, newW = sa > sb ? 'a' : sb > sa ? 'b' : 't';
     if (oldW && oldW !== newW) {
       if (ev.fmt === 'king' && g.r < lastRound(ev)) return 'The next round is already set from this result, so the winner can\'t change now. You can still fix the points.';
-      if (ev.fmt === 'chal' && g.nx) return 'The next game on this court is already set from this result, so the winner can\'t change now. You can still fix the points.';
+      if (ev.fmt === 'chal' && g.nx) { const e = chalUndo(ev, g); if (e) return e; }
     }
     let note = '';
     if (g.src && oldW && oldW !== newW) { const d = dependents(ev, gid).map((id) => ev.g.find((x) => x.id === id)).filter(isSc); d.forEach((x) => { x.sa = x.sb = null; }); if (d.length) note = d.length + ' later game' + (d.length > 1 ? 's' : '') + ' that depended on this result ' + (d.length > 1 ? 'were' : 'was') + ' cleared.'; }
@@ -373,7 +432,7 @@
   function clearScore(ev, gid) {
     const g = ev.g.find((x) => x.id === gid); if (!g) return 'Game not found.';
     if (ev.fmt === 'king' && g.r < lastRound(ev)) return 'The next round is already set from this result, so it can\'t be cleared.';
-    if (ev.fmt === 'chal' && g.nx) return 'The next game on this court is already set from this result, so it can\'t be cleared.';
+    if (ev.fmt === 'chal' && g.nx) { const e = chalUndo(ev, g); if (e) return e.replace('the winner can\'t change now. You can still fix the points.', 'it can\'t be cleared.'); }
     if (g.src) dependents(ev, gid).forEach((id) => { const x = ev.g.find((y) => y.id === id); x.sa = x.sb = null; });
     g.sa = g.sb = null; delete g.k; RES = ev.bk ? resolve(ev) : RES; save(ev); return '';
   }
@@ -394,7 +453,7 @@
       if (!R.length) h = viewHome();
       else if (R[0] === 'new') h = viewNew();
       else if (R[0] === 'join') h = viewJoin();
-      else if (R[0] === 'e') { const ev = load(R[1]); if (!ev) h = back('', 'My events') + '<div class="card">This event is not on this device.</div>'; else { RES = ev.bk ? resolve(ev) : null; h = viewEvent(ev, R.slice(2)); } }
+      else if (R[0] === 'e') { const ev = load(R[1]); if (!ev) h = back('', 'My events') + '<div class="card">This event is not on this device.</div>'; else { try { RES = ev.bk ? resolve(ev) : null; h = viewEvent(ev, R.slice(2)); } catch (x) { h = back('', 'My events') + badCard(ev); } } }
       else h = viewHome();
     } catch (e) { h = back('', 'My events') + `<div class="card err">Something went wrong showing this page: ${esc(e.message)}</div>`; if (window.console) console.error(e); }
     main.innerHTML = (MSG ? `<div class="card err">${esc(MSG)}</div>` : '') + h; MSG = '';
@@ -410,14 +469,15 @@
 <div class="btns"><a class="pill pri" href="#/new">＋ New event</a><a class="pill" href="#/join">Join with code</a></div>
 <div class="gh">My events</div>`;
     if (!L.length) h += '<div class="card note">No events yet. Tap ＋ New event to set up a round robin, King of the Court, a bracket, a ladder or a Calcutta for your group.</div>';
-    L.forEach((ev) => { RES = ev.bk ? resolve(ev) : null; const f = FMT[ev.fmt], d = isDone(ev), G = realGames(ev), sc = G.filter(isSc).length;
-      const top = (finish(ev)[0] || [])[0]; const adds = Object.keys(ADDON).filter((k) => ev.add[k]).map((k) => ADDON[k].ico + ' ' + ADDON[k].n).join(' · ');
+    L.forEach((ev) => { try { RES = ev.bk ? resolve(ev) : null; const f = FMT[ev.fmt], d = isDone(ev), G = realGames(ev), sc = G.filter(isSc).length;
+      const top = finish(ev)[0] || []; const adds = Object.keys(ADDON).filter((k) => ev.add[k]).map((k) => ADDON[k].ico + ' ' + ADDON[k].n).join(' · ');
       h += `<a class="card ev" href="#/e/${esc(ev.id)}"><div class="row"><b>${esc(ev.name)}</b><span class="b ${d ? 'hit' : ''}">${d ? 'Final' : sc ? 'In progress' : 'Not started'}</span></div>
 <div class="sub2">${f.ico} ${esc(f.n)} · ${ev.date ? esc(ev.date) + ' · ' : ''}${ev.us.length} ${f.ind || ev.team === 's' ? 'players' : 'teams'}</div>${adds ? `<div class="sub2">${adds}</div>` : ''}
-${sc && top ? `<div class="sub2">${d ? '🏆 ' : 'Leading: '}${esc(uName(ev, top))}</div>` : ''}</a>`; });
+${sc && top.length ? `<div class="sub2">${d ? '🏆 ' : 'Leading: '}${esc(top.slice(0, 2).map((u) => uName(ev, u)).join(' & ') + (top.length > 2 ? ' +' + (top.length - 2) : ''))}</div>` : ''}</a>`; } catch (e) { h += badCard(ev); } });
     return h;
   }
 
+  function badCard(ev) { const id = String((ev && ev.id) || ''); return `<div class="card err bad" data-id="${esc(id)}"><b>${esc((ev && ev.name) || 'An event')}</b> can't be shown (its data is damaged). <div class="btns"><button class="pill dang" data-act="delbad" data-id="${esc(id)}">Delete it</button></div></div>`; }
   function viewNew() {
     const f = FORM || { name: '', date: new Date().toISOString().slice(0, 10), courts: 2, players: '', fmt: 'rr', team: 'd', timed: false, rounds: '', calc: false, skins: false, pick: false, extra: '', start: 100, split: '50,30,20', skinPts: 1, maxW: 3 };
     FORM = f; const ind = FMT[f.fmt].ind;
@@ -435,7 +495,7 @@ ${sc && top ? `<div class="sub2">${d ? '🏆 ' : 'Leading: '}${esc(uName(ev, top
     if (f.fmt === 'chal') h += `<label>Wins in a row before a pair steps off<input type="number" inputmode="numeric" name="maxW" min="1" max="9" value="${esc(f.maxW)}"></label>`;
     h += `<div class="lbl">Add-ons <small>(points only)</small></div>`;
     Object.keys(ADDON).forEach((k) => { const x = ADDON[k]; h += `<div class="fopt ${f[k] ? 'on' : ''}"><label class="chk"><input type="checkbox" name="${k}" ${f[k] ? 'checked' : ''}> ${x.ico} ${esc(x.n)}</label>${infoBox(x.info, 'How ' + x.n + ' works')}`;
-      if (k === 'calc' && f.calc) h += `<div class="two"><label>Starting points each<input type="number" inputmode="numeric" name="start" min="1" max="10000" value="${esc(f.start)}"></label><label>Pot split %<input name="split" value="${esc(f.split)}" placeholder="50,30,20"></label></div>`;
+      if (k === 'calc' && f.calc) h += `<div class="two"><label>Starting points each<input type="number" inputmode="numeric" name="start" min="1" max="10000" value="${esc(f.start)}"></label><label>Points pot split %<input name="split" value="${esc(f.split)}" placeholder="50,30,20"></label></div>`;
       if (k === 'skins' && f.skins) h += `<label>Points per skin<input type="number" inputmode="numeric" name="skinPts" min="1" max="100" value="${esc(f.skinPts)}"></label>`;
       h += `</div>`; });
     if (f.calc || f.pick) h += `<label>Members <small>every player is a member; add people who aren't playing, one per line</small><textarea name="extra" rows="3" placeholder="Pat (watching)">${esc(f.extra)}</textarea></label>`;
@@ -480,9 +540,9 @@ ${sc && top ? `<div class="sub2">${d ? '🏆 ' : 'Leading: '}${esc(uName(ev, top
 ${infoBox(f.info, 'How ' + f.n + ' is played')}</div>`;
     const gtot = ev.fmt === 'chal' || ev.fmt === 'ladder' ? '' : ' of ' + G.length;
     h += `<div class="sums">` + tile(base + '/games', sc + gtot, 'Games scored', ev.fmt === 'rr' || ev.fmt === 'king' ? 'Round ' + curRound(ev) + ' of ' + ev.rounds : '');
-    const lead = ev.fmt === 'king' && sc ? kingTop(ev) : top;
-    h += tile(base + '/stand', sc && lead.length ? esc(lead.map((u) => uName(ev, u)).join(' & ')) : '—', done ? (ev.fmt === 'king' ? '👑 Won court 1' : '🏆 Winner') : ev.fmt === 'king' ? 'On top of court 1' : ev.fmt === 'ladder' ? 'Top of the ladder' : 'Leading now', 'Standings ›');
-    if (ev.add.calc) { const C = calcutta(ev); h += tile(base + '/calc', C.pot + ' pts', '💰 Calcutta pot', C.sold + ' of ' + ev.us.length + ' sold'); }
+    const lead = top;
+    h += tile(base + '/stand', sc && lead.length ? esc(lead.slice(0, 2).map((u) => uName(ev, u)).join(' & ') + (lead.length > 2 ? ' +' + (lead.length - 2) : '')) : '—', done ? (ev.fmt === 'king' ? '👑 Won court 1' : '🏆 Winner') : ev.fmt === 'king' ? 'On top of court 1' : ev.fmt === 'ladder' ? 'Top of the ladder' : 'Leading now', 'Standings ›');
+    if (ev.add.calc) { const C = calcutta(ev); h += tile(base + '/calc', C.pot + ' pts', '🏅 Calcutta points pot', C.sold + ' of ' + ev.us.length + ' sold'); }
     if (ev.add.skins) { const S = skins(ev), best = Object.keys(S.tot).sort((a, b) => S.tot[b] - S.tot[a])[0]; h += tile(base + '/skins', S.list.length && best && S.tot[best] ? esc(uName(ev, best)) : '—', '🎯 Skins leader', S.carry ? 'Carrying ' + S.carry + ' pts' : best && S.tot[best] ? S.tot[best] + ' pts' : 'No skins yet'); }
     if (ev.add.pick) { const P = pickem(ev), rows = Object.values(P.rows).sort((a, b) => b.pts - a.pts), t = rows[0]; h += tile(base + '/pick', t && t.pts ? esc(mName(ev, t.id)) : '—', '🔮 Pick\'em leader', t && t.pts ? t.pts + ' pts' : 'Make your picks ›'); }
     h += `</div>`;
@@ -493,7 +553,6 @@ ${infoBox(f.info, 'How ' + f.n + ' is played')}</div>`;
     h += `<button class="pill dang" data-act="del">Delete</button></div><div id="delc"></div>`;
     return h;
   }
-  function kingTop(ev) { let r = lastRound(ev); while (r > 0 && roundGames(ev, r).some((g) => !isSc(g))) r--; if (!r) return (finish(ev)[0] || []); const g = roundGames(ev, r)[0]; return winSide(g) === 'a' ? g.a : g.b; }
   function curRound(ev) { const r = ev.g.filter((g) => !g.bye && !isSc(g)).reduce((m, g) => Math.min(m, g.r), Infinity); return r === Infinity ? lastRound(ev) : r; }
 
   function gameCard(ev, g) {
@@ -555,7 +614,7 @@ ${ERR ? `<div class="err">${esc(ERR)}</div>` : ''}<div class="btns"><button clas
 
   function viewStand(ev, base) {
     const T = table(ev), fin = finish(ev), f = FMT[ev.fmt], done = isDone(ev);
-    let h = back(base, ev.name) + `<h2>Standings</h2><p class="note">${done ? 'Final order.' : 'Order right now.'} ${ev.fmt === 'king' ? 'Ranked by the court you finished the last full round on (winners first), then wins.' : ev.fmt === 'ladder' ? 'Ladder order.' : ev.bk ? 'Players still alive first, then by how far they got.' : 'Ranked by wins, then win %, then point difference.'} Tap a ${f.ind || ev.team === 's' ? 'player' : 'team'} for their games.</p>`;
+    let h = back(base, ev.name) + `<h2>Standings</h2><p class="note">${done ? 'Final order.' : 'Order right now.'} ${ev.fmt === 'king' ? 'Ranked by the court you finished the last full round on (winners first; partners share the place), then win %.' : ev.fmt === 'ladder' ? 'Ladder order.' : ev.bk ? 'Players still alive first, then by how far they got.' : (ev.fmt === 'chal' ? 'Ranked by wins, then win %, then point difference.' : 'Ranked by win % (so byes never cost you), then point difference, then points scored.') + ' Equal records share the place (=).'} Tap a ${f.ind || ev.team === 's' ? 'player' : 'team'} for their games.</p>`;
     let place = 1; let kingCourt = {};
     if (ev.fmt === 'king') { const r = lastRound(ev); roundGames(ev, r).forEach((g) => { g.a.concat(g.b).forEach((u) => { kingCourt[u] = g.c; }); }); }
     fin.forEach((grp) => { grp.forEach((u) => { const x = T[u], un = unit(ev, u), diff = x.pf - x.pa;
@@ -581,12 +640,12 @@ ${ERR ? `<div class="err">${esc(ERR)}</div>` : ''}<div class="btns"><button clas
     if (R[0] === 'm' && R[1]) { const b = C.bal[R[1]]; if (!b) return back(cb, 'Calcutta') + '<div class="card">Not found.</div>';
       return back(cb, 'Calcutta') + `<h2>${esc(mName(ev, R[1]))}</h2><div class="sums"><div class="sum"><b>${b.bal}</b><span>Points now</span><small>started with ${ev.calc.st}</small></div><div class="sum"><b>${b.won - b.spent >= 0 ? '+' : ''}${b.won - b.spent}</b><span>Net</span><small>bid ${b.spent} · ${done ? 'won' : 'projected'} ${b.won}</small></div></div>` +
         (b.own.length ? b.own.map((u) => { const r = C.rows.find((x) => x.u === u); return `<div class="card lrow"><span>${esc(uName(ev, u))}<small> bought for ${ev.calc.b[u].pts}</small></span><b>${r ? (r.tie ? 'T-' : '#') + r.place + ' · +' + r.pts : '0'}</b></div>`; }).join('') : '<div class="card note">Owns nobody.</div>'); }
-    if (R[0] === 'pot') return back(cb, 'Calcutta') + `<h2>Pot: ${C.pot} pts</h2><p class="note">Every winning bid goes into the pot.</p>` + (ev.us.filter((u) => ev.calc.b[u.id] && ev.calc.b[u.id].m).sort((a, b) => ev.calc.b[b.id].pts - ev.calc.b[a.id].pts).map((u) => `<div class="card lrow"><span>${esc(u.n)}<small> owner ${esc(mName(ev, ev.calc.b[u.id].m))}</small></span><b>${ev.calc.b[u.id].pts}</b></div>`).join('') || '<div class="card note">Nothing sold yet.</div>');
-    if (R[0] === 'pay') return back(cb, 'Calcutta') + `<h2>${done ? 'Payouts' : 'Projected payouts'}</h2><p class="note">Split ${ev.calc.sp.join(' / ')}% of the pot by finish${done ? '' : ', using the order right now'}. Only bought ${FMT[ev.fmt].ind || ev.team === 's' ? 'players' : 'teams'} count for places; ties share. Total paid = ${C.rows.reduce((a, r) => a + r.pts, 0)} of ${C.pot}.</p>` +
-      (C.rows.filter((r) => r.pts > 0).map((r) => `<div class="card lrow"><b class="rk">${r.tie ? 'T' : ''}${r.place}</b><span>${esc(uName(ev, r.u))}<small> owner ${esc(mName(ev, r.m))}</small></span><b>+${r.pts}</b></div>`).join('') || '<div class="card note">No payouts yet.</div>');
+    if (R[0] === 'pot') return back(cb, 'Calcutta') + `<h2>Points pot: ${C.pot} pts</h2><p class="note">Every winning bid goes into the points pot.</p>` + (ev.us.filter((u) => ev.calc.b[u.id] && ev.calc.b[u.id].m).sort((a, b) => ev.calc.b[b.id].pts - ev.calc.b[a.id].pts).map((u) => `<div class="card lrow"><span>${esc(u.n)}<small> owner ${esc(mName(ev, ev.calc.b[u.id].m))}</small></span><b>${ev.calc.b[u.id].pts}</b></div>`).join('') || '<div class="card note">Nothing sold yet.</div>');
+    if (R[0] === 'pay') return back(cb, 'Calcutta') + `<h2>${done ? 'Points awarded' : 'Points awarded (if it ended now)'}</h2><p class="note">${ev.calc.sp.join(' / ')}% of the points pot by finish${done ? '' : ', using the order right now'}. Only bought ${FMT[ev.fmt].ind || ev.team === 's' ? 'players' : 'teams'} count for places; ties share. Total awarded = ${C.rows.reduce((a, r) => a + r.pts, 0)} of ${C.pot} points.</p>` +
+      (C.rows.filter((r) => r.pts > 0).map((r) => `<div class="card lrow"><b class="rk">${r.tie ? 'T' : ''}${r.place}</b><span>${esc(uName(ev, r.u))}<small> owner ${esc(mName(ev, r.m))}</small></span><b>+${r.pts}</b></div>`).join('') || '<div class="card note">No points awarded yet.</div>');
     const mem = Object.values(C.bal).sort((a, b) => b.bal - a.bal || mName(ev, a.id).localeCompare(mName(ev, b.id)));
-    let h = back(base, ev.name) + `<h2>💰 Calcutta</h2><div class="nomoney">${esc(NOMONEY)}</div>${infoBox(ADDON.calc.info)}
-<div class="sums">${tile(cb + '/pot', C.pot + ' pts', 'Pot', C.sold + ' of ' + ev.us.length + ' sold')}${tile(cb + '/pay', ev.calc.sp.join('/') + '%', done ? 'Payouts' : 'Projected payouts', 'Tap for who gets what')}${mem[0] ? tile(cb + '/m/' + mem[0].id, esc(mName(ev, mem[0].id)), 'Most points', mem[0].bal + ' pts') : ''}</div>`;
+    let h = back(base, ev.name) + `<h2>🏅 Calcutta</h2><div class="nomoney">${esc(NOMONEY)}</div>${infoBox(ADDON.calc.info)}
+<div class="sums">${tile(cb + '/pot', C.pot + ' pts', 'Points pot', C.sold + ' of ' + ev.us.length + ' sold')}${tile(cb + '/pay', ev.calc.sp.join('/') + '%', done ? 'Points awarded' : 'Points awarded if it ended now', 'Tap for who gets what')}${mem[0] ? tile(cb + '/m/' + mem[0].id, esc(mName(ev, mem[0].id)), 'Most points', mem[0].bal + ' pts') : ''}</div>`;
     h += `<div class="gh">Auction ${locked ? '(closed: play has started)' : ''}</div>`;
     if (!locked) h += `<p class="note">Set each winning bid: who bought them and for how many points. Members start with ${ev.calc.st} points each and can't spend more than they have.</p>${ERR ? `<div class="card err">${esc(ERR)}</div>` : ''}`;
     ERR = '';
@@ -652,10 +711,13 @@ ${ERR ? `<div class="err">${esc(ERR)}</div>` : ''}<div class="btns"><button clas
     if (a !== 'gopen' || !e.target.closest('input,button,select')) e.preventDefault();
     if (a === 'create') return createFromForm();
     if (a === 'join') { let ev; try { ev = fromCode(($('#jcode') || {}).value); } catch (x) { ERR = x.message; return render(); }
-      const had = load(ev.id); if (had && !t.hasAttribute('data-ok')) { $('#main').insertAdjacentHTML('beforeend', `<div class="card frm" id="jc"><p>You already have “${esc(had.name)}” on this phone. Replace your copy with the one in the code?</p><div class="btns"><button class="pill pri" data-act="join" data-ok="1">Replace my copy</button><button class="pill" data-act="joinnew">Keep both</button></div></div>`); return; }
+      const had = load(ev.id); if (had && !t.hasAttribute('data-ok')) { const old = $('#jc'); if (old) old.remove(); $('#main').insertAdjacentHTML('beforeend', `<div class="card frm" id="jc"><p>You already have “${esc(had.name)}” on this phone. Replace your copy with the one in the code?</p><div class="btns"><button class="pill pri" data-act="join" data-ok="1">Replace my copy</button><button class="pill" data-act="joinnew">Keep both</button></div></div>`); return; }
       if (save(ev)) go('e/' + ev.id); else render(); return; }
     if (a === 'joinnew') { let ev; try { ev = fromCode(($('#jcode') || {}).value); } catch (x) { ERR = x.message; return render(); } ev.id = 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); ev.name += ' (copy)'; if (save(ev)) go('e/' + ev.id); return; }
-    const ev = cur(); if (!ev) return;
+    if (a === 'delbad') { const id = t.getAttribute('data-id'), box = t.closest('.btns'); box.innerHTML = `<button class="pill dang" data-act="delbadyes" data-id="${esc(id)}">Yes, delete</button><button class="pill" data-act="delbadno">Keep</button>`; return; }
+    if (a === 'delbadyes') { remove(t.getAttribute('data-id')); if (route()[0] === 'e') go(''); else render(); return; }
+    if (a === 'delbadno') return render();
+    let ev = null; try { ev = cur(); } catch (x) { ev = null; } if (!ev) return;
     if (a === 'gopen') { OPEN = OPEN === gid ? null : gid; ERR = ''; render(); const i = $('#sa'); if (i) { i.focus(); i.scrollIntoView({ block: 'center' }); } return; }
     if (a === 'gclose') { OPEN = null; ERR = ''; return render(); }
     if (a === 'gsave') { const r = saveScore(ev, gid, ($('#sa') || {}).value, ($('#sb') || {}).value); if (typeof r === 'string' && r) { ERR = r; return render(); } OPEN = null; if (r && r.note) MSG = r.note; return render(); }
@@ -668,7 +730,7 @@ ${ERR ? `<div class="err">${esc(ERR)}</div>` : ''}<div class="btns"><button clas
     if (a === 'bids') { const r = saveBids(ev); ERR = r; if (!r) MSG = ''; render(); if (!r) { const n = $('#main'); n.insertAdjacentHTML('afterbegin', '<div class="card ok">Bids saved.</div>'); } return; }
     if (a === 'pk') { if (!pickable(ev, ev.g.find((g) => g.id === gid)) || !PICKAS) return; const s = sides(ev, ev.g.find((g) => g.id === gid)); ev.pk.g[gid] = ev.pk.g[gid] || {}; ev.pk.g[gid][PICKAS] = { s: t.getAttribute('data-s'), sig: sig(s) }; save(ev); return render(); }
     if (a === 'lnew') { const ch = ($('#lch') || {}).value, df = ($('#ldf') || {}).value; if (!ch || !df) { ERR = 'Pick a challenger and a defender up to 3 spots above.'; return render(); } if (!defOpts(ev, ch).includes(df)) { ERR = 'That defender is not within 3 spots above, or already has a challenge open.'; return render(); }
-      ev.g.push({ id: 'g' + (ev.g.length + 1), lad: 1, wk: ev.lad.wk, a: [ch], b: [df], sa: null, sb: null }); save(ev); return render(); }
+      ev.g.push({ id: newGid(ev), lad: 1, wk: ev.lad.wk, a: [ch], b: [df], sa: null, sb: null }); save(ev); return render(); }
     if (a === 'lcancel') { const g = ev.g.find((x) => x.id === gid); if (g && !isSc(g)) { ev.g = ev.g.filter((x) => x !== g); delete ev.pk.g[gid]; save(ev); } return render(); }
     if (a === 'lweek') { ev.lad.wk++; save(ev); return render(); }
     if (a === 'copy') { const ta = $('#scode'); const done = () => { $('#cpmsg').textContent = 'Copied. Paste it into a text to your group.'; };
@@ -684,7 +746,7 @@ ${ERR ? `<div class="err">${esc(ERR)}</div>` : ''}<div class="btns"><button clas
     if (t.id === 'lch') fillDef();
   });
   document.addEventListener('input', (e) => { if (e.target.closest && e.target.closest('#nf')) readForm(); });
-  function fillDef() { const ev = cur(), s = $('#ldf'), c = $('#lch'); if (!ev || !s || !c) return; s.innerHTML = defOpts(ev, c.value).map((u) => `<option value="${esc(u)}">${ladderOrder(ev).indexOf(u) + 1}. ${esc(uName(ev, u))}</option>`).join('') || '<option value="">Nobody free within 3 spots</option>'; }
+  function fillDef() { const s = $('#ldf'), c = $('#lch'); if (!s || !c) return; let ev = null; try { ev = cur(); } catch (x) { return; } if (!ev) return; s.innerHTML = defOpts(ev, c.value).map((u) => `<option value="${esc(u)}">${ladderOrder(ev).indexOf(u) + 1}. ${esc(uName(ev, u))}</option>`).join('') || '<option value="">Nobody free within 3 spots</option>'; }
   document.addEventListener('toggle', (e) => { const d = e.target; if (d.matches && d.matches('details[data-k]')) { if (d.open) DOPEN.add(d.getAttribute('data-k')); else DOPEN.delete(d.getAttribute('data-k')); } }, true);
   window.addEventListener('hashchange', () => { OPEN = null; ERR = ''; render(); window.scrollTo(0, 0); });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', render); else render();

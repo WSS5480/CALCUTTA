@@ -5,7 +5,7 @@ async function seed(C) {
   const d1 = chiDay(last), d2 = chiDay(next), made = last - 6 * DAY;
   setNow(made);
   let g = (await ok('groups', 'commish', '/groups/create', { name: 'Valley Sharps', take: { kind: 'pct', v: 10 }, join: { requests: true, open: false, max: 8, late: 'no' },
-    contest: { cname: 'NFL picks, rest of season', sport: 'nfl', fmt: 'standings', start: last - HOUR * 2, runs: 'season', kalshi: false, honor: false, types: { sp: true, ml: true, ou: true, prop: false, parlay: true }, legs: 3, metric: 'win', minBets: 0, minPaid: 3, cap: 0, entry: 25, split: '60/30/10' } })).group;
+    contest: { cname: 'NFL picks, rest of season', sport: 'nfl', fmt: 'standings', start: last - 2 * DAY, runs: 'season', kalshi: false, honor: false, types: { sp: true, ml: true, ou: true, prop: false, parlay: true }, legs: 3, metric: 'win', minBets: 0, minPaid: 3, cap: 0, entry: 25, split: '60/30/10' } })).group;
   ids.group = g.id; ids.groupCode = g.code; const main = g.contests[0].cid;
   const members = ['player', 'p4', 'p5', 'p6', 'p7'];
   for (const r of members) await ok('groups', r, '/groups/join', { code: g.code });
@@ -24,8 +24,9 @@ async function seed(C) {
     p6: [B(1, 'pv102', 'HOU', 'sp', -3.5, 44, -110), B(2, 'pv105', 'GB', 'ml', null, 25, 135)],
     p7: [B(1, 'pv103', 'Over', 'ou', 49.5, 33, -110), B(2, 'pv104', 'LAR', 'ml', null, 20, 118), B(3, 'pv101', 'NYG', 'sp', -3, 22, -110)],
   };
-  setNow(last - 3 * HOUR);
-  for (const r of Object.keys(P)) await row(r, (d) => { d.bets = (d.bets || []).concat(P[r]); });
+  // G16: every group bet goes to the server the moment it is added (/groups/bet/add) and is locked there
+  setNow(last - 3 * HOUR); reset();
+  for (const r of Object.keys(P)) for (const b of P[r]) { const x = Object.assign({}, b); delete x.t; await ok('groups', r, '/groups/bet/add', { bet: x }); }
   reset(); await ok('groups', 'commish', '/groups/standings', { id: g.id, cid: main }); await C.mods.groups.tick().catch(() => {});
   // after the games: the server grades them from the final scores
   setNow(last + 14 * HOUR); reset(); await ok('groups', 'commish', '/groups/standings', { id: g.id, cid: main });
@@ -37,8 +38,8 @@ async function seed(C) {
   // next Sunday's bets: already on the server, hidden from the others until kickoff
   const t1 = C.REAL - 5 * HOUR, N = (n, gid, side, type, line, stake, odds) => { const G = C.GAMES.find((x) => x.id === gid); return bet(t1, n, gid, G.away.abbr, G.home.abbr, chiDay(G.start), side, type, line, stake, odds); };
   const Q = { commish: [N(1, 'pv201', 'PHI', 'sp', -2.5, 50, -110), N(2, 'pv203', 'KC', 'ml', null, 40, -125)], player: [N(1, 'pv201', 'DAL', 'ml', null, 30, 125), N(2, 'pv202', 'Under', 'ou', 39.5, 25, -110), N(3, 'pv203', 'HOU', 'sp', 3, 20, -110)], p4: [N(1, 'pv202', 'BAL', 'sp', -1.5, 35, -108)], p5: [N(1, 'pv203', 'KC', 'sp', -3, 60, -110), N(2, 'pv201', 'PHI', 'ml', null, 45, -140)], p6: [N(1, 'pv203', 'HOU', 'ml', null, 15, 140)] };
-  setNow(C.REAL - 4 * HOUR);
-  for (const r of Object.keys(Q)) await row(r, (d) => { d.bets = (d.bets || []).concat(Q[r]); });
+  setNow(C.REAL - 4 * HOUR); reset();
+  for (const r of Object.keys(Q)) for (const b of Q[r]) { const x = Object.assign({}, b); delete x.t; await ok('groups', r, '/groups/bet/add', { bet: x }); }
   reset(); await ok('groups', 'commish', '/groups/standings', { id: g.id, cid: main }); if (side) await ok('groups', 'commish', '/groups/standings', { id: g.id, cid: side.cid }).catch(() => {});
   setNow(C.REAL); reset();
   const st = await ok('groups', 'player', '/groups/standings', { id: g.id, cid: main, scope: 'season' });

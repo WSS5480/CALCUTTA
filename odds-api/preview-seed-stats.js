@@ -30,8 +30,9 @@ async function seed(C) {
   g = (await ok('golf', 'director', '/golf/get', { id: g.id })).game; const tids = g.day.teams.map((t) => t.tid);
   const order = g.members.map((m) => m.pid); for (let i = 0; i < order.length; i++) await X.call('golf', 'director', '/golf/team', { id: g.id, op: 'assign', pid: order[i], tid: tids[i % tids.length] });
   ids.tourPids = pid; setNow(REAL); reset();
-  // the director's override the owner asked to see: RGV Ray plays this tournament off 10.0; his Oddable index stays what his real results say
-  await require('./preview-extra').setTour({ USERS: X.USERS, emailOf, STATE: X.STATE }, byRole('director'), pid.player, 10.0, 'Club committee number for the member-guest');
-  const guest = g.members.find((m) => m.guest); if (guest) await require('./preview-extra').setTour({ USERS: X.USERS, emailOf, STATE: X.STATE }, byRole('director'), guest.pid, 18.0, 'Guest with no Oddable rounds yet: handicap from his home club card');
+  // the director's override the owner asked to see (E-H, through the real golf + stats routes): RGV Ray plays this tournament off 10.0; his Oddable index stays what his real results say
+  await ok('golf', 'director', '/golf/team', { id: g.id, op: 'hcp', pid: pid.player, hcp: 10.0, reason: 'Club committee number for the member-guest' });
+  const guest = g.members.find((m) => m.guest); if (guest) { const r = await X.call('golf', 'director', '/golf/team', { id: g.id, op: 'hcp', pid: guest.pid, hcp: 18.0, reason: 'Guest with no Oddable rounds yet: home club card' }); if (r.s !== 200) ids.tourGuestHcpNote = r.j && r.j.error; }
+  const chk = (await ok('golf', 'player', '/golf/get', { id: g.id })).game; ids.tourRay = JSON.stringify((chk.day.teams || []).map((t) => t.players).flat().find((p) => p.pid === pid.player) || null).slice(0, 300);
 }
 module.exports = { seed };

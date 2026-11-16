@@ -9,6 +9,9 @@ D.S = {
 };
 const ENT = new Set(['club']);
 D.acct = () => ({ who: (req) => { const t = String(req.headers['x-token'] || ''); return t.startsWith('t-') ? 'acct-' + t.slice(2) : null; } });
+// Merged build (preview): limits.js and stats.js are in the tree, but this suite checks events.js itself on its in-memory database, so it pins the
+// engine's own same-shape fallbacks. The real limits / stats wiring is exercised by the preview's seeded data and Playwright walk.
+D.limits = () => E.LIMSTAND; D.rt = () => E.STAND;
 D.enterprise = async (k) => ENT.has(String(k).replace('acct-', ''));
 D.ip = (req) => String(req.headers['x-ip'] || '1.1.1.1');
 const Z = (s) => Date.parse(s), HOUR = 3600e3, DAY = 864e5;

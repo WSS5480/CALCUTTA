@@ -2,7 +2,7 @@
 //  - "TEST PREVIEW, not live" ribbon in its own strip above everything (the app and every overlay start below it, so it never covers UI)
 //  - Demo user switcher (commissioner / player / tournament director): POST /preview/as on the preview server, then reload as that person
 //  - 🎮 Play hub (#opv): one door to Groups, Calcutta, Golf, Start a game, My events, My stats, My handicap, Partner suggestions, Tournament handicaps
-//  - Screens whose engine is not committed yet say "Preview: in progress" and read stand-in routes (/preview/pairing, /preview/hcp)
+//  - Anything not finished says "Preview: in progress"
 // Money is display only. Nothing is collected, held or paid.
 (function () {
   const API = location.origin + '';
@@ -68,7 +68,7 @@
   }
 
   // ---------- overlay shell with a screen stack (Back always returns to where you were) ----------
-  let stack = [];
+  let stack = [], ST = null;
   const el = () => document.getElementById('opv');
   function open(first) { let e = el(); if (e) e.remove(); e = document.createElement('div'); e.id = 'opv'; e.setAttribute('role', 'dialog'); e.innerHTML = '<div class="pvin"></div>'; document.body.appendChild(e); e.addEventListener('click', click); e.addEventListener('change', change); stack = [first]; paint(); }
   function close() { const e = el(); if (e) e.remove(); stack = []; }
@@ -94,9 +94,10 @@
       h += card('me', '📈', 'My stats', 'Every play you are in: bets, contests, Calcuttas, golf, events. Totals drill down to the plays.');
       h += card('hcp', '🏌️', 'My handicap', 'Oddable Handicap Index from real app rounds, last 20 rounds, Post a round, course handicap calculator.');
       h += card('log', '✍️', 'Log my play', 'Keep your own results: a golf round, a pickleball match, any game. One-player games count.');
-      h += '<div class="pvh">Coming together</div>';
-      h += card('pair', '🤝', 'Suggest partners', 'Balanced, Rotate or Hot pairs for scrambles and doubles. It only suggests; people choose.', WIP);
-      h += card('thcp', '🎯', 'Tournament handicaps', 'Enterprise directors can add or change a handicap for one tournament. The real-results number always stays visible.', WIP);
+      h += '<div class="pvh">Where the newest rules are</div>';
+      h += card('go-golf', '🎯', 'Tournament handicaps', 'Open Golf, then "Member-Guest Scramble". As Pro Shop Pat (director) you can add or change a handicap for that tournament; everyone sees "Oddable 12.4 (real results) · Tournament 10.0, set by director".');
+      h += card('go-golf', '🤝', 'Suggest partners', 'In a golf day (teams), a doubles event and in a group: Balanced, Rotate or Hot pairs. It only suggests; people choose.');
+      h += card('go-groups', '🔒', 'Group bets lock when added', 'In Valley Sharps a bet is saved to the server the moment you add it and cannot be edited or deleted.');
       h += card('voice', '🎤', 'Log my score by voice', 'Speak a score, check the card, save. Needs the AI key, which this test copy does not have.', WIP);
       h += card('status', 'ℹ️', 'What is in this test copy', 'Which parts are finished, which are still being built, and where the demo data came from.');
       return h;
@@ -105,32 +106,9 @@
       let h = top('About this test copy') + '<div class="pvc"><h3>TEST PREVIEW, not live</h3><p>Runs on its own test server with made-up data kept in memory. It never reads or writes the live database, never uses an Odds API credit (lines come from free sources and saved files only), and never collects, holds or pays money.</p></div>';
       if (!ST) { users().then((j) => { ST = j; paint(); }).catch(() => {}); return h + '<div class="pvc">Loading…</div>'; }
       h += '<div class="pvh">Demo data</div>' + ST.steps.map((x) => '<div class="pvc"><div class="pvr"><h3>' + esc(x.name) + '</h3>' + (x.ok ? '<span class="pvtag pvok">ready</span>' : '<span class="pvtag">not ready</span>') + '</div>' + (x.err ? '<p>' + esc(x.err) + '</p>' : '') + '</div>').join('');
-      h += '<div class="pvh">Built and in this copy</div>' + ['Server picks, 1-hour freeze, parlays, actual prices, Move the line (v252/v253)', 'Groups: contests, main and side pots, server grading, invites, 8-person limit, Enterprise contact', 'Calcutta: setup, live auction, enter results, payouts, buy-back half option', 'Golf: pro pools, golf days in every format, heads-up, courses', 'Local events: pickleball and more, round robin, brackets, ladder, pick\'em, sport catalog', 'My stats: personal dashboard with drill-downs, My handicap (WHS method), Oddable rating, Log my play, guests'].map((x) => '<div class="pvc"><p>✅ ' + esc(x) + '</p></div>').join('');
-      h += '<div class="pvh">Preview: in progress</div>' + ['Suggest partners (Balanced / Rotate / Hot pairs): test version here', 'Tournament handicaps set by an Enterprise director: test version here', 'Group bets lock the moment they are added (G16): being built', 'Voice score logging: server part is built, the phone screen is not, and this copy has no AI key', 'Golf handicaps flowing into strokes, flights and pairings automatically (H1)'].map((x) => '<div class="pvc"><p>🚧 ' + esc(x) + '</p></div>').join('');
+      h += '<div class="pvh">Built and in this copy</div>' + ['Server picks, 1-hour freeze, parlays, actual prices, Move the line (v252/v253)', 'Groups: contests, main and side pots, bets locked on entry, server grading, invites, Suggest partners, 8-person limit, Enterprise contact', 'Calcutta: setup, live auction, enter results, payouts, buy-back half option', 'Golf: pro pools, golf days in every format, heads-up, courses, director handicaps for one tournament, Suggest partners', 'Local events: pickleball and more, round robin, brackets, ladder, pick\'em, sport catalog', 'My stats: personal dashboard with drill-downs, My handicap (WHS method), Oddable rating, Log my play, guests'].map((x) => '<div class="pvc"><p>✅ ' + esc(x) + '</p></div>').join('');
+      h += '<div class="pvh">Preview: in progress</div>' + ['Voice score logging: built, but this test copy has no AI key, so it answers "not set up"', 'Calcutta still checks its 8-person limit with its own stand-in (same limit, not yet the shared check)', 'Pro golf pools need the live ESPN golf feed; no demo pool is loaded'].map((x) => '<div class="pvc"><p>🚧 ' + esc(x) + '</p></div>').join('');
       return h;
-    },
-    pair(sc) {
-      let h = top('🤝 Suggest partners') + '<div class="pvnote">' + WIP + ' Test version. It only suggests; people choose.</div>';
-      h += '<div class="pvchips">' + [['golf', '⛳ Golf scramble'], ['pickleball', '🏓 Pickleball doubles']].map(([k, l]) => '<button data-a="psport" data-v="' + k + '" class="' + ((sc.sport || 'golf') === k ? 'on' : '') + '">' + l + '</button>').join('') + '</div>';
-      h += '<div class="pvchips">' + [['balanced', 'Balanced'], ['rotate', 'Rotate'], ['hot', 'Hot pairs']].map(([k, l]) => '<button data-a="pmode" data-v="' + k + '" class="' + ((sc.mode || 'balanced') === k ? 'on' : '') + '">' + l + '</button>').join('') + '</div>';
-      const key = (sc.sport || 'golf') + '|' + (sc.mode || 'balanced');
-      if (sc.key !== key) { sc.key = key; sc.d = null; sc.err = ''; post('/preview/pairing', { sport: sc.sport || 'golf', mode: sc.mode || 'balanced' }).then((j) => { sc.d = j; paint(); }).catch((e) => { sc.err = e.message; paint(); }); }
-      if (sc.err) return h + '<div class="pvc">' + esc(sc.err) + '</div>'; if (!sc.d) return h + '<div class="pvc">Working it out…</div>';
-      h += '<div class="pvc"><p>' + esc(sc.d.how) + '</p></div><div class="pvh">Players</div><div class="pvc">' + sc.d.players.map((p) => '<div class="pvr" style="padding:4px 0"><span>' + esc(p.name) + '</span><b>' + esc(p.show) + '</b></div>').join('') + '</div><div class="pvh">Suggestions, best first</div>';
-      h += sc.d.suggestions.map((x, i) => '<div class="pvc"><h3>' + (i + 1) + '. ' + x.teams.map((t) => esc(t.names.join(' + ')) + ' <span class="pvm">(' + esc(t.show) + ')</span>').join('<br>vs ') + '</h3><p>' + esc(x.reason) + '</p></div>').join('');
-      return h;
-    },
-    thcp(sc) {
-      let h = top('🎯 Tournament handicaps') + '<div class="pvnote">' + WIP + ' Test version of the Enterprise rule: a director can add or change a handicap for one tournament. The Oddable number from real results always stays next to it.</div>';
-      if (!sc.d && !sc.err) { post('/preview/hcp', { op: 'get' }).then((j) => { sc.d = j; paint(); }).catch((e) => { sc.err = e.message; paint(); }); }
-      if (sc.err) return h + '<div class="pvc">' + esc(sc.err) + '</div>'; if (!sc.d) return h + '<div class="pvc">Loading…</div>';
-      const d = sc.d; h += '<div class="pvc"><h3>' + esc(d.title) + '</h3><p>' + esc(d.when) + ' · ' + (d.locked ? 'Started: handicaps are locked.' : 'Handicaps can change until the first tee time.') + '</p><p>' + (d.canEdit ? 'You are the tournament director. Tap a player to add or change.' : 'Only the tournament director (Pro Shop Pat, Enterprise) can change these. Switch demo user to try it.') + '</p></div>';
-      h += d.players.map((p, i) => '<' + (d.canEdit && !d.locked ? 'button data-a="thedit" data-i="' + i + '"' : 'div') + ' class="pvc"><h3>' + esc(p.name) + (p.me ? ' <span class="pvtag pvok">you</span>' : '') + '</h3><p style="color:inherit;font-size:14px">' + esc(p.line) + '</p>' + (p.tour != null ? '<p>Set by tournament' + (p.log && p.log.length ? ' · ' + esc(p.log[p.log.length - 1].why || '') : '') + '</p>' : '') + '</' + (d.canEdit && !d.locked ? 'button' : 'div') + '>').join('');
-      if (d.log && d.log.length) h += '<div class="pvh">Change log</div>' + d.log.slice().reverse().map((x) => '<div class="pvc"><p>' + esc(x.at) + ' · ' + esc(x.by) + ' set ' + esc(x.player) + ' from ' + esc(x.old == null ? 'none' : x.old) + ' to ' + esc(x.val) + (x.why ? ' · ' + esc(x.why) : '') + '</p></div>').join('');
-      return h;
-    },
-    thedit(sc) {
-      const p = sc.p; return top('Set handicap') + '<div class="pvc"><h3>' + esc(p.name) + '</h3><p style="color:inherit">' + esc(p.line) + '</p></div><div class="pvc"><label>Tournament handicap<input id="pvtv" type="number" inputmode="decimal" step="0.1" value="' + esc(p.tour != null ? p.tour : p.odd != null ? p.odd : '') + '"></label><label>Reason (members can see it)<input id="pvtw" maxlength="80" placeholder="For example: club handicap, committee decision"></label><button class="pvbtn" data-a="thsave">Save for this tournament</button> <button class="pvbtn alt" data-a="thclear">Remove tournament number</button><p id="pvte" class="pvl"></p><p>This changes only this tournament. The player\'s Oddable Handicap Index is not changed.</p></div>';
     },
     voice() { return top('🎤 Log my score by voice') + '<div class="pvnote">' + WIP + '</div><div class="pvc"><h3>How it will work</h3><p>Tap the mic, say "Ray made a 5 on hole 7" or "we won 11 to 8", check the card Oddable shows you, then Save. The save goes through the normal score entry, so the other team still confirms.</p></div><div class="pvc"><p>The server part is built and tested. The phone screen is still being built, and this test copy has no AI key on purpose, so nothing can be spoken here yet.</p></div>'; },
   };
@@ -145,11 +123,7 @@
     if (a === 'me') return window.oddStats && window.oddStats();
     if (a === 'hcp') return window.oddStats && window.oddStats({ t: 'hcp' });
     if (a === 'log') return window.oddStats && window.oddStats({ t: 'log' });
-    if (['pair', 'thcp', 'voice', 'status'].includes(a)) return push({ t: a });
-    if (a === 'psport') { sc.sport = t.getAttribute('data-v'); return paint(); }
-    if (a === 'pmode') { sc.mode = t.getAttribute('data-v'); return paint(); }
-    if (a === 'thedit') return push({ t: 'thedit', p: sc.d.players[+t.getAttribute('data-i')] });
-    if (a === 'thsave' || a === 'thclear') { const v = a === 'thclear' ? null : document.getElementById('pvtv').value; post('/preview/hcp', { op: 'set', pid: sc.p.pid, value: v, why: document.getElementById('pvtw').value }).then(() => { stack.pop(); const p = stack[stack.length - 1]; p.d = null; paint(); }).catch((e) => { document.getElementById('pvte').textContent = e.message; }); return; }
+    if (['voice', 'status'].includes(a)) return push({ t: a });
   }
   function change() {}
   window.oddHub = () => open({ t: 'hub' });

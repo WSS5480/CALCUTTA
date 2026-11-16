@@ -7,6 +7,9 @@ D.S = {
   dbPatchIf: async (id, was, data, upd) => { if (!db[id] || db[id].updated !== Number(was)) return false; db[id].data = JSON.parse(JSON.stringify(data)); db[id].updated = upd; return true; },
 };
 D.acct = () => ({ who: (req) => { const t = String(req.headers['x-token'] || ''); return t.startsWith('t-') ? 'acct-' + t.slice(2) : null; } });
+// Merged build (preview): limits.js and stats.js are in the tree, but this suite checks events.js itself on its in-memory database, so it pins the
+// engine's own same-shape fallbacks. The real limits / stats wiring is exercised by the preview's seeded data and Playwright walk.
+D.limits = () => E.LIMSTAND; D.rt = () => E.STAND;
 D.enterprise = async () => false;
 let ipn = 0; D.ip = () => '7.7.' + (ipn % 250) + '.' + (ipn++ % 251);
 const Z = (s) => Date.parse(s), DAY = 864e5; let NOW; D.now = () => NOW; const START = Z('2026-11-21T15:00:00Z');

@@ -22,7 +22,8 @@ async function seed(C) {
   for (let h = 1; h <= 18; h++) { setNow(sat + 14 * HOUR + h * 13 * 60e3); reset();
     for (const tid of tids) { const p = {}; TT[tid].forEach((r) => { p[P(r)] = cards[r][h - 1]; }); await ok('golf', tid === tids[0] ? 'player' : 'p5', '/golf/score', { id: g.id, tid, hole: h, p }); } }
   await ok('golf', 'p5', '/golf/confirm', { id: g.id, tid: tids[0], from: 1, to: 18 }); await ok('golf', 'player', '/golf/confirm', { id: g.id, tid: tids[1], from: 1, to: 18 });
-  await ok('golf', 'player', '/golf/extra', { id: g.id, kind: 'ctp', hole: 3, who: P('p5'), note: '6 ft 3 in' }); await ok('golf', 'player', '/golf/extra', { id: g.id, kind: 'ld', hole: 4, who: P('player'), note: '287 yards' });
+  await ok('golf', 'player', '/golf/extra', { id: g.id, kind: 'ctp', hole: 3, who: P('player'), note: '6 ft 3 in' }); await ok('golf', 'p5', '/golf/extraconfirm', { id: g.id, kind: 'ctp', hole: 3 });
+  await ok('golf', 'p5', '/golf/extra', { id: g.id, kind: 'ld', hole: 4, who: P('p4'), note: '287 yards' }); await ok('golf', 'player', '/golf/extraconfirm', { id: g.id, kind: 'ld', hole: 4 });
   setNow(sat + 19 * HOUR); await ok('golf', 'commish', '/golf/final', { id: g.id });
   if (ids.group) await X.call('golf', 'commish', '/golf/attach', { id: g.id, groupId: ids.group });
   C.golf = { COURSE, PAR, SI, H };

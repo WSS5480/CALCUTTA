@@ -133,7 +133,7 @@ srv.listen(0, async () => {
     t('concurrency: one of two simultaneous entries on a match wins, ' + left.length + ' parallel entries on different matches all saved (' + lost + ' conflicting writes redone)');
     // playoff top 2 created after pool play
     const po = ev.matches.filter((m) => m.st === 'po'); assert.strictEqual(po.length, 1); const tbl = ev.tables[0]; assert.deepStrictEqual([po[0].a, po[0].b].sort(), [tbl[0].eid, tbl[1].eid].sort());
-    ev = ok(await call('ann', 'score', { id: rr, m: po[0].id, games: [[11, 2]] })).event; assert.ok(ev.fin && ev.placeRows[0].place === 1 && ev.placeRows.length === 5);
+    ev = ok(await call('ann', 'score', { id: rr, m: po[0].id, games: [[11, 2]] })).event; assert.ok(!ev.fin && ev.canFinish, 'a round robin waits for Finish'); ev = ok(await call('ann', 'finish', { id: rr })).event; assert.ok(ev.fin && ev.placeRows[0].place === 1 && ev.placeRows.length === 5);
     t('round robin playoff: top 2 by tiebreak order meet in a final; places 1-5 after it');
 
     // ---------- single elimination with byes ----------
@@ -156,14 +156,14 @@ srv.listen(0, async () => {
     let guard = 0; while (!ev.matches.find((m) => m.st === 'gf' && !m.reset && m.state === 'ready') && guard++ < 20) await play(fav);
     const gf = ev.matches.find((m) => m.st === 'gf' && !m.reset); assert.strictEqual(nm(ev, gf.a), 'D1'); assert.strictEqual(nm(ev, gf.b), 'D2');
     ev = ok(await call('ann', 'score', { id: de, m: gf.id, games: win('b') })).event; let gf2 = ev.matches.find((m) => m.reset); assert.strictEqual(gf2.state, 'ready', 'bracket reset match is live'); assert.ok(!ev.fin);
-    ev = ok(await call('ann', 'score', { id: de, m: gf2.id, games: win('b') })).event; assert.ok(ev.fin); assert.strictEqual(ev.placeRows[0].name, 'D2'); assert.strictEqual(ev.placeRows[1].name, 'D1'); assert.strictEqual(ev.placeRows.find((x) => x.name === 'D3').place, 3);
+    ev = ok(await call('ann', 'score', { id: de, m: gf2.id, games: [[12, 15]] })).event; assert.ok(ev.fin); // the reset is one game to 15 (pickleball default; see events.rev2.test.js) assert.strictEqual(ev.placeRows[0].name, 'D2'); assert.strictEqual(ev.placeRows[1].name, 'D1'); assert.strictEqual(ev.placeRows.find((x) => x.name === 'D3').place, 3);
     t('double elimination 4: losers-bracket champion wins the first final -> bracket reset, wins the reset -> champion; places');
     // no reset when the winners-bracket champion wins the first final; property test 2..16 entries (enterprise account lifts the 8-person cap)
     for (let n = 2; n <= 16; n++) {
       NOW = Z('2026-11-17T18:00:00Z'); E._reset();
       ev = ok(await call('club', 'create', base({ title: 'DE' + n, fmt: 'de', seeding: 'manual', entrants: Array.from({ length: n }, (_, i) => ({ name: 'P' + String(i).padStart(2, '0') })) }), '3.3.3.' + n)).event; const id = ev.id;
       ev = ok(await call('club', 'draw', { id })).event; const losses = {}; let steps = 0;
-      while (!ev.fin && steps++ < 80) { const rd = ev.matches.find((m) => m.state === 'ready'); assert.ok(rd, 'stuck at n=' + n); const w = (n * 7 + steps * 3) % 5 < 3 ? 'a' : 'b'; ev = ok(await call('club', 'score', { id, m: rd.id, games: win(w) })).event; const lo = w === 'a' ? rd.b : rd.a; losses[lo] = (losses[lo] || 0) + 1; }
+      while (!ev.fin && steps++ < 80) { const rd = ev.matches.find((m) => m.state === 'ready'); assert.ok(rd, 'stuck at n=' + n); const w = (n * 7 + steps * 3) % 5 < 3 ? 'a' : 'b'; ev = ok(await call('club', 'score', { id, m: rd.id, games: rd.rule ? (w === 'a' ? [[15, 9]] : [[9, 15]]) : win(w) })).event; const lo = w === 'a' ? rd.b : rd.a; losses[lo] = (losses[lo] || 0) + 1; }
       assert.ok(ev.fin, 'finished n=' + n); const champ = ev.placeRows[0].eid; assert.ok((losses[champ] || 0) <= 1, 'champion lost at most once');
       ev.entrants.forEach((e) => { if (e.eid !== champ) assert.strictEqual(losses[e.eid], 2, 'everyone else out after exactly 2 losses (n=' + n + ')'); });
       assert.strictEqual(ev.placeRows.length, n);

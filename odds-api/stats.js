@@ -195,7 +195,7 @@ const ownRound = (r) => r.kind === 'golf-round' && r.score != null && !teamFmt(r
 // (golf day, event, tournament: any engine record that is not a one-player game), or when another player confirmed a self-logged one (extra.confirmedBy,
 // set only by /stats/confirm/do from a different account). Self-logged and guest-kept entries are NOT confirmed until then.
 const isSelfLogged = (r) => r.src === 'self';
-const isConfirmed = (r) => (r.src === 'self' ? !!(r.extra && r.extra.confirmedBy) : !(r.extra && r.extra.solo));
+const isConfirmed = (r) => (r.src === 'self' ? !!(r.extra && r.extra.confirmedBy) : !(r.extra && (r.extra.solo || r.extra.confirmed === false))); // INTEGRATION (merged build, Nov 16 2026; see HANDOFF "Port to component branches"): an engine that marks its own record `extra.confirmed: false` (local events: a match against a typed-in guest, or more than 2 matches against the same opponents in a day) is believed, so those matches never move a rating
 const hasRating = (r) => !!(r.extra && Number.isFinite(crOf(r.extra)) && Number.isFinite(slopeOf(r.extra)));
 // THE handicap calculation (one copy of the maths: ratings.js handicapSet). Used by /stats/me, handicapFor, the course view, guests and pairingProfile alike.
 function golfHcp(recs) { // own, complete 9- or 18-hole rounds with Course Rating + Slope

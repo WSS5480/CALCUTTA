@@ -53,11 +53,18 @@
   const OVER = { calc: ['#ocalc', () => window.oddCalc && window.oddCalc()], golf: ['#ogolf', () => window.oddGolf && window.oddGolf()], event: ['#oevt', () => window.oddEvents && window.oddEvents()] };
   // tap a card in an overlay's list once it has loaded (the engines have no "open this id" call of their own, except Calcutta)
   function tapWhenThere(sel, find, tries) { const e = [...document.querySelectorAll(sel)].find(find); if (e) { e.click(); return; } if ((tries || 0) < 25) setTimeout(() => tapWhenThere(sel, find, (tries || 0) + 1), 200); }
-  function open(type, ref) {
-    if (type === 'calc' && window.oddCalc) return window.oddCalc({ id: ref });
-    const o = OVER[type]; if (!o) return toast('That game cannot be opened here yet.');
-    o[1](); const id = String(ref).replace(/^golf:/, '');
-    tapWhenThere(o[0] + ' [data-a="open"]', (e) => [e.getAttribute('data-id'), e.getAttribute('data-g'), e.getAttribute('data-e')].includes(id));
+  const post = async (path, body) => { const r = await fetch(API + path, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': g('odd-tok') || '' }, body: JSON.stringify(body || {}) }); return { ok: r.ok, j: await r.json().catch(() => ({})) }; };
+  // open(type, ref, { groupId, cid }): a game listed on a group. Someone already in the game goes straight in. A group member who is not in it yet gets
+  // the game's own join screen (Calcutta: "join from the group"; golf / local event: its join preview), so every member of the group can go in.
+  async function open(type, ref, ctx) {
+    const o = OVER[type], id = String(ref).replace(/^golf:/, ''); if (type !== 'calc' && !o) return toast('That game cannot be opened here yet.');
+    let inIt = false; try { inIt = (await post(type === 'calc' ? '/calcutta/get' : type === 'golf' ? '/golf/get' : '/events/get', { id })).ok; } catch (e) { return toast('Could not reach Oddable. Try again.'); }
+    if (type === 'calc') { if (!window.oddCalc) return toast('Calcutta is not loaded.'); return window.oddCalc(inIt ? { id } : { group: id }); }
+    if (inIt) { o[1](); return tapWhenThere(o[0] + ' [data-a="open"]', (e) => [e.getAttribute('data-id'), e.getAttribute('data-g'), e.getAttribute('data-e')].includes(id)); }
+    if (!ctx || !ctx.groupId || !ctx.cid) { o[1](); return toast('Ask the organizer for the join code.'); }
+    let r; try { r = await post('/integrate/open', { groupId: ctx.groupId, cid: ctx.cid }); } catch (e) { return toast('Could not reach Oddable. Try again.'); }
+    if (!r.ok || !r.j.code) return toast(r.j.error || 'That game could not be opened.');
+    if (type === 'golf') window.oddGolf({ code: r.j.code }); else if (window.OddEvents && window.OddEvents.join) window.OddEvents.join(r.j.code); else toast('Local events are not loaded.');
   }
   let FOR = null; // { gid, gname, type } while the commissioner is creating a game for a group
   function banner() {

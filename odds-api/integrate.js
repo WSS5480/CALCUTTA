@@ -2,6 +2,9 @@
 // kept in ONE file so the engines stay as their coders committed them. NOT preview-only: it belongs on main together with the merged engines.
 //   wire()                       groups.registerGame for Calcutta / golf / local events (pots of attached games show in the group), the stats `groups`
 //                                provider, golf's handicap + limits contracts, Calcutta's golf and local-event sources. Safe to call twice.
+//   POST /integrate/open         { groupId, cid } a MEMBER of the group opens a game that is on the group. Answers the game's id (Calcutta: joined with its own
+//                                /calcutta/gjoin) or its join code (golf, local events: they have no join-from-group route yet; see HANDOFF port list).
+//                                The group's own /groups/get decides who is a member; nothing is joined here.
 //   POST /integrate/attach       { groupId, type: 'calc' | 'golf' | 'event', ref, pot? } the group's commissioner adds a game he runs to the group.
 //                                Checked three times: signed in; runs that game (asked from the game's own engine with the caller's own token);
 //                                commissioner of the group (groups.attachGame). Nothing about money moves; pots are display only.
@@ -22,9 +25,11 @@ function wire() {
   t('calcutta source: local events', () => C && E && E.ADAPTER && typeof E.ADAPTER.registerCalcutta === 'function' && (E.ADAPTER.registerCalcutta(C), true));
   t('calcutta source: golf', () => C && GO && typeof GO.registerCalcutta === 'function' && GO.registerCalcutta(C));
   t('stats groups provider', () => !own && ST && G && typeof G.statsFor === 'function' && (ST.register('groups', (k, o) => G.statsFor(k, o)), true));
-  t('golf handicaps from stats', () => { if (!GO || !ST || !['handicapFor', 'eventSetup', 'eventOverride', 'eventLog'].every((f) => typeof ST[f] === 'function')) return false; const D = GO._deps;
+  const gown = GO && GO._deps && typeof GO._deps.stats === 'function' && typeof GO._deps.limitsMod === 'function'; /* Golf v1.2 finds stats.js and limits.js itself */
+  if (gown) t('golf uses stats.js and limits.js itself', () => true);
+  t('golf handicaps from stats', () => { if (gown || !GO || !ST || !['handicapFor', 'eventSetup', 'eventOverride', 'eventLog'].every((f) => typeof ST[f] === 'function')) return false; const D = GO._deps;
     D.handicapFor = (k, o) => ST.handicapFor(k, o); D.eventSetup = (d, id, o) => ST.eventSetup(d, id, o); D.eventOverride = (d, id, k, o) => ST.eventOverride(d, id, k, o); D.eventLog = (d, id) => ST.eventLog(d, id); return true; });
-  t('golf limits from limits.js', () => { if (!GO || !LIM || !GO.limits) return false; GO.limits.maxPeople = (e, id) => LIM.maxPeople(LIM.keyOf(e), id); GO.limits.isEnterprise = (e) => LIM.isEnterprise(LIM.keyOf(e)); return true; });
+  t('golf limits from limits.js', () => { if (gown || !GO || !LIM || !GO.limits) return false; GO.limits.maxPeople = (e, id) => LIM.maxPeople(LIM.keyOf(e), id); GO.limits.isEnterprise = (e) => LIM.isEnterprise(LIM.keyOf(e)); return true; });
   WIRED = done; return done;
 }
 // ask an engine's own route in-process, as the caller (same token), so its own access rules decide
@@ -41,18 +46,28 @@ async function handle(req, res) {
   if (req.method !== 'POST') { send(res, 405, { error: 'POST only' }); return true; }
   try {
     const A = require('./acct'), e = A.who(req); if (!e) throw bad(401, 'Sign in again');
-    if (limited(e, 20, 600e3)) throw bad(429, 'Too many tries. Wait a few minutes.');
     const b = await body(req), G = mod('groups'); wire();
+    if (path === '/integrate/open') { // a member of the group opens a game that is on the group: what the phone needs to show it (Calcutta: its id; golf / local event: its join code)
+      if (limited('o|' + e, 200, 600e3)) throw bad(429, 'Too many tries. Wait a few minutes.');
+      const gid = String(b.groupId || ''), cid = String(b.cid || ''); if (!G || !/^[A-Za-z0-9]{4,20}$/.test(gid) || !/^[A-Za-z0-9]{2,20}$/.test(cid)) throw bad(400, 'Which group and which game?');
+      const r = await ask(G, req, '/groups/get', { id: gid }); if (r.s !== 200 || !r.j.group || !['comm', 'member'].includes(r.j.group.role)) throw bad(403, 'Join the group first: this game is for its members.'); // the group's own route decides who is a member
+      const c = (r.j.group.contests || []).find((x) => x.cid === cid && x.kind === 'ext'); if (!c) throw bad(404, 'That game is not on this group any more.');
+      const ref = String(c.ref).replace(/^golf:/, ''), out = { ok: true, type: c.type, ref, name: c.name };
+      if (c.type === 'golf' || c.type === 'event') { const row = await require('./sync').dbGet((c.type === 'golf' ? 'lock:golf:' : 'lock:evt:') + ref).catch(() => null), d = row && row.data; if (!d || d.deleted || !d.code) throw bad(404, 'That game is gone.'); out.code = d.code; }
+      send(res, 200, out); return true;
+    }
+    if (limited(e, 20, 600e3)) throw bad(429, 'Too many tries. Wait a few minutes.');
     if (path === '/integrate/attach') {
       const type = String(b.type || ''), ref = String(b.ref || ''), gid = String(b.groupId || ''); if (!G || !/^[A-Za-z0-9]{4,20}$/.test(gid) || !/^[A-Za-z0-9:_-]{2,60}$/.test(ref)) throw bad(400, 'Which group and which game?');
       let name = '', mine = false;
       if (type === 'calc') { const C = mod('calcutta'), r = C && await ask(C, req, '/calcutta/get', { id: ref }); if (!r || r.s !== 200) throw bad(404, 'Calcutta not found'); mine = r.j.calc.role === 'comm'; name = r.j.calc.name; }
-      else if (type === 'golf') { const GO = mod('golf'), r = GO && await ask(GO, req, '/golf/get', { id: ref }); if (!r || r.s !== 200) throw bad(404, 'Golf game not found'); const g = r.j.game; mine = !!(g.members || []).find((m) => m.pid === g.me && m.org); name = g.title; }
+      else if (type === 'golf') { // Golf v1.2 attaches through its OWN route: it checks the organizer, asks groups.attachGame (commissioner check) and accepts the call back
+        const GO = mod('golf'), r = GO && await ask(GO, req, '/golf/attach', { id: ref.replace(/^golf:/, ''), groupId: gid, pot: b.pot === 'main' ? 'main' : 'side' }); if (!r) throw bad(404, 'Golf game not found'); if (r.s !== 200) throw bad(r.s >= 400 && r.s < 500 ? r.s : 409, (r.j && r.j.error) || 'That golf game could not be added to this group.');
+        const g = r.j.game || {}; send(res, 200, { ok: true, cid: g.contestId || null, pot: b.pot === 'main' ? 'main' : 'side', name: g.title || '' }); return true; }
       else if (type === 'event') { const E = mod('events'), r = E && await ask(E, req, '/events/get', { id: ref }); if (!r || r.s !== 200) throw bad(404, 'Event not found'); const ev = r.j.event; mine = ev.role === 'comm' || !!(ev.members || []).find((m) => m.pid === ev.me && m.comm); name = ev.title; }
       else throw bad(400, 'Unknown game type');
       if (!mine) throw bad(403, 'Only the person who runs that game can add it to a group');
       const out = await G.attachGame(gid, e, { type, ref, name, pot: b.pot === 'main' ? 'main' : 'side' });
-      if (type === 'golf') { try { await mod('golf').attach(ref, gid, e, out.cid); } catch (er) { console.error('integrate: golf attach', er.message); } }
       send(res, 200, { ok: true, cid: out.cid, pot: out.pot, name }); return true;
     }
     throw bad(404, 'not found');

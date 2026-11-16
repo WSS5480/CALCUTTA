@@ -465,7 +465,7 @@
     if (a === 'hub') { const s = { t: 'hub', id }; push(s); loadGroup(s); return; }
     if (a === 'open') { const s = { t: 'stand', id: id || gid(), cid, tab: 'season' }; push(s); loadStand(s); return; }
     if (a === 'prizes') { const s = { t: 'stand', id: gid(), cid, tab: 'prizes' }; push(s); loadStand(s); return; }
-    if (a === 'ext') { const gr = curGroup(), c = gr && cof(gr, cid); if (c && window.OddGames && window.OddGames.open) { window.OddGames.open(c.type, c.ref); return; } if (c && window.OddJoin && window.OddJoin.openGame(c.type, c.ref, { groupId: gr.id, cid: c.cid, name: c.name })) return; err = 'This game opens in its own screen, which is not on this page yet.'; paint(); return; }
+    if (a === 'ext') { const gr = curGroup(), c = gr && cof(gr, cid); if (c && window.OddGames && window.OddGames.open) { window.OddGames.open(c.type, c.ref, { groupId: gr.id, cid: c.cid }); return; } if (c && window.OddJoin && window.OddJoin.openGame(c.type, c.ref, { groupId: gr.id, cid: c.cid, name: c.name })) return; err = 'This game opens in its own screen, which is not on this page yet.'; paint(); return; }
     if (a === 'newgame' && window.OddGames && window.OddGames.startFor) { const gr = curGroup(); if (gr) window.OddGames.startFor({ id: gr.id, name: gr.name }, t.getAttribute('data-k')); return; } /* integration (merged build, Nov 16 2026; see HANDOFF "Port to component branches") */ 
     if (a === 'newgame') { const gr = curGroup(); if (!(gr && window.OddJoin && window.OddJoin.openGame(t.getAttribute('data-k'), '', { groupId: gr.id, create: true, name: gr.name }))) { err = 'That game is not on this page yet.'; paint(); } return; }
     if (a === 'members') { const s = { t: 'members', id: id || gid() }; push(s); loadGroup(s); return; }

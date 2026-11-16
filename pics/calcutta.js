@@ -60,7 +60,7 @@
   }
   function rulesCard(c) {
     const r = c.rules; let h = '<div class="ccard"><h2>' + (c.locked ? '🔒 Locked rules' : 'Rules (lock at the first bid)') + '</h2><div class="crules">';
-    [['Event', c.evLabel], ['Auction', r.mode === 'live' ? 'Live in the app · ' + r.timer + ' s timer, resets on every bid' : 'Held in person; the commissioner enters who bought what'], ['Lowest bid', usd(r.minBid) + ' · raise by at least ' + usd(r.inc)], ['Buy back half', r.buyBack ? 'Allowed: after a sale, one other person can buy half of the lot for half the price; cost and winnings split 50/50' : 'Off'],
+    [['Event', c.evLabel], ['Auction', r.mode === 'live' ? 'Live in the app · ' + r.timer + ' s timer, resets on every bid' : 'Held in person; the commissioner enters who bought what'], ['Lowest bid', usd(r.minBid) + ' · raise by at least ' + usd(r.inc)], ['Buy back half', !c.local ? 'Not for pro teams or golfers' : r.buyBack ? 'Allowed: a lot\'s own player(s) can buy back half of it for half the winning price; cost and winnings split 50/50' : 'Off'],
       ['Pot', r.main ? 'Main Calcutta: bids join the group pot' : 'Side Calcutta: its own pot, paid separately'], ["Commissioner's take", c.takeText + ' (off the top)'], ['Order', r.order === 'random' ? 'Random, drawn when the auction starts' : 'As listed']].forEach(([k, v]) => { h += '<div><small>' + esc(k) + '</small><span>' + esc(v) + '</span></div>'; });
     h += '</div><h2 class="cmt">Payout table</h2><div class="cthd"><span>Team</span><span class="cr">% of Calcutta</span></div>';
     r.rows.forEach((x) => { h += '<div class="ckv"><span>' + esc(rowText(x, c.rounds)) + '</span><b>' + pct(x.bp / 100) + (x.n > 1 ? ' each' : '') + '</b></div>'; });
@@ -82,8 +82,8 @@
     if (ev && !ev.on) h += '<div class="cnote cyel">Coming soon. Golfers arrive with the golf build.</div>';
     else if (ev && ev.manualOnly) {
       h += '<div class="cnote">Type each team or player. You enter the results by hand.</div>';
-      d.custom.forEach((n, i) => { h += '<div class="cmrow"><span>' + esc(n) + '</span><button class="ctiny" data-a="cdel" data-i="' + i + '">Remove</button></div>'; });
-      h += '<div class="c2"><input id="cadd" class="cin" maxlength="40" placeholder="Team name"><button class="csec" data-a="cadd">Add</button></div>';
+      d.custom.forEach((x, i) => { h += '<div class="cmrow"><span>' + esc(x.n) + (x.por.length ? '<small>Players: ' + esc(x.por.map((p) => p.name || 'Player').join(', ')) + '</small>' : '') + '</span><button class="ctiny" data-a="cdel" data-i="' + i + '">Remove</button></div>'; });
+      h += '<label class="clab">Team or player<input id="cadd" class="cin" maxlength="40" placeholder="Team name"></label><label class="clab">Its players in the group (optional, names with commas)<input id="caddp" class="cin" maxlength="120" placeholder="Pat Lee, Sam Cruz"></label><div class="cnote">Players of record are the only people who can buy back half of their own lot. You can link them to members later.</div><button class="csec cfull" data-a="cadd">Add</button>';
     } else if (ev) {
       h += '<div class="cline"><span>Bundle long shots<small>Teams marked Field are sold as one lot ("the field")</small></span>' + sw(d.bundle, 'data-a="bundle"') + '</div>';
       if (!d.teams.length) h += '<div class="ccard cmut">Loading teams…</div>';
@@ -100,7 +100,7 @@
     return h + '<button class="cpri cfull" data-a="next">Next: rules and payouts</button>';
   }
   function lotsOut() {
-    const d = DR, ev = evOf(d.ev); if (ev && ev.manualOnly) return d.custom.map((n) => ({ teams: [{ name: n }] }));
+    const d = DR, ev = evOf(d.ev); if (ev && ev.manualOnly) return d.custom.map((x) => ({ teams: [{ name: x.n }], playersOfRecord: x.por.map((p) => (p.pid ? { pid: p.pid } : { name: p.name })) }));
     const own = d.teams.filter((t) => d.pick[t.id] === 'lot'), fld = d.bundle ? d.teams.filter((t) => d.pick[t.id] === 'field') : [];
     return own.map((t) => ({ teams: [{ id: t.id, name: t.name, abbr: t.abbr }] })).concat(fld.length ? [{ name: 'The field', teams: fld.map((t) => ({ id: t.id, name: t.name, abbr: t.abbr })) }] : []);
   }
@@ -111,7 +111,7 @@
     h += '<div class="cnote">Live: one lot at a time, the timer resets on every bid. Enter results: you held the auction at the bar, type who bought what.</div>';
     h += '<div class="c2"><label class="clab">Lowest bid' + sel('cmin', (EV.minBids || [5]).map((n) => [n, '$' + n]), d.minBid) + '</label><label class="clab">Raise by at least' + sel('cinc', (EV.incs || [5]).map((n) => [n, '$' + n]), d.inc) + '</label></div>';
     if (d.mode === 'live') h += '<div class="c2"><label class="clab">Bid timer' + sel('ctimer', (EV.timers || [20]).map((n) => [n, n + ' seconds']), d.timer) + '</label><label class="clab">Order' + sel('corder', [['listed', 'As listed'], ['random', 'Random draw']], d.order) + '</label></div>';
-    h += '<div class="cline"><span>Buy back half<small>After a sale, one other person can buy half of that lot for half the price. Cost and winnings split 50/50.</small></span>' + sw(d.buyBack, 'data-a="bb"') + '</div></div>';
+    h += ev.local ? '<div class="cline"><span>Buy back half<small>A lot\'s own player(s) can buy back half of it for half the winning price. Cost and winnings split 50/50.</small></span>' + sw(d.buyBack, 'data-a="bb"') + '</div></div>' : '</div>';
     h += '<div class="ccard"><h2>Main or side Calcutta</h2>' + seg([['1', 'Main Calcutta'], ['0', 'Side Calcutta']], d.main ? '1' : '0', 'data-main') + '<div class="cnote">Main: auction bids join the group\'s pot with the entries. Side: same members, its own pot, tracked and paid separately.</div></div>';
     const tot = Math.round(d.rows.reduce((a, x) => a + (Number(x.pct) || 0) * (Number(x.n) || 0), 0) * 100) / 100;
     h += '<div class="ccard"><h2>Calcutta payouts</h2><div class="cthd"><span>Team reaches</span><span class="cr">% of Calcutta</span></div>';
@@ -138,7 +138,7 @@
     if (v('ctv') !== null) d.takeV = v('ctv');
     if (v('ctake') !== null) { const t = v('ctake'); if (t === 'none') d.takeKind = 'none'; else if (t === 'flat') { if (d.takeKind !== 'flat') d.takeV = ''; d.takeKind = 'flat'; } else if (t === 'pc') { if (d.takeKind !== 'pct' || [5, 10, 15, 20, 25].includes(Number(d.takeV))) d.takeV = ''; d.takeKind = 'pct'; } else { d.takeKind = 'pct'; d.takeV = +t.slice(1); } }
   }
-  function payload() { const d = DR; return { id: d.id, name: d.name.trim(), ev: d.ev, lots: lotsOut(), rows: d.rows.map((x) => ({ k: x.k, r: x.r || undefined, n: Number(x.n), pct: Number(x.pct), label: x.label || undefined })), minBid: d.minBid, inc: d.inc, timer: d.timer, buyBack: d.buyBack, main: d.main, take: { kind: d.takeKind, v: d.takeKind === 'none' ? 0 : Number(d.takeV) }, order: d.order, mode: d.mode }; }
+  function payload() { const d = DR; return { id: d.id, name: d.name.trim(), ev: d.ev, lots: lotsOut(), rows: d.rows.map((x) => ({ k: x.k, r: x.r || undefined, n: Number(x.n), pct: Number(x.pct), label: x.label || undefined })), minBid: d.minBid, inc: d.inc, timer: d.timer, buyBack: !!(evOf(d.ev) || {}).local && d.buyBack, main: d.main, take: { kind: d.takeKind, v: d.takeKind === 'none' ? 0 : Number(d.takeV) }, order: d.order, mode: d.mode }; }
   async function pickEv(k) { const d = DR, ev = evOf(k); d.ev = k; d.teams = []; d.pick = {}; d.rows = ev ? ev.rows.map((x) => Object.assign({}, x)) : []; paint(); if (!ev || !ev.on || ev.manualOnly) return;
     try { const j = await post('teams', { ev: k }); if (DR !== d || d.ev !== k) return; d.teams = j.teams; if (k === 'nfl_season') d.teams.forEach((t) => { d.pick[t.id] = 'lot'; }); } catch (e) { err = errText(e); } paint(); }
 
@@ -202,7 +202,7 @@
       const x = c.sold.find((q) => q.lot === l.id), open = target === l.id;
       h += '<div class="ccard' + (open ? ' cblock' : '') + '"><div class="crow"><b>' + esc(l.name) + '</b>' + (x && !open ? '<b class="cr">' + usd(x.amt) + '</b>' : '') + '</div>' + (l.field ? '<div class="cnote">' + esc(l.teams.map((t) => t.name).join(', ')) + '</div>' : '');
       if (open) h += whoForm('e', c, x ? (x.holder.pid || '_') : '', x && !x.holder.pid ? x.holder.name : '') + '<div class="c2"><input id="eamt" class="cin" type="number" inputmode="numeric" min="' + c.rules.minBid + '" step="1" placeholder="Amount ($)" value="' + esc(x ? x.amt : '') + '" aria-label="Amount in dollars"><button class="cpri" data-a="enter" data-lot="' + att(l.id) + '">Save</button></div>';
-      else if (x) h += '<div class="cmeta">' + esc(x.holder.name) + (x.bb ? ' · half bought back by ' + esc(x.bb.name) : '') + '</div><div class="c2"><button class="csec" data-a="edit1" data-lot="' + att(l.id) + '">Change</button><button class="cdanger" data-a="unenter" data-lot="' + att(l.id) + '">Remove</button></div>' + (c.rules.buyBack ? '<button class="clink" data-a="lot" data-lot="' + att(l.id) + '">Buy back half ›</button>' : '');
+      else if (x) h += '<div class="cmeta">' + esc(x.holder.name) + (x.bb ? ' · half bought back by ' + esc(x.bb.name) : '') + '</div><div class="c2"><button class="csec" data-a="edit1" data-lot="' + att(l.id) + '">Change</button><button class="cdanger" data-a="unenter" data-lot="' + att(l.id) + '">Remove</button></div>' + (c.rules.buyBack && c.local && (l.por || []).length ? '<button class="clink" data-a="lot" data-lot="' + att(l.id) + '">Buy back half ›</button>' : '');
       else h += '<button class="clink" data-a="edit1" data-lot="' + att(l.id) + '">Not entered yet · Enter ›</button>';
       h += '</div>';
     });
@@ -278,9 +278,19 @@
       }
       h += '</div>';
     });
-    if (comm && c.rules.buyBack && l.sold) {
-      h += '<div class="ccard"><h2>Buy back half</h2>' + (l.bb ? '<div class="cmeta">' + esc(l.bb.name) + ' bought back half for ' + usd(Math.floor(l.sold.amt * 100 / 2) / 100) + '. Cost and winnings split 50/50 (an odd cent goes to the winning bidder).</div><button class="cdanger cfull" data-a="bbclear" data-lot="' + att(l.id) + '">Remove the buy-back</button>'
-        : whoForm('b', c, s.bwho || '', '') + '<div class="cnote">They pay the winning bidder ' + usd(Math.floor(l.sold.amt * 100 / 2) / 100) + ' outside the app and own half.</div><button class="cpri cfull" data-a="bbsave" data-lot="' + att(l.id) + '">Record the buy-back</button>') + '</div>';
+    if (c.local) { // players of record + buy back half (owner rule Nov 16 2026: only the lot's own player(s), half for half the price)
+      const por = l.por || [], mine = por.some((p) => p.me), half = l.sold ? usd(Math.floor(l.sold.amt * 100 / 2) / 100) : '';
+      h += '<div class="ccard"><h2>Players of record</h2>' + (por.length ? '<div class="clist0">' + por.map((p, i) => '<div class="cmrow"><span>' + esc(p.name) + (p.me ? ' <i class="cmut">· you</i>' : '') + (p.pid ? '' : ' <i class="cmut">· not in the app</i>') + '</span>' + (comm && !l.bb ? '<button class="ctiny" data-a="pordel" data-i="' + i + '" data-lot="' + att(l.id) + '">Remove</button>' : '') + '</div>').join('') + '</div>' : '<div class="cnote">None. Nobody can buy back half of this lot.</div>');
+      if (comm && !l.bb) h += whoForm('p', c, '', '').replace('Buyer', 'Add a player of record').replace('Who bought it?', 'Pick a member or type a name') + '<button class="csec cfull" data-a="poradd" data-lot="' + att(l.id) + '">Add player</button>';
+      h += '</div>';
+      if (c.rules.buyBack && l.sold && por.length) {
+        h += '<div class="ccard"><h2>Buy back half</h2>';
+        if (l.bb) h += '<div class="cmeta">' + esc(l.bb.name) + ' bought back half for ' + half + '. Cost and winnings split 50/50 (an odd cent goes to the winning bidder).</div>' + (comm || l.bb.pid === c.me ? '<button class="cdanger cfull" data-a="bbclear" data-lot="' + att(l.id) + '">Remove the buy-back</button>' : '');
+        else if (mine) h += '<div class="cnote">This is your lot. Buy back half from ' + esc(l.holder.name) + ' for ' + half + ' (paid outside the app); you then own half of its cost and winnings.</div><button class="cpri cfull" data-a="bbself" data-lot="' + att(l.id) + '">Buy back half for ' + half + '</button>';
+        else if (comm) h += '<label class="clab">Which player of record buys back' + sel('bwho', por.map((p, i) => [i, p.name]), s.bwho || 0) + '</label><div class="cnote">Recorded on their behalf. They pay ' + esc(l.holder.name) + ' ' + half + ' outside the app and own half.</div><button class="cpri cfull" data-a="bbsave" data-lot="' + att(l.id) + '">Record the buy-back</button>';
+        else h += '<div class="cnote">Only ' + esc(por.map((p) => p.name).join(', ')) + ' can buy back half of this lot.</div>';
+        h += '</div>';
+      }
     }
     return h + '<div class="cnote">Hand-entered results override the score feed for that team and are listed in the history.</div>';
   }
@@ -353,7 +363,7 @@
     if (a === 'open') { openCalc(t.getAttribute('data-id')); return; }
     if (a === 'bundle') { readDraft(); DR.bundle = !DR.bundle; paint(); return; }
     if (a === 'allteams') { readDraft(); const all = DR.teams.every((x) => DR.pick[x.id] === 'lot'); DR.teams.forEach((x) => { DR.pick[x.id] = all ? 'out' : 'lot'; }); paint(); return; }
-    if (a === 'cadd') { readDraft(); const i = document.getElementById('cadd'), v = (i && i.value || '').trim(); if (v && DR.custom.length < 80) DR.custom.push(v.slice(0, 40)); paint(); const n = document.getElementById('cadd'); if (n) n.focus(); return; }
+    if (a === 'cadd') { readDraft(); const i = document.getElementById('cadd'), v = (i && i.value || '').trim(); const pp = ((document.getElementById('caddp') || {}).value || '').split(',').map((x) => x.trim()).filter((x) => x.length >= 2).slice(0, 8).map((x) => ({ name: x.slice(0, 24) })); if (v && DR.custom.length < 80) DR.custom.push({ n: v.slice(0, 40), por: pp }); paint(); const n = document.getElementById('cadd'); if (n) n.focus(); return; }
     if (a === 'cdel') { readDraft(); DR.custom.splice(+t.getAttribute('data-i'), 1); paint(); return; }
     if (a === 'next') { readDraft(); if (DR.name.trim().length < 2) { err = 'Give it a name (2+ characters).'; paint(); return; } if (!DR.ev) { err = 'Pick an event.'; paint(); return; } if (lotsOut().length < 2) { err = 'Put at least 2 lots up for auction.'; paint(); return; } push({ t: 'create2' }); return; }
     if (a === 'bb') { readDraft(); DR.buyBack = !DR.buyBack; paint(); return; }
@@ -364,7 +374,7 @@
     if (a === 'submit') { readDraft(); const tot = Math.round(DR.rows.reduce((s, x) => s + (Number(x.pct) || 0) * (Number(x.n) || 0), 0) * 100) / 100; if (tot !== 100) { err = 'Payouts must total exactly 100% (now ' + tot + '%).'; DR.editRows = true; paint(); return; }
       act(DR.id ? 'edit' : 'create', payload(), async (j) => { DR = null; stack = [{ t: 'home' }]; loadHome(); const o = { t: 'members', id: j.calc.id, c: j.calc }; push(o); note = 'Created. Invite people, then start the auction.'; paint(); }); return; }
     if (a === 'editrules') { const c = cur().c; DR = draftNew(); Object.assign(DR, { id: c.id, name: c.name, ev: c.ev, mode: c.rules.mode, minBid: c.rules.minBid, inc: c.rules.inc, timer: c.rules.timer, buyBack: c.rules.buyBack, main: c.rules.main, order: c.rules.order, takeKind: c.rules.take.kind, takeV: c.rules.take.v, rows: c.rules.rows.map((r) => ({ k: r.k, r: r.r, n: r.n, pct: r.bp / 100, label: r.label })) });
-      c.lots.forEach((l) => l.teams.forEach((x) => { DR.pick[x.id] = l.field ? 'field' : 'lot'; })); DR.custom = c.ev === 'custom' ? c.lots.map((l) => l.name) : [];
+      c.lots.forEach((l) => l.teams.forEach((x) => { DR.pick[x.id] = l.field ? 'field' : 'lot'; })); DR.custom = c.ev === 'custom' ? c.lots.map((l) => ({ n: l.name, por: (l.por || []).map((p) => ({ pid: p.pid, name: p.name })) })) : [];
       push({ t: 'create1' }); const go = () => { if (c.ev !== 'custom') post('teams', { ev: c.ev }).then((j) => { DR.teams = j.teams; paint(); }).catch((e) => { err = errText(e); paint(); }); }; if (!EV) post('events', {}).then((j) => { EV = j; paint(); go(); }); else go(); return; }
     if (a === 'delete') { if (!confirm('Delete this Calcutta for everyone?')) return; act('delete', { id: idOf() }, async () => { stack = [{ t: 'home' }]; await loadHome(); paint(); }); return; }
     // auction
@@ -396,13 +406,16 @@
       if (v('rre') != null) b.reached = +v('rre'); if (v('rpl') != null) b.place = Math.round(Number(v('rpl'))); if (s.rc != null) b.champ = s.rc; if (s.ro != null) b.out = s.ro;
       act('result', b, async () => { s.rt = null; note = 'Result saved.'; await loadBoard(s); }); return; }
     if (a === 'rclear') { const s = cur(); act('result', { id: s.id, team: t.getAttribute('data-team'), clear: true }, async () => { s.rt = null; await loadBoard(s); }); return; }
-    if (a === 'bbsave') { const s = cur(), w = whoVal('b'); if (!w) { err = 'Pick who buys back half.'; paint(); return; } act('buyback', Object.assign({ id: s.id, lot: t.getAttribute('data-lot') }, w), async () => { note = 'Buy-back recorded.'; await loadBoard(s); }); return; }
+    if (a === 'bbsave') { const s = cur(), i = +((document.getElementById('bwho') || {}).value || 0); act('buyback', { id: s.id, lot: t.getAttribute('data-lot'), who: i }, async () => { note = 'Buy-back recorded.'; await loadBoard(s); }); return; }
+    if (a === 'bbself') { const s = cur(); act('buyback', { id: s.id, lot: t.getAttribute('data-lot'), self: true }, async () => { note = 'You bought back half.'; await loadBoard(s); }); return; }
+    if (a === 'poradd') { const s = cur(), w = whoVal('p'); if (!w) { err = 'Pick a member or type a name.'; paint(); return; } act('por', { id: s.id, lot: t.getAttribute('data-lot'), add: w }, async () => { note = 'Player of record added.'; await loadBoard(s); }); return; }
+    if (a === 'pordel') { const s = cur(); act('por', { id: s.id, lot: t.getAttribute('data-lot'), remove: +t.getAttribute('data-i') }, async () => { await loadBoard(s); }); return; }
     if (a === 'bbclear') { const s = cur(); act('buyback', { id: s.id, lot: t.getAttribute('data-lot'), clear: true }, async () => { await loadBoard(s); }); return; }
   }
   function change(ev) {
     const id = ev.target && ev.target.id; if (!id) return; const s = cur();
     if (id === 'cev') { readDraft(); pickEv(ev.target.value); return; }
-    if (ev.target.hasAttribute('data-who')) { const p = ev.target.getAttribute('data-who'); if (s.t === 'lot') s.bwho = ev.target.value; const box = ev.target.closest('.ccard'); if (box) { const n = box.querySelector('#' + p + 'name'); if (ev.target.value === '_' && !n) ev.target.closest('label').insertAdjacentHTML('afterend', '<label class="clab">Their name<input id="' + p + 'name" class="cin" maxlength="24"></label>'); if (ev.target.value !== '_' && n) n.closest('label').remove(); } return; }
+    if (ev.target.hasAttribute('data-who')) { const p = ev.target.getAttribute('data-who');  const box = ev.target.closest('.ccard'); if (box) { const n = box.querySelector('#' + p + 'name'); if (ev.target.value === '_' && !n) ev.target.closest('label').insertAdjacentHTML('afterend', '<label class="clab">Their name<input id="' + p + 'name" class="cin" maxlength="24"></label>'); if (ev.target.value !== '_' && n) n.closest('label').remove(); } return; }
     if (/^(ctake|ctv|rk\d+|rr\d+|rn\d+|rp\d+|cmin|cinc|ctimer|corder)$/.test(id)) { readDraft(); paint(); }
   }
   function input(ev) { if (ev.target && ev.target.id === 'cq') { readDraft(); paint(); } }

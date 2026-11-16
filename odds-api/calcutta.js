@@ -66,12 +66,27 @@ const EVENTS = {
   cfb_wk: { label: "College football this weekend's games", sport: 'cfb', path: 'football/college-football', tq: '&groups=80', teams: 0, kinds: ['win', 'big'], rounds: [], days: 6, weekend: true, dq: '&groups=80&limit=400',
     roundOf: (g) => (g.st === 2 || g.st === 3 ? 0 : null), rows: [{ k: 'win', n: 20, bp: 400 }, { k: 'big', n: 1, bp: 2000, label: 'Biggest win margin' }] },
   golf: { label: 'Golf tournament', sport: 'golf', kinds: ['place'], rounds: [], plug: 'golf', rows: [{ k: 'place', r: 1, n: 1, bp: 5000, label: 'Winner' }, { k: 'place', r: 2, n: 1, bp: 2000 }, { k: 'place', r: 3, n: 1, bp: 1000 }, { k: 'place', r: 4, n: 1, bp: 1000 }, { k: 'place', r: 5, n: 1, bp: 1000 }] },
-  custom: { label: 'Custom (type the teams, enter results by hand)', sport: 'other', kinds: ['win', 'round', 'champ', 'place'], rounds: ['Round 1', 'Round 2', 'Round 3', 'Round 4', 'Round 5', 'Round 6'], final: 0, manualOnly: true,
+  custom: { local: true, label: 'Custom (type the teams, enter results by hand)', sport: 'other', kinds: ['win', 'round', 'champ', 'place'], rounds: ['Round 1', 'Round 2', 'Round 3', 'Round 4', 'Round 5', 'Round 6'], final: 0, manualOnly: true,
     rows: [{ k: 'win', n: 7, bp: 500 }, { k: 'round', r: 3, n: 2, bp: 1500, label: 'Reaches the final' }, { k: 'champ', n: 1, bp: 3500, label: 'Champion' }] },
 };
 const SOURCES = {}; // pluggable: SOURCES.golf = { teams: async () => [{id,name,abbr}], results: async (calc) => ({ <teamId>: {place, out, champ} }) }
 function registerSource(key, src) { SOURCES[key] = src; }
 const evOn = (k) => { const ev = EVENTS[k]; return !!ev && (!ev.plug || !!SOURCES[ev.plug]); };
+// LOCAL events (custom, or a plugged source with local:true such as a golf-day team or pickleball pair) have lots whose own players can be
+// in the group = "players of record". Only those lots can be bought back (OWNER DECISION Nov 16 2026). Pro teams/golfers: never.
+const evLocal = (k) => { const ev = EVENTS[k]; return !!ev && (!!ev.local || (!!ev.plug && !!SOURCES[ev.plug] && !!SOURCES[ev.plug].local)); };
+// Players of record: [{ k, name }], k = member key (24 hex, sha256 of the account id) | 'g:<guest id>' | 'n:<lower-case name>'. Never sent out.
+function porEntry(x, members) {
+  if (typeof x === 'string') { const v = x.trim(); if (/^[0-9a-f]{24}$/.test(v)) return { k: v, name: '' }; if (/^g:[\w-]{1,40}$/.test(v)) return { k: v, name: '' }; if (v.length >= 3 && v.length <= 200) return { k: mkOf(v), name: '' }; throw bad(400, 'Bad player of record'); }
+  if (!x || typeof x !== 'object') throw bad(400, 'Bad player of record');
+  const name = cleanName(x.name, 24);
+  if (x.me) { if (!members || !members._me) throw bad(400, 'Bad player of record'); return { k: members._me.mk, name: members._me.name }; }
+  if (x.pid != null) { const m = (members || []).find((y) => y.pid === String(x.pid)); if (!m) throw bad(404, 'Not a member'); return { k: m.mk, name: m.name }; }
+  if (x.key != null || x.guest != null) { const e = porEntry(x.guest != null ? 'g:' + String(x.guest) : String(x.key)); e.name = name; return e; }
+  if (name.length >= 2) return { k: 'n:' + name.toLowerCase(), name };
+  throw bad(400, 'A player of record needs a member, a guest id or a name (2+ characters)');
+}
+function cleanPor(list, members) { if (list == null) return []; if (!Array.isArray(list) || list.length > 8) throw bad(400, 'Up to 8 players of record per lot'); const out = [], seen = new Set(); list.forEach((x) => { const e = porEntry(x, members); if (!seen.has(e.k)) { seen.add(e.k); out.push(e); } }); return out; }
 const rowLabel = (ev, r) => r.label || (r.k === 'win' ? 'Each win' : r.k === 'champ' ? 'Champion' : r.k === 'big' ? 'Biggest win margin' : r.k === 'place' ? (r.r === 1 ? 'Winner' : 'Finishes ' + ord(r.r)) : 'Reaches ' + ((ev.rounds || [])[r.r - 1] || 'round ' + r.r));
 const ord = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th');
 
@@ -93,7 +108,7 @@ function cleanRows(ev, rows) {
   if (tot !== 10000) throw bad(400, 'Payouts must total exactly 100% (now ' + (tot / 100) + '%)', { total: tot / 100 });
   return out;
 }
-function cleanLots(ev, lots, known) {
+function cleanLots(ev, lots, known, local, members) {
   if (!Array.isArray(lots) || lots.length < 2 || lots.length > 80) throw bad(400, 'Put 2 to 80 lots up for auction');
   const seen = new Set(); let x = 0;
   return lots.map((l, i) => {
@@ -106,14 +121,18 @@ function cleanLots(ev, lots, known) {
       return { id, name: known && known[id] ? known[id].name : name, abbr: cleanName(known && known[id] ? known[id].abbr : t.abbr, 6) };
     });
     const nm = cleanName(l.name, 40) || (teams.length === 1 ? teams[0].name : 'The field (' + teams.length + ' teams)');
-    return { id: 'L' + (i + 1), name: nm, teams, field: teams.length > 1 };
+    const src = []; if (known) ts.forEach((t) => { const k = known[String(t && t.id || '')]; if (k && Array.isArray(k.players)) src.push(...k.players); }); // the lot source's own players
+    const given = l.playersOfRecord != null ? l.playersOfRecord : null; if (!local && ((given && given.length) || src.length)) throw bad(400, 'Players of record are only for local events (pro teams and golfers have none)');
+    const por = local ? cleanPor(src.concat(given || []), members) : [];
+    return { id: 'L' + (i + 1), name: nm, teams, field: teams.length > 1, por };
   });
 }
-async function cleanRules(b, now) {
+async function cleanRules(b, now, members) {
   const name = cleanName(b.name, 40); if (name.length < 2) throw bad(400, 'Give the Calcutta a name (2+ characters)');
   const evk = String(b.ev || ''), ev = EVENTS[evk]; if (!ev) throw bad(400, 'Pick an event'); if (!evOn(evk)) throw bad(400, 'That event is coming soon');
   let known = null; if (!ev.manualOnly) { try { const t = await teamsOf(evk); if (t.length) { known = {}; t.forEach((x) => { known[x.id] = x; }); } } catch (e) {} }
-  const lots = cleanLots(ev, b.lots, known), rows = cleanRows(ev, b.rows);
+  const lots = cleanLots(ev, b.lots, known, evLocal(evk), members), rows = cleanRows(ev, b.rows);
+  if (b.buyBack && !evLocal(evk)) throw bad(400, 'Buy back half is only for local events, where the auctioned player or team is in the group');
   const minBid = Number(b.minBid); if (!MINB.includes(minBid)) throw bad(400, 'Pick the lowest bid from the list');
   const inc = Number(b.inc || 5); if (!INCS.includes(inc)) throw bad(400, 'Pick the bid step from the list');
   const timer = Number(b.timer); if (!TIMERS.includes(timer)) throw bad(400, 'Bid timer: 10, 20 or 30 seconds');
@@ -306,9 +325,12 @@ function money(c, R) {
 const takeText = (r) => (r.take.kind === 'pct' && r.take.v ? 'Commissioner keeps ' + r.take.v + '% of the pot' : r.take.kind === 'flat' && r.take.v ? 'Commissioner keeps $' + (Number.isInteger(r.take.v) ? r.take.v : r.take.v.toFixed(2)) + ' of the pot' : 'Commissioner keeps nothing');
 
 // ---------- views ----------
-function pub(c) { const ev = EVENTS[c.ev]; return { id: c.id, kind: 'calcutta', name: c.name, ev: c.ev, evLabel: ev.label, sport: ev.sport, rounds: ev.rounds || [], rules: c.rules, takeText: takeText(c.rules), lots: c.lots.map((l) => ({ id: l.id, name: l.name, field: !!l.field, teams: l.teams })), count: c.members.length, max: maxOf(c), commName: mName(c, (c.members.find((m) => m.mk === c.comm) || {}).pid), status: c.a.status, locked: !!c.locked, group: c.group ? { groupId: c.group.groupId, contestId: c.group.contestId } : null }; }
+const porOut = (c, l, mk) => (l.por || []).map((e) => { const m = c.members.find((x) => x.mk === e.k); return { pid: m ? m.pid : null, name: m ? m.name : e.name || 'Player', me: !!mk && e.k === mk }; });
+const isPor = (l, k) => (l.por || []).some((e) => e.k === k);
+function pub(c) { const ev = EVENTS[c.ev]; return { id: c.id, kind: 'calcutta', name: c.name, ev: c.ev, evLabel: ev.label, sport: ev.sport, rounds: ev.rounds || [], rules: c.rules, takeText: takeText(c.rules), lots: c.lots.map((l) => ({ id: l.id, name: l.name, field: !!l.field, teams: l.teams, por: porOut(c, l, null).map((p) => ({ name: p.name })) })), local: evLocal(c.ev), count: c.members.length, max: maxOf(c), commName: mName(c, (c.members.find((m) => m.mk === c.comm) || {}).pid), status: c.a.status, locked: !!c.locked, group: c.group ? { groupId: c.group.groupId, contestId: c.group.contestId } : null }; }
 function full(c, mk, now) {
   const o = pub(c), comm = isComm(c, mk); o.role = comm ? 'comm' : memberOf(c, mk) ? 'member' : 'none'; if (o.role === 'none') return o;
+  o.lots = c.lots.map((l) => ({ id: l.id, name: l.name, field: !!l.field, teams: l.teams, por: porOut(c, l, mk) }));
   o.me = memberOf(c, mk).pid; o.code = c.code; o.members = c.members.map((m) => ({ pid: m.pid, name: m.name, comm: m.mk === c.comm }));
   const a = c.a; o.a = { status: a.status, order: a.order, cur: a.cur, endsAt: a.endsAt, paused: !!a.paused, left: a.left, nextAt: a.nextAt, nextLeft: a.nextLeft || null, just: a.just, timer: c.rules.timer };
   const hb = a.cur ? high(c, a.cur) : null; o.a.high = hb ? { pid: hb.pid, name: mName(c, hb.pid), amt: hb.amt } : null; o.a.minNext = a.cur ? (hb ? hb.amt + c.rules.inc : c.rules.minBid) : null;
@@ -320,7 +342,7 @@ const canSee = (c, mk) => !!memberOf(c, mk);
 
 // ---------- create (route + adapter) ----------
 async function createCalc(e, b, opts) {
-  const now = D.now(), R = await cleanRules(b, now), mk = mkOf(e), nm = await nameOf(e, b && b.myName);
+  const now = D.now(), mk = mkOf(e), nm = await nameOf(e, b && b.myName), mem = []; mem._me = { mk, name: nm }; const R = await cleanRules(b, now, mem);
   const all = await idx(); if (Object.values(all).filter((x) => x.comm === mk && x.status !== 'closed').length >= 20) throw bad(400, 'You already run 20 open Calcuttas');
   let id; do { id = rnd(10); } while (all[id]); let code; do { code = newCode(); } while (Object.values(all).some((x) => x.code === code));
   const c = Object.assign({ id, code, comm: mk, created: now, rev: 1, members: [{ pid: '', mk, name: nm, joined: now }], bids: {}, sold: {}, manual: {}, audit: [], locked: false, group: opts && opts.group ? opts.group : null }, R);
@@ -341,7 +363,7 @@ async function handle(req, res) {
       if (!hit) { codeFail('c|i|' + ip); throw bad(404, 'No Calcutta with that code'); } send(res, 200, { title: hit.name, kind: 'calcutta' }); return true;
     }
     const u = await me(req);
-    if (op === 'events') { send(res, 200, { events: Object.keys(EVENTS).map((k) => { const ev = EVENTS[k]; return { key: k, label: ev.label, sport: ev.sport, on: evOn(k), teams: ev.teams || 0, kinds: ev.kinds, rounds: ev.rounds || [], manualOnly: !!ev.manualOnly, rows: ev.rows.map((r) => ({ k: r.k, r: r.r || null, n: r.n, pct: r.bp / 100, label: rowLabel(ev, r) })) }; }), minBids: MINB, incs: INCS, timers: TIMERS, max: limits.maxPeople(u.mk), capText: PRICE }); return true; }
+    if (op === 'events') { send(res, 200, { events: Object.keys(EVENTS).map((k) => { const ev = EVENTS[k]; return { key: k, label: ev.label, sport: ev.sport, on: evOn(k), local: evLocal(k), teams: ev.teams || 0, kinds: ev.kinds, rounds: ev.rounds || [], manualOnly: !!ev.manualOnly, rows: ev.rows.map((r) => ({ k: r.k, r: r.r || null, n: r.n, pct: r.bp / 100, label: rowLabel(ev, r) })) }; }), minBids: MINB, incs: INCS, timers: TIMERS, max: limits.maxPeople(u.mk), capText: PRICE }); return true; }
     if (op === 'teams') { const k = String(b.ev || ''); if (!EVENTS[k]) throw bad(400, 'Pick an event'); if (!evOn(k)) throw bad(400, 'That event is coming soon'); try { send(res, 200, { teams: await teamsOf(k) }); } catch (e) { throw bad(502, 'Could not load the teams. Try again.'); } return true; }
     if (op === 'mine') { const all = await idx(), out = []; Object.keys(all).forEach((id) => { const x = all[id]; if ((x.mks || []).includes(u.mk)) out.push({ id, name: x.name, ev: x.ev, evLabel: (EVENTS[x.ev] || {}).label || '', status: x.status, comm: x.comm === u.mk, created: x.created, group: x.group }); }); out.sort((a, b2) => b2.created - a.created); send(res, 200, { calcs: out.slice(0, 50), max: limits.maxPeople(u.mk), capText: PRICE }); return true; }
     if (op === 'create') { rate('create', u.mk, ip); const c = await createCalc(u.e, b); send(res, 200, { calc: full(c, u.mk, now) }); return true; }
@@ -364,7 +386,7 @@ async function handle(req, res) {
       send(res, 200, { calc: full(row.data, u.mk, now) }); return true;
     }
     if (op === 'board') { const row = await loadRow(id); if (!row || !canSee(row.data, u.mk)) throw bad(404, 'Calcutta not found'); const c = row.data, R = await results(c, false), m = money(c, R);
-      m.owners.forEach((o) => { o.me = o.pid === (memberOf(c, u.mk) || {}).pid; delete o.key; }); const r = RES.get(c.id);
+      m.owners.forEach((o) => { o.me = o.pid === (memberOf(c, u.mk) || {}).pid; delete o.key; }); m.lots.forEach((l) => { l.por = porOut(c, lotOf(c, l.id), u.mk); }); const r = RES.get(c.id);
       send(res, 200, { calc: full(c, u.mk, now), board: m, audit: (c.audit || []).slice(-120).reverse(), feedAt: r && r.at ? r.at : null, manual: Object.keys(c.manual || {}).length }); return true; }
     if (op === 'bid') {
       rate('bid', u.mk, ip); const amt = Number(b.amt), lot = String(b.lot || '');
@@ -409,9 +431,35 @@ async function handle(req, res) {
       }, u.mk);
       if (idxSync) await syncIdx(c); send(res, 200, { calc: full(c, u.mk, now) }); return true;
     }
-    if (op === 'enter' || op === 'unenter' || op === 'buyback' || op === 'result' || op === 'edit' || op === 'delete' || op === 'close') {
+    if (op === 'buyback' || op === 'por') { // OWNER DECISION Nov 16 2026: classic golf Calcutta buy-back (see HANDOFF Decisions)
+      rate('write', u.mk, ip); const lot = String(b.lot || '');
+      const c = await mutCalc(id, (c) => {
+        const me = memberOf(c, u.mk), by = me.name, comm = isComm(c, u.mk), l = lotOf(c, lot); if (!l) throw bad(404, 'No such lot');
+        if (!evLocal(c.ev)) throw bad(409, 'Buy back half is not available for pro teams or golfers');
+        if (op === 'por') { // commissioner sets the lot's players of record (members, guest ids or names)
+          if (!comm) throw bad(403, 'Only the commissioner sets players of record');
+          const s0 = c.sold[lot]; if (s0 && s0.bb) throw bad(409, 'Remove the buy-back first');
+          const mem = c.members.slice(); mem._me = me; let por; if (b.add) { por = (l.por || []).slice(); const e = porEntry(b.add, mem); if (!por.some((x) => x.k === e.k)) por.push(e); if (por.length > 8) throw bad(400, 'Up to 8 players of record per lot'); } else if (b.remove != null) { const i = Number(b.remove); por = (l.por || []).filter((x, j) => j !== i); } else por = cleanPor(b.players, mem);
+          l.por = por; audit(c, by, 'Players of record for ' + l.name + ': ' + (por.length ? porOut(c, l, null).map((p) => p.name).join(', ') : 'none')); c.rev++; return c; }
+        if (!c.rules.buyBack) throw bad(409, 'Buy back half is off for this Calcutta');
+        const s = c.sold[lot]; if (!s) throw bad(409, 'That lot is not sold yet');
+        if (!(l.por || []).length) throw bad(409, 'Only the lot\'s own player(s) can buy it back, and this lot has none in the group');
+        const mine = isPor(l, u.mk);
+        if (b.clear) { if (!s.bb) return { nochange: true, v: c }; if (!comm && !(s.bb.k && s.bb.k === u.mk)) throw bad(403, 'Only the commissioner or the player who bought back can remove it'); audit(c, by, 'Removed the buy-back on ' + l.name); s.bb = null; c.rev++; return c; }
+        if (s.bb) throw bad(409, 'Half of this lot is already bought back');
+        let e; // which player of record buys back
+        if (!comm || b.self) { if (!mine) throw bad(403, 'Only the lot\'s own player(s) can buy back half'); e = l.por.find((x) => x.k === u.mk); }
+        else { const i = Number(b.who); if (!(Number.isInteger(i) && i >= 0 && i < l.por.length)) throw bad(400, 'Pick which player of record buys back'); e = l.por[i]; }
+        const m = c.members.find((x) => x.mk === e.k), w = m ? { pid: m.pid, name: '' } : { pid: null, name: e.name || 'Player' };
+        if ((w.pid && w.pid === s.pid) || (!w.pid && !s.pid && w.name.toLowerCase() === s.name.toLowerCase())) throw bad(400, 'The buyer cannot buy back from themselves');
+        s.bb = { pid: w.pid, name: w.name, k: e.k, at: D.now() }; if (holders(c).size > maxOf(c)) throw bad(409, capMsg(c, 'Too many people'), { code: 'cap' });
+        audit(c, by, (w.pid ? mName(c, w.pid) : w.name) + ' bought back half of ' + l.name + ' for $' + (Math.floor(s.amt * 100 / 2) / 100) + (comm && !mine ? ' (recorded by the commissioner)' : '')); c.rev++; return c;
+      }, u.mk);
+      send(res, 200, { calc: full(c, u.mk, now) }); return true;
+    }
+    if (op === 'enter' || op === 'unenter' || op === 'result' || op === 'edit' || op === 'delete' || op === 'close') {
       rate('write', u.mk, ip); let idxSync = op === 'enter' || op === 'unenter' || op === 'close';
-      if (op === 'edit') { const R = await cleanRules(b, now); const c = await mutCalc(id, (c) => { if (!isComm(c, u.mk)) throw bad(403, 'Only the commissioner can change the rules'); if (c.locked || c.a.status !== 'setup') throw bad(409, 'Rules are locked. The auction has started.'); Object.assign(c, R); c.a.order = c.lots.map((l) => l.id); c.rev++; audit(c, mName(c, memberOf(c, u.mk).pid), 'Edited the rules'); return c; }, u.mk); await syncIdx(c); send(res, 200, { calc: full(c, u.mk, now) }); return true; }
+      if (op === 'edit') { const row0 = await loadRow(id, true); if (!row0 || !canSee(row0.data, u.mk)) throw bad(404, 'Calcutta not found'); const mem = row0.data.members.slice(); mem._me = memberOf(row0.data, u.mk); const R = await cleanRules(b, now, mem); const c = await mutCalc(id, (c) => { if (!isComm(c, u.mk)) throw bad(403, 'Only the commissioner can change the rules'); if (c.locked || c.a.status !== 'setup') throw bad(409, 'Rules are locked. The auction has started.'); Object.assign(c, R); c.a.order = c.lots.map((l) => l.id); c.rev++; audit(c, mName(c, memberOf(c, u.mk).pid), 'Edited the rules'); return c; }, u.mk); await syncIdx(c); send(res, 200, { calc: full(c, u.mk, now) }); return true; }
       if (op === 'delete') { await mutCalc(id, (c) => { if (!isComm(c, u.mk)) throw bad(403, 'Only the commissioner can delete it'); if (c.locked) throw bad(409, 'Bids are in. It cannot be deleted.'); c.a.status = 'closed'; c.deleted = true; c.members = c.members.filter((m) => m.mk === c.comm); c.rev++; return c; }, u.mk);
         try { await mutRow(IDX, { calcs: {} }, (d) => { delete d.calcs[id]; return {}; }); } catch (e) {} send(res, 200, { ok: true }); return true; }
       const c = await mutCalc(id, (c) => {
@@ -422,13 +470,6 @@ async function handle(req, res) {
           if (holders(c).size > maxOf(c)) throw bad(409, capMsg(c, 'Too many people'), { code: 'cap' });
           if (!c.locked) { c.locked = true; } c.a.status = unsold(c).length ? 'live' : 'closed'; audit(c, by, (before ? 'Changed ' : 'Entered ') + lotOf(c, lot).name + ': ' + (w.pid ? mName(c, w.pid) : w.name) + ' $' + amt + (before ? ' (was ' + (before.pid ? mName(c, before.pid) : before.name) + ' $' + before.amt + ')' : '')); }
         else if (op === 'unenter') { if (c.rules.mode !== 'manual') throw bad(409, 'Use Undo in the live auction'); const s = c.sold[lot]; if (!s) throw bad(404, 'Nothing entered for that lot'); delete c.sold[lot]; c.a.status = Object.keys(c.sold).length ? 'live' : 'setup'; if (!Object.keys(c.sold).length) c.locked = false; audit(c, by, 'Removed the result for ' + lotOf(c, lot).name + ' (' + (s.pid ? mName(c, s.pid) : s.name) + ' $' + s.amt + ')'); }
-        // BUY BACK HALF (OWNER TO CONFIRM THE EXACT RULE): as built, after a lot is sold the commissioner records ONE other person
-        // (a member, or a typed name) who buys HALF of it for HALF the winning bid (odd cent: the winning bidder pays/keeps it).
-        // Cost and winnings then split 50/50. Any time before the event ends; can be removed. Common alternative not built:
-        // only the team's/golfer's own "owner of record" may buy back, and only right after the sale.
-        else if (op === 'buyback') { if (!c.rules.buyBack) throw bad(409, 'Buy back half is off for this Calcutta'); const s = c.sold[lot]; if (!s) throw bad(409, 'That lot is not sold yet');
-          if (b.clear) { if (!s.bb) return { nochange: true, v: c }; audit(c, by, 'Removed the buy-back on ' + lotOf(c, lot).name); s.bb = null; }
-          else { const w = who(); if ((w.pid && w.pid === s.pid) || (!w.pid && !s.pid && w.name.toLowerCase() === s.name.toLowerCase())) throw bad(400, 'The buyer cannot buy back from themselves'); s.bb = { pid: w.pid, name: w.name, at: D.now() }; if (holders(c).size > maxOf(c)) throw bad(409, capMsg(c, 'Too many people'), { code: 'cap' }); audit(c, by, (w.pid ? mName(c, w.pid) : w.name) + ' bought back half of ' + lotOf(c, lot).name + ' for $' + (Math.floor(s.amt * 100 / 2) / 100)); } }
         else if (op === 'result') { // manual result entry (fallback for any event without a feed); every change is in the audit trail
           const tid = String(b.team || ''); let team = null; c.lots.forEach((l) => l.teams.forEach((t) => { if (t.id === tid) team = t; })); if (!team) throw bad(404, 'No such team');
           const ev = EVENTS[c.ev], cur = Object.assign({}, c.manual[tid] || {}), nx = {};
@@ -464,5 +505,7 @@ async function statsFor(userKey, opt) {
   }
   return out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 }
+// Players of record from the group side (golf-day teams, pickleball pairs): players = account ids, 24-hex member keys, 'g:<guest id>' or {name}.
+async function setPlayersOfRecord(id, lotId, players) { const c = await mutCalc(id, (c) => { if (!evLocal(c.ev)) throw bad(409, 'Players of record are only for local events'); const l = lotOf(c, String(lotId)); if (!l) throw bad(404, 'No such lot'); const s0 = c.sold[l.id]; if (s0 && s0.bb) throw bad(409, 'Remove the buy-back first'); l.por = cleanPor(players, c.members); audit(c, 'Group', 'Players of record for ' + l.name + ' set by the group'); c.rev++; return c; }); return { id: c.id, lot: lotId, count: lotOf(c, String(lotId)).por.length }; }
 const hooks = {}; // reserved for the manager (e.g. hooks.groupMember(groupId, mk) when membership moves into the group)
-module.exports = { handle, createCalc, attachToGroup, potSummary, statsFor, registerSource, limits, hooks, EVENTS, cleanRows, slotAmounts, money, teamResults, parseGames, settle, mkOf, _deps: D, _reset: () => { RL.clear(); RC.clear(); RES.clear(); GC.clear(); TEAMS.clear(); IDS.map = null; NAMES = { at: 0, v: {} }; writes = 0; }, _writes: () => writes };
+module.exports = { handle, createCalc, attachToGroup, setPlayersOfRecord, evLocal, potSummary, statsFor, registerSource, limits, hooks, EVENTS, cleanRows, slotAmounts, money, teamResults, parseGames, settle, mkOf, _deps: D, _reset: () => { RL.clear(); RC.clear(); RES.clear(); GC.clear(); TEAMS.clear(); IDS.map = null; NAMES = { at: 0, v: {} }; writes = 0; }, _writes: () => writes };

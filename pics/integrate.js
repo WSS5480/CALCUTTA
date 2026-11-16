@@ -15,9 +15,11 @@
   // ---------- one header band ----------
   // body starts with <h1>…</h1> and maybe ONE short line (<p class="?sub">, <div class="?meta|?sub">): they move into the band with the top row.
   function head(topHtml, body, mid) {
-    const m = /^\s*(?:<div class="[a-z]row">\s*)?(<h1[^>]*>[\s\S]*?<\/h1>)/.exec(body || ''); let cut = 0, inner = '';
-    if (m && !/^\s*<div class="[a-z]row">/.test(body)) { cut = m[0].length; inner = m[1]; const r = /^\s*<(p|div) class="[a-z]?(?:sub|meta)"[^>]*>(?:(?!<\/?(?:p|div)[ >])[\s\S])*?<\/\1>/.exec(body.slice(cut)); if (r) { inner += r[0]; cut += r[0].length; } }
-    return '<div class="oband">' + topHtml + inner + '</div>' + (mid || '') + (body || '').slice(cut);
+    body = body || ''; let cut = 0, inner = '';
+    // the title: a bare <h1>, or a one-line row that holds it (<div class="grow"><h1>…</h1><span class="gbadge">…</span></div>)
+    const row = /^\s*<div class="[a-z]row">\s*<h1[^>]*>[\s\S]*?<\/h1>(?:(?!<div)[\s\S])*?<\/div>/.exec(body), h1 = row || /^\s*<h1[^>]*>[\s\S]*?<\/h1>/.exec(body);
+    if (h1) { cut = h1[0].length; inner = h1[0]; const r = /^\s*<(p|div) class="[a-z]?(?:sub|meta)"[^>]*>(?:(?!<\/?(?:p|div)[ >])[\s\S])*?<\/\1>/.exec(body.slice(cut)); if (r) { inner += r[0]; cut += r[0].length; } }
+    return '<div class="oband">' + topHtml + inner + '</div>' + (mid || '') + body.slice(cut);
   }
   const st = document.createElement('style'); st.id = 'oddlook';
   const BANDS = '#ogrp .oband,#ocalc .oband,#ogolf .ohdr,#oevt .ehead,#ocat .ehead,#ostat .shead,#opv .pvtop';
@@ -31,6 +33,7 @@
     // everything written on the band is readable on it
     + each(BANDS, ' h1') + ',' + each(BANDS, ' b') + ',' + each(BANDS, ' button') + ',#ostat .stop.shtop button{color:var(--onband)!important}'
     + each(BANDS, ' p') + ',' + each(BANDS, ' small') + ',' + each(BANDS, ' i') + ',' + each(BANDS, ' em') + ',' + each(BANDS, ' span') + ',' + each(BANDS, ' div') + ',' + each(BANDS, ' a') + '{color:var(--onband)!important;opacity:1!important}'
+    + each(BANDS, ' .gbadge') + ',' + each(BANDS, ' .cbadge') + ',' + each(BANDS, ' .ebadge') + ',' + each(BANDS, ' .epill') + ',' + each(BANDS, ' .obadge') + '{background:rgba(255,255,255,.16)!important;border-color:rgba(255,255,255,.55)!important;color:var(--onband)!important}'
     + '#ogrp .oband h1,#ocalc .oband h1{margin:6px 0 2px!important}#ogrp .oband .gsub,#ocalc .oband .csub,#ogrp .oband .gmeta,#ocalc .oband .cmeta{margin:0!important}'
     + '#ostat .shead .schips button{background:rgba(255,255,255,.14)!important;border-color:rgba(255,255,255,.5)!important;color:var(--onband)!important}#ostat .shead .schips button.on{background:#fff!important;color:#1b1340!important;border-color:#fff!important}'
     + '#ocalc .oband .cx,#ocalc .oband .cback,#ogrp .oband .gx,#ogrp .oband .gback{background:none!important;border:0!important}'

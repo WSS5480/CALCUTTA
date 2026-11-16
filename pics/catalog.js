@@ -10,7 +10,8 @@
   const gameName = (g) => g.name || C.games[g.key].name;
   function infoOf(g) { // full how-it-works text
     const base = C.games[g.key], k = C.localInfoKey[g.key], I = (window.OddEvents && window.OddEvents.INFO) || {};
-    let t = base.info || (k ? I[k] : '') || base.line; if (g.key === 'elim' && I.de) t = I.se + ' Double elimination: ' + I.de;
+    const F = window.OddEvents && window.OddEvents.infoFor, sp = (g.start && g.start.sport) || sport, T = (x) => (F ? F(x, sp) : I[x]); // help text accurate for the sport (pickleball rulebook wording only in pickleball)
+    let t = base.info || (k ? T(k) : '') || base.line; if (g.key === 'elim' && T('de')) t = T('se') + ' Double elimination: ' + T('de');
     return t + (g.note ? ' ' + g.note : '');
   }
   const badge = (st) => '<span class="ebadge ' + (st === 'now' ? 'eg' : st === 'soon' ? 'ey' : 'ep') + '">' + esc(C.status[st]) + '</span>';

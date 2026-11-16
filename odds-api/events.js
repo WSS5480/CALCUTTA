@@ -237,9 +237,12 @@ function tick(evt, now) {
     else { m.state = 'confirmed'; m.win = 'a'; m.forfeit = true; m.at = now; m.pp = { a: seats(evt, m.a), b: seats(evt, m.b) }; ladderApply(evt, m); audit(evt, now, 'Oddable', 'forfeit', m.id, 'Challenge not played in ' + evt.rules.expDays + ' days: challenger wins by forfeit'); }
   });
   maybePlayoff(evt, now);
-  if (!evt.fin) { const pl = places(evt, now); if (pl && (evt.fmt === 'se' || evt.fmt === 'de' || evt.fmt === 'rr' || evt.done || now > chiEnd(evt.endDay))) { evt.fin = now; evt.places = pl; } }
+  if (!evt.fin) { const pl = places(evt, now); if (pl && (evt.fmt === 'se' || evt.fmt === 'de' || evt.fmt === 'rr' || evt.done || now > chiEnd(evt.endDay))) { evt.fin = now; evt.places = pl; cancelOpen(evt, now); } }
   return sig() !== before;
 }
+// Review fix 4: at the finish every challenge / side match not yet confirmed is cancelled (a score waiting for confirmation included); results are final.
+function cancelOpen(evt, now) { evt.matches.forEach((m) => { if ((m.st === 'lad' || m.st === 'h2h' || m.st === 'side') && ['offered', 'ready', 'pending', 'disputed'].includes(m.state)) { m.state = 'void'; m.v++; audit(evt, now, 'Oddable', 'cancel', m.id, 'Event finished: challenge cancelled'); } }); }
+const notFin = (evt) => { if (evt.fin || evt.done) throw bad(409, 'The event is finished. Results are final.'); };
 function audit(evt, now, who, a, m, s) { evt.audit = evt.audit || []; evt.audit.push({ t: now, who: cleanName(who, 30), a, m: m || null, s: String(s || '').slice(0, 160) }); if (evt.audit.length > 400) evt.audit.splice(0, evt.audit.length - 400); }
 
 // ---------- money (information only) ----------
@@ -320,6 +323,7 @@ function full(evt, mk, now, cap) {
 
 // ---------- scoring permissions ----------
 function canScore(evt, mk, m, now) {
+  if (evt.fin || evt.done) return { ok: false, why: 'The event is finished. Results are final.' };
   if (!evt.drawn && m.st !== 'h2h' && m.st !== 'side') return { ok: false, why: 'The draw is not made yet' };
   if (isComm(evt, mk)) {
     if (m.state === 'wait' || m.state === 'bye' || m.state === 'void' || m.state === 'offered') return { ok: false, why: 'This match is not ready' };
@@ -334,6 +338,7 @@ function canScore(evt, mk, m, now) {
   return { ok: true, side: s };
 }
 function canConfirm(evt, mk, m) {
+  if (evt.fin || evt.done) return { ok: false };
   if (m.state !== 'pending' || !m.sub) return { ok: false };
   const s = sideOf(evt, mk, m); if (s && s === m.sub.side) return { ok: false }; // nobody confirms their own side's score, the commissioner included
   if (s) return { ok: true }; return isComm(evt, mk) ? { ok: true, comm: true } : { ok: false };
@@ -482,7 +487,7 @@ async function handle(req, res) {
     if (op === 'score') {
       rate('score', u.mk, ip); const evt = await mutate(id, (evt, now) => {
         if (opSeen(evt)) return { nochange: true, v: evt }; // offline queue resend: already saved
-        const m = findM(evt); vOk(m); const c = canScore(evt, u.mk, m, now); if (!c.ok) throw bad(403, c.why);
+        notFin(evt); const m = findM(evt); vOk(m); const c = canScore(evt, u.mk, m, now); if (!c.ok) throw bad(403, c.why);
         const g = checkGames(evt.rules, b.games); m.v++; m.live = m.live || now;
         const s0 = sideOf(evt, u.mk, m), asComm = isComm(evt, u.mk) && (!s0 || m.state === 'disputed' || !linked(evt, s0 === 'a' ? m.b : m.a)); // a commissioner playing in the match enters like any player (the opponent confirms); final only on a dispute or vs a guest
         if (asComm) { const was = m.state === 'confirmed' ? m.win : null; if (was && was !== g.win && downstreamPlayed(evt, m)) throw bad(409, 'Later matches are already played. Fix those first.'); if (m.st === 'lad' && m.state === 'confirmed') throw bad(409, 'Ladder results cannot be changed after they move the ladder'); if (m.st === 'pool' && evt.poSeeds) { if (evt.matches.some((x) => x.st === 'po' && (x.live || PLAYED.has(x.state) || x.state === 'confirmed'))) throw bad(409, 'The playoff has started. Pool results are final.'); evt.matches = evt.matches.filter((x) => x.st !== 'po'); delete evt.poSeeds; audit(evt, now, 'Oddable', 'playoff', null, 'Pool result corrected: playoff redrawn'); } /* review fix 3 */ Object.assign(m, { games: g.games, win: g.win, state: 'confirmed', sub: { side: 'comm', games: g.games, by: myName(evt), at: now }, at: now }); audit(evt, now, myName(evt) + ' (commissioner' + (s0 ? ', own match' : '') + ')', was ? 'correct' : 'final', m.id, scoreText(evt, m)); settle(evt, m, now); }
@@ -491,13 +496,13 @@ async function handle(req, res) {
       return ok(evt);
     }
     if (op === 'confirm' || op === 'dispute') {
-      const evt = await mutate(id, (evt, now) => { if (opSeen(evt)) return { nochange: true, v: evt }; const m = findM(evt); vOk(m); const c = canConfirm(evt, u.mk, m); if (!c.ok) throw bad(403, 'Only the other side (or the commissioner) can ' + op + ' this score'); m.v++;
+      const evt = await mutate(id, (evt, now) => { if (opSeen(evt)) return { nochange: true, v: evt }; notFin(evt); const m = findM(evt); vOk(m); const c = canConfirm(evt, u.mk, m); if (!c.ok) throw bad(403, 'Only the other side (or the commissioner) can ' + op + ' this score'); m.v++;
         if (op === 'confirm') { Object.assign(m, { games: m.sub.games, win: m.sub.win, state: 'confirmed', at: now }); audit(evt, now, myName(evt) + (c.comm ? ' (commissioner)' : ''), 'confirm', m.id, scoreText(evt, m)); settle(evt, m, now); }
         else { if (c.comm) throw bad(400, 'Commissioner: enter the right score instead'); m.state = 'disputed'; m.sub.note = cleanName(b.note, 120); audit(evt, now, myName(evt), 'dispute', m.id, 'Disputed' + (m.sub.note ? ': ' + m.sub.note : '') + '. The commissioner decides.'); }
         return evt; });
       return ok(evt);
     }
-    if (op === 'live') { const evt = await mutate(id, (evt, now) => { const m = findM(evt); if (m.live || m.state !== 'ready') return { nochange: true, v: evt }; if (!isComm(evt, u.mk) && !sideOf(evt, u.mk, m)) throw bad(403, 'Only the players or the commissioner start a match'); m.live = now; m.v++; audit(evt, now, myName(evt), 'start', m.id, 'Match started (picks locked)'); return evt; }); return ok(evt); }
+    if (op === 'live') { const evt = await mutate(id, (evt, now) => { notFin(evt); const m = findM(evt); if (m.live || m.state !== 'ready') return { nochange: true, v: evt }; if (!isComm(evt, u.mk) && !sideOf(evt, u.mk, m)) throw bad(403, 'Only the players or the commissioner start a match'); m.live = now; m.v++; audit(evt, now, myName(evt), 'start', m.id, 'Match started (picks locked)'); return evt; }); return ok(evt); }
     if (op === 'pick') {
       rate('score', u.mk, ip); const evt = await mutate(id, (evt, now) => { if (!evt.rules.pickem) throw bad(409, 'This event has no pick\'em'); const pm = memberOf(evt, u.mk), P = evt.picks[pm.pid] = evt.picks[pm.pid] || { m: {} };
         if (b.tb !== undefined) { const fm = finalMatch(evt); if (fm && locked(fm, now)) throw bad(409, 'The final has started. The tiebreak is locked.'); const t = Number(b.tb); if (!(Number.isInteger(t) && t >= 0 && t <= 999)) throw bad(400, 'Tiebreak: total points in the final, 0 to 999'); P.tb = t; }
@@ -520,7 +525,7 @@ async function handle(req, res) {
         evt.matches.push(m); audit(evt, now, myName(evt), 'challenge', m.id, A.name + ' challenged ' + B.name + (m.exp ? ' (play by ' + new Date(m.exp).toISOString().slice(0, 10) + ')' : '')); return evt; });
       return ok(evt);
     }
-    if (op === 'accept' || op === 'decline') { const evt = await mutate(id, (evt, now) => { const m = findM(evt); if (m.state !== 'offered') return { nochange: true, v: evt }; if (!isComm(evt, u.mk) && sideOf(evt, u.mk, m) !== 'b') throw bad(403, 'Only the challenged side can answer'); m.state = op === 'accept' ? 'ready' : 'void'; m.v++; audit(evt, now, myName(evt), op, m.id, op === 'accept' ? 'Challenge accepted' : 'Challenge declined'); return evt; }); return ok(evt); }
+    if (op === 'accept' || op === 'decline') { const evt = await mutate(id, (evt, now) => { notFin(evt); const m = findM(evt); if (m.state !== 'offered') return { nochange: true, v: evt }; if (!isComm(evt, u.mk) && sideOf(evt, u.mk, m) !== 'b') throw bad(403, 'Only the challenged side can answer'); m.state = op === 'accept' ? 'ready' : 'void'; m.v++; audit(evt, now, myName(evt), op, m.id, op === 'accept' ? 'Challenge accepted' : 'Challenge declined'); return evt; }); return ok(evt); }
     send(res, 404, { error: 'not found' }); return true;
   } catch (e) { if (!e.status) console.error('events:', e.message); send(res, e.status || 500, { error: e.status ? e.message : 'Events error, try again' }); return true; }
 }

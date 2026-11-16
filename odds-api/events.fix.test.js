@@ -28,14 +28,14 @@ srv.listen(0, async () => {
 // ---------- tests (one per review item) ----------
 // 1 (HIGH) a commissioner who plays cannot make their own score final by entering it again or "correcting" it
 T.commOwnMatch = async () => {
-  let ev = ok(await call('ann', 'create', base({ playIn: true, entrants: [] }))).event; const id = ev.id;
+  let ev = ok(await call('ann', 'create', base({ playIn: true, entrants: [{ name: 'Gus' }] }))).event; const id = ev.id; // 3 entries: the event is not over after Ann v Bob
   ok(await call('bob', 'join', { code: ev.code, as: 'player', myName: 'Bob' }));
-  NOW = START + 1000; ev = ok(await call('ann', 'get', { id })).event; const m = ev.matches[0], mine = ev.myEntries[0];
+  NOW = START + 1000; ev = ok(await call('ann', 'get', { id })).event; const mine = ev.myEntries[0], bobE = ev.entrants.find((e) => e.name === 'Bob').eid, m = ev.matches.find((x) => [x.a, x.b].includes(mine) && [x.a, x.b].includes(bobE));
   const annWin = m.a === mine ? [[11, 0]] : [[0, 11]], bobWin = m.a === mine ? [[0, 11]] : [[11, 0]];
-  ev = ok(await call('ann', 'score', { id, m: m.id, games: annWin })).event; assert.strictEqual(ev.matches[0].state, 'pending', 'own entry waits for Bob');
+  ev = ok(await call('ann', 'score', { id, m: m.id, games: annWin })).event; assert.strictEqual(ev.matches.find((x) => x.id === m.id).state, 'pending', 'own entry waits for Bob');
   no(await call('ann', 'score', { id, m: m.id, games: annWin }), 403, 'second entry by the commissioner on her own pending match');
   no(await call('ann', 'confirm', { id, m: m.id }), 403, 'commissioner confirms own score');
-  ev = ok(await call('bob', 'confirm', { id, m: m.id })).event; assert.strictEqual(ev.matches[0].state, 'confirmed');
+  ev = ok(await call('bob', 'confirm', { id, m: m.id })).event; assert.strictEqual(ev.matches.find((x) => x.id === m.id).state, 'confirmed');
   no(await call('ann', 'score', { id, m: m.id, games: bobWin }), 403, 'commissioner "corrects" her own confirmed match');
   // a dispute on her own match: she decides (the brief's rule), and that entry is final
   let ev2 = ok(await call('ann', 'create', base({ title: 'Fix test 2', start: START + DAY, playIn: true, entrants: [] }))).event; const id2 = ev2.id;
@@ -83,4 +83,27 @@ T.poolFixAfterPlayoff = async () => {
   ok(await call('ann', 'score', { id, m: fin.id, games: [[11, 9]] }));
   const da = ev.matches.find((m) => m.st === 'pool' && [nm(m.a), nm(m.b)].sort().join() === 'A,D');
   no(await call('ann', 'score', { id, m: da.id, games: nm(da.a) === 'D' ? [[11, 2]] : [[2, 11]] }), 409, 'pool correction after the playoff was played');
+};
+// 4 (MED) nothing is entered or confirmed after an event is finished; open challenges are cancelled at the finish
+T.afterFinish = async () => {
+  let ev = ok(await call('ann', 'create', base({ fmt: 'ladder', endDay: '2026-11-25', playIn: true, entrants: [] }))).event; const id = ev.id;
+  ok(await call('bob', 'join', { code: ev.code, as: 'player', myName: 'Bob' })); ok(await call('cy', 'join', { code: ev.code, as: 'player', myName: 'Cy' }));
+  NOW = START + 1000; ev = ok(await call('bob', 'get', { id })).event; const L = ev.ladder, who = { [ev.entrants.find((e) => e.name === 'Ann').eid]: 'ann', [ev.entrants.find((e) => e.name === 'Bob').eid]: 'bob', [ev.entrants.find((e) => e.name === 'Cy').eid]: 'cy' };
+  ok(await call(who[L[1].eid], 'challenge', { id, a: L[1].eid, b: L[0].eid }));
+  ev = ok(await call(who[L[2].eid], 'challenge', { id, a: L[2].eid, b: L[1].eid }).then((r) => (r.s === 200 ? r : call('ann', 'get', { id }))));
+  ev = ok(await call('ann', 'get', { id })).event; const m1 = ev.matches[0];
+  ok(await call(who[m1.a], 'score', { id, m: m1.id, games: [[11, 3]] })); // pending at the finish
+  NOW = Z('2026-11-27T12:00:00Z'); ev = ok(await call('ann', 'get', { id })).event; assert.ok(ev.fin, 'finished after the last day');
+  assert.ok(ev.matches.every((m) => m.state === 'void' || m.state === 'confirmed'), 'open challenges cancelled: ' + ev.matches.map((m) => m.state));
+  const before = JSON.stringify(ev.ladder);
+  no(await call(who[m1.b], 'confirm', { id, m: m1.id }), 409, 'confirm after the finish');
+  no(await call(who[m1.a], 'score', { id, m: m1.id, games: [[11, 3]] }), 409, 'score after the finish');
+  no(await call('ann', 'score', { id, m: m1.id, games: [[11, 3]] }), 409, 'commissioner score after the finish');
+  assert.strictEqual(JSON.stringify(ok(await call('ann', 'get', { id })).event.ladder), before, 'ladder frozen');
+  // heads-up finished by the commissioner: an offered challenge is cancelled
+  let h = ok(await call('ann', 'create', base({ title: 'HU', fmt: 'h2h', start: Z('2026-11-28T15:00:00Z'), endDay: '2026-12-05', playIn: true, entrants: [] }))).event;
+  NOW = Z('2026-11-27T13:00:00Z'); ok(await call('bob', 'join', { code: h.code, as: 'player', myName: 'Bob' })); NOW = Z('2026-11-28T16:00:00Z');
+  h = ok(await call('bob', 'get', { id: h.id })).event; ok(await call('bob', 'challenge', { id: h.id, a: h.myEntries[0], b: h.entrants.find((e) => e.name === 'Ann').eid }));
+  h = ok(await call('ann', 'finish', { id: h.id })).event; assert.ok(h.matches.every((m) => m.state === 'void'), 'offered challenge cancelled at finish');
+  no(await call('ann', 'accept', { id: h.id, m: h.matches[0].id }), 409, 'accept after finish');
 };

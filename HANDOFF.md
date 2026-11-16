@@ -767,3 +767,61 @@ Owner decisions applied: Stats block, S-ALL, G16, H1, E-H (+ addendum), P1 input
 - The bottom bar now has 8 buttons (9 for the owner with Dashboard); they fit 430 px but each is narrower than 44 px. Moving Winning / Losing into a "More" sheet would fix it; owner's call.
 - Typed DUPR field kept as reference only (see Decisions).
 - Upgrade The Odds API plan (about $30/month) once Oddable sells (unchanged; stats spends no credits).
+
+## Player stats (v1.1) — Nov 16 2026: review fixes (stats coder 2, branch `stats-v1`, NOT pushed, no version bump)
+Fixes for the independent review of c084625 ("SHIP AFTER FIXES") and for the stats items in the complete review of the preview (/tmp/r1a-report.md: High 5, High 8, Medium 16, 17, 18, the two tournament logs, item 23). Where this section and "Player stats (v1)" above disagree, this section wins.
+
+### Decisions (date, decision, why)
+- Nov 16 2026, manager (owner rule H1 "app play is the real handicap"): every round still makes the Oddable Handicap Index, but a game with money shown, a flight or a tournament plays off the index from CONFIRMED rounds only. Why: 20 typed rounds moved a tester from 12.4 to 51, and that number drives strokes in money games.
+- Nov 16 2026, manager: a round or match is confirmed when an engine scored it in a game with another player, or another player confirmed it. Fewer than 3 confirmed rounds: `use` is null and the organizer or director sets a number (E-H path), or the standard game's typed number.
+- Nov 16 2026, manager: WHS soft cap, hard cap, exceptional score reduction and 9-hole rounds are applied (they were listed as "not applied" in v1).
+- Nov 16 2026, manager: typed rounds have sanity limits; edits and deletes lock 48 hours after entry; edit history kept; no dates before the account existed.
+- Nov 16 2026, manager: the typed DUPR field is removed. Oddable rating only.
+- Nov 16 2026, manager: self-logged matches do not move the rating used for seeding until the opponent confirms.
+- Nov 16 2026, stats coder 2 (owner rule D7 "never assume -110"): a won bet with no price and no stored P/L shows "Net: not known". This means My stats can differ from the owner dashboard for such bets (sync.js adminUsers still assumes -110; not a stats file).
+- Nov 16 2026, stats coder 2: one money rule for group contests. A contest's own money is its entry and prize (`spent` / `won`). `stake` / `pl` / `units` on a contest record are the bets inside it; they are My Bets rows too (same synced row, `gl`), so they are shown on the contest as "Bets in this contest (counted under Bets)" and totalled only on the bets.
+- Nov 16 2026, stats coder 2: bottom bar is five buttons (Games, Live, My Bets, Groups, More); Survivor, Winning, Losing, My stats and the owner's Dashboard are in the More sheet.
+
+### What changed
+- `odds-api/ratings.js` is the ONE copy of the handicap and rating maths (`handicapSet`, `eloSet`, `order`). stats.js only calls it. Golf and events should call the same (`require('./ratings')`) or go through `stats.handicapFor` / `ratingFor`.
+  - Order: date, then entry time (`at` / `extra.at`), then id, inside `handicap()` and `eloFor()`. /stats/me and the engines use the same function, so they agree.
+  - Low Handicap Index = lowest index of the last 365 days among the indexes worked out once 20 rounds existed. Soft cap: rise beyond 3.0 above it is halved. Hard cap: 5.0 above it.
+  - Exceptional score: differential 7.0 to 9.9 below the index in force takes 1.0 off each of the last 20 differentials; 10.0 or more takes 2.0.
+  - 9-hole rounds: 18-hole differential = 9-hole differential + expected 9-hole differential, expected = 0.52 x index + 1.2 (rounded to the tenth). The USGA does not publish its expected-score table; this fit reproduces the USGA's worked example (index 14.0, 9-hole 7.2, result 15.7). Before an index exists a nine waits until 54 holes are posted, then counts as the nine played twice. 9-hole Course Handicap uses half the index.
+  - Hole scores without stroke indexes: par + 5 on every hole. Index floor +10.0, ceiling 54.0.
+  - Elo: opponent and partner ratings are used when a record carries them (`extra.oppRating`, `extra.partnerRating`; null = 1500). Farming guard: the same opponent again inside 7 days counts 1, 1/2, 1/4 ... (`extra.oppKey`, else the opponent names).
+- `handicapFor(userKey, {eventId, casual, typed})` returns `{oddable: {index, rounds, need, selfLogged, confirmedOf, of, text}, confirmedIndex, rounds, confirmedRounds, event, setBy, use, needsSet, text}`. DEFAULT is the strict one (confirmed index). Pass `{casual: true}` for solo and casual play (full index). `typed` = the organizer's number in a standard game (`setBy: 'organizer'`). `text` = "12.6 · 4 of 20 rounds confirmed", to show wherever another person sees a handicap.
+- `ratingFor(userKey, sport, {eventId, casual})` returns `{oddable: {rating, matches, text}, confirmedRating, confirmedGames, event, setBy, use, start}`. `use` = confirmed rating (1500 with no confirmed game).
+- `pairingProfile(accountId, sport)` for the pairing screen: always `{sport, use, needsSet | start, setBy, shared, show}`; `text`, `oddable` and `lifetime` only when the player switched sharing on.
+- Confirm flow: `/stats/confirm/link {id}` (own golf round or match) gives a link `?join=confirm.<code>`; another account opens it (`confirm/get`) and confirms (`confirm/do`). Own entry refused; one confirmer; an edit drops the confirmation. A confirmed match is also written into the confirmer's stats from their side, each side rated against the other's seeding rating (singles). Rows `lock:cfm:<cid>`.
+- Self-logged entries: Rating 55 to 85 (27.5 to 42.5 for nine), Slope 55 to 155, total not more than 15 under the Rating (7.5 for nine); date not before the account existed and not in the future; edit / delete refused 48 hours after entry (409); edits kept in `edits[id]` (last 20) and deletes in `gone` in the player's stats row; /stats/me returns `edits`, `since`, `lockHours` and marks records `extra.locked`, `extra.selfLogged`, `extra.confirmed`, `extra.hcpNote` (why a round does or does not count).
+- Guests: once claimed, `guestAdd` / `guestRemove` answer 409 for the organizer; the claimant removes a claimed item with `/stats/self/delete` (any time).
+- E-H: `eventOverride` needs a non-blank reason, a `lockAt` on the tournament, and an Enterprise account at every call; `eventSetup` can move `lockAt` later only, before it passes, logged; the log's "by" and the player name come from the accounts (`nameOf`), never caller text. `eventSetup` also has a route, `/stats/event/setup` (the signed-in account is the director).
+- ONE tournament override store and log (complete review "two logs"): row `lock:evr:<eventId>`, written only by `eventSetup` / `eventOverride`. `/stats/event/log` answers the director (whole log + `set`) and a player with a number there (own lines); others 404. A per-player index (`lock:evp:<hash>`) fills the "Set by tournament" card on My handicap / My rating before any round is played there. CONTRACT for golf, events and Calcutta golf: call `stats.eventSetup(directorKey, eventId, {title, sport, lockAt})` when an Enterprise tournament is created, `stats.eventOverride(directorKey, eventId, userKey, {hcp | rating, sport, reason})` for every director edit, `stats.eventLog(callerKey, eventId)` to show the log, and keep no log of their own.
+- ONE consent store (Medium 18): consents live only in stats (`lock:cshare`). Ownership is read from every place a link can be today (golf module `coursesOwnedBy`, stand-in `lock:entcourses`, the golf engine's `lock:ent {keys, courses}` + `lock:golf:courses`), so the prompt and the director's list agree. `stats.courseMembers(directorKey, courseId, via)` gives the director the consenting members with index, confirmed index and the "n of m rounds confirmed" line; `coursePrefill` gives course handicaps from the confirmed index (`needsSet` when there is none). `consentOnJoin(e, courseId, via, on)` ignores any name sent; names come from the account.
+- S-ALL money: `record.money = {entry, payout, net, state}` with state `settled` / `open` (`atStake`) / `unknown`. Totals: `pl` and `staked` from settled plays only, `atStake`, `unknown`. Every record is counted once, so overall = sum of sports = sum of game types = the rows. A match made of several bets (Nassau: `stake` = one bet, `extra.bets` = how many) has entry = stake x bets. Engines: send `won: 0` for a finished play that paid nothing, or it shows "Net: not known".
+- Writes are queued per row inside the server (same pattern as groups-v1 486f127); the conditional write stays as the guard.
+- Claim and confirm links use `ODDABLE_APP_URL` when set (preview), else https://steves-pics.onrender.com.
+- Client `pics/stats.js`: money rows ("Open: $150 at stake", "Net: not known", contest prize + bets inside, "3 bets × $20"), confirmed lines and marks, money-game index card, cap note, 9-hole and exceptional-score math, confirm link card and confirm sheet, locked / history on a record, "Remove from my stats" on a claimed result, Back from a Log form returns to the type picker, charts are pictures (the list under each is the way in), DUPR gone. `pics/index.html`: five-button bar + More sheet (`navMore`).
+
+### MERGE TODO (other coders)
+- Golf and events: `handicapFor` / `ratingFor` now default to the confirmed number. Pass `{casual: true}` for solo and casual games; handle `use === null` / `needsSet` by asking the organizer or director for a number. Show `text` next to every handicap another person sees.
+- Golf: drop its own director log and its own course-consent list; use the stats contract above. Send `won: 0` on finished plays with no payout.
+- Groups: partner suggestions can call `stats.pairingProfile`.
+- Owner dashboard (sync.js adminUsers) still assumes -110 for a won bet with no price.
+
+### Tests
+- `node odds-api/stats-fixes.test.js`: 21 groups, one per fix. All 21 FAIL on c084625 (`STATS_DIR=<c084625 checkout>/odds-api node odds-api/stats-fixes.test.js`) and pass now.
+- `node odds-api/stats.test.js`: 23 groups. Every group runs in its own try, so one failure never hides the rest. `S._isolate()` keeps other engines out, so it also runs in the merged build: checked on a copy of calcutta-preview 3b78d58 with these files laid over it, 20 pass and 3 are skipped (they drive the stage-1 groups routes, which groups-v1 replaced).
+- `groups.test.js` still fails about 1 run in 3 on "race join" on this branch and on c084625 alike (stage-1 groups.js; fixed in groups-v1).
+- Phone checks: `node scripts/stats-shots/harness.js` then `python3 scripts/stats-shots/play.py` (now committed). It runs the full app (never `?mirror=1`), includes the hole-grid inputs in the 44 px check, and makes 31 checks; 40 screenshots in /tmp/stats-shots2 at 430 px and 360 px.
+
+### NOT verified
+- Anything live (Supabase, real tokens, Render). The merged build was only tried as a copy with the stats suites; golf.js / events.js / preview-glue.js were not run against the new `handicapFor` default.
+- Account age: no sign-up time is stored anywhere. `acctSince` uses the sync row's `created_at` if the table has that column (not checked), else the oldest bet or daily-log day, else the first time stats saw the account. A brand-new account with no bets can only log from its first stats write on. Better: acct.js stamps the sign-up time.
+- The harness draws the bottom bar by calling the app's own `navRender()`, because the sandbox has no game feed and the page's first render never finishes there.
+- Two real people can still confirm each other's made-up rounds; the rating has the 7-day guard, the handicap has only the caps and the 3-round minimum.
+
+### Open items / for the owner
+- Stored DUPR values from v1 stay in the rows, unused and unshown.
+- Upgrade The Odds API plan once Oddable sells (unchanged; stats spends no credits).

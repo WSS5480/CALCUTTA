@@ -12,7 +12,23 @@
 //    - Rule 6.1a  Course Handicap = Handicap Index x (Slope Rating / 113) + (Course Rating - Par), rounded to the nearest whole number, .5 up.
 //    - Rule 3.1b  net double bogey = par + 2 + handicap strokes received on the hole. Rule 3.1a: before a player has an index, each hole is capped at par + 5.
 //    - Strokes are received from stroke index 1 upward; a plus handicap gives strokes back from stroke index 18 downward (Rule 3.2 Note 2).
-//    NOT applied (documented in HANDOFF): PCC, soft/hard cap and Low Handicap Index, exceptional score reduction, 9-hole score combining, committee review.
+//    - Rule 3.1a (Nov 16 2026 review fix): hole scores WITHOUT stroke indexes are capped at par + 5 on every hole (net double bogey needs the stroke index);
+//                 a round typed as a total has no holes to cap and is used as entered (flagged).
+//    - Rule 5.7 / 5.8 caps: the Low Handicap Index is the lowest index of the 365 days before the round, once 20 rounds exist. Soft cap: any rise beyond 3.0
+//                 above the Low Handicap Index is halved. Hard cap: the index can never be more than 5.0 above it.
+//    - Rule 5.9   exceptional score: a Score Differential 7.0 to 9.9 below the index in force when the round was played takes 1.0 off each of the most recent
+//                 20 differentials (that round included); 10.0 or more takes 2.0 off. The reduction stays on those rounds until they leave the 20.
+//    - Rule 5.1b  9-HOLE ROUNDS (WHS 2024 expected-score method): 18-hole Score Differential = 9-hole Score Differential + expected 9-hole Score Differential.
+//                 9-hole Score Differential = (113 / 9-hole Slope) x (9-hole adjusted gross - 9-hole Course Rating), not rounded until the sum.
+//                 Expected 9-hole Score Differential = 0.52 x Handicap Index + 1.2, rounded to the tenth. The USGA does not publish its expected-score table; this
+//                 line is the commonly used fit and it reproduces the USGA's own worked example (index 14.0, 9-hole differential 7.2 -> 18-hole 15.7, expected 8.5;
+//                 https://www.usga.org/content/usga/home-page/handicapping/world-handicap-system/2024-revision/2024-treatment-of-9-hole-scores-FAQ.html, read Nov 16 2026).
+//                 Before a player has an index a 9-hole round waits until 54 holes are posted (USGA rule); then, with no index to give an expected score yet,
+//                 Oddable counts it as the same nine played twice (9-hole differential x 2). 9-hole Course Handicap (Rule 6.1b) = index / 2 x (Slope / 113) + (Rating - par).
+//    - Limits: index never above 54.0 (Rule 5.3) and, in Oddable, never below +10.0 (shown as -10).
+//    - Same-day order: rounds and matches are always processed by date, then entry time (`at`), then id, whatever order they arrive in.
+//    - Confirmed rounds (owner rule H1, manager decision Nov 16 2026): handicapSet() also works out the index from confirmed rounds only (round.confirmed = true).
+//    NOT applied: PCC (no daily playing-conditions data), committee review.
 //    It is NOT an official USGA / GHIN Handicap Index and must never be called one.
 //
 // 2) "Oddable rating" — Elo for head-to-head local sports (pickleball, tennis, ...), per sport. NOT DUPR.
@@ -44,27 +60,63 @@ function adjustedGross(r, ch) {
   const st = r.strokes, pars = r.pars, si = r.si, n = Array.isArray(st) ? st.length : 0;
   if (n && st.every(Number.isFinite) && Array.isArray(pars) && pars.length === n && pars.every(Number.isFinite)) {
     const hasSi = Array.isArray(si) && si.length === n && si.every(Number.isFinite);
-    if (ch == null || hasSi) {
-      const how = ch == null ? 'par+5' : 'ndb', holes = st.map((x, i) => { const max = how === 'par+5' ? pars[i] + 5 : pars[i] + 2 + strokesOnHole(ch, si[i], n); return { n: i + 1, par: pars[i], si: hasSi ? si[i] : null, strokes: x, max, used: Math.min(x, max) }; });
+    { // no index yet, or no stroke indexes on the card: par + 5 on every hole (Rule 3.1a); with both: net double bogey (Rule 3.1b)
+      const how = ch == null || !hasSi ? 'par+5' : 'ndb', holes = st.map((x, i) => { const max = how === 'par+5' ? pars[i] + 5 : pars[i] + 2 + strokesOnHole(ch, si[i], n); return { n: i + 1, par: pars[i], si: hasSi ? si[i] : null, strokes: x, max, used: Math.min(x, max) }; });
       return { ags: holes.reduce((s, h) => s + h.used, 0), how, holes, cut: holes.filter((h) => h.used < h.strokes).length };
     }
   }
   return { ags: r.total, how: 'as-entered', holes: null, cut: 0 };
 }
-// rounds: [{date, total, cr, slope, par, strokes?, pars?, si?}] (18-hole individual rounds only). Walks them in date order: each round's adjusted score uses the
-// index from the rounds before it. Returns the current index, the differentials used and the history (index after each round).
+// Order used everywhere (handicap, Elo, My stats lists): date, then entry time (`at` or extra.at), then id. Input order never matters.
+const atOf = (x) => { const v = x.at != null ? x.at : x.extra && x.extra.at; return Number.isFinite(Number(v)) ? Number(v) : 0; };
+const order = (a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || atOf(a) - atOf(b) || (String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0);
+const expected9 = (index) => round1(0.52 * index + 1.2); // expected 9-hole Score Differential (see the header: fits the USGA example 14.0 -> 8.5)
+const CAP = { soft: 3, hard: 5, min: -10, max: 54 };
+const dayMinus = (d, n) => new Date(Date.parse(d + 'T12:00:00Z') - n * 864e5).toISOString().slice(0, 10);
+// rounds: [{id, date, at?, total, cr, slope, par, holes? (9 | 18), strokes?, pars?, si?, confirmed?, self?}] (own-ball rounds only). Walks them in order: each round's
+// adjusted score uses the index from the rounds before it. Returns the current index, the differentials used and the history (index after each round).
 function handicap(rounds) {
-  const rs = rounds.filter((r) => Number.isFinite(r.total) && Number.isFinite(r.cr) && Number.isFinite(r.slope) && Number.isFinite(r.par)).slice().sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-  const done = [], history = []; let cur = null;
+  const rs = rounds.filter((r) => Number.isFinite(r.total) && Number.isFinite(r.cr) && Number.isFinite(r.slope) && Number.isFinite(r.par)).slice().sort(order);
+  let done = [], pend = [], cur = null, seq = 0; const history = [];
   rs.forEach((r) => {
-    const ch = cur ? courseHandicap(cur.index, r.slope, r.cr, r.par) : null, a = adjustedGross(r, ch), diff = differential(a.ags, r.cr, r.slope, 0);
-    if (diff == null) return; done.push({ id: r.id, date: r.date, ags: a.ags, how: a.how, diff, total: r.total, cr: r.cr, slope: r.slope, par: r.par, ch, holes: a.holes, cut: a.cut, course: r.course || '', tees: r.tees || '', idxBefore: cur ? cur.index : null });
-    cur = indexFrom(done.slice(-20).reverse().map((x) => x.diff)); if (cur) history.push({ date: r.date, index: cur.index, id: r.id });
+    const nine = Number(r.holes) === 9, before = cur ? cur.index : null;
+    const ch = cur ? courseHandicap(nine ? cur.index / 2 : cur.index, r.slope, r.cr, r.par) : null, a = adjustedGross(r, ch);
+    if (r.slope < 55 || r.slope > 155) return;
+    const e = { seq: seq++, id: r.id, date: r.date, at: atOf(r), ags: a.ags, how: a.how, diff: null, esr: 0, total: r.total, cr: r.cr, slope: r.slope, par: r.par, ch, holes: a.holes, cut: a.cut, nHoles: nine ? 9 : 18, course: r.course || '', tees: r.tees || '', idxBefore: before, confirmed: !!r.confirmed, self: !!r.self };
+    if (nine) { e.d9 = (113 / r.slope) * (a.ags - r.cr); if (cur) { e.exp9 = expected9(cur.index); e.diff = round1(e.d9 + e.exp9); } }
+    else e.diff = differential(a.ags, r.cr, r.slope, 0);
+    if (e.diff == null) pend.push(e); else done.push(e);
+    if (!cur && pend.length && done.reduce((s, x) => s + x.nHoles, 0) + pend.length * 9 >= 54) { // 54 holes posted: the waiting nines count (no index yet -> the nine played twice)
+      pend.forEach((x) => { x.exp9 = round1(x.d9); x.diff = round1(x.d9 * 2); x.doubled = true; }); done = done.concat(pend).sort((x, y) => x.seq - y.seq); pend = [];
+    }
+    if (e.diff == null) return;
+    if (before != null) { const gap = round1(before - e.diff), adj = gap >= 10 ? -2 : gap >= 7 ? -1 : 0; if (adj) { e.exc = adj; done.slice(-20).forEach((x) => { x.esr += adj; }); } } // Rule 5.9 exceptional score
+    const raw = indexFrom(done.slice(-20).reverse().map((x) => round1(x.diff + x.esr))); if (!raw) { cur = null; return; }
+    let idx = raw.index, cap = null, low = null;
+    if (done.length >= 20) { // Rule 5.7: the Low Handicap Index exists once 20 rounds do
+      const from = dayMinus(r.date, 365), lows = history.filter((h) => h.full && h.date >= from).map((h) => h.index); if (lows.length) low = Math.min(...lows);
+      if (low != null && idx > low + CAP.soft) { idx = round1(low + CAP.soft + (idx - low - CAP.soft) / 2); cap = 'soft'; if (idx > low + CAP.hard) { idx = round1(low + CAP.hard); cap = 'hard'; } }
+    }
+    idx = Math.max(CAP.min, Math.min(CAP.max, idx));
+    cur = { index: idx, raw: raw.index, used: raw.used, adj: raw.adj, cap, low };
+    history.push({ date: r.date, index: idx, id: r.id, full: done.length >= 20 });
   });
-  const recent = done.slice(-20), lowIds = new Set(recent.slice().sort((a, b) => a.diff - b.diff).slice(0, cur ? cur.used : 0).map((x) => x.id));
-  return { index: cur ? cur.index : null, used: cur ? cur.used : 0, of: recent.length, adj: cur ? cur.adj : 0, rounds: done.length, need: Math.max(0, 3 - done.length), toTwenty: Math.max(0, 20 - done.length), flagged: recent.filter((x) => x.how === 'as-entered').length,
-    diffs: recent.slice().reverse().map((x) => Object.assign({ used: lowIds.has(x.id) }, x)), history };
+  const recent = done.slice(-20), lowIds = new Set(recent.slice().sort((a, b) => a.diff + a.esr - (b.diff + b.esr)).slice(0, cur ? cur.used : 0).map((x) => x.id));
+  const holesPosted = done.reduce((s, x) => s + x.nHoles, 0) + pend.length * 9;
+  return { index: cur ? cur.index : null, raw: cur ? cur.raw : null, cap: cur ? cur.cap : null, low: cur ? cur.low : null, used: cur ? cur.used : 0, of: recent.length, adj: cur ? cur.adj : 0, rounds: done.length,
+    need: cur ? 0 : Math.max(0, Math.ceil((54 - holesPosted) / 18)), toTwenty: Math.max(0, 20 - done.length), flagged: recent.filter((x) => x.how === 'as-entered').length, waiting9: pend.length,
+    confirmedOf: recent.filter((x) => x.confirmed).length, selfLogged: recent.filter((x) => x.self).length,
+    diffs: recent.slice().reverse().map((x) => Object.assign({ used: lowIds.has(x.id), eff: round1(x.diff + x.esr) }, x)), history: history.map((h) => ({ date: h.date, index: h.index, id: h.id })) };
 }
+// THE handicap calculation every screen and engine uses: the full Oddable index (every round) plus the index from confirmed rounds only.
+function handicapSet(rounds) {
+  const h = handicap(rounds), c = handicap(rounds.filter((r) => r.confirmed));
+  h.confirmedIndex = c.index; h.confirmedRounds = c.rounds; h.confirmed = { index: c.index, rounds: c.rounds, of: c.of, used: c.used, cap: c.cap, low: c.low };
+  h.text = hcpText(h); return h;
+}
+// What another person sees next to a handicap: "12.6 · 4 of 20 rounds confirmed".
+function hcpText(h) { return (h.index == null ? 'No index yet' : fmtIdx(h.index)) + ' · ' + h.confirmedOf + ' of ' + h.of + ' round' + (h.of === 1 ? '' : 's') + ' confirmed'; }
+const fmtIdx = (v) => (v < 0 ? '+' + (-v).toFixed(1) : v.toFixed(1)); // a plus handicap is written +1.5
 
 // ---------- Elo ----------
 const ELO = { start: 1500, K: 32 };
@@ -75,16 +127,27 @@ function eloDelta(a, b, score, opt) {
   let k = o.K || ELO.K; if (o.mov && Number.isFinite(o.margin)) k *= Math.log(Math.abs(o.margin) + 1);
   return k * (score - expected(avg(a), avg(b)));
 }
-// A player's rating over their own match records (in date order). Opponents / partners are rated at extra.oppRating / extra.partnerRating when an engine knows them, else the start value.
+// A player's rating over their own match records, processed by date, entry time, id (never input order).
+// Opponents / partners are rated at extra.oppRating (a number, or one per opponent) / extra.partnerRating when an engine or a confirmation supplied them, else the start value.
+// FARMING GUARD (Nov 16 2026): repeated games against the same opponent(s) inside 7 days count less each time: the 1st at full weight, the 2nd at 1/2,
+// the 3rd at 1/4 ... (weight = 0.5 ^ earlier games against them in the 7 days before). Two accounts trading wins cannot pump a rating; a normal week is untouched.
+const FARM = { days: 7, base: 0.5 };
+const oppKeyOf = (m) => { const ex = m.extra || {}; if (ex.oppKey) return String(ex.oppKey); const n = (Array.isArray(ex.opp) && ex.opp.length ? ex.opp.map((x) => (x && typeof x === 'object' ? x.id || x.name : x)) : [m.opponent]).map((x) => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, '')).filter(Boolean).sort(); return n.join('|') || '?'; };
 function eloFor(matches) {
-  let r = ELO.start; const history = [];
-  matches.slice().sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)).forEach((m) => {
+  let r = ELO.start; const history = [], seen = [];
+  matches.slice().sort(order).forEach((m) => {
     const s = m.result === 'W' ? 1 : m.result === 'L' ? 0 : m.result === 'T' ? 0.5 : null; if (s == null) return;
-    const ex = m.extra || {}, dbl = ex.fmt === 'doubles' || (Array.isArray(ex.opp) && ex.opp.length === 2);
-    const opp = (Array.isArray(ex.oppRating) ? ex.oppRating : [ex.oppRating, ex.oppRating]).map((x) => (Number.isFinite(x) ? x : ELO.start)).slice(0, dbl ? 2 : 1);
-    const mine = dbl ? [r, Number.isFinite(ex.partnerRating) ? ex.partnerRating : ELO.start] : [r];
-    r += eloDelta(mine, opp, s); history.push({ date: m.date, rating: Math.round(r) });
+    const ex = m.extra || {}, dbl = ex.fmt === 'doubles' || (ex.fmt == null && Array.isArray(ex.opp) && ex.opp.length === 2);
+    const opp = (Array.isArray(ex.oppRating) ? ex.oppRating.concat([null, null]) : [ex.oppRating, ex.oppRating]).map((x) => (x != null && Number.isFinite(Number(x)) ? Number(x) : ELO.start)).slice(0, dbl ? 2 : 1);
+    const mine = dbl ? [r, ex.partnerRating != null && Number.isFinite(Number(ex.partnerRating)) ? Number(ex.partnerRating) : ELO.start] : [r];
+    const key = oppKeyOf(m), from = dayMinus(m.date, FARM.days), n = key === '?' ? 0 : seen.filter((x) => x.key === key && x.date > from).length, w = Math.pow(FARM.base, n); seen.push({ key, date: m.date }); // key '?' = a record with no opponent on it at all: nothing to compare
+    r += w * eloDelta(mine, opp, s); history.push({ date: m.date, rating: Math.round(r), id: m.id, w });
   });
   return { rating: Math.round(r), matches: history.length, history };
 }
-module.exports = { differential, indexFrom, courseHandicap, strokesOnHole, adjustedGross, handicap, expected, eloDelta, eloFor, ELO, round1 };
+// THE rating calculation every screen and engine uses: the full Oddable rating (every game) plus the rating from confirmed games only (used for seeding).
+function eloSet(matches) {
+  const all = eloFor(matches), c = eloFor(matches.filter((m) => m.confirmed || (m.extra && m.extra.confirmed)));
+  all.confirmedRating = c.matches ? c.rating : null; all.confirmedGames = c.matches; all.text = all.rating + ' · ' + c.matches + ' of ' + all.matches + ' game' + (all.matches === 1 ? '' : 's') + ' confirmed'; return all;
+}
+module.exports = { differential, indexFrom, courseHandicap, strokesOnHole, adjustedGross, handicap, handicapSet, hcpText, fmtIdx, expected9, CAP, order, expected, eloDelta, eloFor, eloSet, FARM, ELO, round1 };

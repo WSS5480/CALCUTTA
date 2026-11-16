@@ -98,11 +98,12 @@ srv.listen(0, async () => {
     const P0 = { id: '9', t: 5, done: true, state: 'post', st: 3, week: 1, head: '', teams: [{ id: '2', score: 24, winner: true }, { id: '30', score: 10, winner: false }] };
     const R2 = C.teamResults(C.EVENTS.nfl_po, [P0], new Set(['2'])); assert.strictEqual((R2['2'] || {}).wins, 1, 'playoff win vs a team in no lot'); });
   // 7 LOW-MED: a hand-entered champion replaces the feed champion
-  await chk('7 hand-entered champion (and biggest win) replace the feed ones', async () => { fresh();
+  await chk('7 (ROUND 4 B1) a hand-entered champion on a feed event is refused: the feed is the only source', async () => { fresh();
     r = await call('ann', 'create', base({ lots: lotsOf([1, 2, 8]), rows: [{ k: 'champ', n: 1, pct: 100 }], take: { kind: 'none' }, mode: 'manual' })); const m = r.j.calc;
     for (let i = 1; i <= 3; i++) ok(await call('ann', 'enter', { id: m.id, lot: 'L' + i, name: 'P' + i, amt: 10 })); startEvent();
-    ok(await call('ann', 'result', { confirm: true, id: m.id, team: '8', champ: true })); r = await call('ann', 'board', { id: m.id }); const b = r.j.board;
-    assert.strictEqual(b.lots.find((l) => l.id === 'L1').teams[0].r.champ, false, 'feed champion cleared'); assert.strictEqual(b.rows[0].hits, 1); assert.strictEqual(b.lots.find((l) => l.id === 'L3').earned, 30);
+    // ROUND 4 B1 (replaces review fix 7 on feed events): the feed is the only source of results, a hand-entered champion is refused and the feed's stands
+    r = await call('ann', 'result', { confirm: true, id: m.id, team: '8', champ: true }); assert.deepStrictEqual([r.s, r.j.code], [409, 'feedonly']); r = await call('ann', 'board', { id: m.id }); const b = r.j.board;
+    assert.strictEqual(b.lots.find((l) => l.id === 'L1').teams[0].r.champ, true, 'the feed champion stands'); assert.strictEqual(b.rows[0].hits, 1); assert.strictEqual(b.lots.find((l) => l.id === 'L1').earned, 30);
     const g = (id, a, b2, sa, sb) => ({ id, t: 1, done: true, state: 'post', st: 2, week: 1, head: '', teams: [{ id: a, score: sa, winner: true }, { id: b2, score: sb, winner: false }] }); void g; });
   // 4 MED: public peek limit is per IP
   await chk('4 peek rate limit is per IP (31 visitors from 31 IPs all get the title)', async () => { fresh(); r = await call('ann', 'create', base()); const c = r.j.calc;
@@ -172,7 +173,7 @@ srv.listen(0, async () => {
   await chk('S-ALL every Calcutta a player is in (buyer, co-owner, team player) gives a stats record with team(s), price paid, payout and net', async () => { fresh();
     r = await call('ann', 'create', { name: 'Golf day', ev: 'custom', lots: [{ teams: [{ name: 'Red' }] }, { teams: [{ name: 'Blue' }] }], rows: [{ k: 'champ', n: 1, pct: 100 }], minBid: 5, inc: 5, timer: 10, buyBack: true, take: { kind: 'none' }, order: 'listed', mode: 'manual' }); const g = r.j.calc;
     for (const w of ['bob', 'cat', 'eve']) ok(await call(w, 'join', { code: g.code }));
-    await C.setPlayersOfRecord(g.id, 'L1', [pe(SID.cat), pe(SID.dan)]); // dan plays on Red but never joined the Calcutta
+    await C.setPlayersOfRecord(g.id, 'L1', [pe(SID.cat), { key: pe(SID.dan), accepted: true }]); // dan plays on Red and never joined the Calcutta; the group says he accepted (ROUND 4 #5: without that he is pending and has no record)
     ok(await call('ann', 'enter', { id: g.id, lot: 'L1', pid: await pidOf('bob', g.id), amt: 40 })); ok(await call('ann', 'enter', { id: g.id, lot: 'L2', pid: await pidOf('ann', g.id), amt: 30 }));
     ok(await call('cat', 'buyback', { id: g.id, lot: 'L1' })); ok(await call('ann', 'result', { confirm: true, id: g.id, team: 'x1', champ: true }));
     const recOf = async (w) => (await C.statsFor(pe(SID[w]), {})).find((x) => x.id === g.id);

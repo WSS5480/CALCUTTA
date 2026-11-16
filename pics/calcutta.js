@@ -33,7 +33,7 @@
   const sw = (on, a, dis) => '<button class="csw' + (on ? ' on' : '') + '" role="switch" aria-checked="' + (on ? 'true' : 'false') + '" ' + (dis ? 'disabled' : a) + '><i></i></button>';
   const seg = (opts, curV, a) => '<div class="cseg">' + opts.map(([v, l]) => '<button class="' + (String(v) === String(curV) ? 'on' : '') + '" ' + a + '="' + att(v) + '">' + esc(l) + '</button>').join('') + '</div>';
   const sel = (id, opts, curV, extra) => '<select id="' + id + '" class="csel" ' + (extra || '') + '>' + opts.map(([v, l]) => '<option value="' + esc(v) + '"' + (String(v) === String(curV) ? ' selected' : '') + '>' + esc(l) + '</option>').join('') + '</select>';
-  const notices = (c) => (c && c.notices && c.notices.length ? '<div class="cwarn" role="status"><b>Changed after the auction closed</b>' + c.notices.slice(0, 3).map((n) => esc(n.what.replace(/ \(after the auction closed\)$/, '')) + ' · ' + esc(n.by) + ' · ' + esc(fmtTime(n.at))).join('<br>') + '</div>' : '');
+  const notices = (c) => (c && c.notices && c.notices.length ? '<div class="cwarn" role="status"><b>' + (c.notices.slice(0, 3).every((n) => / \(after the auction closed\)$/.test(n.what)) ? 'Changed after the auction closed' : 'Notices') + '</b>' + c.notices.slice(0, 3).map((n) => esc(n.what.replace(/ \(after the auction closed\)$/, '')) + ' · ' + esc(n.by) + ' · ' + esc(fmtTime(n.at))).join('<br>') + '</div>' : '');
   const badge = (c) => (c.rules && c.rules.main ? '<span class="cbadge">Main pot</span>' : '<span class="cbadge cy">Side pot</span>');
   const statusText = (s) => (s === 'setup' ? 'not started' : s === 'live' ? 'auction running' : 'auction closed');
   const rowText = (r, rounds) => (r.label || KIND[r.k]) + (r.k === 'win' || r.k === 'round' ? ' (' + r.n + ')' : '');
@@ -282,8 +282,10 @@
     });
     if (c.local) { // players of record + buy back half (owner rule Nov 16 2026: only the lot's own player(s), half for half the price)
       const por = l.por || [], mine = por.some((p) => p.me), half = l.sold ? usd(Math.floor(l.sold.amt * 100 / 2) / 100) : '';
-      h += '<div class="ccard"><h2>Players of record</h2>' + (por.length ? '<div class="clist0">' + por.map((p, i) => '<div class="cmrow"><span>' + esc(p.name) + (p.me ? ' <i class="cmut">· you</i>' : '') + (p.pid ? '' : ' <i class="cmut">· not in the app</i>') + '</span>' + (comm && !l.bb ? '<button class="ctiny" data-a="pordel" data-i="' + i + '" data-lot="' + att(l.id) + '">Remove</button>' : '') + '</div>').join('') + '</div>' : '<div class="cnote">None. Nobody can buy back half of this lot.</div>');
-      if (comm && !l.bb) h += whoForm('p', c, '', '').replace('Buyer', 'Add a player of record').replace('Who bought it?', 'Pick a member or type a name') + '<button class="csec cfull" data-a="poradd" data-lot="' + att(l.id) + '">Add player</button>';
+      const porOpen = comm && !l.sold && !c.started && !(c.rules.mode === 'live' && c.a.status !== 'setup'); // ROUND 2 D4: players of record lock once the lot is sold
+      h += '<div class="ccard"><h2>Players of record</h2>' + (por.length ? '<div class="clist0">' + por.map((p, i) => '<div class="cmrow"><span>' + esc(p.name) + (p.me ? ' <i class="cmut">· you</i>' : '') + (p.pid ? '' : ' <i class="cmut">· not in the app</i>') + '</span>' + (porOpen ? '<button class="ctiny" data-a="pordel" data-i="' + i + '" data-lot="' + att(l.id) + '">Remove</button>' : '') + '</div>').join('') + '</div>' : '<div class="cnote">None. Nobody can buy back half of this lot.</div>');
+      if (porOpen) h += whoForm('p', c, '', '').replace('Buyer', 'Add a player of record').replace('Who bought it?', 'Pick a member or type a name') + '<button class="csec cfull" data-a="poradd" data-lot="' + att(l.id) + '">Add player</button>';
+      else if (comm && por.length) h += '<div class="cnote">🔒 Locked: players of record cannot change once the lot is sold.</div>';
       h += '</div>';
       if (c.rules.buyBack && l.sold && por.length) {
         h += '<div class="ccard"><h2>Buy back half</h2>';

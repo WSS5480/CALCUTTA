@@ -19,7 +19,7 @@
     const sp = S(), modes = [...new Set(sp.games.map((g) => g.mode))]; if (!modes.includes(mode)) mode = modes[0];
     let h = '<h1>Start a game</h1><p class="esub">Pick a sport, then a game. Tap ⓘ on any game to see how it works.</p>';
     h += '<label class="elab" for="csp">Sport<select id="csp" class="esel">' + C.sports.map((x) => '<option value="' + att(x.key) + '"' + (x.key === sport ? ' selected' : '') + '>' + esc(x.long) + '</option>').join('') + '</select></label>';
-    h += '<div class="e2">' + ['pickleball', 'golf', 'football', 'basketball'].map((k) => { const x = C.sports.find((y) => y.key === k); return '<button class="' + (k === sport ? 'epri' : 'esec') + '" aria-pressed="' + (k === sport) + '" data-sp="' + k + '">' + esc(x.name) + '</button>'; }).join('') + '</div>';
+    h += '<div class="e2">' + ['pickleball', 'golf', 'football', 'basketball'].map((k) => { const x = C.sports.find((y) => y.key === k); return '<button class="esec' + (k === sport ? ' on' : '') + '" aria-pressed="' + (k === sport) + '" data-csp="' + k + '">' + esc(x.name) + '</button>'; }).join('') + '</div>';
     if (modes.length > 1) h += '<div class="eseg">' + [['own', 'Our own event'], ['pro', 'Pro events']].map(([k, l]) => '<button class="' + (k === mode ? 'on' : '') + '" aria-pressed="' + (k === mode) + '" data-mode="' + k + '">' + l + '</button>').join('') + '</div>';
     h += '<div class="enote">' + esc(sp.leagues) + ' · ' + esc(C.results[sp.feed]) + (sp.feedNote ? '. ' + esc(sp.feedNote) : '') + '</div>';
     sp.games.forEach((g, i) => {
@@ -44,7 +44,8 @@
   function paint() {
     const x = el(); if (!x) return;
     const back = view != null ? '<button class="eback" data-a="list">‹ Start a game</button>' : from ? '<button class="eback" data-a="close">‹ ' + esc(from) + '</button>' : '<span></span>';
-    x.querySelector('.ein0').innerHTML = '<div class="etop">' + back + '<button class="ex" data-a="close" aria-label="Close">Close</button></div>' + (!C ? '<div class="ecard">' + (errMsg ? esc(errMsg) : 'Loading games…') + '</div>' : view != null ? detail() : list());
+    const topH = '<div class="etop">' + back + '<button class="ex" data-a="close" aria-label="Close">Close</button></div>', body = !C ? '<h1>Start a game</h1><div class="ecard">' + (errMsg ? esc(errMsg) : 'Loading games…') + '</div>' : view != null ? detail() : list();
+    x.querySelector('.ein0').innerHTML = window.OddEvents && window.OddEvents.head ? window.OddEvents.head(topH, body) : topH + body; // the app's gradient header
   }
   function start() {
     const g = S().games[view], st = g.start || {}; errMsg = '';
@@ -55,7 +56,7 @@
   function click(ev) {
     const t = ev.target.closest('button'); if (!t || t.disabled) return; const a = t.getAttribute('data-a');
     if (a === 'close') { close(); return; } if (a === 'list') { view = null; errMsg = ''; paint(); el().scrollTop = 0; return; } if (a === 'start') { start(); return; }
-    if (t.hasAttribute('data-sp')) { sport = t.getAttribute('data-sp'); paint(); return; }
+    if (t.hasAttribute('data-csp')) { sport = t.getAttribute('data-csp'); paint(); return; }
     if (t.hasAttribute('data-mode')) { mode = t.getAttribute('data-mode'); paint(); return; }
     if (t.hasAttribute('data-g')) { view = +t.getAttribute('data-g'); errMsg = ''; paint(); el().scrollTop = 0; }
   }

@@ -190,3 +190,13 @@ T.capWording = async () => {
   assert.strictEqual(CAT.entLine, PRICE); const cj = fs.readFileSync(path.join(__dirname, '../pics/catalog.js'), 'utf8');
   assert.ok(/function list\(\)[\s\S]*?C\.entLine[\s\S]*?function detail/.test(cj), 'the game list shows the pricing line');
 };
+// Owner (Nov 16 2026, "Render the Oddable look"): events + catalog use the live app's own theme variables (no separate palette), and never use an
+// attribute that pics/index.html handles globally (a [data-sp] tap there opens the "Not a pick model yet" warning and leaves for sports.html)
+T.oddableLook = async () => {
+  const fs = require('fs'), path = require('path'), ev = fs.readFileSync(path.join(__dirname, '../pics/events.js'), 'utf8'), cat = fs.readFileSync(path.join(__dirname, '../pics/catalog.js'), 'utf8'), idx = fs.readFileSync(path.join(__dirname, '../pics/index.html'), 'utf8');
+  for (const v of ['--bg', '--panel', '--panel2', '--line', '--ink', '--muted', '--blue', '--green', '--red']) assert.ok(ev.includes('var(' + v), 'uses the app variable ' + v);
+  for (const old of ['#0f0c18', '#1b1630', '#14111f', '#2f2850', '#f1eefa']) assert.ok(!ev.includes(old), 'old private palette colour ' + old);
+  assert.ok(/html\.cb /.test(ev) && ev.includes('border-radius:0 0 26px 26px'), 'navy theme + the app header shape');
+  const global = [...idx.matchAll(/closest\('\[(data-[a-z-]+)\]'\)/g)].map((m) => m[1]); assert.ok(global.length, 'index.html global handlers found');
+  for (const a of global) assert.ok(!new RegExp(a + '="').test(cat) && !new RegExp(a + '="').test(ev), 'overlay uses ' + a + ', which index.html handles globally');
+};

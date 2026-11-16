@@ -1388,6 +1388,7 @@ Source: `/home/claude/decks/Oddable-Playbook.md` Part F + manager decisions. Eac
 **Preview commit log** (newest last; reviewers: check out by hash)
 - 9c6d5c2 — first live build (heads: 9c10a65 / 5fac7bc / c3d6bea / 67c59e9 / cfb6dff / c084625), one service, demo data.
 - 667f815 — refresh 2 (heads: d7b044f / 486f127 / c3d6bea / 544803e / ab77696 / c084625): real G16, pairing.js, memberStats, registerGame, golf + events director forms; stand-ins removed.
+- refresh 4 (heads: c72cd6f / 1e47e93 / dc5371b / 2fa88eb / 872e74a / e214bcf): screens review r1b, one look, hub add-game wiring, member open; the hash is the commit that adds this line (see "Preview refresh 4" at the end of this file).
 
 ### Round 3 (Nov 16 2026) — fixes from the "DO NOT SHIP" re-review of c3d6bea + Playbook play 10 + golf / events sources — tests in `node odds-api/calcutta.round3.test.js` (20 checks; every one fails on c3d6bea)
 Read this section before the older ones: it REPLACES parts of them (the limits stand-in, "timer 10/20/30", "unclaimed", D2's once-a-minute check, `result` without a confirm, `registerSource(key, {teams, results})`).
@@ -1742,3 +1743,48 @@ Source: the independent review of ab77696 ("SHIP AFTER FIXES"; the reviewer's sc
 - Anything live. The 2025 rulebook wording (see Decisions). The merged build with stats (above). Real `limits.recordPlay` under load (one small write per player, once per event per server start).
 - Places with fewer entries than paid places leave that prize unassigned (unchanged). The auto-finish (12 h) is the coder's number.
 - Upgrade The Odds API plan once Oddable sells (unchanged; events spends no credits).
+
+### Preview refresh 4 (Nov 16 2026) — integration and look owner: newest heads, screens review r1b (15 items), one look, port list
+
+Merged heads (committed heads only; the coders' folders were not touched): v253-parlays `c72cd6f`, groups-v1 `1e47e93`, calcutta-v1 `dc5371b`, golf-v1 `2fa88eb`, local-v1 `872e74a`, stats-v1 `e214bcf`.
+All engine server files (`groups.js`, `pairing.js`, `limits.js`, `grade.js`, `calcutta.js`, `golf.js`, `golf-courses.js`, `ratings.js`, `events.js`) are byte-for-byte their owners' heads. The earlier preview-side `hotBest` tie-break in pairing.js and the golf `started()` rethrow are gone: the owners shipped their own fixes.
+
+**How the pieces are wired now**
+- `groups.wire()` (Groups round 3, called by server.js) registers the three game pots, invites and the stats provider. `odds-api/integrate.js wire()` sees that and registers nothing twice; it still plugs local events and golf in as Calcutta sources. Golf v1.2 finds `stats.js` and `limits.js` itself, so integrate no longer overrides golf's handicap or limits functions.
+- `POST /integrate/attach {groupId, type, ref}`: Calcutta and local events go through `groups.attachGame` (the engine's own `attachToGroup` then checks the two commissioners match). Golf goes through golf's OWN `/golf/attach` route (organizer check, then groups, then the call back).
+- `POST /integrate/open {groupId, cid}` (new): a group MEMBER opens a game listed on the group. The group's own `/groups/get` decides membership. Answer: the Calcutta id (the phone then uses `/calcutta/gjoin`), or the join code for golf / a local event. Outsiders get 403.
+- Phone side (`pics/integrate.js`): `OddGames.startFor(group, kind)` opens the engine's create flow with a "Creating this for <group>" note and attaches the new game when the engine's own create call succeeds; `OddGames.open(type, ref, {groupId, cid})` goes straight in for someone already in the game, else shows that game's join screen.
+
+**Screens review r1b, the 15 items**
+1. Strip: `pics/preview.js` makes `body` a fixed box below the strip, so every screen and overlay starts under it (nothing is covered, on any screen).
+2. My Bets "undefined": demo bets carry every field, and the cards print a plain fallback when a field is missing.
+3. Contrast: theme variables `--gold --onblue --band --band0 --onband --bandline` for all three themes; hard-coded greens / reds / greys / golds on the main screens now follow the theme; light `--red` darkened to `#a8201a`. The Playwright walk fails on any text pair under 4.5:1 (`preview-tools/contrast.js`); the three-theme sweep reports 0.
+4. One look: `OddLook.head()` puts every overlay's title in the same header band; buttons on the brand colour use `--onblue`.
+5. Group hub "+ Add a Calcutta / golf contest / local event": live, see wiring above. Checked end to end for all three, as commissioner and as a member.
+6. Bottom bar: five tabs (Games, Live, My Bets, Groups, More), 70 x 48 px each at 360 px wide; Groups is hidden in mirror mode by the exact rule groups.test.js checks.
+7. Developer wording replaced with plain wording (Ask AI, golf score history names, 3-game history).
+8. Page errors: `ST is not defined` (preview.js) and "Cannot set properties of null (setting 'heard')" (voicelog.js guards) fixed.
+9. "Create group" first tap after typing: the repaint that followed a typed field is delayed, so the tap lands.
+10. After joining a group: a toast and a "How to play / Add a bet" card on the hub; the button lands on My Bets with the add menu open.
+11. "Contact us" is a real button wherever the Enterprise line prints (it opens the Groups contact form).
+12. sports.html: strip, v254, the same five-tab bar.
+13. Main header: the empty gap is gone (10 px between rows).
+14. My Bets banner: opens as a panel inside the page, so it never covers Ask AI or anything else.
+15. "H2H undefined": local-v1 `872e74a` has the owner's own fix (`stepLine`); the merge took theirs and the stop-gap is gone.
+
+**Demo data follows the new engine rules** (the seed uses the real routes, so it had to): group joins are requests the commissioner approves; demo games carry a posted line (spread, total, moneylines), since Groups round 3 refuses a bet with no line; golf handicaps in a money game are OK'd by the organizer (the organizer's by a player on the other team); a card is opened before it is confirmed.
+
+**Port to component branches** (each is an edit made on `preview` in a file a coder owns; search the file for "integration" or "PREVIEW" to find it)
+- Groups coder, `pics/groups.js`: (a) `paint()` builds the screen through `window.OddLook.head(top, body, err)` when present; (b) the three "+ Add a ..." buttons are live when `OddGames.startFor` exists, and `newgame` calls it first; (c) `ext` opens through `OddGames.open(type, ref, {groupId, cid})` first; (d) hub card "How to play / Add a bet" (`data-a="addbet"`); (e) join toast; (f) `CHT` delayed repaint after typing (first-tap fix); (g) exports `OddGroups.refresh` and `OddGroups.contact`; (h) `.gowed` text uses `var(--gold,var(--gy))`.
+- Groups coder, contract gap: `OddJoin.openGame(type, ref, {groupId, create:true})` is not understood by any engine yet (their handlers take a join code). Until the engines accept it, the merged build uses `OddGames`.
+- Calcutta coder, `pics/calcutta.js`: `paint()` through `OddLook.head`; gold TEXT uses `var(--gold,var(--cy))` (borders keep `--cy`).
+- Golf coder, `pics/golf.js`: gold TEXT uses `var(--gold,var(--y))`; plain names in Score history (`AUDITN`). `odds-api/golf.test.js`: in the merged build the suite pins `G._deps.limitsMod = () => null` and `G._deps.groups = () => null` (its Enterprise checks use the `lock:ent` stand-in and its attach check expects "no Groups module").
+- Golf coder and Events coder, missing route: there is no "join from the group" for a golf game or a local event (Calcutta has `/calcutta/gjoin`). `/integrate/open` hands a group member the join code as a stop-gap. Wanted: `gjoin`-style routes (or `inviteInfo` for `groups.registerInvite`), then `/integrate/open` can stop reading the engines' rows.
+- Events coder, `pics/events.js`: gold text through `var(--gold, ...)`. Suites: `events.rev2.test.js`, `events.test.js`, `events.owner.test.js`, `events.fix.test.js` pin `D.limits = () => E.LIMSTAND; D.rt = () => E.STAND` in the merged build; `r2MergedStatsHonoursConfirmed` switches to the real stats module and now passes.
+- Stats coder, `odds-api/stats.js`: `isConfirmed` also returns false when an engine's record says `extra.confirmed === false` (local events: matches against a typed-in guest, or more than 2 against the same opponents in a day). This is the fix the events coder's merged-build check was waiting for. Also `D.auto === false` test switch, `stats-courses.js` passes `offset` and uses golf's `searchSafe`. `pics/stats.js`: course list with "Show more", gold text, hero card colours. `pics/voicelog.js`: `if (S)` guards. `odds-api/voicelog.js` / `pics/ai.js`: plain "Ask AI is not available right now."
+- Main app (v253-parlays line), `pics/index.html`: theme variables above; status colours through `var(--green) / var(--red) / var(--muted) / var(--gold)`; `--onblue` on brand-colour buttons; five-tab bar and More sheet; `navGo` / `?go=`; My Bets banner panel (`plbPanel`); header spacing; My Bets card fallbacks; Disclosures summary readable in the violet themes. `pics/sports.html`: v254 and the same bar. `pics/live.js`: status colours.
+- New files that belong on main with the merged build (NOT preview-only): `odds-api/integrate.js`, `pics/integrate.js`, the `/integrate/` route line and the `integrate.wire()` line in server.js, the `integrate.js` script tag in index.html.
+
+**Never merge to main (preview-only)**: `odds-api/preview*.js`, `pics/preview.js` and its script tags (index.html, sports.html), the memory store in `sync.js`, the `PV()` branch in `acct.js`, the PREVIEW block in server.js (secret scrub, random GATE_KEY, static files, `/preview`, Kalshi block), the `location.origin` host rewrite in the client files, `odds-api/fixtures/courses-fallback.json` only if the golf coder does not want it (golf-v1 already carries its own copy of the course fix).
+
+**Checks before this push**: 21 suites, 5 runs each, all green; `preview-tools/flows.js` (33 targeted checks for the items above) 0 failing; three-theme contrast sweep 0; full walk as commissioner, player and director (results in the report to the manager).

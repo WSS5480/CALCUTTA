@@ -59,14 +59,17 @@
     if (!c) return h + (s.fromLink && !err ? '<div class="ccard">Loading the invite…</div>' : '');
     h += '<div class="ccard"><div class="crow"><b class="cname">' + esc(c.name) + '</b>' + badge(c) + '</div><div class="cmeta">' + esc(c.evLabel) + ' · ' + c.lots.length + ' lots · ' + c.count + ' of ' + c.max + ' people · ' + esc(statusText(c.status)) + '</div></div>';
     h += rulesCard(c);
-    if (c.role === 'none') h += c.status === 'closed' ? '<div class="cwarn"><b>This auction is over</b>New members cannot join.</div>' : '<button class="cpri cfull" data-a="dojoin">Join ' + esc(c.name) + '</button><div class="cnote">You can bid once you have joined. ' + esc(CAPLINE(c.max)) + '</div>';
+    if (c.role === 'none' && c.group) h += '<div class="cwarn" role="status"><b>This Calcutta belongs to a group</b>It is joined from its group: members of the group can join here.</div><button class="cpri cfull" data-a="gjoin" data-id="' + att(c.id) + '">Join as a group member</button><div class="cnote">Not in the group yet? Join the group first. ' + esc(CAPLINE(c.max)) + '</div>'; // ROUND 4 B3
+    else if (c.role === 'none') h += c.status === 'closed' ? '<div class="cwarn"><b>This auction is over</b>New members cannot join.</div>' : '<button class="cpri cfull" data-a="dojoin">Join ' + esc(c.name) + '</button><div class="cnote">You can bid once you have joined. ' + esc(CAPLINE(c.max)) + '</div>';
     else h += '<button class="csec cfull" data-a="open" data-id="' + att(c.id) + '">You are in. Open it ›</button>';
     return h;
   }
   function rulesCard(c) {
     const r = c.rules; let h = '<div class="ccard"><h2>' + (c.locked ? '🔒 Locked rules' : 'Rules (lock at the first bid)') + '</h2><div class="crules">';
     [['Event', c.evLabel], ['Auction', r.mode === 'live' ? 'Live in the app · ' + r.timer + ' s timer, resets on every bid' : 'Held in person; the commissioner enters who bought what'], ['Lowest bid', usd(r.minBid) + ' · raise by at least ' + usd(r.inc)], ['Buy back half', !c.local ? 'Not for pro teams or golfers' : r.buyBack ? 'Allowed: a lot\'s own player(s) can buy back half of it for half the winning price; cost and winnings split 50/50' : 'Off'],
-      ['Pot', r.main ? 'Main Calcutta: bids join the group pot' : 'Side Calcutta: its own pot, paid separately'], ["Commissioner's take", c.takeText + ' (off the top)'], ['Unsold lots', c.unsoldText || 'If an unsold lot wins, its winnings roll into the payouts of the sold lots, pro rata.'], ['Order', r.order === 'random' ? 'Random, drawn when the auction starts' : 'As listed']].forEach(([k, v]) => { h += '<div><small>' + esc(k) + '</small><span>' + esc(v) + '</span></div>'; });
+      ['Pot', r.main ? 'Main Calcutta: bids join the group pot' : 'Side Calcutta: its own pot, paid separately'], ["Commissioner's take", c.takeText + ' (off the top)'], ['Unsold lots', c.unsoldText || 'If an unsold lot wins, its winnings roll into the payouts of the sold lots, pro rata.'], ['Order', r.order === 'random' ? 'Random, drawn when the auction starts' : 'As listed'],
+      ['Results', c.feedBacked ? 'From the score feed only. The commissioner can enter a correction only if the feed still has no result 24 hours after a game\'s scheduled end; everyone is told, and the feed replaces it when it reports.' : 'Entered by the commissioner; every result or change is sent to all members.']]
+      .concat(r.rows.some((x) => x.k === 'place') ? [['Ties', 'Teams tied for a paid place split those places evenly, to the cent (two tied for 1st share 1st + 2nd; the next team is 3rd).']] : []).forEach(([k, v]) => { h += '<div><small>' + esc(k) + '</small><span>' + esc(v) + '</span></div>'; });
     h += '</div><h2 class="cmt">Payout table</h2><div class="cthd"><span>Team</span><span class="cr">% of Calcutta</span></div>';
     r.rows.forEach((x) => { h += '<div class="ckv"><span>' + esc(rowText(x, c.rounds)) + '</span><b>' + pct(x.bp / 100) + (x.n > 1 ? ' each' : '') + '</b></div>'; });
     const tot = r.rows.reduce((a, x) => a + x.bp * x.n, 0) / 100; h += '<div class="ckv ctot"><span>Total</span><b class="cpos">' + pct(tot) + '</b></div>';
@@ -108,7 +111,7 @@
     return h + '<button class="cpri cfull" data-a="next">Next: rules and payouts</button>';
   }
   function lotsOut() {
-    const d = DR, ev = evOf(d.ev); if (ev && ev.manualOnly) return d.custom.map((x) => ({ teams: [{ name: x.n }], playersOfRecord: x.por.map((p) => (p.pid ? { pid: p.pid } : { name: p.name })) }));
+    const d = DR, ev = evOf(d.ev); if (ev && ev.manualOnly) return d.custom.map((x) => ({ teams: [{ name: x.n }], playersOfRecord: x.por.map((p) => (p.pid ? { pid: p.pid } : p.guest ? { guest: p.guest } : { name: p.name })) }));
     const own = d.teams.filter((t) => d.pick[t.id] === 'lot'), fld = d.bundle ? d.teams.filter((t) => d.pick[t.id] === 'field') : [];
     return own.map((t) => ({ teams: [{ id: t.id, name: t.name, abbr: t.abbr }] })).concat(fld.length ? [{ name: 'The field', teams: fld.map((t) => ({ id: t.id, name: t.name, abbr: t.abbr })) }] : []);
   }
@@ -234,20 +237,20 @@
     const c = d.calc, b = d.board, tab = s.tab || 'owners';
     let h = '<div class="crow"><h1>' + esc(c.name) + '</h1>' + badge(c) + '</div><div class="cmeta">' + esc(c.evLabel) + ' · ' + b.owners.length + ' owners · ' + esc(statusText(c.a.status)) + (b.over ? ' · final' : '') + '</div>';
     h += notices(c) + lockCard(c) + '<div class="cseg c3s">' + [['owners', 'Owners'], ['teams', 'Teams'], ['payouts', 'Payouts']].map(([k, l]) => '<button class="' + (tab === k ? 'on' : '') + '" data-tab="' + k + '">' + l + '</button>').join('') + '</div>';
-    h += '<div class="c2">' + tile('Pot', usd(b.pot), 'cgold', 'data-a="pot"', 'Auction ' + usd(b.pot) + (b.take ? ' · take ' + usd(b.take) : '')) + tile('Paid out so far', usd(b.paidOut), 'cpos', 'data-tab="payouts"', usd(b.inPlay) + ' still in play') + '</div>';
+    h += '<div class="c2">' + tile('Pot', usd(b.pot), 'cgold', 'data-a="pot"', 'Auction ' + usd(b.pot) + (b.take ? ' · take ' + usd(b.take) : '')) + tile('Paid out so far', usd(b.paidOut), 'cpos', 'data-tab="payouts"', usd(b.inPlay) + ' still in play' + (b.carry ? ' · ' + usd(b.carry) + ' carried' : b.unclaimed ? ' · ' + usd(b.unclaimed) + ' pending roll' : '')) + '</div>';
     if (tab === 'owners') {
       h += '<div class="cthead"><span>Owner · teams alive</span><span class="cr">Spent</span><span class="cr">Won</span></div>';
       if (!b.owners.length) h += '<div class="ccard cmut">No lots sold yet.</div>';
-      b.owners.forEach((o) => { h += '<button class="ctrow' + (o.me ? ' me' : '') + (o.net > 0 ? ' hit' : !o.alive && o.net < 0 ? ' miss' : '') + '" data-a="owner" data-k="' + att(o.oid || o.pid || 'n' + o.name) + '"><span class="cpn"><b>' + esc(o.name) + (o.me ? ' · you' : '') + '</b><small class="' + (o.alive ? 'cpos' : 'cneg') + '">' + (o.alive ? o.alive + ' alive' + (o.out ? ' · ' + o.out + ' out' : '') : 'All teams out') + '</small></span><span class="cr">' + usd(o.spent) + '</span><span class="cr cv ' + (o.won > 0 ? 'cpos' : '') + '">' + usd(o.won) + '</span></button>'; });
+      b.owners.forEach((o) => { h += '<button class="ctrow' + (o.me ? ' me' : '') + (o.net > 0 ? ' hit' : !o.alive && o.net < 0 ? ' miss' : '') + '" data-a="owner" data-k="' + att(o.oid || o.pid || 'n' + o.name) + '"><span class="cpn"><b>' + esc(o.name) + (o.me ? ' · you' : '') + '</b><small class="' + (o.alive ? 'cpos' : 'cneg') + '">' + (o.alive ? o.alive + ' alive' + (o.out ? ' · ' + o.out + ' out' : '') : 'All teams out') + '</small>' + (o.pendingRoll ? '<small class="cyel">+ ' + usd(o.pendingRoll) + ' pending roll</small>' : '') + '</span><span class="cr">' + usd(o.spent) + '</span><span class="cr cv ' + (o.won > 0 ? 'cpos' : '') + '">' + usd(o.won) + '</span></button>'; });
       h += '<div class="cnote">Payouts update from final scores. Tap an owner to see their teams, what each cost and what each has earned.</div>';
     } else if (tab === 'teams') {
       h += '<div class="cthead c3h"><span>Lot · owner</span><span class="cr">Cost</span><span class="cr">Earned</span></div>';
-      b.lots.forEach((l) => { const st = l.teams.map((t) => t.r ? (t.r.champ ? '🏆 champion' : t.r.out ? 'out' : t.r.wins ? t.r.wins + ' win' + (t.r.wins === 1 ? '' : 's') : 'alive') : '').filter(Boolean);
+      b.lots.forEach((l) => { const st = l.teams.map((t) => t.r ? (t.r.champ ? '🏆 champion' : t.r.pos ? placeTxt(t.r) : t.r.out ? 'out' : t.r.wins ? t.r.wins + ' win' + (t.r.wins === 1 ? '' : 's') : 'alive') : '').filter(Boolean);
         h += '<button class="ctrow c3h' + (l.earned > 0 ? ' hit' : !l.alive && l.sold ? ' miss' : '') + '" data-a="lot" data-lot="' + att(l.id) + '"><span class="cpn"><b>' + esc(l.name) + '</b><small>' + (l.holder ? esc(l.holder.name) + (l.bb ? ' + ' + esc(l.bb.name) + ' (half)' : '') : 'Unsold') + (st.length && !l.field ? ' · ' + esc(st[0]) : l.field ? ' · ' + (l.alive ? 'alive' : 'out') : '') + '</small></span><span class="cr">' + (l.sold ? usd(l.sold.amt) : '–') + '</span><span class="cr cv ' + (l.earned > 0 ? 'cpos' : '') + '">' + usd(l.earned) + '</span></button>'; });
-      if (c.role === 'comm') h += '<div class="cnote">Tap a lot to enter a result by hand (any event without a score feed, or to correct one).</div>';
+      if (c.role === 'comm') h += '<div class="cnote">' + (c.feedBacked ? 'Results come from the score feed only. If the feed still has no result 24 hours after a game\'s scheduled end, tap the lot to enter a correction.' : 'Tap a lot to enter a result by hand. Every result or change is sent to all members.') + '</div>';
     } else {
       h += '<div class="cthead c3h"><span>Pays for</span><span class="cr">Each</span><span class="cr">Paid</span></div>';
-      b.rows.forEach((r) => { h += '<div class="ctrow c3h"><span class="cpn"><b>' + esc(r.label) + '</b><small>' + pct(r.pct) + (r.n > 1 ? ' each · ' + r.hits + ' of ' + r.n + ' paid' : r.hits ? ' · paid' : ' · not yet') + (r.over ? ' · <span class="cyel">more results than the table pays; extras get $0</span>' : '') + '</small></span><span class="cr">' + usd(r.each) + '</span><span class="cr cv">' + usd(r.paid) + '</span></div>'; });
+      b.rows.forEach((r) => { h += '<div class="ctrow c3h"><span class="cpn"><b>' + esc(r.label) + '</b><small>' + pct(r.pct) + (r.n > 1 ? ' each · ' + r.hits + ' of ' + r.n + ' paid' : r.hits ? ' · paid' : ' · not yet') + (r.tie ? ' · <span class="cyel">tie: ' + r.hits + ' teams split the places they share</span>' : '') + (r.over ? ' · <span class="cyel">more results than the table pays; extras get $0</span>' : '') + '</small></span><span class="cr">' + usd(r.each) + '</span><span class="cr cv">' + usd(r.paid) + '</span></div>'; });
       h += unsoldNote(b);
     }
     h += '<button class="clink" data-a="audit">History · ' + (d.audit || []).length + ' entries ›</button>';
@@ -257,12 +260,14 @@
     return h;
   }
   // Playbook play 10: the unsold-lot rule the commissioner picked at set-up, with the dollars it moved
-  const unsoldNote = (b) => (b.rolled ? '<div class="cnote cyel">' + usd(b.rolled) + ' won by unsold lots was rolled into the sold lots\' payouts, pro rata (rule set before the auction).</div>' : '') + (b.carry ? '<div class="cnote cyel">' + usd(b.carry) + ' won by unsold lots carries to the next Calcutta (rule set before the auction).</div>' : b.unclaimed ? '<div class="cnote cyel">' + usd(b.unclaimed) + ' won by unsold lots rolls into the sold lots\' payouts as soon as one of them earns.</div>' : '');
+  // ROUND 4 #4: the roll is paid when the event is over (never moves an owner's winnings down mid-event); the carry says where it goes
+  const placeTxt = (r) => (r.tie ? 'tied ' : '') + ord(r.pos || r.place);
+  const unsoldNote = (b) => (b.rolled ? '<div class="cnote cyel">' + usd(b.rolled) + ' won by unsold lots was rolled into the sold lots\' payouts, ' + (b.rollBy === 'price' ? 'in proportion to the price paid (no sold lot had earned anything)' : 'pro rata to what each earned') + ' (rule set before the auction).</div>' : '') + (b.carry ? '<div class="cnote cyel">' + usd(b.carry) + ' won by unsold lots carries to ' + esc(b.carryTo || 'the next Calcutta') + ' (rule set before the auction).</div>' : b.unclaimed ? '<div class="cnote cyel">' + usd(b.unclaimed) + ' won by unsold lots is <b>pending roll</b>: it is paid into the sold lots\' payouts when the event is over' + (b.pendingRoll ? ' (each owner\'s share so far is shown as pending roll; it is not in Won yet)' : '') + '.</div>' : '');
   function potV() {
     const s = cur(), d = s.d; if (!d) return '<div class="ccard">Loading…</div>'; const b = d.board, c = d.calc;
     let h = '<h1>Pot</h1><div class="ccard"><div class="ckv"><span>Winning bids (' + d.calc.lots.filter((l) => b.lots.find((x) => x.id === l.id && x.sold)).length + ' lots)</span><b>' + usd(b.pot) + '</b></div>';
     h += '<div class="ckv"><span>Commissioner\'s take<small>' + esc(c.takeText) + '</small></span><b>' + (b.take ? '-' + usd(b.take) : '$0') + '</b></div><div class="ckv ctot"><span>Calcutta pool</span><b class="cgold">' + usd(b.pool) + '</b></div>';
-    h += '<div class="ckv"><span>Paid out so far</span><b class="cpos">' + usd(b.paidOut) + '</b></div><div class="ckv"><span>Still in play</span><b>' + usd(b.inPlay) + '</b></div>' + (b.carry ? '<div class="ckv"><span>Carried to the next Calcutta<small>won by unsold lots</small></span><b>' + usd(b.carry) + '</b></div>' : b.unclaimed ? '<div class="ckv"><span>Waiting to roll in<small>won by unsold lots</small></span><b>' + usd(b.unclaimed) + '</b></div>' : '') + '</div>' + unsoldNote(b);
+    h += '<div class="ckv"><span>Paid out so far</span><b class="cpos">' + usd(b.paidOut) + '</b></div><div class="ckv"><span>Still in play</span><b>' + usd(b.inPlay) + '</b></div>' + (b.carry ? '<div class="ckv"><span>Carried<small>won by unsold lots; goes to ' + esc(b.carryTo || 'the next Calcutta') + '</small></span><b>' + usd(b.carry) + '</b></div>' : b.unclaimed ? '<div class="ckv"><span>Pending roll<small>won by unsold lots; paid to the sold lots when the event is over</small></span><b>' + usd(b.unclaimed) + '</b></div>' : '') + '<div class="cnote">Pool = paid out + still in play' + (b.carry ? ' + carried' : b.unclaimed ? ' + pending roll' : '') + '.</div></div>' + unsoldNote(b);
     h += '<div class="ccard"><h2>How the pool pays</h2><div class="cthead c3h"><span>Pays for</span><span class="cr">Each</span><span class="cr">Total</span></div>';
     b.rows.forEach((r) => { h += '<div class="ckv3"><span>' + esc(r.label) + '<small>' + pct(r.pct) + (r.n > 1 ? ' x ' + r.n : '') + '</small></span><b>' + usd(r.each) + '</b><b>' + usd(r.total) + '</b></div>'; });
     h += '</div><div class="cnote">' + (b.main ? 'Main Calcutta: these bids join the group pot.' : 'Side Calcutta: its own pot, paid separately.') + ' Rounded to the cent; any extra cent goes to the bigger payout so the payouts add up exactly to the pool. ' + MONEYLINE + '</div>';
@@ -272,6 +277,7 @@
     const s = cur(), d = s.d; if (!d) return ''; const o = d.board.owners.find((x) => (x.oid || x.pid || 'n' + x.name).replace(/[^\w.-]/g, '') === s.k); if (!o) return '<div class="ccard cmut">Owner not found.</div>';
     let h = '<h1>' + esc(o.name) + (o.me ? ' · you' : '') + '</h1><div class="cmeta">' + ord(o.place) + ' by winnings · ' + o.lots.length + ' lot' + (o.lots.length === 1 ? '' : 's') + '</div>';
     h += '<div class="c3">' + tile('Spent', usd(o.spent)) + tile('Won', usd(o.won), o.won > 0 ? 'cpos' : '') + tile('Net', usd(o.net, true), o.net > 0 ? 'cpos' : o.net < 0 ? 'cneg' : '') + '</div>';
+    if (o.pendingRoll) h += '<div class="cnote cyel">+ ' + usd(o.pendingRoll) + ' pending roll: this owner\'s share so far of what unsold lots won. It is paid when the event is over and is not in Won yet.</div>';
     h += '<div class="cthead c3h"><span>Lot</span><span class="cr">Cost</span><span class="cr">Earned</span></div>';
     o.lots.forEach((l) => { h += '<button class="ctrow c3h' + (l.earned > 0 ? ' hit' : !l.alive ? ' miss' : '') + '" data-a="lot" data-lot="' + att(l.id) + '"><span class="cpn"><b>' + esc(l.name) + '</b><small class="' + (l.alive ? 'cpos' : 'cneg') + '">' + (l.alive ? 'alive' : 'out') + (l.share !== 'all' ? ' · ' + esc(l.share) : '') + '</small></span><span class="cr">' + usd(l.cost) + '</span><span class="cr cv ' + (l.earned > 0 ? 'cpos' : '') + '">' + usd(l.earned) + '</span></button>'; });
     return h + '<div class="cnote">' + MONEYLINE + '</div>';
@@ -281,28 +287,33 @@
     const comm = c.role === 'comm', ev = { rounds: c.rounds || [] }, byPlace = (c.rules.rows || []).some((x) => x.k === 'place') && !(c.rules.rows || []).some((x) => x.k === 'round');
     let h = '<h1>' + esc(l.name) + '</h1><div class="cmeta">' + (l.holder ? 'Owner: ' + esc(l.holder.name) + (l.bb ? ' · half bought back by ' + esc(l.bb.name) : '') : 'Unsold') + '</div>';
     h += lockCard(c) + '<div class="c3">' + tile('Cost', l.sold ? usd(l.sold.amt) : '–') + tile('Earned', usd(l.earned), l.earned > 0 ? 'cpos' : '') + tile('Status', l.alive ? 'Alive' : 'Out', l.alive ? 'cpos' : 'cneg') + '</div>';
-    if (l.rolled) h += '<div class="cnote cyel">Includes ' + usd(l.rolled) + ' rolled in from unsold lots that won (pro rata).</div>';
-    if (!l.sold && l.earned) h += '<div class="cnote cyel">Unsold: the ' + usd(l.earned) + ' it won ' + (d.board.unsoldRule === 'carry' ? 'carries to the next Calcutta.' : 'rolls into the sold lots\' payouts, pro rata.') + '</div>';
+    if (l.rolled) h += '<div class="cnote cyel">Includes ' + usd(l.rolled) + ' rolled in from unsold lots that won.</div>';
+    if (l.pendingRoll) h += '<div class="cnote cyel">+ ' + usd(l.pendingRoll) + ' pending roll (its share so far of what unsold lots won; paid when the event is over).</div>';
+    if (!l.sold && l.earned) h += '<div class="cnote cyel">Unsold: the ' + usd(l.earned) + ' it won ' + (d.board.unsoldRule === 'carry' ? 'carries to ' + esc(d.board.carryTo || 'the next Calcutta') + '.' : 'rolls into the sold lots\' payouts when the event is over.') + '</div>';
     l.teams.forEach((t) => {
       const r = t.r || { wins: 0, reached: 0, champ: false, out: false };
-      h += '<div class="ccard"><div class="crow"><b>' + esc(t.name) + '</b><b class="cr ' + (t.earned > 0 ? 'cpos' : '') + '">' + usd(t.earned) + '</b></div><div class="cmeta">' + r.wins + ' win' + (r.wins === 1 ? '' : 's') + (r.reached && ev.rounds[r.reached - 1] ? ' · reached ' + esc(ev.rounds[r.reached - 1]) : '') + (r.champ ? ' · 🏆 champion' : '') + (r.out ? ' · out' : '') + (r.place ? ' · finished ' + ord(r.place) : '') + (r.big ? ' · biggest win' : '') + (r.manual ? ' · entered by hand' : '') + '</div>';
-      if (comm) {
+      h += '<div class="ccard"><div class="crow"><b>' + esc(t.name) + '</b><b class="cr ' + (t.earned > 0 ? 'cpos' : '') + '">' + usd(t.earned) + '</b></div><div class="cmeta">' + r.wins + ' win' + (r.wins === 1 ? '' : 's') + (r.reached && ev.rounds[r.reached - 1] ? ' · reached ' + esc(ev.rounds[r.reached - 1]) : '') + (r.champ ? ' · 🏆 champion' : '') + (r.out ? ' · out' : '') + (r.place ? ' · finished ' + placeTxt(r) : '') + (r.big ? ' · biggest win' : '') + '</div>';
+      if (r.manual) h += '<div class="cnote cyel"><b>Entered by commissioner</b>' + (r.corr ? ' (correction of the score feed). Reason: ' + esc(r.reason || '') + '. The score feed replaces it the moment it reports.' : '') + '</div>'; // ROUND 4 B1: a visible tag
+      if (comm && c.feedBacked && !t.fix) { if (r.corr) h += '<button class="csec cfull" data-a="rclear" data-team="' + att(t.id) + '">Remove the correction</button>'; } // feed-backed: no hand entry unless a correction is open for this team
+      else if (comm) {
         if (s.rconf && s.rconf.team === t.id) { const n = c.unsold || 0; // ROUND 3 #6: the first result starts the event for good: say so first
           h += '<div class="cwarn" role="alertdialog" aria-label="Start the event?"><b>Start the event?</b>Entering a result starts the event. Sales, buy-backs and players lock for good.' + (n ? '<br><br>' + n + ' lot' + (n === 1 ? ' is' : 's are') + ' still ' + (c.rules.mode === 'manual' ? 'not entered' : 'unsold') + '. Saving this result will close the auction with ' + n + ' lot' + (n === 1 ? '' : 's') + ' unsold.' : '') + '</div>';
           h += '<button class="cpri cfull" data-a="rgo">' + (n ? 'Close the auction with ' + n + ' lot' + (n === 1 ? '' : 's') + ' unsold and save' : 'Start the event and save the result') + '</button><button class="csec cfull" data-a="rcancel">Cancel</button>';
         } else if (s.rt === t.id) {
-          h += '<div class="c2"><label class="clab">Wins<input id="rw" class="cin" type="number" inputmode="numeric" min="0" max="30" value="' + esc(r.wins) + '"></label>' + (ev.rounds.length && !byPlace ? '<label class="clab">Furthest round' + sel('rre', [[0, 'Not yet']].concat(ev.rounds.map((n, i) => [i + 1, n])), r.reached) + '</label>' : '<label class="clab">Place (0 = none)<input id="rpl" class="cin" type="number" inputmode="numeric" min="0" max="200" value="' + esc(r.place || 0) + '"></label>') + '</div>'; // ROUND 3: a table that pays by place (golf day) asks for the place (was: never shown for Custom events)
+          h += '<div class="c2"><label class="clab">Wins<input id="rw" class="cin" type="number" inputmode="numeric" min="0" max="30" value="' + esc(s.rv && s.rv.w != null ? s.rv.w : r.wins) + '"></label>' + (ev.rounds.length && !byPlace ? '<label class="clab">Furthest round' + sel('rre', [[0, 'Not yet']].concat(ev.rounds.map((n, i) => [i + 1, n])), s.rv && s.rv.re != null ? s.rv.re : r.reached) + '</label>' : '<label class="clab">Place (0 = none)<input id="rpl" class="cin" type="number" inputmode="numeric" min="0" max="200" value="' + esc(s.rv && s.rv.pl != null ? s.rv.pl : r.place || 0) + '"></label>') + '</div>'; // ROUND 3: a table that pays by place (golf day) asks for the place (was: never shown for Custom events)
           h += '<div class="cline"><span>Champion</span>' + sw(s.rc != null ? s.rc : r.champ, 'data-a="rchamp"') + '</div><div class="cline"><span>Out (eliminated)</span>' + sw(s.ro != null ? s.ro : r.out, 'data-a="rout"') + '</div>';
-          h += '<div class="c2"><button class="cpri" data-a="rsave" data-team="' + att(t.id) + '">Save result</button><button class="csec" data-a="rclear" data-team="' + att(t.id) + '"' + (r.manual ? '' : ' disabled') + '>Back to the score feed</button></div>';
-        } else h += '<button class="clink" data-a="redit1" data-team="' + att(t.id) + '">Enter a result by hand ›</button>';
+          if (c.feedBacked) h += '<label class="clab">Why are you correcting the score feed? (required; every member sees it)<input id="rrs" class="cin" maxlength="100" placeholder="Example: the feed never posted the final" value="' + esc(s.rrs || '') + '"></label>';
+          h += '<div class="c2"><button class="cpri" data-a="rsave" data-team="' + att(t.id) + '">' + (c.feedBacked ? 'Save correction' : 'Save result') + '</button><button class="csec" data-a="rclear" data-team="' + att(t.id) + '"' + (r.manual ? '' : ' disabled') + '>' + (c.feedBacked ? 'Back to the score feed' : 'Clear this result') + '</button></div>';
+        } else h += c.feedBacked ? '<div class="cnote">The score feed still has no result for this team\'s game, more than 24 hours after it was due to end.</div><button class="clink" data-a="redit1" data-team="' + att(t.id) + '">Enter a correction ›</button>' : '<button class="clink" data-a="redit1" data-team="' + att(t.id) + '">Enter a result by hand ›</button>';
       }
       h += '</div>';
     });
     if (c.local) { // players of record + buy back half (owner rule Nov 16 2026: only the lot's own player(s), half for half the price)
       const por = l.por || [], mine = por.some((p) => p.me), half = l.sold ? usd(Math.floor(l.sold.amt * 100 / 2) / 100) : '';
       const porOpen = comm && !l.sold && !l.porLocked && !c.started && !c.feedLock && !(c.rules.mode === 'live' && c.a.status !== 'setup'); // ROUND 2 D4 + ROUND 3 #5: locked for good once the lot was ever sold or entered
-      h += '<div class="ccard"><h2>Players of record</h2>' + (por.length ? '<div class="clist0">' + por.map((p, i) => '<div class="cmrow"><span>' + esc(p.name) + (p.me ? ' <i class="cmut">· you</i>' : '') + (p.pid ? '' : ' <i class="cmut">· not in the app</i>') + '</span>' + (porOpen ? '<button class="ctiny" data-a="pordel" data-i="' + i + '" data-lot="' + att(l.id) + '">Remove</button>' : '') + '</div>').join('') + '</div>' : '<div class="cnote">None. Nobody can buy back half of this lot.</div>');
-      if (porOpen) h += whoForm('p', c, '', '').replace('Buyer', 'Add a player of record').replace('Who bought it?', 'Pick a member or type a name') + '<button class="csec cfull" data-a="poradd" data-lot="' + att(l.id) + '">Add player</button>';
+      h += '<div class="ccard"><h2>Players of record</h2>' + (por.length ? '<div class="clist0">' + por.map((p, i) => '<div class="cmrow"><span>' + esc(p.name) + (p.me ? ' <i class="cmut">· you</i>' : '') + (p.pending ? ' <i class="cmut">· has not joined yet</i>' : p.guest ? ' <i class="cmut">· guest</i>' : p.pid ? '' : ' <i class="cmut">· not in the app</i>') + '</span>' + (comm && p.guest && !(c.guests || []).some((x) => x.guest === p.guest && x.claimed) ? '<button class="ctiny" data-a="glink" data-g="' + att(p.guest) + '">Claim link</button>' : '') + (porOpen ? '<button class="ctiny" data-a="pordel" data-i="' + i + '" data-lot="' + att(l.id) + '">Remove</button>' : '') + '</div>').join('') + '</div>' : '<div class="cnote">None. Nobody can buy back half of this lot.</div>');
+      if (porOpen) h += whoForm('p', c, '', '').replace('Buyer', 'Add a player of record').replace('Who bought it?', 'Pick a member or type a name') + '<button class="csec cfull" data-a="poradd" data-lot="' + att(l.id) + '">Add player</button><label class="clab">Or add a guest (someone not in the app yet)<input id="gname" class="cin" maxlength="24" placeholder="Guest\'s name"></label><button class="csec cfull" data-a="porguest" data-lot="' + att(l.id) + '">Add as a guest (with a claim link)</button><div class="cnote">You get a private claim link to send that guest, so this play lands in their own dashboard when they sign up.</div>';
+      if (s.glink) h += claimSheet(s.glink);
       else if (comm && por.length) h += '<div class="cnote">🔒 Locked: players of record cannot change once the lot is sold.</div>';
       h += '</div>';
       if (c.rules.buyBack && l.sold && por.length) {
@@ -316,7 +327,7 @@
         h += '</div>';
       }
     }
-    return h + '<div class="cnote">Hand-entered results override the score feed for that team and are listed in the history.</div>';
+    return h + '<div class="cnote">' + (c.feedBacked ? 'Results for this event come from the score feed only. A commissioner correction opens only when the feed still has no result 24 hours after a game\'s scheduled end; it needs a reason, every member is told, and the feed replaces it the moment it reports.' : 'Results are entered by the commissioner. Every result or change is sent to all members and listed in the history.') + '</div>';
   }
   function auditV() { const s = cur(), d = s.d; if (!d) return ''; return '<h1>History</h1><div class="ccard clist">' + ((d.audit || []).map((a) => '<div class="cmrow"><span>' + esc(a.what) + '<small>' + esc(a.by) + ' · ' + esc(fmtTime(a.at)) + '</small></span></div>').join('') || '<div class="cmut">Nothing yet.</div>') + '</div>'; }
   function membersV() {
@@ -329,13 +340,17 @@
     return h + rulesCard(c);
   }
   const link = (c) => SITE + '?join=c.' + c.code;
+  // ROUND 4 #7: a guest's private claim link (shown once to the commissioner; opening it signed in moves that guest's team and buy-backs to the account)
+  const claimLink = (x) => SITE + '?calcclaim=' + x.token;
+  const claimSheet = (x) => '<div class="cwarn" role="status"><b>Claim link for ' + esc(x.name) + '</b>Send this to ' + esc(x.name) + ' only. It works once. It is shown now and not kept: ask for a new one if it gets lost.<div class="cnote cbreak">' + esc(claimLink(x)) + '</div><div class="c2"><button class="csec" data-a="copyclaim">Copy link</button><a class="cpri" href="sms:?&body=' + encodeURIComponent('Claim your Calcutta team on Oddable: ' + claimLink(x)) + '">Text it</a></div></div>';
+  function claimV() { const s = cur(); return '<h1>Claim your Calcutta team</h1><div class="ccard"><div class="cmeta">A commissioner added you to a Calcutta as a guest. Claiming moves that team (and any buy-back) to your Oddable account, so it shows in your dashboard.</div></div>' + (s.done ? '<div class="cwarn" role="status"><b>Done</b>' + esc(s.done.name || 'The guest') + ' is now your account.</div><button class="cpri cfull" data-a="home">My Calcuttas</button>' : '<button class="cpri cfull" data-a="doclaim">Claim it for my account</button><div class="cnote">The link works once.</div>'); }
   const shareText = (c) => 'Join my Calcutta "' + c.name + '" on Oddable: ' + link(c);
   function shareSheet(c) { return '<div class="ccard"><h2>Send the invite</h2><div class="cnote">' + esc(link(c)) + '</div><div class="c3">' + (navigator.share ? '<button class="csec" data-a="nshare">Share…</button>' : '') + '<button class="csec" data-a="copylink">Copy link</button><a class="cpri" href="sms:?&body=' + encodeURIComponent(shareText(c)) + '">Text it</a></div><div class="cnote">New to Oddable? The link signs them up first, then opens this Calcutta to join.</div></div>'; }
 
   // ---------- paint / poll ----------
   const el = () => document.getElementById('ocalc');
   function paintBusy(on) { const e = el(); if (e) e.classList.toggle('cbusy', !!on); }
-  const VIEWS = { home, join: joinV, create1, create2, auction: auctionV, order: orderV, enter: enterV, board: boardV, pot: potV, owner: ownerV, lot: lotV, audit: auditV, members: membersV };
+  const VIEWS = { home, join: joinV, create1, create2, auction: auctionV, order: orderV, enter: enterV, board: boardV, pot: potV, owner: ownerV, lot: lotV, audit: auditV, members: membersV, claim: claimV };
   function paint() {
     const e = el(); if (!e) return; const s = cur(), f = document.activeElement, fid = f && e.contains(f) ? f.id : '', fv = fid ? f.value : null, sp = fid && f.selectionStart != null ? [f.selectionStart, f.selectionEnd] : null;
     if (s.t === 'auction') { const i = document.getElementById('camt'); if (i) s.amt = i.value; }
@@ -350,7 +365,7 @@
   async function loadBoard(o) { try { const j = await post('board', { id: o.id }); o.d = j; setCalc(j.calc); err = ''; } catch (e) { err = errText(e); } paint(); }
   function sched() { // poll: 1.5 s on the live auction, 30 s on boards; nothing while the page is hidden or the overlay is closed
     clearTimeout(POLL); const s = cur(); if (!el()) return;
-    if (s.t === 'auction' && s.c && s.c.a.status !== 'closed') POLL = setTimeout(async () => { if (!document.hidden && el() && cur() === s && !busy) { try { const j = await post('state', { id: s.id, rev: s.c.rev }); if (!j.same && cur() === s) { const was = s.c; setCalc(j.calc); s.c = j.calc; staleNote(was, j.calc); paint(); } else if (j.same) { OFF = j.now - Date.now(); } } catch (e) {} } sched(); }, 1500);
+    if (s.t === 'auction' && s.c && s.c.a.status !== 'closed') POLL = setTimeout(async () => { if (!document.hidden && el() && cur() === s && !busy) { try { const j = await post('state', { id: s.id, rev: s.c.rev }); if (!j.same && cur() === s) { const was = s.c; setCalc(j.calc); s.c = j.calc; staleNote(was, j.calc); paint(); } else if (j.same) { OFF = j.now - Date.now(); if (j.started != null && (!!s.c.started !== !!j.started || !!s.c.feedLock !== !!j.feedLock)) { s.c.started = !!j.started; s.c.feedLock = !!j.feedLock; paint(); } } } catch (e) {} } sched(); }, 1500);
     else if (['board', 'owner', 'lot', 'pot'].includes(s.t) && s.d) POLL = setTimeout(async () => { if (!document.hidden && el() && cur() === s && !busy && s.t !== 'lot') await loadBoard(s); sched(); }, 30000);
   }
   function staleNote(was, now) { // REVIEW FIX 10b: a "Bid in" message never outlives the bid
@@ -387,6 +402,13 @@
     if (a === 'create') { DR = draftNew(); push({ t: 'create1' }); if (!EV) post('events', {}).then((j) => { EV = j; paint(); }).catch((e) => { err = errText(e); paint(); }); return; }
     if (a === 'join') { push({ t: 'join' }); setTimeout(() => { const i = document.getElementById('ccode'); if (i) i.focus(); }, 50); return; }
     if (a === 'preview') { const s = cur(); s.code = (document.getElementById('ccode') || {}).value || ''; act('preview', { code: s.code }, async (j) => { s.pre = j.calc; paint(); }); return; }
+    if (a === 'gjoin') { act('gjoin', { id: t.getAttribute('data-id') }, async (j) => { stack = [{ t: 'home' }]; loadHome(); openCalc(j.calc.id, j.calc); }); return; } // ROUND 4 B3: joined from its group
+    if (a === 'home') { stack = [{ t: 'home' }]; err = ''; note = ''; paint(); loadHome(); return; }
+    if (a === 'doclaim') { const s = cur(); act('claim', { token: s.token }, async (j) => { try { localStorage.removeItem('ocalc-claim'); } catch (x) {} s.done = j; paint(); }); return; }
+    if (a === 'copyclaim') { const s = cur(); if (!s.glink) return; try { navigator.clipboard.writeText(claimLink(s.glink)); t.textContent = 'Copied'; } catch (x) { t.textContent = claimLink(s.glink); } return; }
+    if (a === 'porguest') { const s = cur(), n = ((document.getElementById('gname') || {}).value || '').trim(); if (n.length < 2) { err = 'Type the guest\'s name first.'; paint(); return; }
+      act('por', { id: s.id, lot: t.getAttribute('data-lot'), add: { guest: true, name: n } }, async (j) => { s.glink = (j.guestLinks || [])[0] || null; note = 'Guest added. Send them the claim link below.'; await loadBoard(s); }); return; }
+    if (a === 'glink') { const s = cur(); if (!confirm('Make a new claim link for this guest? Any link sent before stops working.')) return; act('guestlink', { id: s.id, guest: t.getAttribute('data-g') }, async (j) => { s.glink = (j.guestLinks || [])[0] || null; paint(); }); return; }
     if (a === 'dojoin') { const s = cur(); act('join', { code: s.code }, async (j) => { stack = [{ t: 'home' }]; loadHome(); openCalc(j.calc.id, j.calc); }); return; }
     if (a === 'open') { openCalc(t.getAttribute('data-id')); return; }
     if (a === 'bundle') { readDraft(); DR.bundle = !DR.bundle; paint(); return; }
@@ -402,7 +424,7 @@
     if (a === 'submit') { readDraft(); const tot = Math.round(DR.rows.reduce((s, x) => s + (Number(x.pct) || 0) * (Number(x.n) || 0), 0) * 100) / 100; if (tot !== 100) { err = 'Payouts must total exactly 100% (now ' + tot + '%).'; DR.editRows = true; paint(); return; }
       act(DR.id ? 'edit' : 'create', payload(), async (j) => { DR = null; stack = [{ t: 'home' }]; loadHome(); const o = { t: 'members', id: j.calc.id, c: j.calc }; push(o); note = 'Created. Invite people, then start the auction.'; paint(); }); return; }
     if (a === 'editrules') { const c = cur().c; DR = draftNew(); Object.assign(DR, { id: c.id, name: c.name, ev: c.ev, golf: c.golf || null, evtId: c.evtId || null, mode: c.rules.mode, minBid: c.rules.minBid, inc: c.rules.inc, timer: c.rules.timer, unsold: c.rules.unsold || 'roll', buyBack: c.rules.buyBack, main: c.rules.main, order: c.rules.order, takeKind: c.rules.take.kind, takeV: c.rules.take.v, rows: c.rules.rows.map((r) => ({ k: r.k, r: r.r, n: r.n, pct: r.bp / 100, label: r.label })) });
-      c.lots.forEach((l) => l.teams.forEach((x) => { DR.pick[x.id] = l.field ? 'field' : 'lot'; })); DR.custom = c.ev === 'custom' ? c.lots.map((l) => ({ n: l.name, por: (l.por || []).map((p) => ({ pid: p.pid, name: p.name })) })) : [];
+      c.lots.forEach((l) => l.teams.forEach((x) => { DR.pick[x.id] = l.field ? 'field' : 'lot'; })); DR.custom = c.ev === 'custom' ? c.lots.map((l) => ({ n: l.name, por: (l.por || []).map((p) => ({ pid: p.pid, name: p.name, guest: p.guest || null })) })) : []; // a guest of this Calcutta stays that guest through an edit
       push({ t: 'create1' }); const go = () => { if (c.ev !== 'custom') post('teams', { ev: c.ev, golf: c.golf || undefined, evtId: c.evtId || undefined }).then((j) => { DR.teams = j.teams; paint(); }).catch((e) => { err = errText(e); paint(); }); }; if (!EV) post('events', {}).then((j) => { EV = j; paint(); go(); }); else go(); return; }
     if (a === 'delete') { if (!confirm('Delete this Calcutta for everyone?')) return; act('delete', { id: idOf() }, async () => { stack = [{ t: 'home' }]; await loadHome(); paint(); }); return; }
     // auction
@@ -428,10 +450,11 @@
     if (a === 'enter') { const s = cur(), w = whoVal('e'), amt = Math.round(Number((document.getElementById('eamt') || {}).value)); if (!w) { err = 'Pick who bought it.'; paint(); return; } act('enter', Object.assign({ id: s.id, lot: t.getAttribute('data-lot'), amt }, w), async (j) => { setCalc(j.calc); s.c = j.calc; s.edit = null; note = 'Saved.'; paint(); }); return; }
     if (a === 'unenter') { if (!confirm('Remove this result?')) return; const s = cur(); act('unenter', { id: s.id, lot: t.getAttribute('data-lot') }, async (j) => { s.c = j.calc; s.edit = null; paint(); }); return; }
     if (a === 'closeres') { const s = cur(); act('close', { id: s.id }, async () => { const o = { t: 'board', id: s.id }; stack.pop(); push(o); loadBoard(o); }); return; }
-    if (a === 'redit1') { const s = cur(); s.rt = t.getAttribute('data-team'); s.rc = null; s.ro = null; paint(); return; }
+    if (a === 'redit1') { const s = cur(); s.rt = t.getAttribute('data-team'); s.rc = null; s.ro = null; s.rv = null; s.rrs = ''; paint(); return; }
     if (a === 'rchamp' || a === 'rout') { const s = cur(), l = s.d.board.lots.find((x) => x.id === s.lot), tm = l.teams.find((x) => x.id === s.rt), r = tm.r || {}; if (a === 'rchamp') s.rc = !(s.rc != null ? s.rc : r.champ); else s.ro = !(s.ro != null ? s.ro : r.out); paint(); return; }
-    if (a === 'rsave') { const s = cur(), v = (id) => (document.getElementById(id) || {}).value, b = { id: s.id, team: t.getAttribute('data-team'), wins: Math.round(Number(v('rw') || 0)) };
+    if (a === 'rsave') { const s = cur(), v = (id) => (document.getElementById(id) || {}).value, b = { id: s.id, team: t.getAttribute('data-team'), wins: Math.round(Number(v('rw') || 0)) }; s.rv = { w: v('rw'), re: v('rre'), pl: v('rpl') }; // what was typed survives a repaint (an error line, the confirm card)
       if (v('rre') != null) b.reached = +v('rre'); if (v('rpl') != null) b.place = Math.round(Number(v('rpl'))); if (s.rc != null) b.champ = s.rc; if (s.ro != null) b.out = s.ro;
+      if (s.d.calc.feedBacked) { b.reason = String(v('rrs') || '').trim(); s.rrs = b.reason; if (b.reason.length < 5) { err = 'Say why you are correcting the score feed (every member will see it).'; paint(); return; } } // ROUND 4 B1
       if (!s.d.calc.started) { s.rconf = b; err = ''; paint(); return; } // the first result: confirm card first
       act('result', b, async () => { s.rt = null; note = 'Result saved.'; await loadBoard(s); }); return; }
     if (a === 'rcancel') { const s = cur(); s.rconf = null; paint(); return; }
@@ -464,6 +487,8 @@
     stack = [{ t: 'home' }]; err = ''; note = ''; e.addEventListener('click', click); e.addEventListener('change', change); e.addEventListener('input', input); e.addEventListener('keydown', keydown); paint(); loadHome();
     clearInterval(TICK); TICK = setInterval(() => { if (!el()) { clearInterval(TICK); return; } tickClock(); }, 250);
     if (o && o.join) { const s = { t: 'join', code: String(o.join), fromLink: true }; push(s); act('preview', { code: s.code }, async (j) => { s.pre = j.calc; paint(); }); }
+    else if (o && o.group) { const s = { t: 'join', code: '', fromLink: true }; push(s); act('gjoin', { id: String(o.group), preview: true }, async (j) => { s.pre = j.calc; paint(); }); } // ROUND 4 B3: the group screen opens its Calcutta: oddCalc({ group: '<calcutta id>' })
+    else if (o && o.claim) { push({ t: 'claim', token: String(o.claim) }); } // ROUND 4 #7: a guest's claim link
     else if (o && o.id) openCalc(String(o.id));
     else if (o && o.create) { // from another screen (golf day, tour event): oddCalc({ create: { ev: 'golf-day', golf: { gameId }, name } }) or { ev: 'local', evtId, name }
       const x = o.create; DR = draftNew(); DR.name = String(x.name || '').slice(0, 40); DR.golf = x.golf || null; DR.evtId = x.evtId || null; push({ t: 'create1' }); post('events', {}).then((j) => { EV = j; if (x.ev && evOf(x.ev)) pickEv(String(x.ev)); else paint(); }).catch((e) => { err = errText(e); paint(); }); }
@@ -471,6 +496,9 @@
   // invite links: pics/join.js routes ?join=c.<code> here (after sign-up / sign-in)
   const reg = () => { if (window.OddJoin && typeof window.OddJoin.register === 'function' && !reg.done) { reg.done = true; window.OddJoin.register('c', (x) => window.oddCalc({ join: typeof x === 'string' ? x : x && x.code })); } };
   reg(); if (!reg.done) { document.addEventListener('DOMContentLoaded', reg); setTimeout(reg, 1500); }
+  // ROUND 4 #7: a guest's claim link (?calcclaim=<token>). Kept until the person is signed in (a new person signs up first), then the claim screen opens.
+  try { const m = /[?&]calcclaim=([A-Z2-9-]{20,40})/.exec(location.search); if (m) { localStorage.setItem('ocalc-claim', m[1]); try { history.replaceState(null, '', location.pathname + location.search.replace(/([?&])calcclaim=[^&]*&?/, '$1').replace(/[?&]$/, '') + location.hash); } catch (x) {} }
+    const tk = localStorage.getItem('ocalc-claim'); if (tk) setTimeout(() => { if (!el() && window.oddCalc && g('odd-tok')) window.oddCalc({ claim: tk }); }, 1600); } catch (e) {}
   // A reload while it is open (new version, sync from another device) puts it back.
   try { const v = sessionStorage.getItem('ocalc-open'); if (v) setTimeout(() => { if (!el() && window.oddCalc && g('odd-tok')) window.oddCalc(v === '1' ? null : { id: v }); }, 1500); } catch (e) {}
 })();

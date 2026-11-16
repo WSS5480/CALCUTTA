@@ -107,3 +107,13 @@ T.afterFinish = async () => {
   h = ok(await call('ann', 'finish', { id: h.id })).event; assert.ok(h.matches.every((m) => m.state === 'void'), 'offered challenge cancelled at finish');
   no(await call('ann', 'accept', { id: h.id, m: h.matches[0].id }), 409, 'accept after finish');
 };
+// 5 (MED) real scores: tennis sets 7-6 / 7-5 / 6-4, cornhole 23-15 (to 21, win by 1, over 21 allowed)
+T.realScores = async () => {
+  const ten = E.cleanRules(base({ sport: 'tennis', to: 6, winBy: 2, bestOf: 3 }), NOW).rules;
+  assert.strictEqual(E.checkGames(ten, [[7, 6], [6, 4]]).win, 'a'); assert.strictEqual(E.checkGames(ten, [[5, 7], [6, 7]]).win, 'b'); assert.strictEqual(E.checkGames(ten, [[7, 5], [3, 6], [6, 0]]).win, 'a');
+  for (const g of [[[6, 5], [6, 4]], [[8, 6], [6, 4]], [[7, 4], [6, 4]], [[5, 3], [6, 4]], [[7, 7], [6, 4]]]) assert.throws(() => E.checkGames(ten, g), 'tennis ' + JSON.stringify(g));
+  const ch = E.cleanRules(base({ sport: 'cornhole', to: 21, winBy: 1 }), NOW).rules;
+  assert.strictEqual(E.checkGames(ch, [[23, 15]]).win, 'a'); assert.strictEqual(E.checkGames(ch, [[21, 20]]).win, 'a'); assert.strictEqual(E.checkGames(ch, [[12, 22]]).win, 'b');
+  assert.throws(() => E.checkGames(ch, [[23, 21]]), 'loser reached 21: the game was over earlier'); assert.throws(() => E.checkGames(ch, [[20, 15]]), 'winner under 21');
+  const pb = E.cleanRules(base({}), NOW).rules; assert.ok(E.checkGames(pb, [[12, 10]])); assert.throws(() => E.checkGames(pb, [[13, 10]])); // pickleball unchanged
+};

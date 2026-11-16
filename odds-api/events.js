@@ -63,7 +63,8 @@ function cleanRules(b, now) {
   const scoring = P ? (b.scoring === 'sideout' ? 'sideout' : 'rally') : ''; // label only: the app does not count rallies
   const seeding = ['rating', 'oddable', 'random', 'manual'].includes(b.seeding) ? b.seeding : null; if (!seeding) throw bad(400, 'Pick how players are seeded');
   const courts = Math.round(Number(b.courts == null ? 1 : b.courts)); if (!(courts >= 1 && courts <= 32)) throw bad(400, 'Courts: 1 to 32');
-  const R = { unit, to, winBy, bestOf, scoring, seeding, courts, scorer: ['a', 'either', 'comm'].includes(b.scorer) ? b.scorer : 'a', side: !!b.side };
+  const tset = sport === 'tennis' && fmt !== 'solo' && to > 0 && winBy === 2; // tennis set: to 6 (or 4 / 8), win by 2, one tiebreak game at to-to (7-6)
+  const R = { tset, unit, to, winBy, bestOf, scoring, seeding, courts, scorer: ['a', 'either', 'comm'].includes(b.scorer) ? b.scorer : 'a', side: !!b.side };
   if (fmt === 'rr') { R.pools = Math.round(Number(b.pools == null ? 1 : b.pools)); if (!(R.pools >= 1 && R.pools <= 8)) throw bad(400, 'Pools: 1 to 8'); R.playoff = Math.round(Number(b.playoff || 0)); if (![0, 2, 4, 8, 16].includes(R.playoff)) throw bad(400, 'Playoff: none, top 2, 4, 8 or 16'); if (R.playoff && R.playoff < R.pools) throw bad(400, 'The playoff must take at least one from each pool'); }
   if (fmt === 'ladder') { R.reach = Math.round(Number(b.reach || 3)); if (!(R.reach >= 1 && R.reach <= 10)) throw bad(400, 'Challenge reach: 1 to 10 spots'); R.expDays = Math.round(Number(b.expDays || 7)); if (!(R.expDays >= 1 && R.expDays <= 30)) throw bad(400, 'Challenges expire after 1 to 30 days'); R.expire = b.expire === 'void' ? 'void' : 'forfeit'; R.move = b.move === 'shift' ? 'shift' : 'swap'; }
   if (fmt === 'solo') { R.low = !!b.low; R.unitLabel = cleanName(b.unitLabel, 16) || 'points'; }
@@ -89,7 +90,10 @@ function checkGames(R, games) {
     if (x === y) throw bad(400, 'Game ' + (i + 1) + ': a game cannot end in a tie');
     if (wa >= need || wb >= need) throw bad(400, 'The match was already decided before game ' + (i + 1));
     const w = Math.max(x, y), l = Math.min(x, y);
-    if (R.to) { if (w < R.to) throw bad(400, 'Game ' + (i + 1) + ': the winner needs ' + R.to); if (w - l < R.winBy) throw bad(400, 'Game ' + (i + 1) + ': win by ' + R.winBy); if (w > R.to && w - l !== R.winBy) throw bad(400, 'Game ' + (i + 1) + ': past ' + R.to + ' a game ends ' + R.winBy + ' ahead (e.g. ' + (w) + '-' + (w - R.winBy) + ')'); }
+    const G = 'Game ' + (i + 1) + ': ';
+    if (R.tset) { if (!((w === R.to && l <= R.to - 2) || (w === R.to + 1 && l >= R.to - 1))) throw bad(400, (R.bestOf > 1 ? 'Set ' + (i + 1) + ': ' : G) + 'a set ends ' + R.to + '-' + (R.to - 2) + ' or better, ' + (R.to + 1) + '-' + (R.to - 1) + ' or ' + (R.to + 1) + '-' + R.to + ' (tiebreak)'); }
+    else if (R.to && R.winBy === 1) { if (w < R.to) throw bad(400, G + 'the winner needs ' + R.to); if (l >= R.to) throw bad(400, G + 'the game ended when someone reached ' + R.to); } // e.g. cornhole: 23-15 is fine (going over is allowed), 23-21 is not
+    else if (R.to) { if (w < R.to) throw bad(400, G + 'the winner needs ' + R.to); if (w - l < R.winBy) throw bad(400, G + 'win by ' + R.winBy); if (w > R.to && w - l !== R.winBy) throw bad(400, G + 'past ' + R.to + ' a game ends ' + R.winBy + ' ahead (e.g. ' + (w) + '-' + (w - R.winBy) + ')'); }
     if (x > y) wa++; else wb++; pa += x; pb += y; out.push([x, y]);
   });
   if (wa < need && wb < need) throw bad(400, 'Best of ' + R.bestOf + ': someone needs ' + need + ' game' + (need > 1 ? 's' : ''));

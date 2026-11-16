@@ -30,11 +30,26 @@ async function dbPatchIf(id, was, data, upd) {
   return (await r.json()).length > 0;
 }
 const arr = (x) => (Array.isArray(x) ? x : []);
-function merge(a, b) { // a = stored, b = incoming
-  const tomb = [...new Set([...arr(a.tomb), ...arr(b.tomb)].map(String))].slice(-3000), T = new Set(tomb);
+// Round 2 (Nov 16 2026): every bet carries `sa` = the SERVER's time when that bet id first arrived (first-seen for Groups). Any phone-sent `sa` is ignored;
+// a stamp, once given, is kept forever (edits do not move it). Bets stored before stamps existed get the row's previous write time (an upper bound).
+// G16 (owner, Nov 16 2026): a GROUP bet (`gl` = the server time /groups/bet/add saved it) is LOCKED. The stored copy always wins: a phone can't edit, swap or
+// delete it (its tombstone is dropped), even before kickoff. Only the phone's own result marks (res / fin / finPL / auto, and each leg's res) are taken, so My Bets
+// still shows a result on every device; the server never grades from them. A phone can't make a bet a group bet: `gl` on an incoming bet the server did not save is removed.
+const GL_KEEP = ['res', 'fin', 'finPL', 'auto'];
+function lockedCopy(st, inc) {
+  if (!inc || inc === st) return st; const o = Object.assign({}, st);
+  GL_KEEP.forEach((k) => { if (inc[k] !== undefined) o[k] = inc[k]; else delete o[k]; });
+  if (Array.isArray(st.legs) && Array.isArray(inc.legs) && inc.legs.length === st.legs.length) o.legs = st.legs.map((l, i) => Object.assign({}, l, { res: inc.legs[i] && inc.legs[i].res !== undefined ? inc.legs[i].res : l.res }));
+  return o;
+}
+function merge(a, b, now, prevU) { // a = stored, b = incoming
+  const GL = new Map(arr(a.bets).filter((x) => x && x.id != null && Number(x.gl) > 0).map((x) => [String(x.id), x]));
+  const tomb = [...new Set([...arr(a.tomb), ...arr(b.tomb)].map(String))].filter((id) => !GL.has(id)).slice(-3000), T = new Set(tomb);
   const by = new Map();
+  b = Object.assign({}, b, { bets: arr(b.bets).map((x) => { if (!x || x.gl === undefined || GL.has(String(x.id))) return x; const y = Object.assign({}, x); delete y.gl; return y; }) });
   [...arr(a.bets), ...arr(b.bets)].forEach((x) => {
     if (!x || x.id == null || T.has(String(x.id))) return;
+    if (GL.has(String(x.id))) { const st = GL.get(String(x.id)); by.set(String(x.id), x === st ? (by.get(String(x.id)) || st) : lockedCopy(st, x)); return; }
     const o = by.get(String(x.id));
     if (!o) by.set(String(x.id), x);
     else if ((x.t || 0) !== (o.t || 0)) by.set(String(x.id), (x.t || 0) > (o.t || 0) ? x : o); // newest edit wins, whichever phone it came from
@@ -51,7 +66,8 @@ function merge(a, b) { // a = stored, b = incoming
   Object.keys(b.splk || {}).forEach((lg) => { const m = { ...(splk[lg] || {}) }; const inc = b.splk[lg] || {}; Object.keys(inc).forEach((g) => { if (!m[g] || (inc[g] && inc[g].r && !m[g].r)) m[g] = inc[g]; }); splk[lg] = m; });
   return {
     locks, splk,
-    bets: [...by.values()],
+    bets: ((t, old) => [...by.values()].map((x) => { const st = old.get(String(x.id)); return Object.assign({}, x, { sa: st !== undefined ? (st > 0 ? st : (Number(prevU) > 0 ? Number(prevU) : t)) : t }); }))(
+      Number(now) > 0 ? Number(now) : Date.now(), new Map(arr(a.bets).filter((x) => x && x.id != null).map((x) => [String(x.id), Number(x.sa) > 0 ? Number(x.sa) : 0]))),
     pins: (b.pinsAt || a.pinsAt) ? (Number(b.pinsAt || 0) >= Number(a.pinsAt || 0) ? arr(b.pins) : arr(a.pins)).map(String).slice(-500) : [...new Set([...arr(a.pins), ...arr(b.pins)].map(String))].slice(-500), // newest pin change wins, so unpinning sticks
     pinsAt: Math.max(Number(a.pinsAt || 0), Number(b.pinsAt || 0)),
     log, logAt: Math.max(la, lb), kdel: [...new Set([...arr(a.kdel), ...arr(b.kdel)])].slice(-3000), tomb,
@@ -92,7 +108,7 @@ async function handle(req, res) {
       if (!row) fail('mk:' + ip);
       if (row) { send(res, 409, { error: 'That number already has an account. Use Sign in.' }); return true; }
       const salt = crypto.randomBytes(16).toString('hex');
-      const data = merge({}, b.data || {});
+      const data = merge({}, b.data || {}, Date.now());
       await dbPut({ id, salt, pinhash: hashPin(pin, salt), data, updated: Date.now() }, true);
       const mine = await dbGet(id); if (!mine || !same(hashPin(pin, mine.salt), mine.pinhash)) { send(res, 409, { error: 'That number already has an account. Use Sign in.' }); return true; }
       send(res, 200, { ok: true, data, updated: Date.now() }); return true;
@@ -102,7 +118,7 @@ async function handle(req, res) {
     if (path === '/sync/push') {
       let cur = row;
       for (let i = 0; i < 4; i++) { // never overwrite a write that landed since we read: patch only if `updated` is unchanged, else re-read and merge again
-        const data = merge(cur.data || {}, b.data || {}), upd = Math.max(Date.now(), Number(cur.updated || 0) + 1);
+        const upd = Math.max(Date.now(), Number(cur.updated || 0) + 1), data = merge(cur.data || {}, b.data || {}, upd, Number(cur.updated) || 0);
         if (await dbPatchIf(id, cur.updated, data, upd)) { send(res, 200, { ok: true, data, updated: upd }); return true; }
         cur = await dbGet(id) || cur;
       }

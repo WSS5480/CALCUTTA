@@ -19,7 +19,7 @@ let C = { at: 0, v: null };
 async function ent(fresh) { if (!fresh && C.v && D.now() - C.at < 30e3) return C.v; const r = await D.S.dbGet('lock:ent').catch(() => null); C = { at: D.now(), v: (r && r.data) || { acct: {}, seats: {} } }; return C.v; }
 async function rmw(key, init, fn) {
   for (let i = 0; i < 12; i++) { let row = await D.S.dbGet(key); if (!row) { await D.S.dbPut({ id: key, salt: 'x', pinhash: 'x', data: init, updated: 1 }, true); row = await D.S.dbGet(key); if (!row) continue; }
-    const data = JSON.parse(JSON.stringify(row.data || {})); const out = fn(data); if (await D.S.dbPatchIf(key, row.updated, data, Math.max(D.now(), Number(row.updated || 0) + 1))) return out; await D.sleep(3 + Math.random() * 20); }
+    const data = JSON.parse(JSON.stringify(row.data || {})); const out = fn(data); if (out && out.nochange) return out.v; if (await D.S.dbPatchIf(key, row.updated, data, Math.max(D.now(), Number(row.updated || 0) + 1))) return out; await D.sleep(3 + Math.random() * 20); }
   throw bad(409, 'Busy, try again');
 }
 const isEnterprise = async (key) => !!(((await ent()).acct || {})[key] || {}).on;
@@ -32,7 +32,7 @@ const capMsg = (n) => 'This game is full (' + n + ' people). ' + ENTERPRISE_TEXT
 // Enterprise usage: record the distinct players of one game this month (call when a game starts / ends; idempotent, keeps the highest count).
 async function recordUse(accountKey, gameId, players, title) {
   if (!(await isEnterprise(accountKey))) return false; const mo = new Date(D.now()).toISOString().slice(0, 7);
-  await rmw('lock:entuse', {}, (x) => { const a = (x[accountKey] = x[accountKey] || {}), m = (a[mo] = a[mo] || {}), o = m[String(gameId)] || { n: 0 }; m[String(gameId)] = { n: Math.max(o.n, Math.round(Number(players) || 0)), title: String(title || o.title || '').slice(0, 40) }; });
+  await rmw('lock:entuse', {}, (x) => { const a = (x[accountKey] = x[accountKey] || {}), m = (a[mo] = a[mo] || {}), o = m[String(gameId)] || { n: 0 }; const nn = { n: Math.max(o.n, Math.round(Number(players) || 0)), title: String(title || o.title || '').slice(0, 40) }; if (m[String(gameId)] && nn.n === o.n && nn.title === o.title) return { nochange: true }; m[String(gameId)] = nn; }); // round 2: no write when nothing changed
   return true;
 }
 // ---------- routes: /groups/ent/contact (signed in), /groups/ent/admin (owner only) ----------

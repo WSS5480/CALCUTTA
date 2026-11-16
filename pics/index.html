@@ -93,7 +93,13 @@ header{position:relative}
 .rft{display:flex;justify-content:space-between;color:var(--muted);font-size:12px;margin-top:8px}
 .dots{display:flex;gap:6px;justify-content:center;margin:8px 0 2px}.dots i{width:6px;height:6px;border-radius:6px;background:var(--line);transition:all .2s}.dots i.on{width:22px;background:var(--muted)}
 .bn{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:space-around;background:var(--panel);border-top:1px solid var(--line);padding:6px 4px max(8px,env(safe-area-inset-bottom));z-index:20}
-@media(max-width:600px){.bn.n7 button{padding-left:5px!important;padding-right:5px!important;font-size:10px!important;flex:1 1 0;min-width:44px}}.bn button{background:none;border:0;color:var(--muted);font:600 11px inherit;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 10px;cursor:pointer;position:relative}.bn button span{font-size:19px}.bn button.on{color:var(--ink)}.bn .dot{position:absolute;top:2px;right:10px;width:8px;height:8px;border-radius:50%;background:var(--red)}
+@media(max-width:600px){.bn.n7 button{padding-left:5px!important;padding-right:5px!important;font-size:10px!important}}.bn button{background:none;border:0;color:var(--muted);font:600 11px inherit;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 10px;cursor:pointer;position:relative}.bn button span{font-size:19px}.bn button.on{color:var(--ink)}.bn .dot{position:absolute;top:2px;right:10px;width:8px;height:8px;border-radius:50%;background:var(--red)}
+.bn button{flex:1 1 0;min-width:44px;max-width:150px;padding-left:2px;padding-right:2px}
+#bnmore{position:fixed;inset:0;z-index:60;background:rgba(5,8,16,.6);display:flex;align-items:flex-end;justify-content:center}
+#bnmore .bnsheet{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-bottom:0;border-radius:18px 18px 0 0;width:min(560px,100%);padding:8px 14px calc(14px + env(safe-area-inset-bottom));max-height:80vh;overflow:auto;box-sizing:border-box}
+#bnmore .bnhd{display:flex;justify-content:space-between;align-items:center;font-size:18px}#bnmore .bnx{background:none;border:0;color:var(--muted);font:600 15px inherit;min-height:44px;min-width:44px;padding:0 6px;cursor:pointer}
+#bnmore .bnrow{display:flex;align-items:center;gap:12px;width:100%;min-height:56px;margin:6px 0;padding:8px 12px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:14px;font:inherit;text-align:left;cursor:pointer;box-sizing:border-box}
+#bnmore .bnrow.on{border-color:var(--blue)}#bnmore .bnrow>span:first-child{font-size:22px}#bnmore .bnl{flex:1;min-width:0}#bnmore .bnl b{display:block}#bnmore .bnl small{display:block;color:var(--muted);font-size:12.5px}#bnmore .bnrow i{font-style:normal;color:var(--muted);font-size:20px}
 body{padding-bottom:84px}
 
 .lpg h2{margin:6px 0 2px;font-size:30px;letter-spacing:-.02em}.lchips{display:flex;gap:8px;overflow-x:auto;margin:8px -16px 10px;padding:0 16px;scrollbar-width:none}.lchips::-webkit-scrollbar{display:none}
@@ -170,7 +176,7 @@ header{padding-left:max(16px,calc((100% - 1168px)/2))!important;padding-right:ma
 @media (min-width:900px){
 #sc{left:104px}
 .bn{left:0!important;right:auto!important;top:0;bottom:0;transform:none!important;width:104px!important;flex-direction:column;justify-content:flex-start;align-items:stretch;gap:6px;padding:22px 8px 12px!important;border:0!important;border-right:1px solid var(--line)!important;border-radius:0!important;background:var(--panel);box-shadow:2px 0 14px #0006;z-index:30}
-.bn button{width:100%;padding:12px 4px!important;border-radius:14px;font-size:12px!important;gap:4px!important}
+.bn button{width:100%;flex:0 0 auto;max-width:none;padding:12px 4px!important;border-radius:14px;font-size:12px!important;gap:4px!important}
 .bn button span{font-size:24px!important}
 .bn button.on{background:var(--panel2);color:var(--ink);box-shadow:inset 3px 0 0 var(--blue)}
 .bn button:hover{background:var(--panel2)}
@@ -443,13 +449,28 @@ function newBoard(games) {
 function swRender() { const e = $('#nsw'); if (e) e.innerHTML = STYLE === 'new' ? '<a onclick="styleSet(\'classic\')">Use classic view</a> · <a href="classic.html">frozen classic build</a>' : '<a onclick="styleSet(\'new\')">Use new look</a>'; if (e) e.innerHTML += ' · <a onclick="themeSet(document.documentElement.classList.contains(\'cb\') ? \'violet\' : \'cowboys\')">' + (document.documentElement.classList.contains('cb') ? 'Original violet colors' : 'Cowboys colors') + '</a>'; }
 function navRender() { swRender();
   const anyLive = Object.values(ALL).some((g) => g.state === 'in');
-  const it = [['all', '🏠', 'Games'], ['livepg', '📡', 'Live'], ['bets', '🧾', 'My Bets'], ['surv', '🛡️', 'Survivor'], ['win', '✅', 'Winning'], ['lose', '🔻', 'Losing']];
-  if (!(window.MIRROR || /[?&]mirror=1/.test(location.search))) it.push(['groups', '👥', 'Groups']); // Groups overlay (pics/groups.js); not in mirror mode, where groups.js is not loaded
-  if (!(window.MIRROR || /[?&]mirror=1/.test(location.search))) it.push(['hub', '🎮', 'Play']); // preview merge: one hub button (preview.js) for Calcutta, Golf, Start a game, My events, My stats; four more bottom buttons do not fit a phone
-  try { if (localStorage.getItem('odd-dash') === '1') it.push(['dash', '📊', 'Dashboard']); } catch (e) {}
-  $('#bn').classList.toggle('n7', it.length > 6); $('#bn').innerHTML = it.map(([k, i, l]) => `<button class="${(k === 'livepg' ? VIEW === 'live' : k === 'bets' ? VIEW === 'bets' : k === 'surv' ? VIEW === 'surv' : VIEW === 'main' && FILT === k) ? 'on' : ''}" onclick="navGo('${k}')"><span>${i}</span>${l}${k === 'livepg' && anyLive ? '<i class="dot"></i>' : ''}</button>`).join('');
+  // Bottom bar (stats review, Nov 16 2026): FIVE buttons, each at least 44px wide at 360px: Games, Live, My Bets, Groups, More. Survivor, Winning, Losing,
+  // My stats and the owner's Dashboard live in the "More" sheet (navMore). More is lit while one of its screens is showing.
+  const it = [['all', '🏠', 'Games'], ['livepg', '📡', 'Live'], ['bets', '🧾', 'My Bets'], ['groups', '👥', 'Groups'], ['more', '☰', 'More']];
+  const inMore = VIEW === 'surv' || (VIEW === 'main' && (FILT === 'win' || FILT === 'lose'));
+  $('#bn').classList.remove('n7'); $('#bn').innerHTML = it.map(([k, i, l]) => `<button class="${(k === 'livepg' ? VIEW === 'live' : k === 'bets' ? VIEW === 'bets' : k === 'more' ? inMore : k === 'groups' ? false : VIEW === 'main' && FILT === k) ? 'on' : ''}" ${k === 'more' ? 'aria-haspopup="dialog" ' : ''}onclick="navGo('${k}')"><span>${i}</span>${l}${k === 'livepg' && anyLive ? '<i class="dot"></i>' : ''}</button>`).join('');
+}
+function navMoreItems() {
+  const it = [['surv', '🛡️', 'Survivor', 'Pick one team a week'], ['win', '✅', 'Winning', 'Games going your way'], ['lose', '🔻', 'Losing', 'Games going against you'], ['stats', '📈', 'My stats', 'Every play, handicap and rating'],
+    ['calc', '🏆', 'Calcutta', 'Auction the teams, payouts from final scores'], ['golf', '⛳', 'Golf', 'Pro pools, golf days, heads-up'], ['play', '🏓', 'Start a game', 'Pickleball and every other sport'], ['events', '📅', 'My events', 'Round robins, brackets, ladders']]; // integration (preview merge): every engine's door is in the More sheet
+  if (window.oddHub) it.push(['hub', 'ℹ️', 'About this test copy', 'What is finished and what is not']);
+  try { if (localStorage.getItem('odd-dash') === '1') it.push(['dash', '📊', 'Dashboard', 'Owner only']); } catch (e) {}
+  return it;
+}
+function navMore(open) {
+  let e = document.getElementById('bnmore'); if (e) e.remove(); if (open === false) return;
+  e = document.createElement('div'); e.id = 'bnmore'; e.setAttribute('role', 'dialog'); e.setAttribute('aria-label', 'More');
+  e.innerHTML = '<div class="bnsheet"><div class="bnhd"><b>More</b><button class="bnx" onclick="navMore(false)" aria-label="Close">Close</button></div>' + navMoreItems().map(([k, i, l, d]) => `<button class="bnrow${(k === 'surv' ? VIEW === 'surv' : VIEW === 'main' && FILT === k) ? ' on' : ''}" onclick="navMore(false);navGo('${k}')"><span>${i}</span><span class="bnl"><b>${l}</b><small>${d}</small></span><i>›</i></button>`).join('') + '</div>';
+  e.addEventListener('click', (ev) => { if (ev.target === e) navMore(false); }); document.body.appendChild(e);
 }
 function navGo(k) {
+  if (k === 'more') { navMore(!document.getElementById('bnmore')); return; }
+  navMore(false);
   if (k === 'livepg') { setView('live'); return; }
   if (k === 'bets') { setView('bets'); return; }
   if (k === 'surv') { setView('surv'); return; }
@@ -460,6 +481,7 @@ function navGo(k) {
   if (k === 'play') { if (window.oddCatalog) window.oddCatalog({ from: 'Games' }); return; }
   if (k === 'me') { if (window.oddMe) window.oddMe(); return; }
   if (k === 'stats') { if (window.oddStats) window.oddStats(); return; }
+  if (k === 'events') { if (window.oddEvents) window.oddEvents(); return; }
   if (k === 'hub') { if (window.oddHub) window.oddHub(); return; }
   if (VIEW !== 'main') { VIEW = 'main'; try { localStorage.setItem('pics-view', 'main'); } catch (e) {} }
   FILT = k === 'won' ? 'won' : k; try { localStorage.setItem('pics-filt', FILT); } catch (e) {} if (STYLE === 'new') { GV = k === 'all' ? 'games' : 'best'; try { localStorage.setItem('pics-gv', GV); } catch (e) {} } DET.wkrank = true; render(true);

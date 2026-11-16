@@ -1,0 +1,86 @@
+// Screenshot / phone-layout harness for My stats (run: node scripts/stats-shots/harness.js, then python3 scripts/stats-shots/play.py).
+// The REAL odds-api/stats.js + voicelog.js behind in-memory Supabase / sign-in / Claude fakes on :8896, and the real pics/ folder on :8897.
+// Nothing here talks to the live server or the database. Seed data covers every screen the review asked about: confirmed and self-logged rounds,
+// a 9-hole round, an open Calcutta buy, a bet with no price, a group contest with a prize and bets inside, a Nassau, a locked entry, a tournament number.
+const http = require('http'), fs = require('fs'), path = require('path'), W = path.join(__dirname, '..', '..', 'odds-api') + '/', PICS = path.join(__dirname, '..', '..', 'pics');
+process.env.SUPABASE_URL = 'https://fake.supabase.co'; process.env.SUPABASE_KEY = 'x'; process.env.ODDABLE_APP_URL = 'http://localhost:8897';
+const S = require(W + 'stats.js'), V = require(W + 'voicelog.js'); S._isolate();
+let db = {}; const FDB = { dbGet: async (id) => (db[id] ? JSON.parse(JSON.stringify(db[id])) : null), dbPut: async (row, ign) => { if (db[row.id] && ign) return; db[row.id] = JSON.parse(JSON.stringify(row)); }, dbPatchIf: async (id, was, data, upd) => { if (!db[id] || db[id].updated !== Number(was)) return false; db[id].data = JSON.parse(JSON.stringify(data)); db[id].updated = upd; return true; }, dbIds: async () => Object.keys(db).filter((k) => !k.startsWith('lock:')) };
+const P = ['ann', 'bob', 'cat', 'dan', 'eve'], SID = {}, NM = { ann: 'Sir Oddable', bob: 'BobBirdie', cat: 'CatCourt', dan: 'DanTheDriver', eve: 'Eve Eagle' };
+P.forEach((p, i) => { SID[p] = (String(i + 1).repeat(8) + 'e'.repeat(56)).slice(0, 64); });
+const pe = (id) => 'pe' + id.slice(0, 18) + '@phone.oddable', NAMES = {}; P.forEach((p) => (NAMES[SID[p].slice(0, 8)] = NM[p]));
+const who = (req) => { const w = String(req.headers['x-token'] || '').replace(/^t-/, ''); return SID[w] ? pe(SID[w]) : w === 'owner' ? 'owner' : null; };
+const ACCT = { who, phoneEmail: pe, isOwnerPhone: () => false, namesGet: async () => NAMES, ownerName: () => 'Sir Oddable', ownerOk: (req) => who(req) === 'owner', check: async (req) => !!who(req) };
+[S._deps, V._deps].forEach((D) => { D.S = FDB; D.acct = () => ACCT; D.ip = () => '1.2.3.4'; }); S._deps.groups = () => ({});
+V._deps.key = () => 'k'; V._deps.ai = () => ({ limited: () => false });
+V._deps.claude = async (sys, text) => { const t = text.toLowerCase();
+  if (/shot|round/.test(t)) return '{"target":"golf-round","total":84,"holes":18,"course":"Cedar Ridge","date":null}';
+  if (/bowl/.test(t)) return '{"target":"self","sport":"other","result":"solo","score":"187","opponent":null,"notes":"bowling league"}';
+  return '{"target":"unclear","question":"What was the score?"}'; };
+const chi = S.chiDay, today = chi(Date.now()), day = (n) => chi(Date.now() - n * 864e5);
+const T = ['DAL', 'NYG', 'KC', 'BUF', 'SF', 'LAR'];
+const bets = []; for (let i = 0; i < 12; i++) { const r = i % 3 === 2 ? 'lost' : i % 7 === 6 ? 'push' : 'won', st = 20 + (i % 5) * 10; bets.push({ id: 'b' + (Date.now() - (i + 1) * 864e5 * 2), day: day(i * 2 + 1), side: T[i % 6], home: T[i % 6], away: T[(i + 2) % 6], type: i % 2 ? 'sp' : 'ml', line: i % 2 ? -3.5 : 0, stake: st, odds: -110, fin: r, finPL: r === 'won' ? Math.round(st / 1.1 * 100) / 100 : r === 'lost' ? -st : 0, gl: i < 3 ? Date.now() - (i + 1) * 864e5 * 2 : undefined }); }
+bets.push({ id: 'b' + (Date.now() - 3600e3), day: day(1), side: 'SF', home: 'SF', away: 'LAR', type: 'ml', stake: 100, fin: 'won' }); // won, no price, no stored P/L -> "Net: not known"
+bets.push({ id: 'b' + Date.now(), day: today, side: 'KC', home: 'KC', away: 'BUF', type: 'ml', stake: 25, odds: -120 }); // open
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.webmanifest': 'application/json', '.gz': 'application/gzip' };
+http.createServer((req, res) => { const f = path.join(PICS, decodeURIComponent(req.url.split('?')[0]).replace(/\.\./g, '') || '/'); const file = f.endsWith(path.sep) || f === PICS ? path.join(PICS, 'index.html') : f;
+  fs.readFile(file, (er, buf) => { if (er) { res.statusCode = 404; return res.end('not found'); } res.setHeader('Content-Type', TYPES[path.extname(file)] || 'application/octet-stream'); res.setHeader('Cache-Control', 'no-store'); res.end(buf); }); }).listen(8897);
+const PARS = [4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 4, 3, 5, 4, 4, 3, 4, 5], SI = [5, 11, 17, 1, 13, 7, 15, 3, 9, 6, 12, 18, 2, 14, 8, 16, 4, 10];
+const srv = http.createServer(async (req, res) => {
+  if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'content-type,x-token,x-dash', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Max-Age': '86400' }); return res.end(); }
+  if (req.url === '/seed') { res.setHeader('Access-Control-Allow-Origin', '*'); return res.end(JSON.stringify(SEED)); }
+  if (await S.handle(req, res)) return; if (await V.handle(req, res)) return; res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 404; res.end('{}');
+});
+const SEED = {};
+const call = async (w, p, b) => { const r = await fetch('http://127.0.0.1:8896' + p, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': 't-' + w }, body: JSON.stringify(b || {}) }); const j = await r.json(); if (!r.ok) throw new Error(p + ' ' + JSON.stringify(j)); return j; };
+srv.listen(8896, async () => {
+  P.forEach((p) => (db[SID[p]] = { id: SID[p], data: { bets: p === 'ann' ? bets : [] }, updated: 1, created_at: '2025-01-01T12:00:00Z' }));
+  const AK = pe(SID.ann), only = (list) => async (k) => (k === AK ? list : []);
+  // ann: 14 self-logged rounds (some hole by hole, one 9-hole, one without Rating / Slope) + 8 rounds scored in the app with other players (confirmed)
+  const sc = [92, 88, 95, 90, 86, 84, 91, 87, 89, 93, 85, 88, 90, 83], ids = [];
+  for (let i = 0; i < sc.length; i++) { const item = { type: 'golf', date: day((sc.length - i) * 6), course: i % 3 ? 'Cedar Ridge' : 'Palm View GC', tees: i % 3 ? 'Blue' : 'White', total: sc[i], par: 72, cr: i % 3 ? 71.3 : 70.2, slope: i % 3 ? 125 : 122, courseId: i % 3 ? 'cedar' : undefined };
+    if (i >= 12) { const st = PARS.map((p) => p + 1); st[0] = 9; st[2] = 8; delete item.total; item.strokes = st; item.pars = PARS; if (i === 13) item.si = SI; }
+    ids.push((await call('ann', '/stats/self/save', { item })).record.id); }
+  await call('ann', '/stats/self/save', { item: { type: 'golf', date: day(9), course: 'Muni 9', total: 42, holes: 9, par: 36, cr: 34.9, slope: 118 } });
+  await call('ann', '/stats/self/save', { item: { type: 'golf', date: day(10), course: 'No Card Links', total: 97 } });
+  await call('ann', '/stats/self/save', { item: { type: 'golf', date: day(2), course: 'Charity Classic', total: 61, format: 'scramble', team: 'Team Ann', cr: 71.3, slope: 125 } });
+  for (const id of ids.slice(-2)) await call('bob', '/stats/confirm/do', { code: (await call('ann', '/stats/confirm/link', { id })).code }); // two self-logged rounds confirmed by Bob
+  const lockId = ids[0]; db[S.selfKey(AK)].data.items.find((x) => x.id === lockId).extra.at = Date.now() - 60 * 36e5; // logged 60 hours ago: locked
+  const edId = (await call('ann', '/stats/self/save', { item: { type: 'golf', date: day(1), course: 'Cedar Ridge', tees: 'Blue', total: 91, par: 72, cr: 71.3, slope: 125 } })).record.id; await call('ann', '/stats/self/save', { id: edId, item: { type: 'golf', date: day(1), course: 'Cedar Ridge', tees: 'Blue', total: 89, par: 72, cr: 71.3, slope: 125 } });
+  const pk = [[[11, 7], [11, 9]], [[9, 11], [11, 8], [11, 6]], [[5, 11], [8, 11]], [[11, 4], [11, 2]]], pids = [];
+  for (let i = 0; i < pk.length; i++) pids.push((await call('ann', '/stats/self/save', { item: { type: 'pickleball', date: day(20 - i * 3), fmt: 'singles', opp: [i % 2 ? 'Ola' : 'BobBirdie'], games: pk[i], event: 'Tuesday ladder' } })).record.id);
+  await call('bob', '/stats/confirm/do', { code: (await call('ann', '/stats/confirm/link', { id: pids[0] })).code });
+  await call('ann', '/stats/self/save', { item: { type: 'other', date: day(1), sport: 'other', result: 'solo', score: '187', title: 'Bowling league' } });
+  const gst = (await call('ann', '/stats/guest/create', { name: 'Gary Guest' })).guest; await call('ann', '/stats/self/save', { item: { type: 'golf', date: day(5), course: 'Cedar Ridge', total: 101, guest: gst.gid, cr: 71.3, slope: 125 } });
+  // a link for Bob to confirm (confirm sheet screenshot) and a claimed guest result in Cat's stats
+  const openId = (await call('ann', '/stats/self/save', { item: { type: 'golf', date: today, course: 'Cedar Ridge', tees: 'Blue', total: 87, par: 72, cr: 71.3, slope: 125 } })).record.id; SEED.confirm = (await call('ann', '/stats/confirm/link', { id: openId })).code; SEED.openId = openId; SEED.lockId = lockId; SEED.edId = edId;
+  const g2 = (await call('bob', '/stats/guest/create', { name: 'Cat (guest)' })).guest; await call('bob', '/stats/self/save', { item: { type: 'golf', date: day(3), course: 'Cedar Ridge', total: 94, guest: g2.gid, cr: 71.3, slope: 125 } }); await call('cat', '/stats/guest/claim', { code: g2.code });
+  // enterprise: ann's account runs Cedar Ridge; bob, cat, dan, eve consent
+  await call('owner', '/stats/course/admin', { op: 'ent', tag: SID.ann.slice(0, 8), on: true }); await call('owner', '/stats/course/admin', { op: 'link', tag: SID.ann.slice(0, 8), courseId: 'cedar', name: 'Cedar Ridge' });
+  const golfers = { bob: [78, 81, 76, 80, 79, 83, 77], cat: [95, 99, 92, 97], dan: [88, 86, 85, 84, 82, 85, 83, 81, 80], eve: [104] };
+  for (const p of Object.keys(golfers)) { const g = golfers[p]; for (let i = 0; i < g.length; i++) await call(p, '/stats/self/save', { item: { type: 'golf', date: day((g.length - i) * 7), course: 'Cedar Ridge', tees: 'White', total: g[i], par: 72, cr: 70.1, slope: 120, courseId: 'cedar' } });
+    await call(p, '/stats/consent/set', { courseId: 'cedar', on: true, via: p === 'eve' ? { kind: 'event', id: 'E9', title: 'Member-Guest' } : { kind: 'league', id: 'L1', title: 'Tuesday Men’s League' }, myName: 'Somebody Else' }); }
+  const DK = pe(SID.dan), eng = (who, n, base) => Array.from({ length: n }, (_, i) => ({ src: 'golf', id: 'golf:D' + who + i + ':round:p1', date: day(40 - i * 4), sport: 'golf', kind: 'golf-round', contestId: i === 0 ? 'GD2' : 'D' + who + i, title: (i === 0 ? 'Club Championship' : 'Saturday game') + ' · Cedar Ridge', result: null, place: { n: 1 + (i % 4), of: 8 }, score: base + (i * 7) % 5, toPar: base + (i * 7) % 5 - 72, verified: true, extra: { course: 'Cedar Ridge', courseId: 'cedar', tees: 'Blue', rating: 71.3, slope: 125, par: 72, holes: 18, of: 18, format: 'stroke', solo: false } }));
+  const annEng = eng('a', 8, 84), danEng = eng('d', 4, 82);
+  S.register('golf', async (k) => (k === AK ? annEng.concat([
+    { src: 'golf', id: 'golf:GD1:round:p1', date: day(8), sport: 'golf', kind: 'golf-round', contestId: 'GD1', title: 'Member-guest · Cedar Ridge', result: null, place: { n: 3, of: 12 }, stake: 40, score: 66, toPar: -6, verified: true, extra: { course: 'Cedar Ridge', format: 'scramble4', teamBall: true, holes: 18, of: 18, team: 'Team Ann' } },
+    { src: 'golf', id: 'golf:GD2:match:m1:p1', date: day(7), sport: 'golf', kind: 'match', contestId: 'GD2', title: 'Club Championship · Nassau vs Team 2', result: 'L', stake: 20, pl: -40, won: 0, opponent: 'Team 2', verified: false, extra: { text: 'AS / 2 dn / 1 dn', type: 'nassau', bets: 3 } },
+    { src: 'golf', id: 'golf:GD2:skins:p1', date: day(7), sport: 'golf', kind: 'event', contestId: 'GD2', title: 'Club Championship · skins', result: 'W', stake: 0, won: 15, pl: 15, verified: true, extra: { side: 'skins', skins: 3 } },
+    { src: 'golf', id: 'golf:PL1:pool:p1', date: day(3), sport: 'golf', kind: 'golf-pool', contestId: 'PL1', title: 'Majors pool · The RSM Classic', result: null, place: { n: 4, of: 8 }, stake: 25, score: -31, toPar: -31, verified: true, extra: { game: 'pick six' } }]) : k === DK ? danEng : []));
+  S.register('calcutta', only([{ src: 'calcutta', id: 'CAL1', date: day(6), sport: 'nfl', kind: 'calcutta', groupId: 'G7', contestId: 'c2', title: 'Playoff Calcutta', result: null, place: { n: 2, of: 6 }, spent: 120, won: 300, pl: 180, verified: true, extra: { over: true } },
+    { src: 'calcutta', id: 'CAL2', date: day(1), sport: 'nfl', kind: 'calcutta', groupId: 'G7', contestId: 'c3', title: 'Super Bowl Calcutta · Cowboys', result: null, spent: 150, won: 0, pl: -150, verified: true, extra: { over: false } }]));
+  S.register('events', only([
+    { src: 'events', id: 'EV1:m3', date: day(5), sport: 'pickleball', kind: 'match', title: 'Tuesday ladder · Round 2', result: 'W', opponent: 'Ola / Oz', verified: true, extra: { game: 'pickleball', fmt: 'doubles', scoreText: '11-7, 11-9', games: [[11, 7], [11, 9]], partner: 'Pat', oppRating: [1540, 1490], partnerRating: 1510 } },
+    { src: 'events', id: 'EV2:event', date: day(4), sport: 'other', kind: 'event', title: 'Cornhole night', result: null, place: { n: 3, of: 12 }, verified: true, extra: { game: 'cornhole' } },
+    { src: 'events', id: 'TR1:event', date: day(2), sport: 'pickleball', kind: 'tournament', contestId: 'TR1', title: 'Fall Classic', result: null, place: { n: 1, of: 16 }, stake: 30, won: 200, verified: true, extra: { game: 'pickleball' } }]));
+  // the complete review's contest: entry $25, prize $9, and the bets inside it (+$64.10 on $180), which are My Bets rows too
+  S._deps.groups = () => ({ statsFor: async (k) => (k === AK ? [{ src: 'groups', id: 'G7:c1', date: day(1), sport: 'nfl', kind: 'contest', groupId: 'G7', contestId: 'c1', title: 'Sunday Crew · Picks', result: 'L', place: { n: 3, of: 6 }, pl: 64.1, units: 0.6, stake: 180, spent: 25, won: 9, verified: true, extra: { record: '4-3-0' } }] : []) });
+  S._reset();
+  await S.eventSetup(AK, 'GD2', { title: 'Club Championship', sport: 'golf', lockAt: Date.now() + 5 * 864e5 }); await S.eventOverride(AK, 'GD2', AK, { hcp: 12.4, reason: 'Club committee' });
+  await S.eventSetup(AK, 'MG27', { title: 'Member-Guest (next week)', sport: 'golf', lockAt: Date.now() + 9 * 864e5 }); await S.eventOverride(AK, 'MG27', AK, { hcp: 11, reason: 'Paired with a guest' });
+  await S.eventSetup(AK, 'TR1', { title: 'Fall Classic', sport: 'pickleball', lockAt: Date.now() + 5 * 864e5 }); await S.eventOverride(AK, 'TR1', AK, { rating: 1700, sport: 'pickleball', reason: 'Seeded by the director' });
+  const CS = require(W + 'stats-courses.js'); CS._deps.golf = () => null;
+  CS._deps.fetch = async (u) => { if (/courses\/search/.test(u)) return { ok: true, status: 200, json: async () => ({ courses: [{ id: 'og1', course_name: 'Palm View GC', city: 'McAllen', state: 'TX', par_total: 72, holes_count: 18 }] }) };
+    return { ok: true, status: 200, json: async () => ({ id: 'og1', course_name: 'Palm View GC', tees: [{ tee_name: 'Blue', course_rating: 72.4, slope: 131, par: 72, total_yards: 6700 }, { tee_name: 'White', course_rating: 70.2, slope: 122, par: 72, total_yards: 6200 }], holes: PARS.map((p, i) => ({ number: i + 1, par: p, handicap: SI[i] })) }) }; };
+  console.log('harness ready');
+});

@@ -5,7 +5,8 @@ const http = require('http');
 // env var can never reach the live database, My Apps, the owner PIN or spend an Odds API credit. See odds-api/preview.js and HANDOFF "Preview".
 const PREVIEW = process.env.PREVIEW === '1';
 if (PREVIEW) { Object.keys(process.env).forEach((k) => { if (/^odds_?api(_?key)?$/i.test(k) || /^(SUPABASE_|MYAPPS_|OWNER_PIN$|OWNER_PHONE$|ODDS_UPSTREAM$|GATE_OFF$|CFBD|ANTHROPIC_|AI_MODEL$|KALSHI|SYNC_TOKEN$|VAPID)/i.test(k)) delete process.env[k]; });
-  process.env.GATE_KEY = require('crypto').randomBytes(32).toString('hex'); } // sign-in tokens are signed with a secret made at every start: nobody can forge one (the link is treated as public)
+  process.env.GATE_KEY = require('crypto').randomBytes(32).toString('hex');
+  if (process.env.RENDER_EXTERNAL_URL) process.env.ODDABLE_APP_URL = process.env.RENDER_EXTERNAL_URL; else delete process.env.ODDABLE_APP_URL; } // sign-in tokens are signed with a secret made at every start: nobody can forge one (the link is treated as public)
 
 // Accept the key under any spelling of ODDS_API / ODDS_API_KEY (env names are case-sensitive on Linux)
 const KEYNAME = Object.keys(process.env).find((k) => /^odds_?api(_?key)?$/i.test(k));

@@ -382,7 +382,7 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 - Cause 2: empty bet records (only `t` and `id`, $0 stake, e.g. player 4143) passed the filter because the old regex had a stray leading space. They are now dropped from `open`.
 
 ## v220 — Underdog-off-blowout tag (info only)
-- Card chip "🐶 Dog off blowout" when the market underdog lost its last game by 14+ (NFL, pre-game). Sheet explains: 2004-2025 dog covered 53.6% of 1,303 games, ~break-even after juice, 1 of 24 factors tested, not significant after correction.
+- Card chip "🐶 Dog off blowout" when the market underdog lost its last game by 14+ (NFL, pre-game). Sheet explains: 2004-2025 dog covered 652-577 (53.1%, 28 pushes, 1,257 games, about +15.7 units at -110), ~break-even after juice, 1 of 24 factors tested, not significant after correction.
 - Does NOT touch model, locks or scoreboard. User approved Nov 15 2026 after factor backtest found no edge.
 
 ## v221 — Trophy picks (spread): #1 = 🏆🏆, #2 = 🏆
@@ -575,3 +575,7 @@ Owner: "Make sure that every app shows same information. Fix all of these issues
 - Unit rounding display (1 vs 2 decimals).
 - ALH / ALY / TRH are static: refresh at season end. alert-frozen.json and trophy-season.json are static: see notes above.
 - Parlays: still not built (owner's rule stands: real prices only).
+
+## v249 — Nov 15 2026: "Dog off blowout" figure corrected (text only)
+- The second reviewer found a definition mismatch: the sheet quoted 53.6% of 1,303 games, from a script that also counted a team's last game of the PRIOR season as its "last game" in week 1. The app's `dogOff()` only looks at earlier games of the same season. Matching figure, 2004-2025 regular season: 652-577 with 28 pushes, 53.1%, 1,257 games (1,229 decided), about +15.7 units at -110; break-even 52.4%. The coder re-counted it from games.csv and got the same numbers.
+- Changed: the `dogOpen()` sheet text and the code comment above `dogOff()` in pics/index.html, and the v220 line in this file. "About even after juice / information only / does not change any pick" wording kept. Nothing else changed. (The "1 of 24 factors tested" sentence was not re-checked.)

@@ -1,7 +1,8 @@
 // Unofficial ratings for Oddable player stats (Nov 16 2026). Pure functions, no I/O, so the golf and local-events engines can reuse them.
 //
-// 1) "Oddable handicap (unofficial)" — follows the published World Handicap System method (USGA Rules of Handicapping, verified Nov 16 2026 from
-//    https://scga.org/pdfs/Rules of Handicapping_USGA_Final.pdf ; Course Handicap formula also in https://www.usga.org/content/dam/usga/pdf/WHS_Change_Summaries_2020.pdf):
+// 1) "Oddable Handicap Index" (H1 name; shown with "Calculated with the World Handicap System method.") — follows the published World Handicap System method (USGA Rules of Handicapping, verified Nov 16 2026 from
+//    the 2024 USGA Rules of Handicapping, https://www.scga.org/pdfs/2024 Rules of Handicapping.pdf (Rules 3.1a, 3.1b, 5.1a, 5.2a incl. its two worked
+//    examples, 5.2b, 6.1a quoted from it; re-read Nov 16 2026 by the stats coder). Rule 5.2b also matches R&A's https://www.randa.org/roh/the-rules-of-handicapping/rule-5 ):
 //    - Rule 5.1a  Score Differential = (113 / Slope Rating) x (Adjusted Gross Score - Course Rating - PCC), rounded to the nearest tenth, .5 rounded up
 //                 (5.1c: negative values round toward zero, e.g. -1.55 -> -1.5). Oddable uses PCC = 0 (no daily playing-conditions data).
 //    - Rule 5.2a  fewer than 20 differentials: 3 -> lowest 1 minus 2.0; 4 -> lowest 1 minus 1.0; 5 -> lowest 1; 6 -> average of lowest 2 minus 1.0;
@@ -14,7 +15,7 @@
 //    NOT applied (documented in HANDOFF): PCC, soft/hard cap and Low Handicap Index, exceptional score reduction, 9-hole score combining, committee review.
 //    It is NOT an official USGA / GHIN Handicap Index and must never be called one.
 //
-// 2) "Oddable rating (unofficial)" — Elo for head-to-head local sports (pickleball, tennis, ...), per sport. NOT DUPR.
+// 2) "Oddable rating" — Elo for head-to-head local sports (pickleball, tennis, ...), per sport. NOT DUPR.
 //    Start 1500, K = 32, expected = 1 / (1 + 10^((opp - me) / 400)), new = old + K x (actual - expected), actual 1 win / 0 loss / 0.5 tie.
 //    Doubles: each side's strength is the average of its two players; every player on a side moves by the same amount.
 //    Margin of victory: OFF in v1 (option `mov: true` multiplies K by ln(point margin + 1), documented, not used by the app).
@@ -38,13 +39,17 @@ function strokesOnHole(ch, si, holes) { // handicap strokes a player receives (+
   const g = -ch, n = Math.floor(g / h) + (si > h - (g % h) ? 1 : 0); return n ? -n : 0;
 }
 // Adjusted gross score for one round. With hole scores + pars (+ stroke indexes once the player has a Course Handicap) each hole is capped; else the total as entered (flagged).
+// `holes` lists every hole: {n, par, si, strokes, max, used} so the round drill-down can show where a net double bogey (or par + 5) cut a score.
 function adjustedGross(r, ch) {
   const st = r.strokes, pars = r.pars, si = r.si, n = Array.isArray(st) ? st.length : 0;
   if (n && st.every(Number.isFinite) && Array.isArray(pars) && pars.length === n && pars.every(Number.isFinite)) {
-    if (ch == null) return { ags: st.reduce((s, x, i) => s + Math.min(x, pars[i] + 5), 0), how: 'par+5' }; // no index yet (Rule 3.1a)
-    if (Array.isArray(si) && si.length === n && si.every(Number.isFinite)) return { ags: st.reduce((s, x, i) => s + Math.min(x, pars[i] + 2 + strokesOnHole(ch, si[i], n)), 0), how: 'ndb' };
+    const hasSi = Array.isArray(si) && si.length === n && si.every(Number.isFinite);
+    if (ch == null || hasSi) {
+      const how = ch == null ? 'par+5' : 'ndb', holes = st.map((x, i) => { const max = how === 'par+5' ? pars[i] + 5 : pars[i] + 2 + strokesOnHole(ch, si[i], n); return { n: i + 1, par: pars[i], si: hasSi ? si[i] : null, strokes: x, max, used: Math.min(x, max) }; });
+      return { ags: holes.reduce((s, h) => s + h.used, 0), how, holes, cut: holes.filter((h) => h.used < h.strokes).length };
+    }
   }
-  return { ags: r.total, how: 'as-entered' };
+  return { ags: r.total, how: 'as-entered', holes: null, cut: 0 };
 }
 // rounds: [{date, total, cr, slope, par, strokes?, pars?, si?}] (18-hole individual rounds only). Walks them in date order: each round's adjusted score uses the
 // index from the rounds before it. Returns the current index, the differentials used and the history (index after each round).
@@ -53,11 +58,11 @@ function handicap(rounds) {
   const done = [], history = []; let cur = null;
   rs.forEach((r) => {
     const ch = cur ? courseHandicap(cur.index, r.slope, r.cr, r.par) : null, a = adjustedGross(r, ch), diff = differential(a.ags, r.cr, r.slope, 0);
-    if (diff == null) return; done.push({ id: r.id, date: r.date, ags: a.ags, how: a.how, diff, total: r.total, cr: r.cr, slope: r.slope, par: r.par });
-    cur = indexFrom(done.slice(-20).reverse().map((x) => x.diff)); if (cur) history.push({ date: r.date, index: cur.index });
+    if (diff == null) return; done.push({ id: r.id, date: r.date, ags: a.ags, how: a.how, diff, total: r.total, cr: r.cr, slope: r.slope, par: r.par, ch, holes: a.holes, cut: a.cut, course: r.course || '', tees: r.tees || '', idxBefore: cur ? cur.index : null });
+    cur = indexFrom(done.slice(-20).reverse().map((x) => x.diff)); if (cur) history.push({ date: r.date, index: cur.index, id: r.id });
   });
   const recent = done.slice(-20), lowIds = new Set(recent.slice().sort((a, b) => a.diff - b.diff).slice(0, cur ? cur.used : 0).map((x) => x.id));
-  return { index: cur ? cur.index : null, used: cur ? cur.used : 0, of: recent.length, adj: cur ? cur.adj : 0, rounds: done.length, need: Math.max(0, 3 - done.length), flagged: recent.filter((x) => x.how === 'as-entered').length,
+  return { index: cur ? cur.index : null, used: cur ? cur.used : 0, of: recent.length, adj: cur ? cur.adj : 0, rounds: done.length, need: Math.max(0, 3 - done.length), toTwenty: Math.max(0, 20 - done.length), flagged: recent.filter((x) => x.how === 'as-entered').length,
     diffs: recent.slice().reverse().map((x) => Object.assign({ used: lowIds.has(x.id) }, x)), history };
 }
 

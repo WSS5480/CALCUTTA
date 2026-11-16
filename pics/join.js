@@ -4,6 +4,22 @@
 // Engines plug in with: window.OddJoin.register(type, handler) — handler(code) opens that game's join preview (it runs only once the person is signed in).
 // API: OddJoin = { register(type, handler), pending() -> {type, code} | null, clear(), share({type, code, title, text}) -> opens the share sheet,
 //                  run() (gate.js calls it after a sign-in), banner(el) (gate.js: "You're invited to join <title>") }.
+//
+// GAMES INSIDE A GROUP (round 4; the contract for the Calcutta, golf and events screens). An invite handler takes a join CODE, so it cannot start a new
+// game or open one by its id. An engine's screen registers a second, explicit pair:
+//     OddJoin.registerGame(type, { open(ref, ctx), create(ctx) })          type: 'calc' | 'golf' | 'event'  ('calcutta' and 'events' are the same types)
+//       open(ref, ctx)   open the existing game <ref> (the engine's own game id, as stored on the group) for a member of the group.
+//                        ctx = { ref, code: ref, groupId, cid, name }
+//       create(ctx)      open the engine's "new game" screen for that group. ctx = { groupId, create: true, name: <the group's name> }.
+//                        When the game exists, the engine ties it to the group on the server (groups.attachGame, or its own attach route), then
+//                        calls OddGroups.refresh() so the hub shows it.
+// The Groups hub calls ONE function for both:
+//     OddJoin.openGame(type, ref, { groupId, cid, name })        -> the engine's open(ref, ctx); with no registerGame it falls back to the invite
+//                                                                    handler(ref, ctx), as before
+//     OddJoin.openGame(type, '', { groupId, create: true, name }) -> the engine's create(ctx). It returns false (and calls nothing) when the engine
+//                                                                    registered no create: an invite handler is NEVER called with an empty code.
+//     OddJoin.canCreate(type) -> true when a create is registered: the hub shows "+ Add a Calcutta / golf contest / local event" only then (or when
+//                                the merged build's OddGames.startFor, or the engine's server create handler, is there).
 (function () {
   const KEY = 'odd-join', API = (window.ODD_GROUPS_API || 'https://calcutta-odds.onrender.com') + '/groups/invite', SITE = 'https://steves-pics.onrender.com/';
   const H = {}, ss = (k, v) => { try { if (v === undefined) return sessionStorage.getItem(k); if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch (e) { return null; } };
@@ -19,6 +35,7 @@
   let busy = false; const KIND = { g: 'group', c: 'Calcutta', calc: 'Calcutta', golf: 'golf game', e: 'local event', event: 'local event' };
   // The group hub calls games by their pot type ('calc', 'golf', 'event'); invite links use 'c', 'golf', 'e'. One handler serves both names.
   const ALIAS = { calc: 'c', event: 'e' }, hOf = (t) => H[t] || H[ALIAS[t]] || null;
+  const GM = {}, GALIAS = { calcutta: 'calc', events: 'event', c: 'calc', e: 'event' }, gOf = (t) => GM[GALIAS[t] || t] || null;
   function waitNote(p) { // the engine for this invite is not on this page (yet): keep the invite and say exactly that, once
     if (document.getElementById('ojoin')) return; const o = document.createElement('div'); o.id = 'ojoin';
     o.style.cssText = 'position:fixed;inset:0;z-index:110;background:rgba(5,8,16,.8);display:flex;align-items:center;justify-content:center;padding:16px;font:15px/1.4 system-ui';
@@ -52,13 +69,20 @@
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px"><button id="oshare-c" style="min-height:48px;border-radius:14px;border:1px solid #2f2850;background:#14111f;color:#f1eefa;font:700 16px system-ui">Copy link</button><a id="oshare-t" href="sms:?&body=' + encodeURIComponent(line + ' ' + url) + '" style="min-height:48px;border-radius:14px;background:#7c3aed;color:#fff;font:700 16px system-ui;display:flex;align-items:center;justify-content:center;text-decoration:none">Text it</a></div>'
       + '<button id="oshare-x" style="width:100%;min-height:48px;margin-top:10px;border-radius:14px;border:0;background:none;color:#a78bfa;font:700 16px system-ui">Done</button></div>';
     document.body.appendChild(s); document.getElementById('oshare-x').onclick = () => s.remove(); s.addEventListener('click', (e) => { if (e.target === s) s.remove(); });
-    document.getElementById('oshare-c').onclick = async (e) => { const i = document.getElementById('oshare-l'); try { await navigator.clipboard.writeText(url); e.target.textContent = 'Copied'; } catch (er) { i.select(); try { document.execCommand('copy'); e.target.textContent = 'Copied'; } catch (e2) {} } };
+    document.getElementById('oshare-c').onclick = (e) => { const b = e.target, i = document.getElementById('oshare-l'), hand = () => { try { i.focus(); i.select(); b.textContent = document.execCommand('copy') ? 'Copied' : 'Select the link and copy it'; } catch (e2) { b.textContent = 'Select the link and copy it'; } }; // the clipboard can be refused: never say "Copied" unless it was
+      try { navigator.clipboard.writeText(url).then(() => { b.textContent = 'Copied'; }).catch(hand); } catch (er) { hand(); } };
     return 'sheet';
   }
   // openGame(type, ref, ctx): open a game from inside another screen (a game attached to a group: every member of the group can go in). The engine's
   // registered handler gets (ref, ctx) where ctx = { ref, code: ref, groupId, cid, name, create? }; returns false when that engine is not on this page.
-  function openGame(type, ref, ctx) { const h = hOf(type); if (!h) return false; try { h(ref, Object.assign({ ref: ref, code: ref }, ctx || {})); } catch (e) {} return true; }
-  window.OddJoin = { openGame, has: (type) => !!hOf(type), register(type, handler) { if (!/^[a-z]{1,8}$/.test(type) || typeof handler !== 'function') return; H[type] = handler; run(); }, pending, clear() { ss(KEY, null); ss(KEY + '-t', null); }, share, run, banner, link, parse };
+  function openGame(type, ref, ctx) {
+    const g = gOf(type), c = Object.assign({ ref: ref, code: ref }, ctx || {});
+    if (c.create) { if (!g || typeof g.create !== 'function') return false; try { g.create(c); } catch (e) {} return true; } // never the invite handler: it would read '' as a join code
+    if (g && typeof g.open === 'function') { try { g.open(ref, c); } catch (e) {} return true; }
+    const h = hOf(type); if (!h) return false; try { h(ref, c); } catch (e) {} return true;
+  }
+  function registerGame(type, api) { const t = GALIAS[type] || type; if (!/^[a-z]{1,8}$/.test(String(t)) || !api || (typeof api.open !== 'function' && typeof api.create !== 'function')) return false; GM[t] = { open: api.open, create: api.create }; try { if (window.OddGroups && window.OddGroups.refresh) window.OddGroups.refresh(); } catch (e) {} return true; }
+  window.OddJoin = { openGame, registerGame, canCreate: (type) => { const g = gOf(type); return !!(g && typeof g.create === 'function'); }, has: (type) => !!hOf(type) || !!gOf(type), register(type, handler) { if (!/^[a-z]{1,8}$/.test(type) || typeof handler !== 'function') return; H[type] = handler; run(); }, pending, clear() { ss(KEY, null); ss(KEY + '-t', null); }, share, run, banner, link, parse };
   // Already signed in when the link was opened: run once the engines had a moment to register.
   setTimeout(run, 1800);
 })();

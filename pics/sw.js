@@ -1,4 +1,4 @@
-const C='pics-v254';
+const C='pics-v254-g4'; // the cache name changes with every build that changes a cached file (Groups round 4 kept the v254 label; the manager's v255 bump renames it again)
 self.addEventListener('install',e=>{self.skipWaiting();});
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==C).map(x=>caches.delete(x)))).then(()=>self.clients.claim())));
 // Always go to the network first (bypassing the HTTP cache); cache is only an offline fallback.

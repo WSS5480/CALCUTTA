@@ -26,8 +26,8 @@ const BASE = () => [
   { id: '503', start: START + 7 * DAY, away: T('GB', 'Green Bay Packers'), home: T('CHI', 'Chicago Bears'), as: 14, hs: 21, odds: O('CHI -3', 41, 140, -160) },
   { id: '505', start: START, away: T('WAS', 'Washington Commanders'), home: T('PHI', 'Philadelphia Eagles'), as: 10, hs: 31, odds: { details: 'PHI -7.5', overUnder: 44.5 } }, // a line, no prices
   { id: '506', start: START, away: T('ARI', 'Arizona Cardinals'), home: T('SF', 'San Francisco 49ers'), as: 13, hs: 30, odds: O('SF -9.5', 45, 380, -500), oddsFrom: START - DAY }, // posted a day before only
-  { id: '507', start: START, away: T('DEN', 'Denver Broncos'), home: T('LV', 'Las Vegas Raiders'), as: 0, hs: 0, off: 'STATUS_CANCELED', completed: true, odds: O('LV -3', 40, 140, -160) },
-  { id: '508', start: START, away: T('SEA', 'Seattle Seahawks'), home: T('LAR', 'Los Angeles Rams'), as: 21, hs: 20, off: 'STATUS_POSTPONED', odds: O('LAR -3', 40, 140, -160) },
+  { id: '507', start: START, away: T('DEN', 'Denver Broncos'), home: T('LV', 'Las Vegas Raiders'), as: 0, hs: 0, off: 'STATUS_CANCELED', offFrom: START - H, completed: true, odds: O('LV -3', 40, 140, -160) }, // called off an hour before kickoff
+  { id: '508', start: START, away: T('SEA', 'Seattle Seahawks'), home: T('LAR', 'Los Angeles Rams'), as: 21, hs: 20, off: 'STATUS_POSTPONED', offFrom: START - H, odds: O('LAR -3', 40, 140, -160) },
   { id: '509', start: START + 2 * H, away: T('MIA', 'Miami Dolphins'), home: T('NE', 'New England Patriots'), as: 17, hs: 10, odds: O('NE -3', 40, 140, -160) },
   { id: '901', lg: 'nhl', start: START, away: T('TOR', 'Toronto Maple Leafs'), home: T('BOS', 'Boston Bruins'), as: 2, hs: 3, odds: O('BOS -1.5', 6, 140, -165, { awayTeamOdds: { moneyLine: 140, spreadOdds: -200 }, homeTeamOdds: { moneyLine: -165, spreadOdds: 170 } }) },
   { id: '701', lg: 'nba', start: START, away: T('LAL', 'Los Angeles Lakers'), home: T('BOS', 'Boston Celtics'), as: 105, hs: 110, odds: O('BOS -4', 214.5, 150, -170) },
@@ -35,21 +35,24 @@ const BASE = () => [
 const ymd = (ms) => GR.chiDay(ms).replace(/-/g, '');
 D.fetch = async (u) => {
   const m = /sports\/([a-z-]+\/[a-z-]+)\/scoreboard\?dates=(\d{8})/.exec(u);
-  const evs = !m ? [] : GAMES.filter((g) => PATH[g.lg || 'nfl'] === m[1] && ymd(g.start) === m[2]).map((g) => { const now = D.now(), st = g.off ? (now < g.start ? 'pre' : 'post') : now < g.start ? 'pre' : now < g.start + 3.5 * H ? 'in' : 'post';
+  const evs = !m ? [] : GAMES.filter((g) => PATH[g.lg || 'nfl'] === m[1] && ymd(g.start) === m[2]).map((g0) => { const now = D.now(), g = Object.assign({}, g0, { off: g0.off && !(g0.offFrom && now < g0.offFrom) ? g0.off : '' }), st = g.off ? (now < g.start ? 'pre' : 'post') : now < g.start ? 'pre' : now < g.start + 3.5 * H ? 'in' : 'post';
     const tm = (t) => ({ abbreviation: t.abbr, displayName: t.name, shortDisplayName: t.short, location: t.loc }), od = typeof g.odds === 'function' ? g.odds(now) : g.odds;
     return { id: g.id, date: new Date(g.start).toISOString(), status: { type: { state: st, completed: g.completed != null ? (st === 'post' && g.completed) : (!g.off && st === 'post'), name: g.off || (st === 'post' ? 'STATUS_FINAL' : 'STATUS_SCHEDULED') } },
       competitions: [{ odds: od && !(g.oddsFrom && now < g.oddsFrom) ? [od] : undefined, competitors: [{ homeAway: 'home', score: st === 'pre' ? '0' : String(g.hs), team: tm(g.home) }, { homeAway: 'away', score: st === 'pre' ? '0' : String(g.as), team: tm(g.away) }] }] }; });
   return { ok: true, json: async () => ({ events: evs }) };
 };
 let NOW = START - 3 * DAY; D.now = () => NOW;
-const fresh = () => { X.db = {}; WHO.forEach((w) => { X.db[SID[w]] = { id: SID[w], salt: 's', pinhash: 'h', data: { bets: [] }, updated: 1 }; }); GAMES = BASE(); X.DOWN = X.LOSTACK = X.NOREAD = false; G._reset(); if (LIM._reset) LIM._reset(); NOW = START - 3 * DAY; };
+const fresh = () => { X.db = {}; WHO.forEach((w) => { X.db[SID[w]] = { id: SID[w], salt: 's', pinhash: 'h', data: { bets: [] }, updated: 1 }; }); GAMES = BASE(); X.DOWN = X.LOSTACK = X.NOREAD = X.NOTICK = false; G._reset(); if (LIM._reset) LIM._reset(); NOW = START - 3 * DAY; };
 const srv = http.createServer(async (req, res) => { if (!(await G.handle(req, res))) { res.statusCode = 404; res.end('{}'); } }); let P;
 const call = async (who, op, b, ip) => { const r = await fetch('http://127.0.0.1:' + P + '/groups/' + op, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': who ? 't-' + who : '', 'x-ip': ip || ('9.9.' + (WHO.indexOf(who) >> 8) + '.' + (WHO.indexOf(who) & 255)) }, body: JSON.stringify(b || {}) }); return { s: r.status, j: await r.json() }; };
 const CDEF = { cname: 'Picks', sport: 'nfl', fmt: 'standings', start: START - H, runs: 'w4', kalshi: false, honor: false, types: { sp: true, ml: true, ou: true, prop: true, parlay: true }, legs: 4, metric: 'win', minBets: 0, minPaid: 0, cap: 0, entry: 25, split: '100' };
 // A group whose commissioner turned on "anyone with the link joins without approval" (so the helpers below can seat people); joinAll uses the commissioner's code.
 const mk = async (who, c, join, extra) => { NOW = START - 3 * DAY; G._reset(); const r = await call(who, 'create', Object.assign({ name: 'G' + Math.random().toString(36).slice(2, 7), take: { kind: 'none', v: 0 }, join: Object.assign({ requests: true, open: false, auto: true, max: 8, late: 'no' }, join || {}), contest: Object.assign({}, CDEF, c || {}) }, extra || {})); assert.strictEqual(r.s, 200, JSON.stringify(r.j)); return r.j.group; };
 const joinAll = async (g, ws) => { for (const w of ws) { const r = await call(w, 'join', { code: g.code }); assert.strictEqual(r.s, 200, w + ' join ' + JSON.stringify(r.j)); assert.ok(r.j.group && r.j.group.members, w + ' is a member'); } };
-const view = async (w, g, at, cid) => { if (at != null) NOW = at; G._reset(); const st = await call(w, 'standings', { id: g.id, cid: cid || g.contests[0].cid }); assert.strictEqual(st.s, 200, JSON.stringify(st.j)); const me = st.j.rows.find((x) => x.name === w.toUpperCase() + 'name'); const p = await call(w, 'player', { id: g.id, cid: cid || g.contests[0].cid, pid: me.pid }); return { st: st.j, row: me, bets: p.j.bets, t: p.j.t, by: Object.fromEntries(p.j.bets.map((b) => [b.id, b])) }; };
+// Round 4: the kickoff reference must have been read inside the last 30 minutes before kickoff. In production the server ticks every 5 minutes in a game
+// window; here the clock jumps, so before a jump FORWARD the harness runs the tick the server would have run 5 minutes before each kickoff on the way.
+const kickTicks = async (to) => { if (X.NOTICK) return; const ts = [...new Set(GAMES.map((g) => g.start - 5 * 6e4))].filter((t) => t > NOW && t <= to).sort((a, b) => a - b); for (const t of ts) { NOW = t; await G.tick({ force: true }); } };
+const view = async (w, g, at, cid) => { if (at != null) { await kickTicks(at); NOW = at; } G._reset(); const st = await call(w, 'standings', { id: g.id, cid: cid || g.contests[0].cid }); assert.strictEqual(st.s, 200, JSON.stringify(st.j)); const me = st.j.rows.find((x) => x.name === w.toUpperCase() + 'name'); const p = await call(w, 'player', { id: g.id, cid: cid || g.contests[0].cid, pid: me.pid }); return { st: st.j, row: me, bets: p.j.bets, t: p.j.t, by: Object.fromEntries(p.j.bets.map((b) => [b.id, b])) }; };
 const bet = (id, gid, side, type, odds, stake, o) => { const g = GAMES.find((x) => x.id === gid); return Object.assign({ id, gid, lg: g.lg || 'nfl', away: g.away.abbr, home: g.home.abbr, day: GR.chiDay(g.start), side, type, odds, stake }, o || {}); };
 const leg = (gid, side, type, o, line) => { const g = GAMES.find((x) => x.id === gid); return { gid, side, type, o, line, lg: g.lg || 'nfl', home: g.home.abbr, away: g.away.abbr, day: GR.chiDay(g.start) }; };
 const add = (w, b) => call(w, 'bet/add', { bet: b });
@@ -77,38 +80,38 @@ test('C1 a Kalshi bet is added like any other: it locks at that moment; marking 
 test('C1 "Kalshi-tagged bets only" filters among SERVER-ADDED bets by a ticker checked in shape; the label stays "(not verified)"', async () => {
   const g = await mk('ann', { kalshi: true }); await joinAll(g, ['bob']); NOW = START - 6 * H;
   assert.strictEqual((await add('bob', { id: 'kk1', src: 'kalshi', kt: 'KXNFLGAME-26NOV22KCBUF-KC', ks: 'yes', kind: 'prop', text: 'Kansas City to win', mult: 2.2, stake: 50, day: '2026-11-22' })).s, 200);
-  assert.strictEqual((await add('bob', bet('h1', '509', 'MIA', 'ml', 140, 50))).s, 200);
-  let r = await add('bob', { id: 'kbad', src: 'kalshi', kt: 'not a ticker', mult: 2, stake: 5, day: '2026-11-22' }); assert.strictEqual(r.s, 400, 'bad ticker shape refused');
+  let r = await add('bob', bet('h1', '509', 'MIA', 'ml', 140, 50)); assert.strictEqual(r.s, 409, 'round 4: a bet that cannot count is refused with the reason'); assert.match(r.j.error, /can't count in Picks: Kalshi-tagged bets only/);
+  r = await add('bob', { id: 'kbad', src: 'kalshi', kt: 'not a ticker', mult: 2, stake: 5, day: '2026-11-22' }); assert.strictEqual(r.s, 400, 'bad ticker shape refused');
   r = await add('bob', { id: 'kbad2', src: 'polymarket', kt: 'KXNFLGAME-26NOV22KCBUF-KC', mult: 2, stake: 5, day: '2026-11-22' }); assert.strictEqual(r.s, 400);
   const v = await view('bob', g, START + 2 * DAY); assert.ok(v.by.kk1.ok && v.by.kk1.kalshi && v.by.kk1.res === 'won'); assert.strictEqual(v.by.kk1.pl, 60, 'typed 2.2x (+120) is worse than the +130 reference: 50 x 1.2');
-  assert.ok(!v.by.h1.ok && /Kalshi-tagged bets only/.test(v.by.h1.why)); assert.ok(client().includes('Kalshi-tagged bets only (not verified)'));
+  assert.ok(!v.by.h1); assert.ok(client().includes('Kalshi-tagged bets only (not verified)'));
 });
 // =============================== CRITICAL 2: the price is settled at kickoff ===============================
-test('C2 no reference price = EVEN MONEY at most, never "+500 on anything" (moneyline with nothing posted: +100)', async () => {
+test('C2 (round 4: replaces "even money") no posted price: a moneyline with nothing posted is REFUSED when added, never paid at +100 or +500', async () => {
   const g = await mk('ann'); await joinAll(g, ['bob']); NOW = START - 5 * H;
-  assert.strictEqual((await add('bob', bet('n2', '501', 'NYG', 'ml', 500, 100))).s, 200);
-  const v = await view('bob', g, START + 2 * DAY); assert.ok(v.by.n2.ok && v.by.n2.res === 'won'); assert.strictEqual(v.by.n2.pl, 100);
+  const r = await add('bob', bet('n2', '501', 'NYG', 'ml', 500, 100)); assert.strictEqual(r.s, 409); assert.match(r.j.error, /^No posted price for this game yet — it can't count in your group/);
+  const v = await view('bob', g, START + 2 * DAY); assert.deepStrictEqual(v.bets, []);
 });
-test('C2 the reference is re-read until kickoff: a bet added before ESPN posts odds is graded at the price posted later (SF -500, not the +500 typed)', async () => {
+test('C2 the price typed never beats the reference: SF -500 on ESPN, +500 typed -> graded at -500', async () => {
   const g = await mk('ann'); await joinAll(g, ['bob']); NOW = START - 2.5 * DAY;
-  assert.strictEqual((await add('bob', bet('n5', '506', 'SF', 'ml', 500, 100))).s, 200);
-  NOW = START - 2 * H; G._reset(); await G.tick(Object.assign({ force: true })); // the server's own tick, two hours before kickoff
+  assert.strictEqual((await add('bob', bet('n5', '506', 'SF', 'ml', 500, 100))).s, 409, 'round 4: before ESPN posts a price the bet is refused');
+  NOW = START - 20 * H; assert.strictEqual((await add('bob', bet('n5', '506', 'SF', 'ml', 500, 100))).s, 200);
   const v = await view('bob', g, START + 2 * DAY); assert.strictEqual(v.by.n5.res, 'won'); assert.strictEqual(v.by.n5.pl, 20);
 });
 test('C2 worse of the price typed and the reference AT KICKOFF: the line moves against the bettor after the bet, the kickoff price is used; nothing after kickoff is read', async () => {
   const g = await mk('ann'); await joinAll(g, ['bob', 'cat']);
   GAMES.find((x) => x.id === '502').odds = (now) => (now < START - 3 * H ? O('BUF -2.5', 47.5, 150, -170) : now < START + 3 * H ? O('BUF -2.5', 47.5, 110, -130) : O('BUF -2.5', 47.5, 900, -2000)); // +150 early, +110 at kickoff, +900 "live"
   NOW = START - 6 * H; assert.strictEqual((await add('bob', bet('m1', '502', 'KC', 'ml', 140, 100))).s, 200); assert.strictEqual((await add('cat', bet('m2', '502', 'KC', 'ml', 105, 100))).s, 200);
-  NOW = START + 2 * H; G._reset(); await G.tick({ force: true }); // an hour before kickoff: +110
+  NOW = START + 3 * H - 10 * 6e4; G._reset(); await G.tick({ force: true }); // ten minutes before kickoff: +110
   NOW = START + 4 * H; G._reset(); await G.tick({ force: true }); // in play: the +900 must never be taken
   let v = await view('bob', g, START + 2 * DAY); assert.strictEqual(v.by.m1.pl, 110, 'typed +140, +150 when added, +110 at kickoff -> +110');
   v = await view('cat', g, START + 2 * DAY); assert.strictEqual(v.by.m2.pl, 105, 'typed +105 is the worse one: kept');
 });
-test('C2 the line check runs with or without a reference PRICE: ESPN has PHI -7.5 and no prices, PHI -5.5 is refused; PHI ML is capped by the spread (well under even money)', async () => {
+test('C2 the line check runs with or without a reference PRICE: ESPN has PHI -7.5 and no prices, PHI -5.5 is refused for its line; at the line, and on the moneyline, it is refused for having no posted price (round 4)', async () => {
   const g = await mk('ann'); await joinAll(g, ['bob']); NOW = START - 5 * H;
   let r = await add('bob', bet('n4', '505', 'PHI', 'sp', 500, 100, { line: -5.5 })); assert.strictEqual(r.s, 409, JSON.stringify(r.j)); assert.match(r.j.error, /Line too far from the market: the main line is PHI -7.5/);
-  r = await add('bob', bet('n4b', '505', 'PHI', 'sp', 500, 100, { line: -7.5 })); assert.strictEqual(r.s, 200); r = await add('bob', bet('n3', '505', 'PHI', 'ml', 500, 100)); assert.strictEqual(r.s, 200);
-  const v = await view('bob', g, START + 2 * DAY); assert.strictEqual(v.by.n4b.pl, 100, 'main line, no price: even money, not +500'); assert.ok(v.by.n3.pl > 0 && v.by.n3.pl < 50, 'a 7.5-point favorite never pays even money: ' + v.by.n3.pl);
+  r = await add('bob', bet('n4b', '505', 'PHI', 'sp', 500, 100, { line: -7.5 })); assert.strictEqual(r.s, 409); assert.match(r.j.error, /No posted price/); r = await add('bob', bet('n3', '505', 'PHI', 'ml', 500, 100)); assert.strictEqual(r.s, 409); assert.match(r.j.error, /No posted price/);
+  const v = await view('bob', g, START + 2 * DAY); assert.deepStrictEqual(v.bets, []);
   assert.strictEqual(typeof GR.lineWhy, 'function'); assert.ok(GR.lineWhy({ kind: 'sp', side: 'home', line: -5.5, lg: 'nfl', rl: -7.5 }), 'no rp given, still refused');
 });
 test('C2 no line at all: a spread or total is refused when added ("No line posted yet for this game — try closer to kickoff"); a moneyline counts at even money at most', async () => {
@@ -119,24 +122,24 @@ test('C2 no line at all: a spread or total is refused when added ("No line poste
 test('C2 "Longest odds that count" stays an upper cap ON TOP of the reference rule (typed +400, reference +380, contest cap +150 -> +150)', async () => {
   GAMES.find((x) => x.id === '506').oddsFrom = 0; const g = await mk('ann', { maxOdds: 150 }); await joinAll(g, ['bob']); NOW = START - 5 * H; GAMES.find((x) => x.id === '506').as = 31;
   assert.strictEqual((await add('bob', bet('c1', '506', 'ARI', 'ml', 400, 100))).s, 200); const v = await view('bob', g, START + 2 * DAY); assert.strictEqual(v.by.c1.pl, 150);
-  const g2 = await mk('ann', { maxOdds: 5000 }); await joinAll(g2, ['cat']); NOW = START - 5 * H; assert.strictEqual((await add('cat', bet('c2', '501', 'NYG', 'ml', 5000, 100))).s, 200);
-  assert.strictEqual((await view('cat', g2, START + 2 * DAY)).by.c2.pl, 100, 'a +5000 setting never lifts the even-money rule');
+  const g2 = await mk('ann', { maxOdds: 5000 }); await joinAll(g2, ['cat']); NOW = START - 5 * H; assert.strictEqual((await add('cat', bet('c2', '501', 'NYG', 'ml', 5000, 100))).s, 409, 'a +5000 setting never makes a bet with no posted price count');
 });
 // =============================== CRITICAL 3: parlays ===============================
 test('C3 parlays: the same leg twice and two legs from one game are refused; legs are capped (default 4, commissioner setting)', async () => {
   const g = await mk('ann', { legs: undefined }); assert.strictEqual(g.contests[0].rules.legs, 4, 'default 4'); await joinAll(g, ['bob']); NOW = START - 5 * H;
   let r = await add('bob', { id: 'p1', kind: 'parlay', stake: 100, day: '2026-11-22', lg: 'nfl', mult: 1000, legs: [1, 2, 3, 4, 5].map(() => leg('502', 'KC', 'ml', 130)) }); assert.strictEqual(r.s, 409); assert.match(r.j.error, /same leg/);
   r = await add('bob', { id: 'p3', kind: 'parlay', stake: 100, day: '2026-11-22', lg: 'nfl', legs: [leg('502', 'KC', 'ml', 130), leg('502', 'KC', 'sp', -110, 2.5)] }); assert.strictEqual(r.s, 409); assert.match(r.j.error, /same game/);
-  r = await add('bob', { id: 'p5', kind: 'parlay', stake: 10, day: '2026-11-22', lg: 'nfl', legs: [leg('501', 'NYG', 'ml', -110), leg('502', 'KC', 'ml', 130), leg('506', 'SF', 'ml', -500), leg('509', 'MIA', 'ml', 140), leg('505', 'PHI', 'ml', -300)] }); assert.strictEqual(r.s, 200);
-  const v = await view('bob', g, START + 2 * DAY); assert.ok(!v.by.p5.ok && /More than 4 legs/.test(v.by.p5.why), JSON.stringify(v.by.p5));
+  r = await add('bob', { id: 'p5', kind: 'parlay', stake: 10, day: '2026-11-22', lg: 'nfl', legs: [leg('507', 'LV', 'ml', -160), leg('502', 'KC', 'ml', 130), leg('506', 'SF', 'ml', -500), leg('509', 'MIA', 'ml', 140), leg('508', 'LAR', 'ml', -160)] });
+  assert.strictEqual(r.s, 409, 'round 4: refused when added, with the reason'); assert.match(r.j.error, /can't count in Picks: More than 4 legs\. Nothing was added/);
+  const v = await view('bob', g, START + 2 * DAY); assert.deepStrictEqual(v.bets, []);
 });
 test('C3 every leg passes the price rule on its own and the multiplier is the PRODUCT of the graded leg prices, never the typed one when that is higher', async () => {
   const g = await mk('ann'); await joinAll(g, ['bob', 'cat']); NOW = START - 5 * H;
-  // legs typed +500 each: NYG has no reference (even money, 2x), KC reference +130 (2.3x), MIA reference +140 (2.4x) -> 2 x 2.3 x 2.4 = 11.04x, not 216x and not the typed 1000x
-  let r = await add('bob', { id: 'p2', kind: 'parlay', stake: 100, day: '2026-11-22', lg: 'nfl', mult: 1000, legs: [leg('501', 'NYG', 'ml', 500), leg('502', 'KC', 'ml', 500), leg('509', 'MIA', 'ml', 500)] }); assert.strictEqual(r.s, 200, JSON.stringify(r.j));
+  // legs typed +500 each: SF reference -500 (1.2x), KC reference +130 (2.3x), MIA reference +140 (2.4x) -> 1.2 x 2.3 x 2.4 = 6.624x, not 216x and not the typed 1000x
+  let r = await add('bob', { id: 'p2', kind: 'parlay', stake: 100, day: '2026-11-22', lg: 'nfl', mult: 1000, legs: [leg('506', 'SF', 'ml', 500), leg('502', 'KC', 'ml', 500), leg('509', 'MIA', 'ml', 500)] }); assert.strictEqual(r.s, 200, JSON.stringify(r.j));
   r = await add('cat', { id: 'p4', kind: 'parlay', stake: 100, day: '2026-11-22', lg: 'nfl', mult: 3, legs: [leg('502', 'KC', 'ml', 130), leg('509', 'MIA', 'ml', 140)] }); assert.strictEqual(r.s, 200); // typed 3x is LOWER than 2.3 x 2.4 = 5.52x: the typed one is used
-  r = await add('cat', { id: 'p6', kind: 'parlay', stake: 100, day: '2026-11-22', lg: 'nfl', legs: [leg('501', 'NYG', 'ml', -110), leg('505', 'PHI', 'sp', 500, -5.5)] }); assert.strictEqual(r.s, 409, 'a leg with a far line sinks the parlay when it is added');
-  let v = await view('bob', g, START + 2 * DAY); assert.strictEqual(v.by.p2.res, 'won'); assert.strictEqual(v.by.p2.pl, 1004, '100 x (2 x 2.3 x 2.4 - 1)');
+  r = await add('cat', { id: 'p6', kind: 'parlay', stake: 100, day: '2026-11-22', lg: 'nfl', legs: [leg('506', 'SF', 'ml', -500), leg('505', 'PHI', 'sp', 500, -5.5)] }); assert.strictEqual(r.s, 409, 'a leg with a far line sinks the parlay when it is added');
+  let v = await view('bob', g, START + 2 * DAY); assert.strictEqual(v.by.p2.res, 'won'); assert.strictEqual(v.by.p2.pl, 562.4, '100 x (1.2 x 2.3 x 2.4 - 1)');
   v = await view('cat', g, START + 2 * DAY); assert.strictEqual(v.by.p4.pl, 200);
 });
 // =============================== HIGH 4: tolerance per sport and market; alternate lines ===============================
@@ -168,7 +171,7 @@ test('H5 idempotent add: same id + same bet = success with the stored bet (never
   X.LOSTACK = true; let r = await add('cat', b); X.LOSTACK = false; assert.notStrictEqual(r.s, 200, 'the write landed but the answer was lost');
   let st = await call('cat', 'bet/status', { id: 'x2' }); assert.strictEqual(st.s, 200); assert.strictEqual(st.j.saved, true, 'the phone asks by id before saying anything'); assert.strictEqual(st.j.bet.id, 'x2'); assert.strictEqual(st.j.bet.gl, NOW);
   const t0 = NOW; NOW += 30e3; r = await add('cat', b); assert.strictEqual(r.s, 200, JSON.stringify(r.j)); assert.strictEqual(r.j.gl, t0, 'the stored bet, first stamp'); assert.strictEqual(r.j.again, true);
-  r = await add('cat', b); assert.strictEqual(r.s, 200); r = await add('cat', bet('x2', '502', 'BUF', 'ml', -150, 100)); assert.strictEqual(r.s, 409, 'different content'); assert.match(r.j.error, /different bet is already locked/);
+  r = await add('cat', b); assert.strictEqual(r.s, 200); r = await add('cat', bet('x2', '502', 'BUF', 'ml', -150, 100)); assert.strictEqual(r.s, 409, 'different content'); assert.match(r.j.error, /different bet is already saved/);
   st = await call('cat', 'bet/status', { id: 'never' }); assert.strictEqual(st.j.saved, false);
   assert.strictEqual(X.db[SID.cat].data.bets.filter((y) => y.id === 'x2').length, 1, 'one copy in My Bets'); assert.ok(X.db[SID.cat].data.bets[0].gl === t0);
   const v = await view('cat', g, START + 2 * DAY); assert.strictEqual(v.bets.length, 1); assert.strictEqual(v.t.stake, 100); assert.strictEqual(v.by.x2.pl, 130);
@@ -210,28 +213,31 @@ test('H7 Hot pairs with exactly four players uses each pair\'s OWN record togeth
   const g = await mk('ann'); const r = await call('ann', 'partners', { id: g.id, sport: 'golf', teamSize: 3, sizes: '4/3', guests: seven.map((p) => ({ name: p.name, val: p.hcp })).slice(0, 6) }); assert.strictEqual(r.s, 200); assert.deepStrictEqual(r.j.choices.map((c) => c.key), ['3/2/2', '4/3']); assert.strictEqual(r.j.sizes, '4/3'); assert.ok(client().includes('p-sizes'), 'the commissioner is offered the choice on the phone');
 });
 // =============================== MEDIUM 8: stake caps, weekly limit ===============================
-test('M8 stake cap per MARKET and per GAME per member: the same bet 20 times counts once; markets on one game share twice the cap; Standings default to 10 bets a week', async () => {
+test('M8 stake cap per MARKET and per GAME per member: the same bet 20 times counts once (the copies are refused, round 4); markets on one game share twice the cap; Standings default to 10 bets a week', async () => {
   const g = await mk('ann', { cap: 100 }); assert.strictEqual(g.contests[0].rules.maxBets, 10, 'weekly limit default in Standings'); await joinAll(g, ['bob']); NOW = START - 5 * H;
-  for (let i = 0; i < 20; i++) { NOW += 1000; assert.strictEqual((await add('bob', bet('d' + String(i).padStart(2, '0'), '502', 'KC', 'ml', 130, 100))).s, 200); }
-  let v = await view('bob', g, START + 2 * DAY); assert.strictEqual(v.t.n, 1); assert.strictEqual(v.t.stake, 100); assert.strictEqual(v.t.win, 130); assert.match(v.by.d01.why, /Over the stake limit: \$100 counts on one market and \$200 on one game/);
+  for (let i = 0; i < 20; i++) { NOW += 1000; const r = await add('bob', bet('d' + String(i).padStart(2, '0'), '502', 'KC', 'ml', 130, 100)); assert.strictEqual(r.s, i ? 409 : 200); if (i) assert.match(r.j.error, /Over the stake limit: \$100 counts on one market and \$200 on one game/); }
+  let v = await view('bob', g, START + 2 * DAY); assert.strictEqual(v.bets.length, 1); assert.strictEqual(v.t.n, 1); assert.strictEqual(v.t.stake, 100); assert.strictEqual(v.t.win, 130);
   const g2 = await mk('ann', { cap: 100, maxBets: 0 }); await joinAll(g2, ['cat']); NOW = START - 5 * H;
-  for (const b of [bet('a1', '502', 'KC', 'ml', 130, 80), bet('a2', '502', 'KC', 'sp', -110, 100, { line: 2.5 }), bet('a3', '502', 'Over', 'ou', -110, 100, { line: 47.5 }), bet('a4', '502', 'KC', 'ml', 130, 50)]) { NOW += 1000; assert.strictEqual((await add('cat', b)).s, 200); }
-  v = await view('cat', g2, START + 2 * DAY); assert.deepStrictEqual(['a1', 'a2', 'a3', 'a4'].map((k) => [v.by[k].ok, v.by[k].cs || 0]), [[true, 80], [true, 100], [true, 20], [false, 0]], '80 + 100 + 20 = $200 on the game; the 4th is over'); assert.strictEqual(v.by.a3.capped, true);
-  const g3 = await mk('ann'); await joinAll(g3, ['dan']); NOW = START - 5 * H; const gm = ['501', '502', '505', '506', '509'];
-  for (let i = 0; i < 12; i++) { NOW += 1000; const r = await add('dan', i < 5 ? bet('w' + String(i).padStart(2, '0'), gm[i], GAMES.find((x) => x.id === gm[i]).home.abbr, 'ml', -110, 10) : i < 10 ? bet('w' + String(i).padStart(2, '0'), gm[i - 5], 'Over', 'ou', -110, 10, { line: { 502: 47.5, 505: 44.5, 506: 45, 509: 40 }[gm[i - 5]] || 40 }) : bet('w' + i, i === 10 ? '507' : '508', i === 10 ? 'LV' : 'LAR', 'ml', -110, 10)); if (gm[i - 5] === '501') assert.strictEqual(r.s, 409); else assert.strictEqual(r.s, 200, i + JSON.stringify(r.j)); }
-  v = await view('dan', g3, START + 2 * DAY); assert.strictEqual(v.bets.filter((x) => x.ok).length, 10); assert.match(v.bets.find((x) => !x.ok).why, /Over the weekly limit: only the first 10 bets/);
+  for (const b of [bet('a1', '502', 'KC', 'ml', 130, 80), bet('a2', '502', 'KC', 'sp', -110, 100, { line: 2.5 }), bet('a3', '502', 'Over', 'ou', -110, 100, { line: 47.5 }), bet('a4', '502', 'KC', 'ml', 130, 50)]) { NOW += 1000; assert.strictEqual((await add('cat', b)).s, b.id === 'a4' ? 409 : 200); }
+  v = await view('cat', g2, START + 2 * DAY); assert.deepStrictEqual(['a1', 'a2', 'a3'].map((k) => [v.by[k].ok, v.by[k].cs || 0]), [[true, 80], [true, 100], [true, 20]], '80 + 100 + 20 = $200 on the game; the 4th was over and refused'); assert.strictEqual(v.by.a3.capped, true); assert.ok(!v.by.a4);
+  const g3 = await mk('ann'); await joinAll(g3, ['dan']); NOW = START - 5 * H; const gm = [['502', 'KC', 2.5, 47.5], ['506', 'SF', -9.5, 45], ['509', 'NE', -3, 40], ['507', 'LV', -3, 40]];
+  for (let i = 0; i < 12; i++) { NOW += 1000; const [gid, tm, sp, ou] = gm[i % 4], k = Math.floor(i / 4), r = await add('dan', k === 0 ? bet('w' + String(i).padStart(2, '0'), gid, tm, 'ml', -110, 10) : k === 1 ? bet('w' + String(i).padStart(2, '0'), gid, tm, 'sp', -110, 10, { line: sp }) : bet('w' + i, gid, 'Over', 'ou', -110, 10, { line: ou }));
+    if (i < 10) assert.strictEqual(r.s, 200, i + JSON.stringify(r.j)); else { assert.strictEqual(r.s, 409); assert.match(r.j.error, /Over the weekly limit: only the first 10 bets/); } }
+  v = await view('dan', g3, START + 2 * DAY); assert.strictEqual(v.bets.filter((x) => x.ok).length, 10); assert.strictEqual(v.bets.length, 10);
 });
 // =============================== MEDIUM 9: hedges across markets and inside parlays ===============================
-test('M9 a member cannot hold opposing sides of one game in a contest: moneyline against spread, a parlay leg against a single, over against under', async () => {
-  const g = await mk('ann'); await joinAll(g, ['bob', 'cat']); NOW = START - 5 * H; const A = async (w, b) => { NOW += 1000; const r = await add(w, b); assert.strictEqual(r.s, 200, JSON.stringify(r.j)); };
-  await A('bob', bet('s1', '502', 'BUF', 'ml', -150, 100)); await A('bob', bet('s2', '502', 'KC', 'sp', -110, 100, { line: 2.5 })); // KC +2.5 against BUF moneyline
-  await A('bob', { id: 'pp', kind: 'parlay', stake: 100, day: '2026-11-22', lg: 'nfl', legs: [leg('502', 'KC', 'ml', 130), leg('509', 'MIA', 'ml', 140)] }); // a KC leg against BUF moneyline
-  await A('bob', bet('s3', '502', 'Over', 'ou', -110, 100, { line: 47.5 })); await A('bob', bet('s4', '502', 'Under', 'ou', -110, 100, { line: 47.5 }));
+test('M9 a member cannot hold opposing sides of one game in a contest: moneyline against spread, a parlay leg against a single, over against under (the hedge is refused when added, round 4)', async () => {
+  const g = await mk('ann'); await joinAll(g, ['bob', 'cat']); NOW = START - 5 * H; const A = async (w, b, hedge) => { NOW += 1000; const r = await add(w, b); assert.strictEqual(r.s, hedge ? 409 : 200, JSON.stringify(r.j)); if (hedge) assert.match(r.j.error, /Hedge, not counted: you already have the other side of this game/); };
+  await A('bob', bet('s1', '502', 'BUF', 'ml', -150, 100)); await A('bob', bet('s2', '502', 'KC', 'sp', -110, 100, { line: 2.5 }), 1); // KC +2.5 against BUF moneyline
+  await A('bob', { id: 'pp', kind: 'parlay', stake: 100, day: '2026-11-22', lg: 'nfl', legs: [leg('502', 'KC', 'ml', 130), leg('509', 'MIA', 'ml', 140)] }, 1); // a KC leg against BUF moneyline
+  await A('bob', bet('s3', '502', 'Over', 'ou', -110, 100, { line: 47.5 })); await A('bob', bet('s4', '502', 'Under', 'ou', -110, 100, { line: 47.5 }), 1);
   await A('bob', bet('s5', '502', 'BUF', 'sp', -110, 50, { line: -2.5 })); // same side as the first bet: fine
-  await A('cat', { id: 'q1', kind: 'parlay', stake: 50, day: '2026-11-22', lg: 'nfl', legs: [leg('502', 'KC', 'ml', 130), leg('509', 'MIA', 'ml', 140)] }); await A('cat', bet('q2', '509', 'NE', 'sp', -110, 50, { line: -3 })); // NE -3 against the parlay's MIA leg
-  let v = await view('bob', g, START + 2 * DAY); assert.deepStrictEqual(['s1', 's2', 'pp', 's3', 's4', 's5'].map((k) => v.by[k].ok), [true, false, false, true, false, true]); ['s2', 'pp', 's4'].forEach((k) => assert.match(v.by[k].why, /Hedge, not counted/));
-  assert.strictEqual(v.t.win, -100 + 90.91 - 50, 'BUF ML lost, Over won, BUF -2.5 lost; the winning KC bets were hedges');
-  v = await view('cat', g, START + 2 * DAY); assert.ok(v.by.q1.ok && !v.by.q2.ok);
+  await A('cat', { id: 'q1', kind: 'parlay', stake: 50, day: '2026-11-22', lg: 'nfl', legs: [leg('502', 'KC', 'ml', 130), leg('509', 'MIA', 'ml', 140)] }); await A('cat', bet('q2', '509', 'NE', 'sp', -110, 50, { line: -3 }), 1); // NE -3 against the parlay's MIA leg
+  let v = await view('bob', g, START + 2 * DAY); assert.deepStrictEqual(Object.keys(v.by).sort(), ['s1', 's3', 's5']); assert.ok(v.bets.every((x) => x.ok));
+  assert.strictEqual(v.t.win, -100 + 90.91 - 50, 'BUF ML lost, Over won, BUF -2.5 lost; the winning KC bets were hedges and never went in');
+  v = await view('cat', g, START + 2 * DAY); assert.ok(v.by.q1.ok && !v.by.q2);
+  // the rule still holds at grading for two adds that raced each other (both written to the book)
+  const rows = G.memberRules({ rules: { cap: 100 } }, [{ ok: true, id: 'a', f: 1, stake: 10, legsM: [{ game: 'nfl|1', kind: 'ml', dir: 'home' }] }, { ok: true, id: 'b', f: 2, stake: 10, legsM: [{ game: 'nfl|1', kind: 'sp', dir: 'away' }] }]); assert.ok(rows[0].ok && !rows[1].ok && /Hedge/.test(rows[1].why));
 });
 // =============================== MEDIUM 10: the commissioner approves invite codes too ===============================
 test('M10 an invite code makes a join REQUEST (owner rule): approval applies, a denied player cannot come back by code, only the commissioner sees the code, requests off = the code does not work', async () => {
@@ -283,19 +289,19 @@ test('L2 a bet added after kickoff gets an honest answer (refused, nothing added
 test('L3 a parlay that lost its first leg is not shown or scored early: nothing about it reaches the standings before its last game kicks off', async () => {
   const g = await mk('ann'); await joinAll(g, ['bob', 'cat']); NOW = START - 6 * H;
   assert.strictEqual((await add('bob', { id: 'v4', kind: 'parlay', stake: 31, day: '2026-11-22', lg: 'nfl', legs: [leg('509', 'NE', 'ml', -160), leg('503', 'GB', 'ml', 140)] })).s, 200); // NE loses on Nov 22; GB plays Nov 29
-  NOW = START + 1 * DAY; G._reset(); let st = await call('cat', 'standings', { id: g.id, cid: g.contests[0].cid }), row = st.j.rows.find((x) => x.name === 'BOBname');
+  await kickTicks(START + 1 * DAY); NOW = START + 1 * DAY; G._reset(); let st = await call('cat', 'standings', { id: g.id, cid: g.contests[0].cid }), row = st.j.rows.find((x) => x.name === 'BOBname');
   assert.deepStrictEqual([row.t.l, row.t.win, row.t.open], [0, 0, 1], 'still an open bet to everyone'); let p = await call('cat', 'player', { id: g.id, cid: g.contests[0].cid, pid: row.pid }); assert.deepStrictEqual(p.j.bets, []); assert.strictEqual(p.j.hidden, 1);
-  NOW = START + 7 * DAY + 60e3; G._reset(); st = await call('cat', 'standings', { id: g.id, cid: g.contests[0].cid }); row = st.j.rows.find((x) => x.name === 'BOBname'); assert.deepStrictEqual([row.t.l, row.t.win], [1, -31], 'counted once the last game kicked off');
+  await kickTicks(START + 7 * DAY + 60e3); NOW = START + 7 * DAY + 60e3; G._reset(); st = await call('cat', 'standings', { id: g.id, cid: g.contests[0].cid }); row = st.j.rows.find((x) => x.name === 'BOBname'); assert.deepStrictEqual([row.t.l, row.t.win], [1, -31], 'counted once the last game kicked off');
 });
 test('R-STATS a contest record carries spent (entry) and won (prize) only; the bets\' stake / pl / units sit under inner; a finished contest that paid nothing sends won: 0', async () => {
   const g = await mk('ann', { runs: 'weekend', minPaid: 0 }); await joinAll(g, ['bob', 'cat']); NOW = START - 6 * H; await add('bob', bet('v1', '502', 'BUF', 'ml', -150, 100)); await add('cat', bet('v2', '502', 'KC', 'ml', 130, 100));
-  NOW = START + DAY; G._reset(); let r = (await G.statsFor(pe(SID.bob), {})).find((x) => x.groupId === g.id); assert.ok(r, 'record');
+  await kickTicks(START + DAY); NOW = START + DAY; G._reset(); let r = (await G.statsFor(pe(SID.bob), {})).find((x) => x.groupId === g.id); assert.ok(r, 'record');
   assert.deepStrictEqual([r.pl, r.stake, r.units], [undefined, undefined, undefined], 'no bet money at the top level'); assert.deepStrictEqual(r.inner, { pl: -100, units: -1, stake: 100 }); assert.strictEqual(r.spent, 25); assert.ok(!('won' in r), 'still running');
   NOW = START + 9 * DAY; G._reset(); r = (await G.statsFor(pe(SID.bob), {})).find((x) => x.groupId === g.id); assert.strictEqual(r.won, 0, 'finished, paid nothing: won 0'); assert.strictEqual(r.result, 'L'); assert.deepStrictEqual([r.spent, r.extra.money.net], [25, -25]);
 });
 test('L4 memberStats no longer returns memberKey', async () => {
   const g = await mk('ann'); await joinAll(g, ['bob', 'cat']); NOW = START - 6 * H; await add('bob', bet('v1', '502', 'KC', 'ml', 130, 100)); const pid = (await call('ann', 'get', { id: g.id })).j.group.members.find((m) => m.name === 'BOBname').pid;
-  NOW = START + DAY; G._reset(); const ms = await G.memberStats(pe(SID.cat), g.id, pid); assert.ok(ms && ms.records.length === 1); assert.ok(!('memberKey' in ms) && !/memberKey/.test(JSON.stringify(ms)));
+  await kickTicks(START + DAY); NOW = START + DAY; G._reset(); const ms = await G.memberStats(pe(SID.cat), g.id, pid); assert.ok(ms && ms.records.length === 1); assert.ok(!('memberKey' in ms) && !/memberKey/.test(JSON.stringify(ms)));
 });
 test('L6 players with no settled bet (0-0) rank below everyone who has one; place and prize money agree', async () => {
   const g = await mk('ann', { split: '60/30/10' }); await joinAll(g, ['bob', 'cat', 'dan']); NOW = START - 6 * H;
@@ -308,7 +314,7 @@ test('L8 late joining cannot be switched on once anyone has joined or asked', as
   NOW = START - 3 * DAY; G._reset(); let r = await call('ann', 'create', { name: 'No late', take: { kind: 'none', v: 0 }, join: { requests: true, open: false, max: 8, late: 'no' }, contest: CDEF }); const g = r.j.group;
   r = await call('ann', 'edit', { id: g.id, name: 'No late', join: { requests: true, open: false, max: 8, late: '2w' } }); assert.strictEqual(r.s, 200, 'before anyone joined: allowed'); r = await call('ann', 'edit', { id: g.id, name: 'No late', join: { requests: true, open: false, max: 8, late: 'no' } });
   await call('u001', 'request', { id: g.id }); await call('u001', 'cancel', { id: g.id });
-  r = await call('ann', 'edit', { id: g.id, name: 'No late', join: { requests: true, open: false, max: 8, late: '2w' } }); assert.strictEqual(r.s, 409); assert.match(r.j.error, /Late joining is locked/);
+  r = await call('ann', 'edit', { id: g.id, name: 'No late', join: { requests: true, open: false, max: 8, late: '2w' } }); assert.strictEqual(r.s, 409); assert.match(r.j.error, /Late joining is final/);
 });
 test('L5 / L7 phone: a tied place label is not cut off at 430 px; a 30-character group name is warned about', async () => {
   const c = client(); assert.ok(/\.g-place\{[^}]*min-width:\s*(4[4-9]|[5-9]\d)px/.test(c) && /\.g-place\.tie/.test(c), 'room for "T12"'); assert.ok(c.includes('Names are cut at 30 characters'), 'warning text');
@@ -357,12 +363,12 @@ test('R-VOID the commissioner\'s void exists and only works under the void rules
   const g = await mk('ann'); await joinAll(g, ['bob', 'cat']); NOW = START - 6 * H; const cid = g.contests[0].cid;
   await add('bob', bet('d1', '502', 'KC', 'ml', 130, 50)); NOW += 40e3; await add('bob', bet('d2', '502', 'KC', 'ml', 130, 50)); NOW += 10 * 60e3; await add('bob', bet('d3', '502', 'KC', 'ml', 130, 50)); await add('bob', bet('pz', '508', 'SEA', 'ml', 140, 100)); await add('bob', bet('ok1', '509', 'MIA', 'ml', 140, 100));
   const pid = (await call('ann', 'get', { id: g.id })).j.group.members.find((m) => m.name === 'BOBname').pid; G._reset();
-  let r = await call('ann', 'bet/voidable', { id: g.id }); assert.strictEqual(r.s, 200, JSON.stringify(r.j)); assert.deepStrictEqual(r.j.list.map((x) => [x.bid, x.kind]).sort(), [['d2', 'duplicate'], ['pz', 'postponed']], 'only the later copy inside 2 minutes (not d1, not d3); the bet on the postponed game'); assert.ok(!r.j.list.some((x) => /KC|SEA|ML/.test(x.text)), 'the picks themselves stay hidden before kickoff');
+  let r = await call('ann', 'bet/voidable', { id: g.id }); assert.strictEqual(r.s, 200, JSON.stringify(r.j)); assert.deepStrictEqual(r.j.list.map((x) => [x.bid, x.kind]).sort(), [['d2', 'duplicate']], 'only the later copy inside 2 minutes (not d1, not d3); nothing is postponed yet'); assert.ok(!r.j.list.some((x) => /KC|SEA|ML/.test(x.text)), 'the picks themselves stay hidden before kickoff');
   assert.strictEqual((await call('bob', 'bet/void', { id: g.id, pid, bid: 'd2', kind: 'duplicate', reason: 'Entered twice by mistake' })).s, 403, 'commissioner only'); assert.strictEqual((await call('ann', 'bet/void', { id: g.id, pid, bid: 'd2', kind: 'duplicate', reason: '' })).s, 400, 'a reason is required');
   for (const [bid, kind] of [['d1', 'duplicate'], ['d3', 'duplicate'], ['ok1', 'duplicate'], ['ok1', 'postponed'], ['ok1', 'other']]) assert.ok([400, 409].includes((await call('ann', 'bet/void', { id: g.id, pid, bid, kind, reason: 'Because I say so' })).s), bid + ' ' + kind + ' is outside the void rules');
   r = await call('ann', 'bet/void', { id: g.id, pid, bid: 'd2', kind: 'duplicate', reason: 'Bob tapped Add twice' }); assert.strictEqual(r.s, 200, JSON.stringify(r.j));
   const cg = (await call('cat', 'get', { id: g.id })).j.group; assert.deepStrictEqual(cg.voids.map((x) => [x.name, x.kind, x.reason]), [['BOBname', 'duplicate', 'Bob tapped Add twice']], 'every member sees who, why and when');
-  NOW = START + 5 * H; G._reset(); r = await call('ann', 'bet/voidable', { id: g.id }); assert.ok(r.j.list.some((x) => x.bid === 'pz' && x.kind === 'postponed')); r = await call('ann', 'bet/void', { id: g.id, pid, bid: 'pz', kind: 'postponed', reason: 'Game postponed, snow' }); assert.strictEqual(r.s, 200);
+  await kickTicks(START + 5 * H); NOW = START + 5 * H; G._reset(); r = await call('ann', 'bet/voidable', { id: g.id }); assert.ok(r.j.list.some((x) => x.bid === 'pz' && x.kind === 'postponed')); r = await call('ann', 'bet/void', { id: g.id, pid, bid: 'pz', kind: 'postponed', reason: 'Game postponed, snow' }); assert.strictEqual(r.s, 200);
   NOW = START + DAY; G._reset(); const p = await call('cat', 'player', { id: g.id, cid, pid }), by = Object.fromEntries(p.j.bets.map((b) => [b.id, b]));
   assert.deepStrictEqual([by.d2.res, by.d2.pl, by.d2.voided], ['push', 0, true]); assert.match(by.d2.vr, /Voided by the commissioner \(entered twice by mistake\): Bob tapped Add twice/); assert.match(by.pz.vr, /Voided by the commissioner \(game postponed or cancelled\): Game postponed, snow/); assert.strictEqual(by.d1.pl, 65);
   assert.match(G.LOCKED_MSG, /duplicate added by mistake within 2 minutes/); assert.ok(/bet\/void/.test(client()), 'the commissioner has the screen for it');

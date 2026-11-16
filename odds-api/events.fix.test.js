@@ -160,3 +160,23 @@ T.leaveRestoresGuest = async () => {
   assert.strictEqual(hal.players[0].name, 'Guest Hal', 'name restored'); assert.ok(hal.players[0].claim && hal.players[0].claim !== old, 'new claim code');
   ok(await call('dov', 'claim', { claim: hal.players[0].claim, myName: 'Dov' }), 'new code works');
 };
+// 10a (LOW) a deleted event no longer answers to its id
+T.deletedGone = async () => {
+  const ev = ok(await call('ann', 'create', base({ entrants: [{ name: 'Gus' }] }))).event; ok(await call('ann', 'delete', { id: ev.id }));
+  no(await call('ann', 'get', { id: ev.id }), 404, 'get a deleted event'); no(await call('ann', 'score', { id: ev.id, m: 'x', games: [[11, 0]] }), 404, 'write to a deleted event');
+  assert.ok(!ok(await call('ann', 'mine', {})).events.some((e) => e.id === ev.id));
+};
+// 10b (LOW) after a tiebreak separates one player from a tie, head-to-head is applied again among the players still tied
+T.h2hReapplied = async () => {
+  const g = (a, b, x, y) => ({ st: 'pool', pool: 0, state: 'confirmed', a, b, games: [[x, y]], win: x > y ? 'a' : 'b' });
+  const evt = { seeds: ['A', 'B', 'C', 'D'], matches: [g('A', 'B', 11, 0), g('B', 'C', 11, 9), g('C', 'A', 11, 9), g('A', 'D', 11, 0), g('B', 'D', 11, 9), g('C', 'D', 11, 0)] };
+  const t = E.poolTable(evt, ['A', 'B', 'C', 'D'], 0).map((r) => r.eid); // A, B, C all 2-1 (circle); A best differential; then B beat C head-to-head
+  assert.deepStrictEqual(t, ['A', 'B', 'C', 'D']);
+};
+// 10c (LOW) the 10-second refresh notices a ladder / heads-up passing its last day
+T.pollSeesLastDay = async () => {
+  let ev = ok(await call('ann', 'create', base({ fmt: 'ladder', endDay: '2026-11-25', playIn: true, entrants: [{ name: 'Gus' }] }))).event; const id = ev.id;
+  NOW = START + 1000; ev = ok(await call('ann', 'get', { id })).event; assert.ok(!ev.fin);
+  NOW = Z('2026-11-27T12:00:00Z'); const r = ok(await call('ann', 'get', { id, since: ev.u }));
+  assert.ok(r.event && r.event.fin, 'poll after the last day returns the finished event, not "same"');
+};

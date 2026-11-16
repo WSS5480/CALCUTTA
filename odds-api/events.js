@@ -185,10 +185,19 @@ function poolTable(evt, ids, pool) {
   const ms = evt.matches.filter((m) => m.st === 'pool' && (pool == null || m.pool === pool) && m.state === 'confirmed');
   ms.forEach((m) => { const A = T[m.a], B = T[m.b]; if (!A || !B) return; m.games.forEach(([x, y]) => { A.pf += x; A.pa += y; B.pf += y; B.pa += x; if (x > y) { A.gw++; B.gl++; } else { B.gw++; A.gl++; } }); A.n++; B.n++; if (m.win === 'a') { A.w++; B.l++; } else { B.w++; A.l++; } });
   const seedIx = (id) => (evt.seeds || []).indexOf(id), rows = Object.values(T); rows.forEach((r) => (r.diff = r.pf - r.pa));
-  const byW = {}; rows.forEach((r) => (byW[r.w] = byW[r.w] || []).push(r));
-  Object.values(byW).forEach((grp) => { const S = new Set(grp.map((r) => r.eid)); grp.forEach((r) => (r.h2h = 0)); if (grp.length > 1) ms.forEach((m) => { if (S.has(m.a) && S.has(m.b)) T[winnerOf(m)].h2h++; }); });
-  rows.sort((a, b) => b.w - a.w || b.h2h - a.h2h || b.diff - a.diff || b.pf - a.pf || seedIx(a.eid) - seedIx(b.eid));
-  rows.forEach((r, i) => (r.rank = i + 1)); return rows;
+  // Review fix 10b: within a group tied on wins, head-to-head (wins among the tied only) is applied; whenever a later tiebreak (differential, points)
+  // splits off part of the group, head-to-head is applied AGAIN among those still tied (standard re-apply rule). Seed is the last resort.
+  const h2hIn = (grp) => { const S = new Set(grp.map((r) => r.eid)), o = {}; grp.forEach((r) => (o[r.eid] = 0)); ms.forEach((m) => { if (S.has(m.a) && S.has(m.b)) o[winnerOf(m)]++; }); return o; };
+  const splitBy = (grp, f) => { const by = new Map(); grp.forEach((r) => { const k = f(r); if (!by.has(k)) by.set(k, []); by.get(k).push(r); }); return [...by.entries()].sort((a, b) => b[0] - a[0]).map((x) => x[1]); };
+  function order(grp, depth) {
+    if (grp.length <= 1 || depth > 20) return grp.slice().sort((a, b) => seedIx(a.eid) - seedIx(b.eid));
+    const H = h2hIn(grp); grp.forEach((r) => (r.h2h = H[r.eid]));
+    const hp = splitBy(grp, (r) => H[r.eid]); if (hp.length > 1) return [].concat(...hp.map((p) => order(p, depth + 1)));
+    for (const f of [(r) => r.diff, (r) => r.pf]) { const parts = splitBy(grp, f); if (parts.length > 1) return order(parts[0], depth + 1).concat(order([].concat(...parts.slice(1)), depth + 1)); } // the best is placed, the rest start over at head-to-head
+    return grp.slice().sort((a, b) => seedIx(a.eid) - seedIx(b.eid));
+  }
+  const out = [].concat(...splitBy(rows, (r) => r.w).map((g) => order(g, 0)));
+  out.forEach((r, i) => (r.rank = i + 1)); return out;
 }
 function h2hTable(evt) { // heads-up / ladder records (all confirmed non-pool matches, side matches included)
   const T = {}; evt.entrants.forEach((e) => (T[e.eid] = { eid: e.eid, w: 0, l: 0, pf: 0, pa: 0 }));
@@ -285,7 +294,7 @@ const codeFail = (k) => { const t = D.now(), a = (RL.get(k) || []).filter((x) =>
 const codeBlocked = (k) => (RL.get(k) || []).filter((x) => D.now() - x < 900e3).length >= 10;
 
 // ---------- storage ----------
-async function load(id) { if (!/^[A-Z2-9]{10}$/.test(String(id || ''))) return null; const r = await D.S.dbGet(ROW(id)); return r || null; }
+async function load(id) { if (!/^[A-Z2-9]{10}$/.test(String(id || ''))) return null; const r = await D.S.dbGet(ROW(id)); return r && r.data && !r.data.deleted ? r : null; } // review fix 10a: a deleted event is gone
 async function mutateRow(rowId, init, fn) {
   for (let i = 0; i < 6; i++) {
     let row = await D.S.dbGet(rowId);
@@ -469,7 +478,7 @@ async function handle(req, res) {
     const known = memberOf(r0.data, u.mk); if (!known) throw bad(404, 'Event not found'); // private: members only (non-members use the invite code)
     const cap = await capOf(r0.data);
     if (op === 'get') {
-      if (op === 'get' && b.since && Number(b.since) === Number(r0.data.u) && !(r0.data.start <= now && !r0.data.drawn) && !r0.data.matches.some((m) => m.exp && now > m.exp && m.state === 'ready')) { send(res, 200, { same: true, u: r0.data.u }); return true; } // cheap poll
+      if (op === 'get' && b.since && Number(b.since) === Number(r0.data.u) && !(r0.data.start <= now && !r0.data.drawn) && !r0.data.matches.some((m) => m.exp && now > m.exp && m.state === 'ready') && !(r0.data.endDay && !r0.data.fin && now > chiEnd(r0.data.endDay))) { send(res, 200, { same: true, u: r0.data.u }); return true; } // cheap poll (review fix 10c: not after the last day)
       const evt = await mutate(id, (evt) => ({ nochange: true, v: evt })) || r0.data; send(res, 200, { event: full(evt, u.mk, now, cap) }); return true;
     }
     const ok = (evt) => { send(res, 200, { event: full(evt, u.mk, D.now(), cap) }); return true; };

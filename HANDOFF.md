@@ -483,3 +483,9 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v244 — Alert history = past 12 seasons (2014-2025)
 - User: "add the historical data stating over the past 12 seasons" / "model over 12 seasons". The Alert grid's history column is now "12 seasons" (2014-2025 only, no 2026): Double lock 108-101 (-2.8u), Lock 110-99 (+1.0u), tag-only road dog 315-267 (+19.4u), combined 533-467 (53.3%, +17.5u, ~83 picks/season). Season-by-season table (ALY) in a "Past 12 seasons" dropdown in the Alert drill sheet. Losing seasons: 2017, 2020, 2023, 2024, 2025. Static data; refresh at season end.
+
+## v245 — Double lock retired (user: "Kill the double lock. It's horrible.")
+- The #1 weekly pick (🔒🔒 Double lock) is gone everywhere: trophyData keeps only rank 2 = 🔒 Lock. Results box shows one Lock box + History (Lock only); Alert = Lock + every division road dog that is not the Lock (former Double lock games that are division road dogs now show as 🏠 Road dog). Lock/info texts updated.
+- 12-season (2014-2025) history recomputed: Lock 110-99 (52.6%, +1.0u), road dog 339-293 (53.6%, +15.2u), combined 449-392 (53.4%, +16.2u, ~70 picks/season). ALH/ALY updated (year, Lock W L, road dog W L). Double lock was 108-101 (-2.8u).
+- Test on the app's 2026 wk1-10: Lock 6-3, road dogs 17-10, 23-13 (64%, +7.9u).
+- Checked whether the factor model improves the road dog pick: no. Model agrees with the dog 53.1% vs disagrees 55.6% (2014-25), top-1/week 54.5%; plain "all division road dogs" is as good as any filter. So the dog factor is not combined with the model.

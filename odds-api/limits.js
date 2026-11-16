@@ -35,6 +35,20 @@ async function recordUse(accountKey, gameId, players, title) {
   await rmw('lock:entuse', {}, (x) => { const a = (x[accountKey] = x[accountKey] || {}), m = (a[mo] = a[mo] || {}), o = m[String(gameId)] || { n: 0 }; const nn = { n: Math.max(o.n, Math.round(Number(players) || 0)), title: String(title || o.title || '').slice(0, 40) }; if (m[String(gameId)] && nn.n === o.n && nn.title === o.title) return { nochange: true }; m[String(gameId)] = nn; }); // round 2: no write when nothing changed
   return true;
 }
+// ONE usage call for EVERY game type (round 3; billing is $20 per player per game): group picks contests, Calcuttas, golf days and pools, local events.
+//   await limits.recordPlay(accountKey, gameType, gameId, playerKey, title?)
+//     accountKey  limits.keyOf(<the creator's account id from acct.who>)      gameType  'picks' | 'calcutta' | 'golf' | 'event' | ...
+//     gameId      the engine's own id for the game (any string up to 60)      playerKey any stable id for the player in that engine, or an ARRAY of them (hashed here, never stored raw)
+//   Call it once per player when the game starts (or when a player joins a started game). Idempotent: a player is counted once per game per month.
+//   No-op (false) for a standard account. The owner's Enterprise list shows games and players per month from this one row ('lock:entuse').
+async function recordPlay(accountKey, gameType, gameId, playerKey, title) {
+  if (!accountKey || !(await isEnterprise(accountKey))) return false; const mo = new Date(D.now()).toISOString().slice(0, 7);
+  const type = String(gameType || 'game').toLowerCase().replace(/[^a-z]/g, '').slice(0, 12) || 'game', gid = String(gameId || '').slice(0, 60), pks = (Array.isArray(playerKey) ? playerKey : [playerKey]).filter((p) => p != null && p !== '').map((p) => crypto.createHash('sha256').update('oddable-play|' + String(p)).digest('hex').slice(0, 12));
+  if (!gid || !pks.length) return false;
+  await rmw('lock:entuse', {}, (x) => { const a = (x[accountKey] = x[accountKey] || {}), m = (a[mo] = a[mo] || {}), o = (m[gid] = m[gid] || { n: 0 }); o.p = Array.isArray(o.p) ? o.p : [];
+    const add = pks.filter((pk) => !o.p.includes(pk)); if (!add.length && o.type === type) return { nochange: true }; add.forEach((pk) => { if (o.p.length < 5000) o.p.push(pk); }); o.type = type; o.n = Math.max(Number(o.n) || 0, o.p.length); if (title) o.title = String(title).slice(0, 40); });
+  return true;
+}
 // ---------- routes: /groups/ent/contact (signed in), /groups/ent/admin (owner only) ----------
 const RL = new Map(); const limited = (k, n, ms) => { const t = D.now(), a = (RL.get(k) || []).filter((x) => t - x < ms); if (a.length >= n) return true; a.push(t); RL.set(k, a); if (RL.size > 20000) RL.clear(); return false; };
 const clean = (s, n) => String(s == null ? '' : s).replace(/[<>&"'`\\\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, n);
@@ -57,7 +71,7 @@ async function admin(b) {
   if (op === 'seats') { const id = String(b.id || ''); if (!/^[A-Za-z0-9:_-]{4,40}$/.test(id)) throw bad(400, 'Which group or game?'); const n = Math.round(Number(b.n)); if (!(n >= 0 && n <= CEILING() - STANDARD)) throw bad(400, 'Extra seats: 0 to ' + (CEILING() - STANDARD)); await rmw('lock:ent', { acct: {}, seats: {} }, (x) => { x.seats = x.seats || {}; if (n) x.seats[id] = n; else delete x.seats[id]; }); C.at = 0; return { ok: true, id, extraSeats: n }; }
   if (op === 'done') { await rmw('lock:entreq', { list: [] }, (x) => { (x.list || []).forEach((q) => { if (q.id === String(b.id)) q.done = !!b.done; }); }); return { ok: true }; }
   const E = await ent(true), R = await D.S.dbGet('lock:entreq').catch(() => null), U = await D.S.dbGet('lock:entuse').catch(() => null);
-  const use = {}; Object.keys((U && U.data) || {}).forEach((k) => { use[k] = Object.keys(U.data[k]).sort().reverse().map((mo) => { const g = U.data[k][mo]; const games = Object.keys(g).map((id) => ({ id, title: g[id].title, players: g[id].n })); return { month: mo, games: games.length, playerGames: games.reduce((a, x) => a + x.players, 0), list: games }; }); });
+  const use = {}; Object.keys((U && U.data) || {}).forEach((k) => { use[k] = Object.keys(U.data[k]).sort().reverse().map((mo) => { const g = U.data[k][mo]; const games = Object.keys(g).map((id) => ({ id, title: g[id].title, type: g[id].type || 'picks', players: g[id].n })); return { month: mo, games: games.length, playerGames: games.reduce((a, x) => a + x.players, 0), list: games }; }); });
   return { requests: ((R && R.data && R.data.list) || []).slice().reverse(), enterprise: Object.keys(E.acct || {}).map((k) => Object.assign({ key: k }, E.acct[k], { use: use[k] || [] })), seats: E.seats || {}, standard: STANDARD, ceiling: CEILING(), text: ENTERPRISE_TEXT };
 }
-module.exports = { STANDARD, CEILING, ENTERPRISE_TEXT, CAP_TEXT, keyOf, maxPeople, isEnterprise, capMsg, recordUse, contact, admin, _deps: D, _reset: () => { C = { at: 0, v: null }; RL.clear(); } };
+module.exports = { STANDARD, CEILING, ENTERPRISE_TEXT, CAP_TEXT, keyOf, maxPeople, isEnterprise, capMsg, recordUse, recordPlay, contact, admin, _deps: D, _reset: () => { C = { at: 0, v: null }; RL.clear(); } };

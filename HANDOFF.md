@@ -474,3 +474,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v241 — Standalone lock cards removed from the board
 - User: "remove the other locks since they're in the Oddable Alert". The Top Pick / Second Top Pick (Double lock / Lock) cards at the top of the NFL board are gone; the 📣 Oddable Alert replaces them. Lock chips on game cards and the Results tab (Locks boxes, History, Division road dogs) stay. Bet of the Day / Upset Pick do NOT come back (removed in v222).
+
+## v242 — Units by pick type in the Oddable Alert
+- Alert banner and drill sheet show record, % and units for 🔒🔒 Double lock, 🔒 Lock and 🏠 Road dog separately (alertTypes). User asked if it makes sense; it shows which pick type earns the units.

@@ -68,20 +68,24 @@ async function searchPage(q, state, near, offset) {
 }
 async function search(q, state, near, offset) { return (await searchPage(q, state, near, offset)).results; }
 async function detail(extId) {
-  if (/^fb-[\w-]{1,36}$/.test(String(extId || ''))) { const f = fallbackAll().find((c) => c.extId === extId); if (!f) throw new Error('not found'); return f; } // a bundled sample course
+  if (/^fb-[\w-]{1,36}$/.test(String(extId || ''))) { const f = fallbackAll().find((c) => c.extId === extId); if (!f) throw new Error('not found'); return checked(JSON.parse(JSON.stringify(f))); } // a bundled sample course
   if (!/^[\w-]{1,40}$/.test(String(extId || ''))) throw new Error('bad id'); const id = encodeURIComponent(extId); const j = await get('/courses/' + id);
   let hj = null, tj = null; try { hj = await get('/courses/' + id + '/holes'); } catch (e) {} try { tj = await get('/courses/' + id + '/tees'); } catch (e) {}
   const base = (j && (j.course || j.data)) || j || {}, tl = Array.isArray(tj) ? tj : (tj && (tj.tees || tj.data)) || [], hl = hj && (Array.isArray(hj) ? hj : hj.holes || hj.data);
   // holes: the /holes answer (par, stroke index, yards per tee colour) wins over the bare scorecard of the course answer
   const merged = Object.assign({}, base, tl.length ? { tees: tl } : {}, Array.isArray(hl) && hl.length ? { holes_data: hl, scorecard: undefined, holes: undefined } : {});
-  return normCourse(merged, hj);
+  return checked(normCourse(merged, hj));
 }
+// `checked`: 18 (or 9) holes, each with par, a stroke index and yards. The directory lists many courses with a placeholder hole list (pars and
+// stroke indexes with no yards, not in hole order): those tees keep their real rating / slope / total yards, but their holes must be checked by a person.
+function checked(c) { c.tees.forEach((t) => { const n = t.holes.length; t.checked = (n === 18 || n === 9) && t.holes.every((h) => h.par && h.hcp && h.yards); }); return c; }
 // ---------- bundled sample courses (fallback) ----------
 // Used ONLY when the live course list cannot be reached, so a search never comes back empty. Real courses, saved from OpenGolfAPI answers
 // (fixtures/courses-fallback.json; ODbL, same attribution). Callers must label them: "Sample courses saved in the app".
 let FB = null;
 function fallbackAll() { if (FB) return FB; try { FB = (require('./fixtures/courses-fallback.json').courses || []).map((c) => Object.assign({}, c, { attribution: ATTR, sample: true })); } catch (e) { FB = []; } return FB; }
-function fallbackSearch(q, state) { const k = norm(q), st = String(state || '').toUpperCase(), all = fallbackAll(), area = CITIES[k] ? all.filter((c) => c.area && norm(c.area) === (k === 'rgv' ? 'rio grande valley' : k)) : [];
+const RGV = ['mcallen', 'edinburg', 'mission', 'pharr', 'weslaco', 'harlingen', 'brownsville', 'san juan', 'alamo', 'donna', 'mercedes', 'san benito', 'rio grande city', 'south padre island', 'rio grande valley', 'rgv'];
+function fallbackSearch(q, state) { const k = norm(q), st = String(state || '').toUpperCase(), all = fallbackAll(), area = RGV.includes(k) ? all.filter((c) => c.area === 'Rio Grande Valley') : [];
   const hit = all.filter((c) => (!st || c.state === st) && (!k || norm(c.name + ' ' + c.city + ' ' + (c.area || '')).includes(k))), seen = new Set();
   let list = hit.concat(area).filter((c) => (seen.has(c.extId) ? false : (seen.add(c.extId), true))); if (!list.length) list = all.filter((c) => !st || c.state === st);
   return list.slice(0, 40).map((c) => ({ extId: c.extId, name: c.name, city: c.city, state: c.state, holes: 18, par: (c.tees[0] && c.tees[0].par) || null, sample: true })); }

@@ -620,9 +620,9 @@ async function handle(req, res) {
     if (op === 'courses' || op === 'coursedetail') { // OpenGolfAPI course search for Post a round and the course handicap calculator (server-side, cached)
       if (limited('cs|' + mk, 60, 600e3)) throw bad(429, 'Too many searches. Wait a few minutes.');
       const CS = require('./stats-courses');
-      try { if (op === 'courses') { const q = clean(b.q, 60); if (q.length < 2 && !b.state) throw bad(400, 'Type at least 2 letters of the course name'); send(res, 200, Object.assign({ ok: true, courses: [] }, { api: await CS.search(q, b.state) })); }
+      try { if (op === 'courses') { const q = clean(b.q, 60); if (q.length < 2 && !b.state) throw bad(400, 'Type at least 2 letters of the course name'); send(res, 200, Object.assign({ ok: true, courses: [] }, { api: await CS.search(q, b.state, b.offset) })); }
         else send(res, 200, { ok: true, course: await CS.detail(String(b.extId || '')) }); }
-      catch (er) { if (er.status) throw er; throw bad(502, 'Course search is not available right now. Type the course, Rating and Slope from the scorecard.'); }
+      catch (er) { if (er.status) throw er; throw bad(502, "Couldn't reach the course list. Try again."); }
       return true;
     }
     if (op === 'event/log') { send(res, 200, await eventLog(e, b.eventId)); return true; } // the tournament director's change log (E-H)

@@ -23,7 +23,8 @@ function course(j, hj) {
   const tees = arr(c.tees, c.tee_sets).map((x, i) => ({ name: t(x.tee_name || x.name || x.tee_color || x.color || 'Tee ' + (i + 1), 30), rating: n0(x.course_rating != null ? x.course_rating : x.rating), slope: n0(x.slope != null ? x.slope : x.slope_rating), par: n0(x.par != null ? x.par : x.par_total) || (holes.length ? holes.reduce((a, h) => a + (h.par || 0), 0) : null), yards: n0(x.total_yards != null ? x.total_yards : x.yards), holes: Array.isArray(x.holes) && x.holes.length ? x.holes.map((h) => ({ n: n0(h.number || h.hole), par: n0(h.par), hcp: n0(h.handicap || h.stroke_index) })) : holes }));
   return { extId: t(c.id != null ? c.id : c.course_id, 40), name: t(c.course_name || c.name, 60), city: t(c.city, 40), state: t(c.state, 20), tees: tees.length ? tees : holes.length ? [{ name: 'Default', rating: null, slope: null, par: holes.reduce((a, h) => a + (h.par || 0), 0), holes }] : [], attribution: ATTR };
 }
-async function search(q, state) {
+async function search(q, state, offset) {
+  const G0 = D.golf(); if (G0 && typeof G0.searchSafe === 'function') return G0.searchSafe(q, state, '', offset); // PREVIEW FIX: paging, courses near a city, labelled sample list when the API is down
   const G = D.golf(); if (G) return { results: await G.search(q, state), attribution: ATTR };
   const p = new URLSearchParams(); if (q) p.set('q', String(q).slice(0, 60)); if (/^[A-Za-z]{2}$/.test(String(state || ''))) p.set('state', String(state).toUpperCase()); p.set('limit', '20');
   return { results: list(await get('/courses/search?' + p.toString())), attribution: ATTR };

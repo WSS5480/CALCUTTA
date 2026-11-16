@@ -85,6 +85,7 @@ async function boot(again) {
   BOOTING = (async () => {
     if (!S.memory()) throw new Error('preview needs the memory store');
     if (again) { S._mem.clear(); ['groups', 'calcutta', 'golf', 'events', 'stats', 'limits'].forEach((m) => { try { const M = require('./' + m); if (M._reset) M._reset(); } catch (e) {} }); }
+    if (process.env.PREVIEW_COURSE_MOCK) require(process.env.PREVIEW_COURSE_MOCK)(require('./golf-courses')); // local Playwright only: canned OpenGolfAPI answers (the sandbox cannot reach the API)
     STATE.steps = []; STATE.done = false; STATE.ids = {};
     await step('demo accounts', makeUsers);
     const seed = require('./preview-seed');

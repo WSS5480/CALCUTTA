@@ -187,19 +187,29 @@
     if (s.res && s.res.owned && s.res.owned.length) h += '<h3 class="oh">Your course</h3>' + s.res.owned.map(savedRow).join('');
     if (s.res) {
       if (s.res.courses.length) h += '<h3 class="oh">Saved courses</h3>' + s.res.courses.map(savedRow).join('');
-      if (s.res.api.ok) h += '<h3 class="oh">Course directory</h3>' + (s.res.api.results.length ? s.res.api.results.map((c) => '<button class="ocard obtn" data-a="cdir" data-x="' + att(c.extId) + '"><b>' + esc(c.name) + '</b><div class="omut">' + esc([c.city, c.state].filter(Boolean).join(', ')) + (c.par ? ' · par ' + c.par : '') + ' ›</div></button>').join('') : '<div class="ocard omut">No match in the directory.</div>') + '<div class="oattr">' + esc(s.res.api.attribution || '') + '</div>';
-      else if (s.res.api.error) h += '<div class="ocard omut">' + esc(s.res.api.error) + '</div>';
+      // PREVIEW FIX (course search): the list grows in place with "Show more courses"; a failed search says so and shows the labelled sample courses;
+      // typing a course in is a separate, clearly named last choice.
+      const A = s.res.api || {}, R = A.results || [], dirRow = (c) => '<button class="ocard obtn" data-a="cdir" data-x="' + att(c.extId) + '"><b>' + esc(c.name) + '</b><div class="omut">' + esc([c.city, c.state].filter(Boolean).join(', ')) + (c.par ? ' · par ' + c.par : '') + (c.mi != null ? ' · ' + c.mi + ' mi' : '') + ' ›</div></button>';
+      if (A.error) h += '<div class="ocard"><b>' + esc(A.error) + '</b><button class="osec ofull" style="margin-top:10px" data-a="csearch">Try again</button></div>';
+      if (R.length) h += '<h3 class="oh">' + (A.fallback ? 'Sample courses' : 'Course directory') + '</h3>' + (A.fallback ? '<div class="onote">' + esc(A.fallback) + '</div>' : '') + (A.near ? '<div class="onote">Courses with that name first, then courses near ' + esc(A.near) + '.</div>' : '') + R.map(dirRow).join('')
+        + (A.next != null ? '<button class="osec ofull" data-a="cmore">Show more courses (' + R.length + ' of ' + (A.total || R.length) + ')</button>' : '') + '<div class="oattr">' + esc(A.attribution || '') + '</div>';
+      else if (A.ok) h += '<h3 class="oh">Course directory</h3><div class="ocard omut">No course by that name. Try the city, or pick the state alone to list its courses.</div>';
     }
-    return h + '<button class="osec ofull" data-a="cmanual">Type a course in</button>';
+    return h + '<h3 class="oh">Can\'t find it?</h3><button class="osec ofull" data-a="cmanual">Enter a course yourself</button>';
   }
   function courseDetailV() {
     const s = cur(), c = s.c; if (!c) return '<div class="ocard">Loading the course…</div>';
     let h = '<h1>' + esc(c.name) + '</h1><div class="ometa">' + esc([c.city, c.state].filter(Boolean).join(', ')) + '</div>';
-    if (!c.tees.length) h += '<div class="ocard omut">No tees listed for this course. Type it in instead.</div>';
+    if (!c.tees.length) h += '<div class="ocard omut">No tees are on file for this course.</div><button class="osec ofull" data-a="cmanual">Enter this course yourself</button>';
     c.tees.forEach((t, i) => { const open = s.ti === i;
       h += '<div class="ocard"><button class="otee" data-a="tee" data-i="' + i + '"><span><b>' + esc(t.name) + '</b>' + (t.gender ? ' <span class="omut">· ' + esc(t.gender) + '</span>' : '') + '</span><span class="ogrid4 ohd"><span>Yards</span><span>Par</span><span>Rating</span><span>Slope</span></span><span class="ogrid4"><span>' + (t.yards || '–') + '</span><span>' + (t.par || '–') + '</span><span>' + (t.rating || '–') + '</span><span>' + (t.slope || '–') + '</span></span><span class="olink">' + (open ? 'Hide holes' : 'Show holes') + ' ›</span></button>';
       if (open) { h += '<div class="ogrid4 ohd"><span>Hole</span><span>Par</span><span>Yards</span><span>Index</span></div>' + t.holes.map((x) => '<div class="ogrid4 ohole"><span>' + x.n + '</span><span>' + (x.par || '–') + '</span><span>' + (x.yards || '–') + '</span><span>' + (x.hcp || '–') + '</span></div>').join('');
-        const okH = t.holes.length === 18 || t.holes.length === 9; h += okH ? '<button class="opri ofull" data-a="usetee" data-i="' + i + '">Play the ' + esc(t.name) + ' tees</button>' : '<div class="onote">This tee is missing holes. Use it as a start and fill in the rest.</div><button class="osec ofull" data-a="edittee" data-i="' + i + '">Fill in the rest</button>'; }
+        // PREVIEW FIX (course search): say plainly what the directory has. Complete, checked holes -> Play. Holes with no yardages (the directory's
+        // placeholder list) -> Play is still offered, with a warning and a way to check them. Missing holes -> finish the card (rating, slope, yards kept).
+        const n = t.holes.length, okH = n === 18 || n === 9, sure = t.checked !== false && okH && t.holes.every((x) => x.par && x.hcp);
+        if (sure) h += '<button class="opri ofull" data-a="usetee" data-i="' + i + '">Play the ' + esc(t.name) + ' tees</button>';
+        else if (okH && t.holes.every((x) => x.par && x.hcp)) h += '<div class="onote">The directory has no yardage for each hole on these tees, so the hole order may be wrong. Check the pars and handicap indexes against the scorecard.</div><button class="opri ofull" data-a="edittee" data-i="' + i + '">Check the holes, then play the ' + esc(t.name) + ' tees</button>';
+        else h += '<div class="onote">' + (n ? 'The directory has ' + n + ' of 18 holes for these tees.' : 'The directory has no hole-by-hole card for these tees.') + ' Rating, slope and yards are filled in for you: add the holes from the scorecard.</div><button class="opri ofull" data-a="edittee" data-i="' + i + '">Add the holes for the ' + esc(t.name) + ' tees</button>'; }
       h += '</div>'; });
     return h + '<div class="oattr">' + esc(c.attribution || '') + '</div>';
   }
@@ -505,6 +515,7 @@
     if (a === 'createday') { readDraft(); if (!DR.course) { err = 'Pick a course first.'; paint(); return; } act('create', dayPayload(), async (j) => { DR = null; stack = [stack[0]]; loadHome(); push({ t: 'day', id: j.game.id, g: j.game, tab: j.game.day.solo ? 'card' : 'lb' }); }); return; }
     if (a === 'course') { readDraft(); push({ t: 'course', q: '' }); act('courses', {}, async (j) => { cur().res = j; paint(); }); return; }
     if (a === 'csearch') { s.q = (document.getElementById('oq') || {}).value || ''; s.st = (document.getElementById('ost') || {}).value || ''; act('courses', { q: s.q, state: s.st }, async (j) => { s.res = j; paint(); }); return; }
+    if (a === 'cmore') { const A = s.res && s.res.api; if (!A || A.next == null) return; act('courses', { q: s.q, state: s.st, offset: A.next }, async (j) => { const B = j.api || {}; if (B.ok) { const have = new Set(A.results.map((c) => c.extId)); A.results = A.results.concat((B.results || []).filter((c) => !have.has(c.extId))); A.next = B.next; A.total = Math.max(A.total || 0, B.total || 0, A.results.length); } else { err = B.error || "Couldn't reach the course list. Try again."; } paint(); }); return; }
     if (a === 'csaved') { const c = s.res.courses.concat(s.res.owned || []).find((x) => x.id === t.getAttribute('data-id')); if (c) { useCourse({ name: c.name, tees: c.tees, holes: c.holes, par: c.par, hcp: c.hcp, yards: c.yards || undefined, rating: c.rating, slope: c.slope, city: c.city }, c.id); } return; }
     if (a === 'cdir') { const o = { t: 'cdetail' }; push(o); act('coursedetail', { extId: t.getAttribute('data-x') }, async (j) => { o.c = j.course; o.ti = j.course.tees.length === 1 ? 0 : null; paint(); }); return; }
     if (a === 'tee') { const i = +t.getAttribute('data-i'); s.ti = s.ti === i ? null : i; paint(); return; }

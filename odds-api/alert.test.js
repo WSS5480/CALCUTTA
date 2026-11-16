@@ -229,6 +229,10 @@ srv.listen(0, async () => {
     assert.strictEqual(A.view({ 12: { v: 2, gl: {}, dogs: [], fix: [{ t: 1, why: 'private note', n: 1, src: 'manual' }] } }, null)['12'].fix[0].why, undefined, "the owner's fix note is not in the public GET");
     const kid = require('child_process').execFileSync(process.execPath, ['-e', "const fs=require('fs'),o=fs.readFileSync;fs.readFileSync=(p,...a)=>/trophy-model/.test(String(p))?'{}':o(p,...a);const A=require('./odds-api/alert.js');A.tick().then(()=>console.log(JSON.stringify(A._state().TK)))"], { cwd: require('path').join(__dirname, '..'), encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
     x = JSON.parse(kid.trim().split('\n').pop()); assert.ok(x.ok === false && /picks disabled: trophy-model\.json/.test(x.err), 'a broken data file does not crash the server and stops all computing');
+    // --- 19 (v253 review fix 6, owner D7): Move the line never assumes -110. No stored price -> only each line's own break-even price, no comparison ---
+    const LM = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, '..', 'pics', 'linemove.json'))), np = PL.ladder({ line: 2.5, p: 0.55, price: null }, LM), w110 = PL.ladder({ line: 2.5, p: 0.55, price: -110 }, LM);
+    assert.strictEqual(np.real, false); assert.strictEqual(np.px, null, 'no -110 stand-in'); np.rows.forEach((r, i) => { assert.ok(Math.abs(r.d - (1 + r.l / r.w)) < 1e-12 && r.be === true && r.pd === null, 'break-even only'); assert.notStrictEqual(r.price, w110.rows[i].price); });
+    assert.ok(Math.abs(np.base.be - (1 + np.base.l / np.base.w)) < 1e-12); assert.strictEqual(w110.real, true); assert.ok(w110.rows.every((r) => !r.be));
     console.log('alert.test.js: all passed');
   } catch (e) { console.error('FAILED:', e.stack || e.message); process.exitCode = 1; }
   srv.close();

@@ -163,4 +163,11 @@ async function verifyLogin(phone, pin, ip, create) {
   if (!same(hashPin(pin, row.salt), row.pinhash)) { fail(id); fail('ip:' + ip); throw bad(401, 'Wrong PIN'); }
   return { id, created: false };
 }
-module.exports = { handle, merge, normPhone, verifyLogin, adminUsers, dbGet, dbPut, dbPatchIf };
+// Groups (groups.js): every player row id (no data), to find a signed-in phone account's own synced bets row. Shared 'lock:' rows are left out.
+async function dbIds() {
+  const { url, key } = cfg();
+  const r = await fetch(`${url}/rest/v1/oddable_sync?select=id&limit=5000`, { headers: hdr(key), signal: AbortSignal.timeout(15000) });
+  if (!r.ok) throw new Error('db read ' + r.status);
+  return (await r.json()).map((x) => String(x.id)).filter((id) => !id.startsWith('lock:'));
+}
+module.exports = { handle, merge, normPhone, verifyLogin, adminUsers, dbGet, dbPut, dbPatchIf, dbIds };

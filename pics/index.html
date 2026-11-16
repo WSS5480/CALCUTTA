@@ -206,7 +206,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v239 -->
+<!-- Pics v240 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
   <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v231</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
@@ -217,7 +217,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v239 (lock + division road dog tag)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v240 (alert of the week)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -236,7 +236,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </div>
 <div id="plb" hidden></div>
 <nav class="bn" id="bn"></nav>
-<script src="trophy.js?v=239"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
+<script src="trophy.js?v=240"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
 <script>
 const SC = document.getElementById('sc');
 // The page scrolls inside #sc so the banner and bottom bar (outside it) can never drift on iOS
@@ -434,7 +434,7 @@ function newBoard(games) {
   const ucand = grp.pre.map(uo).filter((x) => x && x.pm < 0.45), ur = ucand.filter((x) => x.gap > 0).sort((a, c) => c.gap - a.gap)[0] || ucand.sort((a, c) => c.pb - a.pb)[0];
   const upset = ur && !(bp && ur.g === bp.g) ? `<div class="upset"><div class="bh2">🏆🏆 Biggest Upset Pick<small>${ur.t.abbr} to win outright · the books give them ${pct(ur.pm)}, the model says ${pct(ur.pmod)}</small></div><div class="bmoney"><b>$100 bet → $${(100 * ur.dec).toFixed(0)} back</b> <span>(+$${(100 * (ur.dec - 1)).toFixed(0)} profit) · ${ur.dec.toFixed(2)}x · ${ur.real ? '' : 'about '}${ur.am > 0 ? '+' : ''}${ur.am}${ur.real ? '' : ' (estimated)'}</span></div><div class="sub" style="margin:2px 4px 6px">${ur.real ? 'Real moneyline from the odds feed.' : 'Price is estimated from the spread.'} Long shot: expect to lose most of the time. Check your book.</div>${nCard(ur.g)}</div>` : '';
   const TRB = (() => { const td = trophyData(), tw = td && td[wk]; if (!tw || !tw.picks.length) return ''; return tw.picks.map((p) => { const g = ALL[p.id]; if (!g) return ''; const r = trGrade(p); return `<div class="${p.rank === 1 ? 'botd' : 'upset'}"><div class="bh2">${p.rank === 1 ? '🔒🔒 Double Lock' : '🔒 Lock'}<small>${p.abbr} ${p.line > 0 ? '+' : ''}${p.line} against the spread${trDD(p, g) ? ' · 🏠 also a division road dog' : ''} · ${Math.round(p.conf * 100)}% chance to cover${r === 'hit' ? ' · ✓ covered' : r === 'miss' ? ' · ✗ missed' : r === 'push' ? ' · push' : ''}</small></div><div class="sub" style="margin:2px 4px 6px">Spread pick from the frozen factor model. Break-even is 52.4%; the same method ran about 50% in 2018-2025. A tracker, not a guarantee.</div>${nCard(g)}</div>`; }).join(''); })();
-  return (TRB || botd + upset) + `<div class="nbar"><button onclick="nGo(-1)" ${wk <= weeks[0] ? 'disabled style="opacity:.35"' : ''}>◀</button><b>${wk === CUR ? 'This week · ' : ''}Week ${wk}</b><button onclick="nGo(1)" ${wk >= weeks[weeks.length - 1] ? 'disabled style="opacity:.35"' : ''}>▶</button></div>
+  return alertBox(wk) + (TRB || botd + upset) + `<div class="nbar"><button onclick="nGo(-1)" ${wk <= weeks[0] ? 'disabled style="opacity:.35"' : ''}>◀</button><b>${wk === CUR ? 'This week · ' : ''}Week ${wk}</b><button onclick="nGo(1)" ${wk >= weeks[weeks.length - 1] ? 'disabled style="opacity:.35"' : ''}>▶</button></div>
   <div class="nchips">${chip('all', 'All', wg.length)}${chip('live', 'Live', grp.live.length)}${chip('pre', 'Upcoming', grp.pre.length)}${chip('post', 'Final', grp.post.length)}${chip('watch', '📌 Watch', watch.length)}</div>
   ${list.filter((g) => NFILT === 'watch' || !((bp && g === bp.g) || (ur && g === ur.g))).map(nCard).join('') || '<div class="note">' + (NFILT === 'watch' ? 'Nothing watched yet. Tap 📍 Watch on any game.' : 'No games here.') + '</div>'}`;
 }
@@ -1594,6 +1594,20 @@ function trophyData() {
   TRC = { key, v: out, gs, yr }; return out;
 }
 const trDD = (p, g) => !CFB && p && g && p.dog && p.abbr === g.away.abbr && window.Trophy && Trophy.ready() && Trophy.isDiv(g.away.abbr, g.home.abbr); // lock pick that is also a division road dog
+// --- 📣 Oddable Alert of the week: the Double lock + Lock + every division road dog that is not already a lock ---
+function alertAll() {
+  const d = trophyData(); if (!d) return []; const out = [], ids = new Set();
+  Object.keys(d).forEach((w) => d[w].picks.forEach((p) => { const g = ALL[p.id]; if (!g) return; ids.add(String(p.id)); out.push({ wk: +w, g, abbr: p.abbr, line: p.line, kind: p.rank === 1 ? '🔒🔒 Double lock' : '🔒 Lock', res: trGrade(p), dd: trDD(p, g), start: g.start }); }));
+  divDogs().forEach((x) => { if (ids.has(String(x.g.id))) return; out.push({ wk: x.wk, g: x.g, abbr: x.g.away.abbr, line: x.g.line, kind: '🏠 Road dog', res: x.res, dd: true, start: x.g.start }); });
+  return out.sort((a, b) => b.wk - a.wk || a.start - b.start);
+}
+function alertRow(x) { const g = x.g, sc = g.state === 'pre' ? new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : `${g.away.abbr} ${g.away.score}–${g.home.abbr} ${g.home.score}`; return `<div style="display:flex;justify-content:space-between;gap:8px;padding:9px 0;border-top:1px solid var(--line)"><div><b>${x.kind} ${x.abbr} ${x.line > 0 || x.kind === '🏠 Road dog' ? '+' : ''}${x.line}</b>${x.dd && x.kind !== '🏠 Road dog' ? ' 🏠' : ''} <span class="sub">${g.away.abbr} at ${g.home.abbr}</span><small class="sub" style="display:block">${sc}</small></div><b style="color:${x.res === 'hit' ? '#4fd18b' : x.res === 'miss' ? '#ff6b6b' : 'inherit'}">${x.res === 'hit' ? '✓' : x.res === 'miss' ? '✗' : x.res === 'push' ? 'Push' : ''}</b></div>`; }
+function alertRec(L) { const w = L.filter((x) => x.res === 'hit').length, l = L.filter((x) => x.res === 'miss').length; return { w, l, pct: w + l ? Math.round(w / (w + l) * 100) : null, u: w * 100 / 110 - l }; }
+function alertBox(wk) {
+  const A = alertAll(); if (!A.length) return ''; const cur = A.filter((x) => x.wk === wk), r = alertRec(A);
+  return `<div style="border:2px solid #f5c542;border-radius:14px;padding:10px 12px;margin:8px 0;background:#f5c54210"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1;font-size:16px">📣 Oddable Alert of the week</b><i class="ibtn inl" style="float:none" onclick="infoOpen('alert')">ⓘ</i></div><div class="sub">Double lock, Lock and every division road dog, ${cur.length} pick${cur.length === 1 ? '' : 's'} in week ${wk}</div>${cur.map(alertRow).join('') || '<div class="note">No alert picks this week yet.</div>'}<div onclick="alertDrill()" style="cursor:pointer;border-top:1px solid var(--line);margin-top:6px;padding-top:8px;display:flex;justify-content:space-between"><span>This season <b>${r.w}-${r.l}</b>${r.pct === null ? '' : ' · ' + r.pct + '%'}</span><b>${r.u >= 0 ? '+' : ''}${r.u.toFixed(1)} units ›</b></div></div>`;
+}
+function alertDrill() { const A = alertAll(), r = alertRec(A); sheetOpen(`<div style="margin:4px 0"><b>📣 Oddable Alert · this season · ${r.w}-${r.l}</b></div><div class="sub">${r.u >= 0 ? '+' : ''}${r.u.toFixed(1)} units at -110.</div>` + A.map(alertRow).join('')); }
 function trophyChip(g) { const d = trophyData(); if (!d) return ''; const w = d[g.week]; if (!w) return ''; const p = w.picks.find((x) => x.id === g.id); if (!p) return ''; return `<span class="nw" style="border-color:#f5c542;color:#f5c542;font-weight:800">${p.rank === 1 ? '🔒🔒 Double lock' : '🔒 Lock'} ${p.abbr} ${p.line > 0 ? '+' : ''}${p.line}</span>${trDD(p, g) ? ' <span class="nw" style="border-color:#4fd18b;color:#4fd18b">🏠 + division road dog</span>' : ''}`; }
 const TRH = [[2014,8,9,12,5],[2015,9,8,10,7],[2016,9,8,9,8],[2017,10,7,9,8],[2018,9,8,10,7],[2019,9,8,11,6],[2020,6,11,8,9],[2021,10,8,10,8],[2022,9,9,10,8],[2023,10,8,8,10],[2024,11,7,8,10],[2025,8,10,5,13]]; // season, #1 W, #1 L, #2 W, #2 L (each season picked by a model trained only on earlier seasons)
 function trophyHistory() {
@@ -1949,6 +1963,7 @@ const lineText = (g) => (g.line === null ? '' : g.line === 0 ? 'Pick ’em' : `$
 const lkKey = (id) => 'lk26-' + LG + '-' + id;
 const lkLoad = (id) => { try { return JSON.parse(localStorage.getItem(lkKey(id))); } catch (e) { return null; } };
 const INFO = {
+  alert: ['Oddable Alert of the week', "<p>The week's Double lock and Lock, plus every road underdog in a division game that is not already one of them. Each is graded against the spread.</p><p><b>History (2014-2026, same method):</b> 559-482, 53.7%, about +26 units at -110 across 1,041 games, roughly 80 a season. Break-even is 52.4%.</p><p>The division road dog part was found in the same data, so this is a tracker, not a proven edge. Weeks before 11 this season are back-filled; week 11 on is the real test.</p>"],
   divdog: ['Division road dogs', "<p><b>Rule:</b> take the road underdog (against the spread) in every NFL division game.</p><p>2004-2025: 685-599, 53.3%, about +24 units at -110. Break-even is 52.4%. Since 2015 it is 54%. Home underdogs in division games covered only 48.6%.</p><p>It was found while testing about a dozen slices, so there is roughly a 1 in 10 chance it looks this good by luck. Weeks before 11 this season are back-filled; <b>Since added</b> is the real out-of-sample test. A tracker, not a promise.</p>"],
   trnote: ['About these results', "<p>Small sample: a few weeks of results say almost nothing yet. Break-even at -110 is 52.4%.</p><p>The same method run on 2014-2025 ended near break-even (218-200, 52%), so treat this as a tracker, not a promise.</p><p><b>*</b> = picked after the fact with the model frozen before the season. Weeks marked without a star were locked before kickoff on this phone.</p>"],
   picks: ['How the app picks winners', "<p><b>Win pick.</b> Two things are blended: the betting line (90% NFL, 80% NCAA) turned into a win chance, and the app's own team ratings (10% / 20%). The side with the higher chance is the pick, and that chance is the confidence shown.</p><p>The ratings come from this season: score margins (blowouts capped), yards per play, turnovers, home edge, and AP rank for NCAA. One injury rule: if a team's starting QB is Out or Doubtful, its expected margin drops 5.5 points. That moves the <i>spread</i> pick only, not the win pick. Tested on 949 games over 4 seasons: with the QB out, spread picks went from 52% to 65%, while win picks did not improve. Other injuries (RB, WR, defense) did not help, so they are info only. The 🧪 Injury lab on the Stats tab lets you switch it off or test more.</p><p><b>Best odds to win list.</b> This week's games sorted by that confidence, highest first. It is where the model and the line agree most, not a promise.</p><p><b>Backtest</b> grades every finished game using today's ratings, which already know those results, so it looks better than real life. It is graded without the QB rule.</p>"],
@@ -2445,6 +2460,6 @@ if ('serviceWorker' in navigator) {
 })();
 </script>
 <script>setTimeout(()=>{const l=document.querySelector('.lg'),o=l&&l.querySelector('.on');if(o)l.scrollLeft=Math.max(0,o.offsetLeft-60);},500);</script>
-<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=239"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
+<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=240"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
 </body>
 </html>

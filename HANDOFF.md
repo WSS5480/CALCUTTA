@@ -468,3 +468,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v239 — Locks that are also division road dogs get a 🏠 tag
 - Double lock / Lock cards, top-pick cards and Results rows show "🏠 + division road dog" when the pick is the road underdog in a division game (trDD). Info only; lock info sheet explains. 2014-2026: those locks 48-35 (57.8%) vs 51.7% for other locks (found in the same data, not proven). 2026 wk1-10: 5 tagged picks.
+
+## v240 — 📣 Oddable Alert of the week
+- User request: make Double lock + Lock + tag-only division road dogs the "Oddable Alert of the week" with a megaphone. Banner at the top of the NFL Games board (alertBox) lists the week's picks with ✓/✗, season record and units (tap for all picks, alertDrill), ⓘ explains. History 2014-2026 combined 559-482 (53.7%, +26.2u, 1,041 games, ~80/season). 2026 wk1-10 in the app: 26-15 (63%, +8.6u); week 8 alone was 1-6. Same-data caveat kept: tracker, not a proven edge; week 11 on is the real test.

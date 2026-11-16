@@ -28,7 +28,8 @@
   /* ---------------- storage ---------------- */
   let MSG = '';
   function load(id) { let ev = null; try { ev = JSON.parse(localStorage.getItem(PFX + id)); } catch (e) { return null; } try { if (ev && Array.isArray(ev.g) && migrate(ev)) localStorage.setItem(PFX + id, JSON.stringify(ev)); } catch (e) {} return ev; }
-  function save(ev) { ev.up = Date.now(); try { localStorage.setItem(PFX + ev.id, JSON.stringify(ev)); return true; } catch (e) { MSG = 'Could not save on this device (storage is full or blocked).'; return false; } }
+  function save(ev) { ev.up = Date.now(); const s = JSON.stringify(ev); try { localStorage.setItem(PFX + ev.id, s); return true; } catch (e) {} // full: drop the court caches and try once more
+    try { dropCaches(); localStorage.setItem(PFX + ev.id, s); return true; } catch (e) { MSG = 'Could not save on this device (storage is full or blocked).'; return false; } }
   function remove(id) { try { localStorage.removeItem(PFX + id); } catch (e) {} }
   function listEvents() { // every pb1-ev- record; one that can't be read, has no id or whose id isn't its key comes back as { bad, key, name }
     const out = []; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.indexOf(PFX) === 0) { const key = k.slice(PFX.length), e = load(key);
@@ -741,17 +742,24 @@ ${ERR ? `<div class="err">${esc(ERR)}</div>` : ''}<div class="btns"><button clas
   const mapUrl = (L) => 'https://www.openstreetmap.org/?mlat=' + (+L.lat).toFixed(5) + '&mlon=' + (+L.lon).toFixed(5) + '#map=17/' + (+L.lat).toFixed(5) + '/' + (+L.lon).toFixed(5);
   const fmtMi = (d) => (d < 10 ? d.toFixed(1) : String(Math.round(d))) + ' mi';
   function jget(k) { try { return JSON.parse(lsGet(k)); } catch (e) { return null; } }
-  function cachePut(pfx, k, v, cap) { // keep at most cap entries under pfx; the oldest go first
-    try { const ks = []; for (let i = 0; i < localStorage.length; i++) { const x = localStorage.key(i); if (x && x.indexOf(pfx) === 0 && x !== k) ks.push(x); }
-      if (ks.length >= cap) ks.map((x) => [x, (jget(x) || {}).t || 0]).sort((a, b) => a[1] - b[1]).slice(0, ks.length - cap + 1).forEach(([x]) => localStorage.removeItem(x)); } catch (e) {}
-    lsSet(k, JSON.stringify(v));
+  // The place/court caches share the ~5 MB origin quota with Oddable, so they stay small: at most cap entries per
+  // prefix AND at most CACHE_MAX bytes for all pb1-geo- + pb1-ovp- keys together (UTF-16 = 2 bytes a char), oldest out first.
+  const CACHE_RE = /^pb1-(geo|ovp)-/, CACHE_MAX = 300 * 1024;
+  function dropCaches() { try { const ks = []; for (let i = 0; i < localStorage.length; i++) { const x = localStorage.key(i); if (x && CACHE_RE.test(x)) ks.push(x); } ks.forEach((x) => localStorage.removeItem(x)); } catch (e) {} }
+  function cachePut(pfx, k, v, cap) {
+    const s = JSON.stringify(v), need = (k.length + s.length) * 2; if (need > CACHE_MAX) return;
+    try { const all = []; for (let i = 0; i < localStorage.length; i++) { const x = localStorage.key(i); if (x && x !== k && CACHE_RE.test(x)) { const raw = localStorage.getItem(x) || ''; let t = 0; try { t = +JSON.parse(raw).t || 0; } catch (e) {} all.push({ x, t, b: (x.length + raw.length) * 2, same: x.indexOf(pfx) === 0 }); } }
+      all.sort((a, b) => a.t - b.t); let same = all.filter((a) => a.same).length, tot = all.reduce((n, a) => n + a.b, 0) + need;
+      for (const a of all) { if (same < cap && tot <= CACHE_MAX) break; if ((a.same && same >= cap) || tot > CACHE_MAX) { localStorage.removeItem(a.x); tot -= a.b; if (a.same) same--; } }
+    } catch (e) {}
+    try { localStorage.setItem(k, s); } catch (e) { dropCaches(); } // storage full: give the room back to events, skip caching
   }
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   async function tfetch(url, opt, ms) { const ac = typeof AbortController === 'function' ? new AbortController() : null, tm = setTimeout(() => { if (ac) ac.abort(); }, ms);
     try { return await fetch(url, Object.assign({ credentials: 'omit', referrerPolicy: 'strict-origin-when-cross-origin' }, opt, ac ? { signal: ac.signal } : {})); } finally { clearTimeout(tm); } }
-  let NOMQ = Promise.resolve();
-  function nomFetch(url) { // one Nominatim request at a time, at least 1.1 s apart (also across reloads)
-    const p = NOMQ.then(async () => { const w = 1100 - (Date.now() - (+lsGet('pb1-nomt') || 0)); if (w > 0) await sleep(Math.min(w, 1100)); lsSet('pb1-nomt', String(Date.now())); return tfetch(url, {}, 15000); });
+  let NOMQ = Promise.resolve(), NOMT = 0;
+  function nomFetch(url) { // one Nominatim request at a time, at least 1.1 s apart: last time kept in memory, and in storage for reloads
+    const p = NOMQ.then(async () => { const last = Math.max(NOMT, +lsGet('pb1-nomt') || 0), w = 1100 - (Date.now() - last); if (w > 0) await sleep(Math.min(w, 1100)); NOMT = Date.now(); lsSet('pb1-nomt', String(NOMT)); return tfetch(url, {}, 15000); });
     NOMQ = p.catch(() => {}); return p;
   }
   async function geocode(q) {
@@ -783,14 +791,17 @@ ${ERR ? `<div class="err">${esc(ERR)}</div>` : ''}<div class="btns"><button clas
   }
   async function overpass(ctr, rad) {
     const la = +ctr.lat.toFixed(2), lo = +ctr.lon.toFixed(2), k = 'pb1-ovp-' + la + ',' + lo + ',' + rad, hit = jget(k);
-    if (hit && Date.now() - hit.t < DAY && Array.isArray(hit.c)) return hit.c;
+    if (hit && Date.now() - hit.t < DAY && Array.isArray(hit.c)) return { c: hit.c, more: +hit.more || 0 };
     const q = '[out:json][timeout:25];nwr["sport"~"pickleball"](around:' + Math.round(rad * 1609.344) + ',' + la + ',' + lo + ');out center tags;';
     let err = null;
     for (const u of OVP) {
       try { const r = await tfetch(u, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }, body: 'data=' + encodeURIComponent(q) }, 30000);
         if (!r.ok) throw new Error('HTTP ' + r.status); const j = await r.json();
         if (!j || !Array.isArray(j.elements) || (!j.elements.length && typeof j.remark === 'string' && /error/i.test(j.remark))) throw new Error('bad answer');
-        const c = parseCourts(j.elements); cachePut('pb1-ovp-', k, { t: Date.now(), c }, 20); return c;
+        // keep only what can be shown: the closest MAXRES places in range, trimmed to the fields the cards use
+        const P = { lat: la, lon: lo }, all = parseCourts(j.elements).filter((x) => miles(P, x) <= rad + 0.5).sort((a, b) => miles(P, a) - miles(P, b));
+        const c = all.slice(0, MAXRES).map((x) => ({ id: x.id, n: x.n, ctx: x.ctx, a: x.a, lat: Math.round(x.lat * 1e6) / 1e6, lon: Math.round(x.lon * 1e6) / 1e6, k: x.k, io: x.io, lit: x.lit, acc: x.acc })), more = Math.max(0, all.length - MAXRES);
+        cachePut('pb1-ovp-', k, { t: Date.now(), c, more }, 20); return { c, more };
       } catch (e) { err = e; }
     }
     throw err || new Error('no server');
@@ -799,9 +810,9 @@ ${ERR ? `<div class="err">${esc(ERR)}</div>` : ''}<div class="btns"><button clas
   const show = () => { if (onCourt()) render(); };
   async function courtsAt(tok) {
     SRCH.st = 'busy'; SRCH.msg = 'Looking for pickleball courts…'; show();
-    try { const c = await overpass(SRCH.ctr, SRCH.rad); if (tok !== SRCH.tok) return;
-      const L = c.filter((x) => okLL(x.lat, x.lon)).map((x) => Object.assign({}, x, { d: miles(SRCH.ctr, x) })).filter((x) => x.d <= SRCH.rad + 0.5).sort((a, b) => a.d - b.d);
-      SRCH.res = L.slice(0, MAXRES); SRCH.more = Math.max(0, L.length - MAXRES); SRCH.st = 'ok'; SRCH.msg = ''; SRCH.retry = null;
+    try { const o = await overpass(SRCH.ctr, SRCH.rad); if (tok !== SRCH.tok) return;
+      const L = o.c.filter((x) => x && okLL(x.lat, x.lon)).map((x) => Object.assign({}, x, { d: miles(SRCH.ctr, x) })).filter((x) => x.d <= SRCH.rad + 0.5).sort((a, b) => a.d - b.d);
+      SRCH.res = L.slice(0, MAXRES); SRCH.more = o.more + Math.max(0, L.length - MAXRES); SRCH.st = 'ok'; SRCH.msg = ''; SRCH.retry = null;
     } catch (e) { if (tok !== SRCH.tok) return; SRCH.st = 'err'; SRCH.res = []; SRCH.retry = 'o'; SRCH.msg = e && e.name === 'AbortError' ? 'The court map took too long to answer (it may be busy). Try again in a minute.' : 'Couldn\'t reach the court map right now (no connection, or it is busy). Try again in a minute.'; }
     show();
   }
@@ -809,26 +820,28 @@ ${ERR ? `<div class="err">${esc(ERR)}</div>` : ''}<div class="btns"><button clas
     const q = txt(SRCH.q, 120); SRCH.q = q; const tok = ++SRCH.tok;
     if (!q) { SRCH.st = 'err'; SRCH.msg = 'Type a city, address or ZIP first.'; SRCH.retry = null; SRCH.res = []; return show(); }
     SRCH.st = 'busy'; SRCH.msg = 'Finding ' + q + '…'; show(); let c;
-    try { c = await geocode(q); } catch (e) { if (tok !== SRCH.tok) return; SRCH.st = 'err'; SRCH.res = []; SRCH.retry = 'q'; SRCH.msg = 'Couldn\'t reach the map search right now. Check your connection and try again.'; return show(); }
+    try { c = await geocode(q); } catch (e) { if (tok !== SRCH.tok) return; SRCH.st = 'err'; SRCH.res = []; SRCH.ctr = null; SRCH.retry = 'q'; SRCH.msg = 'Couldn\'t reach the map search right now. Check your connection and try again.'; return show(); }
     if (tok !== SRCH.tok) return;
-    if (!c) { SRCH.st = 'err'; SRCH.res = []; SRCH.retry = null; SRCH.msg = 'Couldn\'t find “' + q + '”. Try a city and state (Austin, TX) or a ZIP code.'; return show(); }
+    if (!c) { SRCH.st = 'err'; SRCH.res = []; SRCH.ctr = null; SRCH.retry = null; SRCH.msg = 'Couldn\'t find “' + q + '”. Try a city and state (Austin, TX) or a ZIP code.'; return show(); }
     SRCH.ctr = { lat: c.lat, lon: c.lon, label: c.label }; return courtsAt(tok);
   }
   function courtNear() {
     const tok = ++SRCH.tok;
     if (!navigator.geolocation) { SRCH.st = 'err'; SRCH.res = []; SRCH.retry = null; SRCH.msg = 'This browser can\'t share your location. Type a city or ZIP instead.'; return show(); }
     SRCH.st = 'busy'; SRCH.msg = 'Getting your location…'; show();
-    navigator.geolocation.getCurrentPosition((p) => { if (tok !== SRCH.tok) return; const lat = p.coords.latitude, lon = p.coords.longitude;
-      if (!okLL(lat, lon)) { SRCH.st = 'err'; SRCH.msg = 'Couldn\'t read your location. Type a city or ZIP instead.'; return show(); }
-      SRCH.ctr = { lat, lon, label: 'your location' }; courtsAt(tok); },
-    (e) => { if (tok !== SRCH.tok) return; SRCH.st = 'err'; SRCH.res = [];
+    const fail = (e) => { if (tok !== SRCH.tok) return; ++SRCH.tok; SRCH.st = 'err'; SRCH.res = []; SRCH.ctr = null;
       if (e && e.code === 1) { SRCH.retry = null; SRCH.msg = 'Location is turned off for this page. Allow location for this site in your browser settings, or type a city or ZIP.'; }
       else { SRCH.retry = 'me'; SRCH.msg = 'Couldn\'t get your location (it timed out or isn\'t available). Try again, or type a city or ZIP.'; }
-      show(); }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 });
+      show(); };
+    setTimeout(() => { if (tok === SRCH.tok && SRCH.st === 'busy' && SRCH.msg === 'Getting your location…') fail({ code: 3 }); }, 20000); // the prompt was never answered
+    navigator.geolocation.getCurrentPosition((p) => { if (tok !== SRCH.tok) return; const lat = p.coords.latitude, lon = p.coords.longitude;
+      if (!okLL(lat, lon)) { SRCH.st = 'err'; SRCH.res = []; SRCH.ctr = null; SRCH.retry = null; SRCH.msg = 'Couldn\'t read your location. Type a city or ZIP instead.'; return show(); }
+      SRCH.ctr = { lat, lon, label: 'your location' }; courtsAt(tok); },
+    fail, { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 });
   }
   const courtTitle = (c) => c.n || 'Unnamed courts' + (c.ctx ? ', ' + c.ctx : '');
   function locLine(L, href) { // the chosen court on the event page / New event form
-    return `<div class="loc"><span>📍 <b>${esc(L.n)}</b>${L.a ? `<small>${esc(L.a)}</small>` : ''}</span><span class="la">${L.lat != null ? `<a class="lnk" href="${esc(mapUrl(L))}" target="_blank" rel="noopener">Map</a>` : ''}${href ? `<a class="lnk" href="#/${href}">Change</a>` : ''}</span></div>`;
+    return `<div class="loc"><span>📍 <b>${esc(L.n)}</b>${L.a ? `<small>${esc(L.a)}</small>` : ''}</span><span class="la">${okLL(L.lat, L.lon) ? `<a class="lnk" href="${esc(mapUrl(L))}" target="_blank" rel="noopener">Map</a>` : ''}${href ? `<a class="lnk" href="#/${href}">Change</a>` : ''}</span></div>`;
   }
   function viewCourt(ev) {
     const isNew = !ev, base = isNew ? 'new' : 'e/' + ev.id, cur0 = isNew ? FORM && (FORM.court || (FORM.loc ? { n: FORM.loc } : null)) : ev.loc, busy = SRCH.st === 'busy';
@@ -863,7 +876,7 @@ ${ERR ? `<div class="err">${esc(ERR)}</div>` : ''}<div class="btns"><button clas
   function courtAct(a, t) { // returns true when it handled a court action
     if (a === 'csearch') { const i = $('#cq'); if (i) SRCH.q = i.value; courtSearch(); return true; }
     if (a === 'cnear') { courtNear(); return true; }
-    if (a === 'crad') { const r = +t.getAttribute('data-r'); if (RADS.includes(r)) { SRCH.rad = r; lsSet('pb1-rad', String(r)); } if (SRCH.ctr && SRCH.st !== 'busy') courtsAt(++SRCH.tok); else render(); return true; }
+    if (a === 'crad') { const r = +t.getAttribute('data-r'); if (RADS.includes(r)) { SRCH.rad = r; lsSet('pb1-rad', String(r)); } if (SRCH.ctr && SRCH.st !== 'busy') courtsAt(++SRCH.tok); else render(); return true; } // no place found yet (or the last lookup failed): only the setting changes
     if (a === 'cretry') { if (SRCH.retry === 'q') courtSearch(); else if (SRCH.retry === 'me') courtNear(); else if (SRCH.ctr) courtsAt(++SRCH.tok); return true; }
     if (a === 'cuse') { const c = SRCH.res[+t.getAttribute('data-i')]; if (!c) return true; setLoc(cleanLoc({ n: courtTitle(c), a: c.a || (c.n ? c.ctx : ''), lat: c.lat, lon: c.lon, id: c.id })); return true; }
     if (a === 'ctypeopen') { DOPEN.add('ctype'); render(); const i = $('#loctxt'); if (i) { i.focus(); i.scrollIntoView({ block: 'center' }); } return true; }
@@ -918,7 +931,7 @@ ${ERR ? `<div class="err">${esc(ERR)}</div>` : ''}<div class="btns"><button clas
   document.addEventListener('input', (e) => { const t = e.target; if (t.id === 'cq') SRCH.q = t.value; else if (t.id === 'loctxt') SRCH.typed = t.value; else if (t.closest && t.closest('#nf')) readForm(); }); // typing never searches
   function fillDef() { const s = $('#ldf'), c = $('#lch'); if (!s || !c) return; let ev = null; try { ev = cur(); } catch (x) { return; } if (!ev) return; s.innerHTML = defOpts(ev, c.value).map((u) => `<option value="${esc(u)}">${ladderOrder(ev).indexOf(u) + 1}. ${esc(uName(ev, u))}</option>`).join('') || '<option value="">Nobody free within 3 spots</option>'; }
   document.addEventListener('toggle', (e) => { const d = e.target; if (d.matches && d.matches('details[data-k]')) { if (d.open) DOPEN.add(d.getAttribute('data-k')); else DOPEN.delete(d.getAttribute('data-k')); } }, true);
-  window.addEventListener('hashchange', () => { OPEN = null; ERR = ''; SRCH.typed = null; render(); window.scrollTo(0, 0); });
+  window.addEventListener('hashchange', () => { OPEN = null; ERR = ''; SRCH.typed = null; if (SRCH.st === 'busy') { ++SRCH.tok; SRCH.st = ''; SRCH.msg = ''; } render(); window.scrollTo(0, 0); });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', render); else render();
 
   // test hook (read-only helpers; nothing here talks to a server)

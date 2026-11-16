@@ -204,3 +204,128 @@ T.p1EventStep = async () => {
   NOW = ev.start + 1000; no(await call('ann', 'teams', { id, teams: bal.suggestions[0].teams }), 409); assert.strictEqual(ok(await call('ann', 'partners', { id })).locked, true);
   ev = ok(await call('ann', 'get', { id })).event; assert.strictEqual(ev.matches.length, 1); assert.deepStrictEqual([ev.matches[0].an, ev.matches[0].bn].map((n) => n.split(' / ').sort().join(' / ')).sort(), ['Bob / Cy', 'Di / Ed']);
 };
+
+// ================= Playbook fixes (manager decisions, Nov 16 2026) =================
+const dayOf = (ms) => new Date(ms).toISOString().slice(0, 10);
+// every match record carries oppRating / partnerRating; beating a higher-rated opponent gains more
+T.pbEloUsesOpponentRatings = async () => {
+  await playEvent('ann', ['bob', 'cy', 'di'], ['Di', 'Cy', 'Bob', 'Ann']); NOW += DAY; E._reset();
+  const di = (await E.ratingFor('acct-di', 'pickleball')).oddable.rating, ann = (await E.ratingFor('acct-ann', 'pickleball')).oddable.rating; assert.ok(di > 1540 && ann < 1460, di + ' ' + ann);
+  const first = (await E.statsFor('acct-di', {})).filter((r) => r.kind === 'match'); first.forEach((r) => { assert.ok(Array.isArray(r.extra.oppRating) && r.extra.oppRating.length === 1, 'oppRating on every match record'); assert.strictEqual(r.extra.fmt, 'singles'); assert.ok(!('partnerRating' in r.extra)); });
+  assert.strictEqual(first.sort((a, b) => a.extra.at - b.extra.at)[0].extra.oppRating[0], null, 'a first-ever opponent has no rating yet (counted at 1500)'); assert.ok(first.some((r) => Number.isFinite(r.extra.oppRating[0])), 'later opponents carry their rating at that moment');
+  // two new players (1500 each): Eve beats the top player, Fay beats the bottom player
+  let ev = ok(await call('org', 'create', base({ fmt: 'h2h', playIn: false, myName: 'Org', title: 'Challenge night', endDay: dayOf(NOW + 3 * DAY), self: true }))).event; const id = ev.id;
+  for (const o of ['eve', 'fay', 'di', 'ann']) ok(await call(o, 'join', { code: ev.code, as: 'player', myName: cap1(o) }));
+  NOW += 3 * HOUR; ev = ok(await call('org', 'get', { id })).event; const eid = (n) => ev.entrants.find((e) => e.name === n).eid;
+  for (const [a, b] of [['Eve', 'Di'], ['Fay', 'Ann']]) { ev = ok(await call('org', 'challenge', { id, a: eid(a), b: eid(b) })).event; const m = ev.matches.find((x) => x.state === 'ready'); NOW += 60e3; ev = ok(await call('org', 'score', { id, m: m.id, games: [[11, 9]] })).event; }
+  E._reset(); const eve = (await E.ratingFor('acct-eve', 'pickleball')).oddable, fay = (await E.ratingFor('acct-fay', 'pickleball')).oddable;
+  assert.ok(eve.rating > fay.rating, 'beating a higher-rated opponent gains more: Eve ' + eve.rating + ' v Fay ' + fay.rating); assert.ok(eve.rating - 1500 > 16 && fay.rating - 1500 < 16, 'more than half of K for the upset, less for the favourite');
+  const rE = (await E.statsFor('acct-eve', {})).find((r) => r.kind === 'match'), rF = (await E.statsFor('acct-fay', {})).find((r) => r.kind === 'match');
+  assert.deepStrictEqual(rE.extra.oppRating, [di]); assert.deepStrictEqual(rF.extra.oppRating, [ann]); assert.strictEqual(rE.extra.myRating, undefined, 'Eve had no rating before');
+  const di2 = (await E.ratingFor('acct-di', 'pickleball')).oddable.rating, ann2 = (await E.ratingFor('acct-ann', 'pickleball')).oddable.rating; assert.ok(di - di2 > ann - ann2, 'and losing to a lower-rated player costs more');
+  assert.strictEqual((await E.statsFor('acct-di', {})).find((r) => r.kind === 'match' && /Challenge night/.test(r.title)).extra.myRating, di);
+  // doubles: both opponents and the partner
+  let d = ok(await call('org', 'create', base({ fmt: 'h2h', unit: 'doubles', playIn: false, myName: 'Org', title: 'Doubles night', endDay: dayOf(NOW + 3 * DAY), self: true, start: NOW + 2 * HOUR }))).event;
+  for (const [a, b] of [['di', 'eve'], ['ann', 'fay']]) { d = ok(await call(a, 'join', { code: d.code, as: 'player', myName: cap1(a), entryName: cap1(a) + ' / ' + cap1(b) })).event; ok(await call(b, 'join', { code: d.code, as: 'player', myName: cap1(b), eid: d.entrants.find((x) => x.name.startsWith(cap1(a))).eid })); }
+  NOW += 3 * HOUR; d = ok(await call('org', 'get', { id: d.id })).event; d = ok(await call('org', 'challenge', { id: d.id, a: d.entrants[0].eid, b: d.entrants[1].eid })).event; ok(await call('org', 'score', { id: d.id, m: d.matches.find((x) => x.state === 'ready').id, games: [[11, 2]] }));
+  const rD = (await E.statsFor('acct-di', {})).find((r) => r.kind === 'match' && r.extra.fmt === 'doubles'); assert.strictEqual(rD.extra.fmt, 'doubles'); assert.deepStrictEqual(rD.extra.oppRating.slice().sort(), [ann2, fay.rating].sort()); assert.strictEqual(rD.extra.partnerRating, eve.rating); assert.strictEqual(rD.extra.partner, 'Eve');
+  assert.ok(!JSON.stringify(await E.statsFor('acct-di', {})).includes('acct-'));
+  if (process.env.STATS_JS) for (const r of await E.statsFor('acct-di', {})) assert.ok(require(process.env.STATS_JS).validate(r, 'events').ok);
+};
+// round robin tiebreak: the pickleball rulebook order; never the seed; then the organizer's playoff or coin flip, logged
+T.pbTiebreakRulebookOrder = async () => {
+  const g = (a, b, x, y) => ({ id: a + b, st: 'pool', pool: 0, state: 'confirmed', a, b, games: [[x, y]], win: x > y ? 'a' : 'b' }), ents = (ids) => ids.map((eid) => ({ eid, name: eid }));
+  const tbl = (ids, ms, seeds) => E.poolTable({ seeds: seeds || ids, entrants: ents(ids), matches: ms, pools: [ids], drawn: 1, fmt: 'rr' }, ids, 0);
+  // step 4, head-to-head point differential: A, B, C 2-1 in a circle, all +6 overall; among the three C is +4, A and B -2 -> C, then A (beat B), then B.
+  let M = [g('A', 'B', 11, 5), g('B', 'C', 11, 7), g('C', 'A', 11, 3), g('A', 'D', 11, 3), g('B', 'D', 11, 3), g('C', 'D', 11, 9)], t = tbl(['A', 'B', 'C', 'D'], M);
+  assert.deepStrictEqual(t.slice(0, 3).map((r) => r.diff), [6, 6, 6]); assert.deepStrictEqual(t.map((r) => r.eid), ['C', 'A', 'B', 'D'], 'head-to-head differential (points scored would say C, B, A)');
+  // step 5, differential against the next-highest entry: T beats everyone; A, B, C circle by the same score; all level overall; v T: A -2, B -4, C -6
+  M = [g('A', 'B', 11, 5), g('B', 'C', 11, 5), g('C', 'A', 11, 5), g('T', 'A', 11, 9), g('T', 'B', 11, 7), g('T', 'C', 11, 5), g('A', 'D', 11, 9), g('B', 'D', 11, 7), g('C', 'D', 11, 5), g('T', 'D', 11, 0)];
+  t = tbl(['C', 'B', 'A', 'T', 'D'], M); assert.deepStrictEqual(t.map((r) => r.eid), ['T', 'A', 'B', 'C', 'D'], 'closest to the top entry first, then head-to-head again (B beat C)'); assert.ok(t.every((r) => !r.tie));
+  // nothing separates them: never the seed. Flagged as tied in both seed orders, same neutral order
+  M = [g('A', 'B', 11, 5), g('B', 'C', 11, 5), g('C', 'A', 11, 5), g('A', 'D', 11, 5), g('B', 'D', 11, 5), g('C', 'D', 11, 5)];
+  for (const seeds of [['A', 'B', 'C', 'D'], ['C', 'B', 'A', 'D']]) { t = tbl(['A', 'B', 'C', 'D'], M, seeds); assert.deepStrictEqual(t.map((r) => r.tie || null), ['A+B+C', 'A+B+C', 'A+B+C', null], 'tied rows are flagged, the seed decides nothing'); assert.deepStrictEqual(t.map((r) => r.eid), ['A', 'B', 'C', 'D']); }
+  assert.strictEqual(E.openTies({ seeds: [], entrants: ents(['A', 'B', 'C', 'D']), matches: M, pools: [['A', 'B', 'C', 'D']], drawn: 1, fmt: 'rr' }).length, 1);
+};
+T.pbTiebreakOrganizerChoice = async () => {
+  const mk = async (title) => { let ev = ok(await call('org', 'create', base({ playIn: false, myName: 'Org', title, seeding: 'manual', entry: 10, split: '60/30/10', entrants: [{ name: 'Gil' }, { name: 'Hy' }, { name: 'Ida' }] }))).event; const id = ev.id; ok(await call('zed', 'join', { code: ev.code, as: 'spectator', myName: 'Zed' }));
+    NOW = ev.start + 1000; ev = ok(await call('org', 'get', { id })).event; const beat = { Gil: 'Hy', Hy: 'Ida', Ida: 'Gil' };
+    for (let i = 0; i < 3; i++) { const m = ev.matches.find((x) => x.state === 'ready' && x.an && x.bn); NOW += 60e3; ev = ok(await call('org', 'score', { id, m: m.id, games: beat[m.an] === m.bn ? [[11, 5]] : [[5, 11]] })).event; } return ev; };
+  // coin flip
+  let ev = await mk('Circle one'); const id = ev.id; assert.ok(!ev.fin && !ev.placeRows, 'the event waits: no places from the seed'); assert.strictEqual(ev.ties.length, 1); assert.deepStrictEqual(ev.ties[0].names.slice().sort(), ['Gil', 'Hy', 'Ida']); assert.ok(ev.tables[0].every((r) => r.tie));
+  no(await call('zed', 'tiebreak', { id, key: ev.ties[0].key, how: 'coin' }), 403, 'only the organizer'); no(await call('org', 'tiebreak', { id, key: ev.ties[0].key, how: 'dice' }), 400); no(await call('org', 'tiebreak', { id, key: 'X+Y', how: 'coin' }), 409);
+  ev = ok(await call('org', 'tiebreak', { id, key: ev.ties[0].key, how: 'coin' })).event; assert.ok(ev.fin, 'finished once the tie is decided'); assert.strictEqual(ev.ties.length, 0); assert.deepStrictEqual(ev.placeRows.map((r) => r.place), [1, 2, 3]);
+  const logLine = ev.audit.find((a) => /chose a coin flip\. Oddable flipped: /.test(a.s)); assert.ok(logLine && /Org \(commissioner\)/.test(logLine.who), 'logged with who chose'); assert.strictEqual(logLine.s.split('flipped: ')[1], ev.placeRows.map((r) => r.name).join(', then ')); assert.strictEqual(ev.tbLog[0].how, 'coin'); assert.ok(ev.tables[0].every((r) => r.tb === 'coin flip'));
+  no(await call('org', 'tiebreak', { id, key: 'x', how: 'coin' }), 409, 'final after that');
+  const orders = new Set(); for (let i = 0; i < 12; i++) { reset(); const e = await mk('Flip ' + i); orders.add(ok(await call('org', 'tiebreak', { id: e.id, key: e.ties[0].key, how: 'coin' })).event.placeRows[0].name); } assert.ok(orders.size > 1, 'a real flip, not the entry order: ' + [...orders]);
+  // tiebreak playoff: stepladder of 2 matches for 3 tied entries
+  reset(); ev = await mk('Circle two'); const id2 = ev.id; ev = ok(await call('org', 'tiebreak', { id: id2, key: ev.ties[0].key, how: 'game' })).event; assert.ok(!ev.fin); assert.strictEqual(ev.ties[0].matches, 2);
+  let tm = ev.matches.filter((m) => m.st === 'tb'); assert.strictEqual(tm.length, 1); assert.strictEqual(tm[0].state, 'ready'); assert.strictEqual(ev.ties[0].game, tm[0].id); no(await call('org', 'tiebreak', { id: id2, key: ev.ties[0].key, how: 'coin' }), 409, 'no switching once the playoff is set');
+  const sitting = ['Gil', 'Hy', 'Ida'].find((n) => n !== tm[0].an && n !== tm[0].bn), loser1 = tm[0].bn; NOW += 60e3; ev = ok(await call('org', 'score', { id: id2, m: tm[0].id, games: [[11, 8]] })).event;
+  tm = ev.matches.filter((m) => m.st === 'tb'); assert.strictEqual(tm.length, 2, 'the winner plays the third entry'); assert.deepStrictEqual([tm[1].an, tm[1].bn].sort(), [sitting, tm[0].an].sort()); assert.ok(!ev.fin);
+  const w2 = tm[1].an, l2 = tm[1].bn; NOW += 60e3; ev = ok(await call('org', 'score', { id: id2, m: tm[1].id, games: [[11, 8]] })).event; assert.ok(ev.fin); assert.deepStrictEqual(ev.placeRows.map((r) => r.name), [w2, l2, loser1]); assert.ok(ev.audit.some((a) => /chose a tiebreak playoff \(2 matches, order drawn at random\)/.test(a.s)));
+  assert.ok(ev.tables[0].every((r) => r.w === 1 && r.l === 1), 'tiebreak matches do not change the pool records');
+};
+// bracket pick'em: lock time per round (auto-lock), lock button, picks locked on entry
+T.pbPickemLocks = async () => {
+  let ev = ok(await call('org', 'create', base({ fmt: 'se', playIn: false, myName: 'Org', pickem: true, seeding: 'manual', entrants: [{ name: 'A1' }, { name: 'B2' }, { name: 'C3' }, { name: 'D4' }] }))).event; const id = ev.id;
+  for (const f of ['fan', 'pat']) ok(await call(f, 'join', { code: ev.code, as: 'spectator', myName: cap1(f) }));
+  NOW = ev.start + 1000; ev = ok(await call('fan', 'get', { id })).event; const [s1, s2] = ev.matches.filter((m) => m.st === 'w' && m.r === 1), rk = ev.pickem.rounds.find((r) => /Round 1/.test(r.label)); assert.ok(rk && !rk.locked && rk.lockAt === null && rk.matches === 2);
+  // locked on entry: server-stamped, cannot be changed or re-stamped; the same pick again is a harmless resend
+  const t0 = NOW; ev = ok(await call('fan', 'pick', { id, m: s1.id, side: 'a' })).event; assert.deepStrictEqual(ev.pickem.mine[s1.id], { s: 'a', t: t0 }, 'stamped by the server clock');
+  NOW += 5000; assert.ok(/locked/i.test(no(await call('fan', 'pick', { id, m: s1.id, side: 'b' }), 409, 'changing a pick').error)); ev = ok(await call('fan', 'pick', { id, m: s1.id, side: 'a', t: 1 })).event; assert.strictEqual(ev.pickem.mine[s1.id].t, t0, 'the first stamp stays');
+  ok(await call('fan', 'pick', { id, tb: 30 })); no(await call('fan', 'pick', { id, tb: 31 }), 409, 'the tiebreak guess is locked on entry too'); ok(await call('fan', 'pick', { id, tb: 30 }));
+  // lock time: only the commissioner, only in the future; auto-locks at that moment
+  no(await call('fan', 'picklock', { id, round: rk.key, at: NOW + HOUR }), 403); no(await call('org', 'picklock', { id, round: rk.key, at: NOW - 1 }), 400); no(await call('org', 'picklock', { id, round: 'x|w|9', lock: true }), 404);
+  const at = NOW + HOUR; ev = ok(await call('org', 'picklock', { id, round: rk.key, at })).event; assert.strictEqual(ev.pickem.rounds.find((r) => r.key === rk.key).lockAt, at); assert.ok(ev.audit.some((a) => /Round 1: picks lock at/.test(a.s)));
+  NOW = at - 1000; ok(await call('pat', 'pick', { id, m: s1.id, side: 'b' }), 'one second before the lock');
+  NOW = at; assert.ok(/locked/i.test(no(await call('pat', 'pick', { id, m: s2.id, side: 'a' }), 409, 'at the lock time, with no match started').error));
+  ev = ok(await call('pat', 'get', { id })).event; const r1 = ev.pickem.rounds.find((r) => r.key === rk.key); assert.ok(r1.locked && r1.how === 'time'); assert.ok(!ev.pickem.open.includes(s2.id)); assert.deepStrictEqual(ev.pickem.counts[s1.id], { a: 1, b: 1 }, 'counts show once locked');
+  no(await call('org', 'picklock', { id, round: rk.key, at: NOW + HOUR }), 409, 'a lock is never undone'); no(await call('org', 'picklock', { id, round: rk.key, lock: true }), 409);
+  const poll = ok(await call('pat', 'get', { id, since: ev.u })); assert.ok(!poll.same, 'the 10-second refresh notices the lock time passing');
+  // the lock button on the next round (the final), before anyone starts it
+  for (const m of [s1, s2]) { NOW += 60e3; ev = ok(await call('org', 'score', { id, m: m.id, games: [[11, 4]] })).event; }
+  const fin = ev.matches.find((m) => m.st === 'w' && m.r === 2), rf = ev.pickem.rounds.find((r) => /Round 2/.test(r.label)); ok(await call('fan', 'pick', { id, m: fin.id, side: 'a' }));
+  ev = ok(await call('org', 'picklock', { id, round: rf.key, lock: true })).event; assert.ok(ev.pickem.rounds.find((r) => r.key === rf.key).how === 'button'); assert.ok(ev.audit.some((a) => /Round 2: picks locked now/.test(a.s) && /Org/.test(a.who)));
+  no(await call('pat', 'pick', { id, m: fin.id, side: 'a' }), 409, 'locked by the button'); no(await call('pat', 'pick', { id, tb: 20 }), 409, 'the final is locked, so is the tiebreak');
+};
+// pairs / local teams as a Calcutta lot source with the started() hook; fail closed
+T.pbCalcuttaSource = async () => {
+  const SRC = {}, calcutta = { registerSource: (key, src) => { if (!src || typeof src.teams !== 'function') throw new Error('teams() is required'); if (typeof src.started !== 'function' && typeof src.startTime !== 'function') throw new Error('no started hook'); SRC[key] = src; } };
+  let ev = ok(await call('org', 'create', base({ fmt: 'se', unit: 'doubles', playIn: false, myName: 'Org', seeding: 'manual', self: true, entrants: [{ name: 'Gil / Hy' }] }))).event; const id = ev.id;
+  ev = ok(await call('bob', 'join', { code: ev.code, as: 'player', myName: 'Bob', entryName: 'Bob / Cy' })).event; ok(await call('cy', 'join', { code: ev.code, as: 'player', myName: 'Cy', eid: ev.entrants.find((x) => x.name === 'Bob / Cy').eid }));
+  const key = E.ADAPTER.registerCalcutta(calcutta, id); assert.strictEqual(key, 'evt:' + id); const S = SRC[key]; assert.strictEqual(S.local, true, 'local lots: players of record, buy back half'); for (const f of ['teams', 'results', 'started', 'startTime']) assert.strictEqual(typeof S[f], 'function');
+  const teams = await S.teams(); assert.deepStrictEqual(teams.map((t) => t.name).sort(), ['Bob / Cy', 'Gil / Hy']); const bc = teams.find((t) => t.name === 'Bob / Cy'), gh = teams.find((t) => t.name === 'Gil / Hy');
+  assert.deepStrictEqual(bc.players, ['acct-bob', 'acct-cy'], 'players of record = the accounts in the pair (server side only)'); assert.ok(gh.players.every((p) => p.guest && p.name));
+  assert.strictEqual(await S.started({ id: 'c1' }), false); assert.strictEqual(await S.startTime({}), ev.start); assert.deepStrictEqual(await S.results({}), {}, 'nothing has happened');
+  NOW = ev.start - 1; assert.strictEqual(await S.started({}), false); NOW = ev.start; assert.strictEqual(await S.started({}), true, 'true the moment the start time is reached');
+  NOW = ev.start + 1000; ev = ok(await call('org', 'get', { id })).event; ev = ok(await call('org', 'score', { id, m: ev.matches.find((m) => m.state === 'ready').id, games: [[11, 6]] })).event; assert.ok(ev.fin);
+  const R = await S.results({}), champ = ev.placeRows[0].eid, other = ev.placeRows[1].eid; assert.deepStrictEqual({ wins: R[champ].wins, champ: R[champ].champ, out: R[champ].out, place: R[champ].place }, { wins: 1, champ: true, out: false, place: 1 }); assert.deepStrictEqual({ wins: R[other].wins, champ: R[other].champ, out: R[other].out, place: R[other].place }, { wins: 0, champ: false, out: true, place: 2 }); assert.strictEqual(R[champ].winT.length, 1);
+  // an early draw counts as started before the start time
+  let e2 = ok(await call('org', 'create', base({ fmt: 'se', playIn: false, myName: 'Org', title: 'Early', start: NOW + 5 * HOUR, entrants: [{ name: 'P' }, { name: 'Q' }] }))).event; const S2 = E.ADAPTER.calcuttaSource(e2.id); assert.strictEqual(await S2.started({}), false); ok(await call('org', 'draw', { id: e2.id })); assert.strictEqual(await S2.started({}), true); assert.ok((await S2.startTime({})) < e2.start, 'the start time moves up to the draw');
+  // FAIL CLOSED: unknown / deleted event or a database error throws from every hook (the Calcutta engine keeps ownership locked on a throw); never "not started" on a guess
+  const e3 = ok(await call('org', 'create', base({ fmt: 'se', playIn: false, myName: 'Org', title: 'Gone', start: NOW + 5 * HOUR, entrants: [{ name: 'P' }, { name: 'Q' }] }))).event, S3 = E.ADAPTER.calcuttaSource(e3.id); ok(await call('org', 'delete', { id: e3.id }));
+  for (const src of [S3, E.ADAPTER.calcuttaSource('NOSUCHEVT1'), E.ADAPTER.calcuttaSource('')]) for (const f of ['teams', 'results', 'started', 'startTime']) await assert.rejects(() => src[f]({}), /not found/, f + ' must throw');
+  const keep = D.S.dbGet; D.S.dbGet = async () => { throw new Error('db down'); }; await assert.rejects(() => S.started({})); await assert.rejects(() => S.startTime({})); D.S.dbGet = keep;
+  assert.throws(() => E.ADAPTER.registerCalcutta({}, id), /registerSource/); assert.throws(() => E.ADAPTER.registerCalcutta(null, id));
+  // one shared source keyed by the Calcutta's own reference
+  const G = E.ADAPTER.calcuttaSource(); assert.strictEqual((await G.teams({ ref: id })).length, 2); assert.strictEqual(await G.started({ ref: id }), true);
+};
+// the people cap is the shared limits.maxPeople(limits.keyOf(account), gameId), not a ceiling of events' own
+T.pbSharedLimits = async () => {
+  const seen = [], keep = D.limits, fake = { keyOf: (e) => 'K(' + e + ')', ENTERPRISE_TEXT: 'SHARED TEXT', isEnterprise: async (k) => k === 'K(acct-club)', maxPeople: async (k, gid) => { seen.push([k, gid]); return k === 'K(acct-club)' ? 12 : gid === 'XTRA' ? 10 : 8; } };
+  D.limits = () => fake;
+  try {
+    let ev = ok(await call('ann', 'create', base({ playIn: true, entrants: Array.from({ length: 7 }, (_, i) => ({ name: 'G' + i })) }))).event; assert.strictEqual(ev.cap, 8); assert.strictEqual(ev.ent, false); assert.deepStrictEqual(seen[0], ['K(acct-ann)', ''], 'asked with (keyOf(account), game id)');
+    const r = no(await call('bob', 'join', { code: ev.code, as: 'spectator', myName: 'Bob' }), 403, 'the 9th person'); assert.ok(r.error.includes('8 people max') && r.error.includes('SHARED TEXT'), 'the shared wording'); assert.ok(seen.some((x) => x[0] === 'K(acct-ann)' && x[1] === ev.id), 'asked per game id (owner-granted extra seats)');
+    no(await call('ann', 'create', base({ title: 'Nine', playIn: true, entrants: Array.from({ length: 8 }, (_, i) => ({ name: 'G' + i })) })), 403);
+    // whatever maxPeople says is the cap: 12 for this Enterprise account, not events' own number
+    ev = ok(await call('club', 'create', base({ title: 'Club', myName: 'Dana', playIn: false, entrants: Array.from({ length: 11 }, (_, i) => ({ name: 'G' + i })) }))).event; assert.strictEqual(ev.cap, 12); assert.strictEqual(ev.ent, true); no(await call('bob', 'join', { code: ev.code, as: 'spectator', myName: 'Bob' }), 403, 'the 13th person');
+    no(await call('club', 'create', base({ title: 'Club 13', myName: 'Dana', playIn: false, entrants: Array.from({ length: 13 }, (_, i) => ({ name: 'G' + i })) })), 403);
+    // extra seats are not Enterprise: no director ratings
+    assert.ok(/Enterprise/.test(no(await call('ann', 'trate', { id: ok(await call('ann', 'create', base({ title: 'Std', playIn: false, entrants: [{ name: 'P' }, { name: 'Q' }] }))).event.id, gid: 'gX', rating: 1600, reason: 'no way' }), 403).error));
+    // fail closed when the shared check cannot answer
+    fake.maxPeople = async () => { throw new Error('limits down'); }; no(await call('ann', 'create', base({ title: 'Down' })), 500); fake.maxPeople = async () => NaN; no(await call('ann', 'create', base({ title: 'Down2' })), 503);
+  } finally { D.limits = keep; }
+  assert.strictEqual(D.limits(), E.LIMSTAND, 'this branch alone: the fallback with the same names'); for (const f of ['keyOf', 'maxPeople', 'isEnterprise']) assert.strictEqual(typeof E.LIMSTAND[f], 'function');
+};

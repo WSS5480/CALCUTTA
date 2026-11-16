@@ -49,7 +49,7 @@
   async function become(role) {
     const j = await post('/preview/as', { role });
     if (window.oddWipe) window.oddWipe();
-    try { ['odd-noauto', 'odd-dash', 'odd-dt', 'odd-join'].forEach((k) => localStorage.removeItem(k)); sessionStorage.clear(); } catch (e) {}
+    try { ['odd-noauto', 'odd-dash', 'odd-dt'].forEach((k) => localStorage.removeItem(k)); const inv = sessionStorage.getItem('odd-join'); sessionStorage.clear(); if (inv) sessionStorage.setItem('odd-join', inv); } catch (e) {} // an invite link opened before choosing a person is kept
     s('odd-tok', j.token); s('sync-phone', j.phone); s('sync-pin', j.pin); s('sync-owner', j.phone); s('odd-name', j.user.name); s('odd-ok', String(Date.now())); s('odd-gate', '1');
     s('pv-role', j.user.role); s('pv-user', JSON.stringify(j.user)); s('pv-ids', JSON.stringify(j.ids || {}));
     location.href = location.pathname;

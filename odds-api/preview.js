@@ -1,7 +1,9 @@
 // TEST PREVIEW ONLY (branch `preview`, env PREVIEW=1). Never loaded on the live service (server.js requires it only when PREVIEW=1).
 // What it does:
 //   - demo accounts (cell number + PIN rows in sync.js's MEMORY store; nothing touches Supabase, My Apps, the Odds API or the owner PIN)
-//   - "Demo user" switcher routes: GET /preview/status, POST /preview/as {role}
+//   - "Demo user" switcher routes: GET /preview/status, POST /preview/as {role}. The demo people are PUBLIC personas: anyone with the link may be any of
+//     them. Real testers who make their own account (cell + PIN) are protected: tokens are signed with a secret made at start (server.js), so they
+//     cannot be forged. POST /preview/reseed needs the admin secret (env PREVIEW_ADMIN, 12+ characters; unset = off) and is rate-limited.
 //   - seeds believable demo data through the REAL engine routes (groups, calcutta, golf, events, stats), so every screen has content
 //   - wires the shared contracts the branches left as stand-ins (limits, stats providers, Oddable handicap / rating)
 //   - preview-only stand-ins for the features whose engines are not committed yet (partner suggestions P1, tournament handicap overrides E-H):
@@ -64,7 +66,7 @@ const pub = (u) => ({ role: u.role, label: u.label, name: u.name, blurb: u.blurb
 async function handle(req, res) {
   const path = req.url.split('?')[0];
   if (path === '/preview/status') { send(res, 200, { preview: true, seeded: STATE.done, at: STATE.at, steps: STATE.steps, users: USERS.slice(0, 3).map(pub), others: USERS.slice(3).map(pub), store: 'memory', note: 'Test data only. It is rebuilt whenever this test server restarts.' }); return true; }
-  if (path === '/preview/coursecheck') { const CC = require('./preview-coursecheck'); send(res, 200, { lines: /[?&]run=1/.test(req.url) ? await CC.run() : CC.last() }); return true; }
+  if (path === '/preview/coursecheck') { send(res, 200, { lines: require('./preview-coursecheck').last().map((x) => x.slice(0, 400)) }); return true; } // read-only: the check runs once at start, never on request
   if (req.method !== 'POST') return false;
   let b; try { b = await body(req); } catch (e) { send(res, 400, { error: 'bad request' }); return true; }
   if (path === '/preview/as') {
@@ -73,12 +75,18 @@ async function handle(req, res) {
       me: { email: 'Test preview account', role: 'user', plan: 'pro', expires_on: null, source: 'preview', allowed: true, pending: false, price: 99, link: null, tag: null, payReady: false } });
     return true;
   }
-  if (path === '/preview/reseed') { await boot(true); send(res, 200, { ok: true, steps: STATE.steps }); return true; }
+  if (path === '/preview/reseed') { // admin only: env PREVIEW_ADMIN (never in the repo, never in the page); unset = switched off
+    const ip = require('./ip').clientIp(req), t = Date.now(), tries = (ADMIN_TRY.get(ip) || []).filter((x) => t - x < 600e3); if (tries.length >= 5) { send(res, 429, { error: 'Too many tries. Wait 10 minutes.' }); return true; } tries.push(t); ADMIN_TRY.set(ip, tries); if (ADMIN_TRY.size > 2000) ADMIN_TRY.clear();
+    if (!adminOk(req.headers['x-preview-admin'] || b.admin)) { send(res, 403, { error: 'Not allowed' }); return true; }
+    if (t - LAST_RESEED < 60e3) { send(res, 429, { error: 'Reseeded less than a minute ago' }); return true; } LAST_RESEED = t;
+    await boot(true); send(res, 200, { ok: true, steps: STATE.steps }); return true; }
   const X = require('./preview-extra');
   if (X.routes[path]) { const e = A.who(req); if (!e) { send(res, 401, { error: 'Sign in again' }); return true; } try { send(res, 200, await X.routes[path](e, b, { USERS, emailOf, STATE })); } catch (er) { send(res, er.status || 500, { error: er.message }); } return true; }
   return false;
 }
 
+const ADMIN_TRY = new Map(); let LAST_RESEED = 0;
+function adminOk(got) { const want = String(process.env.PREVIEW_ADMIN || ''); if (want.length < 12) return false; const a = Buffer.from(String(got || '')), w = Buffer.from(want); return a.length === w.length && crypto.timingSafeEqual(a, w); }
 let BOOTING = null;
 async function boot(again) {
   if (BOOTING) return BOOTING;

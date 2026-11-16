@@ -4,9 +4,10 @@ const crypto = require('crypto');
 const FAILS = new Map();
 const MAX_BODY = 1.5e6;
 const origin = (u) => { try { return new URL(/^https?:/i.test(u.trim()) ? u.trim() : 'https://' + u.trim()).origin; } catch (e) { return ''; } };
-// TEST PREVIEW / no database: when PREVIEW=1 (always, even if Supabase vars are set by mistake) or SUPABASE_URL is unset, every row lives in this process's memory.
-// Nothing is read from or written to the live oddable_sync table. The data is gone when the process restarts (preview.js seeds demo data again on boot).
-const MEM_ON = () => process.env.PREVIEW === '1' || !process.env.SUPABASE_URL;
+// >>> PREVIEW-ONLY (never merge to main): with PREVIEW=1, and ONLY then, every row lives in this process's memory (always, even if Supabase vars are set
+// by mistake). Nothing is read from or written to the live oddable_sync table. Without PREVIEW=1 this file behaves exactly as on main (Supabase or
+// "not set up"). The data is gone when the process restarts (preview.js seeds demo data again on boot).
+const MEM_ON = () => process.env.PREVIEW === '1';
 const MEM = new Map(), cp = (x) => JSON.parse(JSON.stringify(x));
 const cfg = () => (MEM_ON() ? { url: 'memory:', key: 'memory' } : { url: origin(process.env.SUPABASE_URL || ''), key: (process.env.SUPABASE_KEY || '').trim() });
 const noNet = () => { if (MEM_ON()) throw new Error('memory store: no database call allowed'); }; // belt and braces: a missed code path fails instead of reaching a database

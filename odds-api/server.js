@@ -4,7 +4,8 @@ const http = require('http');
 // TEST PREVIEW (PREVIEW=1, branch `preview` only): demo data in memory. Before anything else loads, drop every live secret from this process so a mistaken
 // env var can never reach the live database, My Apps, the owner PIN or spend an Odds API credit. See odds-api/preview.js and HANDOFF "Preview".
 const PREVIEW = process.env.PREVIEW === '1';
-if (PREVIEW) { Object.keys(process.env).forEach((k) => { if (/^odds_?api(_?key)?$/i.test(k) || /^(SUPABASE_|MYAPPS_|OWNER_PIN$|OWNER_PHONE$|ODDS_UPSTREAM$|GATE_OFF$|CFBD)/i.test(k)) delete process.env[k]; }); process.env.GATE_KEY = 'oddable-test-preview-not-a-secret'; }
+if (PREVIEW) { Object.keys(process.env).forEach((k) => { if (/^odds_?api(_?key)?$/i.test(k) || /^(SUPABASE_|MYAPPS_|OWNER_PIN$|OWNER_PHONE$|ODDS_UPSTREAM$|GATE_OFF$|CFBD|ANTHROPIC_|AI_MODEL$|KALSHI|SYNC_TOKEN$|VAPID)/i.test(k)) delete process.env[k]; });
+  process.env.GATE_KEY = require('crypto').randomBytes(32).toString('hex'); } // sign-in tokens are signed with a secret made at every start: nobody can forge one (the link is treated as public)
 
 // Accept the key under any spelling of ODDS_API / ODDS_API_KEY (env names are case-sensitive on Linux)
 const KEYNAME = Object.keys(process.env).find((k) => /^odds_?api(_?key)?$/i.test(k));
@@ -81,6 +82,11 @@ try { require('./golf').registerCalcutta(require('./calcutta')); } catch (e) { /
 http.createServer(async (req, res) => {
   // CORS preflight for every route (the sign-in/sign-up calls send JSON + an x-token header, so the browser asks first; without this answer they fail with "Failed to fetch")
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'content-type,x-token,x-dash', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Max-Age': '86400' }); return res.end(); }
+  // >>> PREVIEW-ONLY (never merge to main): the block below and the PREVIEW block after it
+  if (PREVIEW) {
+    // every route below matches on req.url, so the path is normalised FIRST ("/kalshi/./order", "//kalshi", "%2e" and friends all become their real path)
+    try { const u = new URL('http://x' + (String(req.url).startsWith('/') ? '' : '/') + req.url); let p = decodeURIComponent(u.pathname).replace(/\\/g, '/').replace(/\/{2,}/g, '/'); p = new URL(p, 'http://x').pathname; req.url = p + u.search; } catch (e) { res.statusCode = 400; return res.end('{"error":"bad request"}'); }
+  }
   if (PREVIEW && req.method === 'GET') { // one service for the whole test copy: the site's files (same layout steves-pics builds: pics/*, public/data, public/model.js) are served here too
     const p = decodeURIComponent(req.url.split('?')[0]), f = p === '/' ? '/index.html' : p;
     if (/^\/(data\/)?[A-Za-z0-9._-]+\.[A-Za-z0-9]+$/.test(f) && !f.includes('..')) {
@@ -94,7 +100,8 @@ http.createServer(async (req, res) => {
     }
   }
   if (PREVIEW) {
-    if (req.url.startsWith('/kalshi/order')) { res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json'); res.statusCode = 403; return res.end('{"error":"Test preview: no real orders are sent from here."}'); }
+    // Kalshi is switched off completely in the test copy: no order, no proxy, no sync, whatever the method
+    if (/^\/kalshi(\/|$|\?)/i.test(req.url)) { res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json'); res.statusCode = 403; return res.end('{"error":"Test preview: Kalshi is switched off here. No order or account call is sent."}'); }
     if (req.url.startsWith('/preview')) { try { if (await require('./preview').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end(JSON.stringify({ error: 'preview: ' + (e && e.message) })); } }
   }
   if (req.url.startsWith('/acct')) { try { if (await require('./acct.js').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"acct"}'); } }

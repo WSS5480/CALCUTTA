@@ -691,7 +691,7 @@ async function writeOp(op, b, e, mk, now, ip) {
   }
   throw bad(404, 'not found');
 }
-const claimLink = (code) => 'https://steves-pics.onrender.com/?join=claim.' + code;
+const claimLink = (code) => (process.env.PREVIEW === '1' && process.env.RENDER_EXTERNAL_URL ? String(process.env.RENDER_EXTERNAL_URL).replace(/\/$/, '') : 'https://steves-pics.onrender.com') + '/?join=claim.' + code; // PREVIEW-ONLY part: the test copy's own address, never the live site
 const mirrorGids = (rec) => { const ex = (rec && rec.extra) || {}; return [...new Set([ex.partnerGuest].concat(ex.oppGuest || []).filter(Boolean))]; };
 
 // One member's stats inside one group, for another member of that group (or themselves): that group's contest only; other members' bets only after

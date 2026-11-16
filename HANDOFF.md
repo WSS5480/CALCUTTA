@@ -20,7 +20,7 @@ Start here if you are a new AI session picking up this repo. Update this file in
 - No build step. `pics/` = Oddable (single-page app, mostly `pics/index.html`; `classic.html` is the older look, `sports.html` handles NBA/MLB/NHL/NCAAB).
 - `public/` = Oddable Pool (Calcutta). `odds-api/` = calcutta-odds Node service (odds, lines, Kalshi sync, accounts/gate).
 - Push to `main` and Render redeploys.
-- Bump the version on every change: `v###` in 3 places in `pics/index.html` plus `C='pics-v###'` in `pics/sw.js`, so phones pick up the update.
+- Bump the version on every change, in ALL of these (the header pill was missed from v232 to v247 and still read v231): `pics/index.html` = the `<!-- Pics v### -->` comment, the header pill `>v###</span>` next to the Kalshi dot, the footer `Oddable v### (...)`, every `?v=###` (trophy.js, gate.js, alert-frozen.json); `pics/sports.html` = `gate.js?v=###`; `pics/sw.js` = `C='pics-v###'`. Check with: `grep -n -o "v=2[0-9][0-9]\|v2[0-9][0-9][^0-9]" pics/index.html pics/sports.html pics/sw.js`.
 - Local check: serve `pics/` with `python3 -m http.server`, set `localStorage['pics-lg']='cfb'`, open `index.html?mirror=1`. ESPN must be mocked if outbound access is blocked.
 
 ## Change log
@@ -531,3 +531,47 @@ Shipped without enough checking
 12. /cfbd/* routes on the odds server are unauthenticated and spend the owner's CFBD_API_KEY quota (coder task 4).
 
 What held up (for reference): division road dogs ATS 370-316 (53.9%, +20.4u) 2014-2025 and 685-599 (53.3%) 2004-2025, about a 1-in-10 chance of luck after testing ~12 slices; Lock 110-99; Double lock 108-101 (retired); no conference / do-or-die / lost-last-week signal; college factor model 171-182; weeks 15+ road dogs 51.1% (revisit a cutoff before week 15).
+
+## v248 — Nov 15 2026 (new coder session): units audit, phone layout check, same picks on every phone, /cfbd owner-only
+Owner: "Make sure that every app shows same information. Fix all of these issues."
+
+### Units audit (no arithmetic bug found)
+- Recomputed from raw nflverse games.csv with an independent script (own grading, own tallies; only the model probability comes from trophy.js) and compared with the app's functions in Playwright: 0 mismatches. 2026 weeks 1-9: Lock 6-3 (+2.45u), Alert road dogs 8-3 (+4.27u), Alert 14-6 (+6.73u), division road dogs picked 8-4 (+3.27u) / not picked 9-7 (+1.18u), Helper 6-3.
+- 12-season tables re-run from the Python walk-forward (/tmp/nv/work_dogs/D.pkl): TRH, ALY and ALH reproduce exactly (Lock 110-99 +1.00u, picked dogs 141-120 +8.18u, not picked 198-173 +7.00u, Double lock 108-101, all division road dogs 370-316). ALH = column sums of ALY; ALY Lock columns = TRH #2 columns; every per-year units cell = W*100/110 - L.
+- Things that LOOK like unit errors and were confusing (fixed or explained on screen):
+  1. Results said "Picked 8-4" while the Alert said "Road dog 8-3": Results counts a picked dog that was also that week's Lock (wk 8 KC +1.5); the Alert counts it once, under the Lock. divBox now says so in words. Math unchanged.
+  2. A dog at 52.5% was listed under "Not picked (under 53%)" but printed "53%" (rounding). `ddPct` now never prints 53 for a dog under the bar.
+  3. Alert drill sheet headed its first column with a FUTURE week (latest week with any pick, e.g. "Week 11 0-0"); now the current week.
+  4. NOT changed: each unit figure is rounded to 1 decimal on its own, so parts can differ from the total by 0.1 (Lock +2.5 and road dog +4.3 next to total +6.7; exact 2.45 + 4.27 = 6.73). Owner's call whether to show 2 decimals.
+  5. `trnote` info text still quoted 218-200 (Lock + retired Double lock); now quotes the Lock alone, 110-99.
+- Header version pill was stuck at v231 since v232 (now bumped; see the bump list above).
+
+### Same picks on every phone (DECISION Nov 15 2026, owner request; reason: per-phone freezes made records differ by device)
+- Per week the app takes, in this order: (1) `pics/alert-frozen.json` shipped with the app, (2) the copy frozen on the server, (3) this phone's own computation, only until the server answers. Old per-phone keys `trk26-w*`, `hlp26-w*`, `ddp26-*` are deleted on load and never read. `trophyData()` builds `TRC.A[week] = {src:'ship'|'srv'|'local', bf, lock, dogs:[{id,line,p}], helper}`; `divDogs()`, `ddOf()`, `helperOf()`, `alertAll()` all read that one record.
+- (1) `alert-frozen.json`: 2026 weeks 1-9 (Lock, every division road dog with line and model %, Helper), keyed `week-away-home` with nflverse names (LA, WAS). Generated Nov 15 from games.csv + the frozen model; Helper = the v247 app's back-fill in the test harness (ratings through week 9, no injuries). NOTE: a phone that had its own frozen picks will change to these (e.g. week 8 Lock is KC +1.5, not TEN). Add a finished week to this file only if the server has no copy of it.
+- Lines: a started/finished game uses `trophy-season.json` first (covers 2026 weeks 1-11, 163 games, identical to games.csv), then ESPN's line, then the phone's logged history. Weeks 10-11 in that file are a Nov 15 snapshot, not closing lines: refresh from games.csv weekly as before.
+- (2) Server: new `odds-api/alert.js`, route `/alert` (wired in server.js). GET returns `{weeks}`; POST `{week, rec}` needs a signed-in `x-token` (same `acct.check` as /locks). Stored in the existing Supabase table `oddable_sync`, row id `lock:alert26`, written with `dbPatchIf` on `updated` (same pattern as locks.js): the first copy wins, a stored week is never overwritten, the loser of a race gets the winner's copy back. Guard rails: only ESPN's current regular-season week of 2026 is accepted, every game id must be in that week, teams must match ESPN (with the app's WSH->WAS fix), numbers range-checked. `pre:false` marks a week frozen after its first kickoff (shown with *). The server cannot check the model numbers themselves: a signed-in user with a modified app could freeze a wrong pick for everyone (accepted risk for now; to harden, compute server-side or restrict POST to `ownerOk`).
+- Phone side: `alertPull()` on load and each tick (2 min throttle), cache in localStorage `asv26` (server truth only). `alertPush()` offers the current week only when every earlier week is loaded and final with a line (a half-loaded season gives wrong model numbers: caught in testing, a first version froze SEA -6.5 at 78%), never in mirror mode, never without a token. Fallback keys `afl26-wN` / `afh26-wN` hold this phone's own pre-kickoff pick and are used only while the server has no copy.
+- Road dogs are now graded at the line they were picked at (frozen line), like the Lock. Before, they were graded at whatever line the phone had.
+- DD_START stays 11 (only a comment now). On-screen wording is built from the data (`bfTxt`): weeks whose record is back-filled are listed; with the shipped file that is weeks 1-9, plus week 10 once it is frozen mid-week. Info sheets say: weeks 1-9 back-filled, week 10 frozen after its first game, week 11 on is the real test.
+- Tests: `node odds-api/alert.test.js` (in-memory store, fake ESPN, fake sign-in: first copy wins, no overwrite, race, wrong week/team/game refused, ESPN down = 503). Playwright, real page at 430x900 against the real alert.js behind an in-memory store: phone A (clean) froze week 10; phone B (stale trk26/ddp26/hlp26, different lm26 line history, a stale local week-10 freeze) and phone C (mirror mode) showed identical Lock, road dogs with %, Helper and records for weeks 1-11; phone D with the server unreachable kept weeks 1-9 identical and fell back to its own week 10 without posting.
+- NOT verified (sandbox cannot reach them): the live calcutta-odds deploy, Supabase reading/writing row `lock:alert26`, real ESPN payloads, the real CORS preflight from a phone (Playwright answers preflights itself; the headers used are content-type and x-token, both already allowed). After deploy: open the app signed in, then GET https://calcutta-odds.onrender.com/alert and check week 10 is there; open a second device and compare. The odds server MUST be redeployed for (2); until then every phone stays on its own week 10+.
+- Week 11 before ESPN makes it the current week is computed live on each phone (same inputs, so same result at the same moment) and is frozen when the first phone opens it as the current week.
+
+### Phone layout check (430x900, screenshots read)
+- Checked: NFL Games board with the Alert (scroll 0-700), Results tab (Locks box, road dog boxes, history, week list), Alert drill + 12-season table, road dog drills (picked / not picked), Helper drill, Lock list + Lock detail, Multiview. The My Bets banner covered nothing: it sits in the header's reserved corner at the top, tucks away once the sport chips reach it, and is behind sheets (z 300) and Multiview (z 250). No page-level sideways scroll; grid headers sit over their columns.
+- Fixed: Alert grid cells wrapped raggedly in the 12-seasons column (now record on line 1, "% · units" on line 2); "Wk 10 *" wrapped onto two lines in Results (.trn 58px, nowrap); Multiview on a phone squeezed 4 tiles into one screen and hid each tile's buttons (now tiles take their natural height and the grid scrolls, max-width 700px only).
+- Not checked: a real phone on the live site; the banner with real bets on it (taller, same tuck-away rule); the expanded banner panel still covers Add bet / Ask AI while open (known since v149).
+
+### /cfbd routes are owner-only (review item)
+- `odds-api/cfbd.js` now answers 401 unless `acct.ownerOk(req)`: the existing owner-PIN token (`x-token` from /acct/owner), or an owner phone token plus its `x-dash` second factor. Same rule as /acct/dash; no new secret. A browser address bar can no longer call them: `curl -H "x-token: <owner token>" https://calcutta-odds.onrender.com/cfbd/backtest`. Test: `node odds-api/cfbd.test.js`. The key is never logged or returned (unchanged).
+
+### Removed dead code
+- `TVSVC` and `TVCAB` (incl. the unverified Spectrum link) were referenced nowhere since v235: removed. `tvPref` is still used by Multiview's service picker (mvUrl / mvSet), so it stays.
+
+### Open for the next session
+- Deploy calcutta-odds, then verify /alert live on two real devices (above).
+- Server-side check of the model numbers, or owner-only freezing (decision needed).
+- Unit rounding display (1 vs 2 decimals).
+- ALH / ALY / TRH are static: refresh at season end. alert-frozen.json and trophy-season.json are static: see notes above.
+- Parlays: still not built (owner's rule stands: real prices only).

@@ -165,4 +165,6 @@ const dmint = (e) => { const p = Buffer.from(JSON.stringify({ e, v: pinVer(), x:
 function dok(tok, e) { try { const [p, sg] = String(tok || '').split('.'); if (!p || !sg) return false; const w = crypto.createHmac('sha256', KEY()).update('dash|' + p).digest('hex'); if (sg.length !== w.length || !crypto.timingSafeEqual(Buffer.from(sg), Buffer.from(w))) return false; const o = JSON.parse(Buffer.from(p, 'base64url').toString()); return o.e === e && o.v === pinVer() && o.x > Date.now(); } catch (er) { return false; } }
 const dashOk = (e, req, b) => (e === 'owner' && !!OWNER_PIN()) || (isOwnerPhone(e) && dok(req.headers['x-dash'] || (b && b.dash), e));
 const phoneEmail = (id) => crypto.createHmac('sha256', KEY()).update('phoneid|' + id).digest('hex').slice(0, 20) + '@phone.oddable';
-module.exports = { handle, check, on, phoneEmail };
+// Owner-only check for other routes (e.g. /cfbd): an owner-PIN token, or an owner-phone token plus its dashboard second factor (x-dash). Same rule as /acct/dash.
+function ownerOk(req) { const e = verify(req.headers['x-token']); return !!e && dashOk(e, req); }
+module.exports = { handle, check, on, phoneEmail, ownerOk };

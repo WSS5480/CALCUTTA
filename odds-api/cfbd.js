@@ -113,6 +113,7 @@ async function runSlices(y0 = 2014, y1 = 2025) {
 let CT = null, CU = null, CC = null, CS = null;
 async function handle(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json');
+  if (!require('./acct').ownerOk(req)) { res.statusCode = 401; res.end('{"error":"Owner sign-in needed"}'); return true; } // owner only: every call spends the CFBD quota
   if (!KEY()) { res.statusCode = 503; res.end('{"error":"CFBD_API_KEY not set"}'); return true; }
   const q = new URL(req.url, 'http://x').searchParams;
   if (req.url.startsWith('/cfbd/backtest')) { try { if (!CT || Date.now() - CT.t > 3600e3 || q.get('fresh')) CT = { t: Date.now(), v: await run(Math.max(2014, +q.get('from') || 2014), Math.min(2025, +q.get('to') || 2025), +q.get('c') || 0.05) }; res.end(JSON.stringify(CT.v, null, 1)); } catch (e) { res.statusCode = 502; res.end(JSON.stringify({ error: e.message })); } return true; }

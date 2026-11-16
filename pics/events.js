@@ -93,7 +93,9 @@
     const open = (e.open || []).filter((x) => x.open > 0);
     if (!e.locked) {
       h += '<h3 class="eh">Join as a player</h3>';
-      open.forEach((x) => x.seats.forEach((st) => { h += '<button class="esec efull" data-a="dojoin" data-eid="' + att(x.eid) + '" data-gid="' + att(st.gid) + '">I am ' + esc(st.name) + (x.name !== st.name ? ' (' + esc(x.name) + ')' : '') + '</button>'; }));
+      if (!e.join.self) h += '<div class="enote">The commissioner adds the players in this event. If you were added by name, ask the commissioner for your claim code and enter it under Join with a code.</div>';
+      open.forEach((x) => x.seats.forEach((st) => { h += '<button class="esec efull" data-a="dojoin" data-eid="' + att(x.eid) + '" data-gid="' + att(st.gid) + '">Take the open partner spot: ' + esc(x.name) + '</button>'; }));
+      if (e.join.self) h += '<div class="enote">Added by name by the commissioner? Use your claim code (Join with a code) to take your spot.</div>';
       if (e.join.self) h += '<label class="elab">' + (e.rules.unit === 'singles' ? 'Or join as a new player' : 'Or enter a new ' + (e.rules.unit === 'teams' ? 'team' : 'pair') + ' (your partner joins with the same link)') + '<input id="enewname" class="ein" maxlength="40" placeholder="' + (e.rules.unit === 'singles' ? 'Your name' : 'Team name') + '"></label><label class="elab">Your rating (optional, e.g. DUPR 4.25)<input id="enewrt" class="ein" type="number" inputmode="decimal" step="0.01" min="0"></label><button class="epri efull" data-a="dojoin">Join as a player</button>';
     } else h += '<div class="ewarn"><b>Entries are closed</b>The event has started.</div>';
     if (e.join.spectators) h += '<button class="esec efull" data-a="dojoin" data-as="spectator">' + (e.rules.pickem ? "Join to watch and play pick'em" : 'Join to watch') + '</button>';

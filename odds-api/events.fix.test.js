@@ -47,3 +47,22 @@ T.commOwnMatch = async () => {
   let ev3 = ok(await call('ann', 'create', base({ title: 'Fix test 3', start: START + 2 * DAY, playIn: true, entrants: [{ name: 'Gus' }] }))).event; NOW = START + 2 * DAY + 1000;
   ev3 = ok(await call('ann', 'get', { id: ev3.id })).event; ev3 = ok(await call('ann', 'score', { id: ev3.id, m: ev3.matches[0].id, games: [[11, 4]] })).event; assert.strictEqual(ev3.matches[0].state, 'confirmed', 'vs guest: final');
 };
+// 2 (MED-HIGH) a typed-in guest's spot is taken only with that guest's claim code; "commissioner adds players" is honored; strangers do not see guest names
+T.guestSeats = async () => {
+  let ev = ok(await call('ann', 'create', base({ self: false, unit: 'doubles', entrants: [{ name: 'Gail / Hal' }, { name: 'Ivy' }] }))).event; const id = ev.id, code = ev.code;
+  no(await call('mal', 'join', { code, as: 'player', myName: 'Mal' }), 403, 'self-join when the commissioner adds players');
+  const pv = ok(await call('mal', 'preview', { code })).event; const txt = JSON.stringify(pv);
+  assert.ok(!/Gail|Hal|Ivy/.test(txt), 'stranger preview must not show guest names: ' + txt.slice(0, 400));
+  const gail = (await D.S.dbGet('lock:evt:' + id)).data.entrants[0];
+  no(await call('mal', 'join', { code, as: 'player', myName: 'Mal', eid: gail.eid, gid: gail.players[0].gid }), 403, 'taking a named guest seat without the claim code');
+  const ivy = (await D.S.dbGet('lock:evt:' + id)).data.entrants[1];
+  no(await call('mal', 'join', { code, as: 'player', myName: 'Mal', eid: ivy.eid, gid: ivy.players[1].gid }), 403, 'blank partner spot when the commissioner adds players');
+  const cc = ok(await call('ann', 'get', { id })).event.entrants[0].players[0].claim; ok(await call('gail', 'claim', { claim: cc, myName: 'Gail' }), 'claim code still works');
+  // self-join on: blank partner spot of a pair is joinable; the named one is not
+  let ev2 = ok(await call('ann', 'create', base({ title: 'Open doubles', unit: 'doubles', entrants: [{ name: 'Ivy' }] }))).event;
+  const pv2 = ok(await call('nat', 'preview', { code: ev2.code })).event; assert.ok(!/Ivy/.test(JSON.stringify(pv2)), 'no guest names to strangers');
+  assert.strictEqual(pv2.open.length, 1); assert.strictEqual(pv2.open[0].seats.length, 1, 'only the blank partner spot');
+  const r = ok(await call('nat', 'join', { code: ev2.code, as: 'player', myName: 'Nat', eid: pv2.open[0].eid, gid: pv2.open[0].seats[0].gid })).event; assert.ok(r.entrants[0].players.some((p) => p.me));
+  const ivy2 = (await D.S.dbGet('lock:evt:' + ev2.id)).data.entrants[0];
+  no(await call('oz', 'join', { code: ev2.code, as: 'player', myName: 'Oz', eid: ivy2.eid, gid: ivy2.players[0].gid }), 403, 'named guest seat needs the claim code');
+};

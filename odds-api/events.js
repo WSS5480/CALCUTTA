@@ -286,6 +286,7 @@ async function byCode(code) { const ix = await D.S.dbGet(IDX), ev = (ix && ix.da
 
 // ---------- views (what each person may see) ----------
 const nameOf = (evt, eid) => { if (eid === 'BYE') return 'Bye'; const e = evt.entrants.find((x) => x.eid === eid); return e ? e.name : null; };
+const isBlank = (p) => !p.pid && (p.blank || /^(Partner \d|Open seat)$/.test(p.name || '')); // pre-fix rows: placeholder names
 const pidsOf = (e) => ((e && e.players) || []).filter((p) => p.pid).map((p) => p.pid);
 const memberOf = (evt, mk) => evt.members.find((m) => m.mk === mk);
 const isComm = (evt, mk) => evt.comm === mk;
@@ -371,7 +372,7 @@ function addEntrant(evt, name, rating, by, now, players) {
   if (!nm && typed.length) nm = typed.join(' / '); if (nm.length < 1) throw bad(400, 'Type a name');
   if (evt.entrants.some((e) => e.name.toLowerCase() === nm.toLowerCase())) throw bad(409, 'That name is already in the event');
   let r = null; if (rating !== '' && rating != null) { r = Number(rating); if (!(Number.isFinite(r) && r >= 0 && r <= 9999)) throw bad(400, 'Rating: a number from 0 to 9999 (e.g. DUPR 4.25)'); r = Math.round(r * 1000) / 1000; }
-  const pl = []; for (let i = 0; i < size; i++) pl.push({ gid: 'g' + rnd(8), ct: rnd(10), name: typed[i] || (i ? 'Partner ' + (i + 1) : nm), pid: null });
+  const pl = []; for (let i = 0; i < size; i++) pl.push(Object.assign({ gid: 'g' + rnd(8), ct: rnd(10), name: typed[i] || (i ? 'Partner ' + (i + 1) : nm), pid: null }, typed[i] || !i ? {} : { blank: true })); // blank = an unnamed partner spot anyone with the link may take (review fix 2); named seats need their claim code
   const e = { eid: newEid(evt), name: nm, rating: r, players: pl, at: now, by }; evt.entrants.push(e); return e;
 }
 async function handle(req, res) {
@@ -407,7 +408,7 @@ async function handle(req, res) {
       if (codeBlocked('ec|a|' + u.mk) || codeBlocked('ec|i|' + ip)) throw bad(429, 'Too many wrong codes. Wait 15 minutes.');
       rate('join', u.mk, ip); const code = normCode(b.code), id = code ? await byCode(code) : null;
       if (!id) { codeFail('ec|a|' + u.mk); codeFail('ec|i|' + ip); throw bad(404, 'No event with that code'); }
-      if (op === 'preview') { const r = await load(id); if (!r) throw bad(404, 'No event with that code'); const evt = r.data; tick(evt, now); const cap = await capOf(evt); const o = memberOf(evt, u.mk) ? full(evt, u.mk, now, cap) : Object.assign(pub(evt, now), { role: 'none', cap, open: evt.entrants.filter((e) => pidsOf(e).length < (UNITS[evt.rules.unit] || 1)).map((e) => ({ eid: e.eid, name: e.name, open: (e.players || []).filter((p) => !p.pid).length, seats: (e.players || []).filter((p) => !p.pid).map((p) => ({ gid: p.gid, name: p.name })) })) }); send(res, 200, { event: o }); return true; }
+      if (op === 'preview') { const r = await load(id); if (!r) throw bad(404, 'No event with that code'); const evt = r.data; tick(evt, now); const cap = await capOf(evt); const o = memberOf(evt, u.mk) ? full(evt, u.mk, now, cap) : Object.assign(pub(evt, now), { role: 'none', cap, open: !evt.join.self ? [] : evt.entrants.filter((e) => (e.players || []).some(isBlank)).map((e, i) => ({ eid: e.eid, name: pidsOf(e).length ? e.name : 'Open spot ' + (i + 1), open: (e.players || []).filter(isBlank).length, seats: (e.players || []).filter(isBlank).map((p) => ({ gid: p.gid, name: 'Partner spot' })) })) }); send(res, 200, { event: o }); return true; }
       const r0 = await load(id), cap = r0 ? await capOf(r0.data) : 8, as = b.as === 'spectator' ? 'spectator' : 'player', nm = cleanName(b.myName, 24) || 'Player';
       const evt = await mutate(id, (evt, now) => {
         const m0 = memberOf(evt, u.mk); if (m0 && (as === 'spectator' || evt.entrants.some((e) => pidsOf(e).includes(m0.pid)))) return { nochange: true, v: evt };
@@ -416,9 +417,10 @@ async function handle(req, res) {
         let m = m0; if (!m) { m = { pid: newPid(evt), mk: u.mk, ak: u.e, name: nm, role: as, joined: now, paid: false }; evt.members.push(m); }
         if (as === 'player') {
           const size = UNITS[evt.rules.unit] || 1; let e = null;
-          if (b.eid) { e = evt.entrants.find((x) => x.eid === String(b.eid)); if (!e) throw bad(404, 'That entry is gone'); if (pidsOf(e).length >= size) throw bad(409, e.name + ' is full'); if (size > 1 && pidsOf(e).length && !b.partner) { /* joining a pair someone started: allowed */ } }
-          else { if (!evt.join.self) throw bad(403, 'The commissioner adds the players in this event. Ask for a spot, or join to watch.'); e = addEntrant(evt, b.entryName || nm, b.rating, u.mk, now, [nm]); }
-          const seat = e.players.find((p) => !p.pid && (!b.gid || p.gid === String(b.gid))); if (!seat) throw bad(409, e.name + ' is full'); seat.pid = m.pid; seat.name = m.name; m.role = m.role === 'comm' ? 'comm' : 'player';
+          if (!evt.join.self) throw bad(403, 'The commissioner adds the players in this event. Ask for a spot (or a claim code), or join to watch.'); // review fix 2
+          if (b.eid) { e = evt.entrants.find((x) => x.eid === String(b.eid)); if (!e) throw bad(404, 'That entry is gone'); if (!(e.players || []).some((p) => isBlank(p) && (!b.gid || p.gid === String(b.gid)))) throw bad(403, 'That spot belongs to a player the commissioner added. Ask the commissioner for its claim code.'); }
+          else { e = addEntrant(evt, b.entryName || nm, b.rating, u.mk, now, [nm]); }
+          const seat = b.eid ? e.players.find((p) => isBlank(p) && (!b.gid || p.gid === String(b.gid))) : e.players.find((p) => !p.pid); if (!seat) throw bad(409, e.name + ' is full'); seat.orig = seat.orig || (seat.blank ? null : seat.name); seat.pid = m.pid; seat.name = m.name; m.role = m.role === 'comm' ? 'comm' : 'player';
           audit(evt, now, m.name, 'join', null, 'Joined as ' + e.name);
         } else audit(evt, now, m.name, 'join', null, 'Joined to watch');
         if (people(evt) > cap) throw bad(403, fullMsg(cap));

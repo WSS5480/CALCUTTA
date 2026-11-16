@@ -75,8 +75,10 @@ srv.listen(0, async () => {
     // bob joins and claims the guest seat "Bea" (as a player) before the start
     const bea = ev.entrants.find((e) => e.name === 'Bea').eid, cy = ev.entrants.find((e) => /^Cy/.test(e.name)).eid, di = ev.entrants.find((e) => e.name === 'Di').eid, ed = ev.entrants.find((e) => e.name === 'Ed').eid, ann = ev.myEntries[0];
     j = ok(await call('bob', 'preview', { code: code.toLowerCase() })); assert.strictEqual(j.event.role, 'none'); assert.ok(j.event.takeText.includes('10%')); assert.ok(!j.event.members && !j.event.code, 'preview has no member list or code');
-    ev = ok(await call('bob', 'join', { code, as: 'player', eid: bea, myName: 'Bob' })).event; assert.strictEqual(ev.people, 5, 'claiming a guest seat does not add a person');
-    ev = ok(await call('cat', 'join', { code, as: 'player', eid: cy, myName: 'Cat' })).event;
+    no(await call('bob', 'join', { code, as: 'player', eid: bea, myName: 'Bob' }), 403, 'a named guest seat needs its claim code (review fix 2)');
+    const cl0 = ok(await call('ann', 'get', { id: rr })).event, clOf = (eid) => cl0.entrants.find((e) => e.eid === eid).players[0].claim;
+    ev = ok(await call('bob', 'claim', { claim: clOf(bea), myName: 'Bob' })).event; assert.strictEqual(ev.people, 5, 'claiming a guest seat does not add a person');
+    ev = ok(await call('cat', 'claim', { claim: clOf(cy), myName: 'Cat' })).event;
     no(await call('bob', 'entrant', { id: rr, do: 'add', name: 'Zed' }), 403, 'only the commissioner edits entries');
     no(await call('bob', 'draw', { id: rr }), 403); no(await call('zed', 'get', { id: rr }), 404, 'non-member cannot read');
     t('create with typed guests + organizer playing; join by code claims a seat; roles enforced; private to members');
@@ -246,7 +248,7 @@ srv.listen(0, async () => {
 
     // ---------- guest claim + solo + stats contract ----------
     const dv = ok(await call('ann', 'get', { id: did })).event; const claim = dv.entrants[0].players[1].claim; // "Bo"
-    j = ok(await call('bob', 'get', { id: rr })); assert.ok(!JSON.stringify(j).includes('"claim"'), 'claim codes only for the commissioner');
+    j = ok(await call('bob', 'get', { id: rr })); assert.ok(!/"claim":"[A-Z0-9]{4}-/.test(JSON.stringify(j)), 'claim codes only for the commissioner');
     no(await call('kim', 'claim', { claim: dcode + '.ZZZZZZZZZZ' }), 404);
     ev = ok(await call('kim', 'claim', { claim, myName: 'Kim' })).event; assert.ok(ev.entrants[0].players.find((p) => p.me)); no(await call('lee', 'claim', { claim }), 404, 'used once');
     // doubles match Al/Bo vs Cal/Dee, kim holds Bo's seat

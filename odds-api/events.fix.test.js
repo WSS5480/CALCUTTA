@@ -66,3 +66,21 @@ T.guestSeats = async () => {
   const ivy2 = (await D.S.dbGet('lock:evt:' + ev2.id)).data.entrants[0];
   no(await call('oz', 'join', { code: ev2.code, as: 'player', myName: 'Oz', eid: ivy2.eid, gid: ivy2.players[0].gid }), 403, 'named guest seat needs the claim code');
 };
+// 3 (MED) a pool result corrected after the playoff was set: rebuild the playoff if none of it is played, refuse once it is
+T.poolFixAfterPlayoff = async () => {
+  let ev = ok(await call('ann', 'create', base({ playIn: false, playoff: 2, entrants: ['A', 'B', 'C', 'D'].map((n) => ({ name: n })) }))).event; const id = ev.id;
+  NOW = START + 1000; ev = ok(await call('ann', 'get', { id })).event; const nm = (e) => ev.entrants.find((x) => x.eid === e).name;
+  // A beats everyone, B beats C and D, C beats D -> playoff A v B
+  for (const m of ev.matches) { const order = 'ABCD', wa = order.indexOf(nm(m.a)) < order.indexOf(nm(m.b)); ok(await call('ann', 'score', { id, m: m.id, games: wa ? [[11, 5]] : [[5, 11]] })); }
+  ev = ok(await call('ann', 'get', { id })).event; let fin = ev.matches.find((m) => m.st === 'po'); assert.deepStrictEqual([fin.an, fin.bn].sort(), ['A', 'B']);
+  // correct C v B to C winning, and C v A to C winning: C is now 3-0... (C beat A, B, D) -> playoff must become C v A or C v B by the new table
+  const cb = ev.matches.find((m) => m.st === 'pool' && [nm(m.a), nm(m.b)].sort().join() === 'B,C'), ca = ev.matches.find((m) => m.st === 'pool' && [nm(m.a), nm(m.b)].sort().join() === 'A,C');
+  ok(await call('ann', 'score', { id, m: cb.id, games: nm(cb.a) === 'C' ? [[11, 2]] : [[2, 11]] })); ev = ok(await call('ann', 'score', { id, m: ca.id, games: nm(ca.a) === 'C' ? [[11, 2]] : [[2, 11]] })).event;
+  fin = ev.matches.find((m) => m.st === 'po'); const top2 = ev.tables[0].slice(0, 2).map((r) => r.name).sort();
+  assert.deepStrictEqual([fin.an, fin.bn].sort(), top2, 'playoff follows the corrected table ' + JSON.stringify(top2));
+  assert.strictEqual(ev.matches.filter((m) => m.st === 'po').length, 1, 'one playoff, not two');
+  // once the playoff is played, pool corrections are refused
+  ok(await call('ann', 'score', { id, m: fin.id, games: [[11, 9]] }));
+  const da = ev.matches.find((m) => m.st === 'pool' && [nm(m.a), nm(m.b)].sort().join() === 'A,D');
+  no(await call('ann', 'score', { id, m: da.id, games: nm(da.a) === 'D' ? [[11, 2]] : [[2, 11]] }), 409, 'pool correction after the playoff was played');
+};

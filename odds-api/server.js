@@ -60,8 +60,9 @@ tickLines();
 // Price log (Kalshi + books + ESPN line, every 20 min) for measuring book-vs-Kalshi gaps after the season
 const PL = require('./pricelog.js'); const plTick = () => PL.tick(LINES, require('./games')).catch((e) => console.error('pricelog:', e.message));
 setInterval(plTick, 20 * 60 * 1000); setTimeout(plTick, 90 * 1000);
-// Oddable Alert (v252): the server itself computes the weekly picks and freezes them 30 minutes before kickoff, every minute while it is awake (GET /alert also runs it), so no phone has to be open
-const ALERT = require('./alert'); ALERT._deps.lines = () => LINES; setInterval(() => ALERT.tick(), 60 * 1000); setTimeout(() => ALERT.tick(), 15 * 1000);
+// Oddable Alert (v252/v253): the server itself computes the weekly picks and freezes each one 1 hour (alert.js FREEZE_MIN) before its own game's kickoff, every minute while
+// it is awake (GET /alert also runs it), so no phone has to be open. v253: loaded inside try/catch so a problem in it can never take the whole service down.
+let ALERT = null; try { ALERT = require('./alert'); ALERT._deps.lines = () => LINES; setInterval(() => ALERT.tick().catch((e) => console.error('alert tick:', e && e.message)), 60 * 1000); setTimeout(() => ALERT.tick().catch(() => {}), 15 * 1000); } catch (e) { console.error('alert: !!! could not load, picks disabled:', e && e.message); }
 // Free Render services sleep when idle; ping our own public URL so the tick keeps running (set KEEP_AWAKE=0 to turn off)
 if (process.env.RENDER_EXTERNAL_URL && process.env.KEEP_AWAKE !== '0') {
   setInterval(() => fetch(process.env.RENDER_EXTERNAL_URL + '/health').catch(() => {}), 10 * 60 * 1000);
@@ -83,7 +84,7 @@ http.createServer(async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   if (req.url.startsWith('/health')) return res.end('{"ok":true}');
   if (req.url.startsWith('/backtest')) { try { const q = new URL(req.url, 'http://x').searchParams; const lg = ['nba','nhl','ncaab','mlb'].includes(q.get('lg')) ? q.get('lg') : 'nba'; const key = [lg, Math.min(+q.get('days') || 45, 200), Math.min(+q.get('bt') || 14, 60), String(q.get('to') || '').slice(0, 12)].join('|'); const ks = Object.keys(BT); if (ks.length > 30) delete BT[ks[0]]; BT[key] = BT[key] && Date.now() - BT[key].t < 3600e3 ? BT[key] : { t: Date.now(), v: await require('./backtest.js').run(lg, Math.min(+q.get('days') || 45, 200), Math.min(+q.get('bt') || 14, 60), q.get('to') || '') }; return res.end(JSON.stringify(BT[key].v, null, 1)); } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end(JSON.stringify({ error: e.message })); } }
-  if (req.url.startsWith('/alert')) { try { if (await require('./alert').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"alert error"}'); } }
+  if (req.url.startsWith('/alert')) { try { if (ALERT && (await ALERT.handle(req, res))) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"alert error"}'); } }
   if (req.url.startsWith('/locks')) { try { if (await require('./locks').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"lock error"}'); } }
   if (req.url.startsWith('/games')) { res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json'); res.setHeader('Cache-Control', 'public, max-age=120'); try { const g = await require('./games').get('nfl', NAMES); return res.end(JSON.stringify({ updated: g.updated, remaining: g.remaining, games: g.games })); } catch (e) { res.statusCode = 502; return res.end(JSON.stringify({ error: e.message })); } }
   if (req.url.startsWith('/lines')) { res.setHeader('Cache-Control', 'public, max-age=60'); return res.end(JSON.stringify(LINES)); }

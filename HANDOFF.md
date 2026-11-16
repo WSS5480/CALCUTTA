@@ -471,3 +471,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 
 ## v240 — 📣 Oddable Alert of the week
 - User request: make Double lock + Lock + tag-only division road dogs the "Oddable Alert of the week" with a megaphone. Banner at the top of the NFL Games board (alertBox) lists the week's picks with ✓/✗, season record and units (tap for all picks, alertDrill), ⓘ explains. History 2014-2026 combined 559-482 (53.7%, +26.2u, 1,041 games, ~80/season). 2026 wk1-10 in the app: 26-15 (63%, +8.6u); week 8 alone was 1-6. Same-data caveat kept: tracker, not a proven edge; week 11 on is the real test.
+
+## v241 — Standalone lock cards removed from the board
+- User: "remove the other locks since they're in the Oddable Alert". The Top Pick / Second Top Pick (Double lock / Lock) cards at the top of the NFL board are gone; the 📣 Oddable Alert replaces them. Lock chips on game cards and the Results tab (Locks boxes, History, Division road dogs) stay. Bet of the Day / Upset Pick do NOT come back (removed in v222).

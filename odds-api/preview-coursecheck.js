@@ -22,16 +22,7 @@ async function run() {
   if (id != null) for (const p of ['/courses/' + id, '/courses/' + id + '/holes', '/courses/' + id + '/tees', '/courses/' + id + '/scorecard']) { r = await ask(B + base + p); say(base + p + ' -> ' + r.s + ' ' + (r.j ? shape(r.j) + ' ' + JSON.stringify(r.j).slice(0, 1300) : String(r.txt || r.err || '').slice(0, 160))); }
   else say('no course id found: detail not checked');
   try { const CO = require('./golf-courses'); CO._reset(); const L = await CO.search('mcallen', '', ''); say('golf-courses.search("mcallen") -> ' + L.length + ' ' + JSON.stringify(L.slice(0, 2))); if (L[0]) { const d = await CO.detail(L[0].extId); say('golf-courses.detail -> tees ' + d.tees.length + ' ' + JSON.stringify(d).slice(0, 900)); } } catch (e) { say('golf-courses.search threw: ' + e.message); }
-  // Real course data for the bundled sample list (fixtures/courses-fallback.json): one line per tee, read back from the log by the builder.
-  try { const CO = require('./golf-courses'), seen = new Set(), want = [];
-    const add = (rows, area) => rows.forEach((c) => { if (!seen.has(c.extId)) { seen.add(c.extId); want.push([c, area]); } });
-    add((await CO.searchPage('', '', '26.2034,-98.2300', 0)).results, 'Rio Grande Valley'); add((await CO.searchPage('', '', '26.2034,-98.2300', 25)).results, 'Rio Grande Valley'); add((await CO.searchPage('', '', '26.1906,-97.6961', 0)).results, 'Rio Grande Valley'); add((await CO.searchPage('', '', '25.9017,-97.4975', 0)).results, 'Rio Grande Valley');
-    for (const nm of ['Pebble Beach Golf Links', 'Bethpage', 'Torrey Pines', 'TPC Sawgrass', 'Pinehurst', 'Memorial Park Golf Course', 'Brackenridge', 'TPC Scottsdale', 'Bandon Dunes', 'Harbour Town']) { try { add((await CO.searchPage(nm, '', '', 0)).results.slice(0, 2), ''); } catch (e) {} }
-    say('data: ' + want.length + ' courses found'); let n = 0;
-    for (const [c, area] of want.slice(0, 60)) { let d; try { d = await CO.detail(c.extId); } catch (e) { continue; } const tees = d.tees.filter((t) => t.holes.length === 18 && t.rating && t.slope).slice(0, 5); if (!tees.length) { say('data-skip: ' + c.name + ' (' + c.city + ') tees ' + d.tees.length + ' holes ' + (d.tees[0] ? d.tees[0].holes.length : 0)); continue; }
-      n++; tees.forEach((t) => console.log('coursedata: ' + [n, d.name, d.city, d.state, area, t.name, t.gender || '', t.rating, t.slope, t.par, t.yards || '', t.holes.map((h) => [h.par || '', h.hcp || '', h.yards || ''].join('.')).join(',')].join('|'))); }
-    say('data: ' + n + ' courses written');
-  } catch (e) { say('data failed: ' + e.message); }
+  // (The one-off dump that produced fixtures/courses-fallback.json was removed: it asked the directory about 50 questions at every start.)
   say('end'); return OUT.slice();
 }
 module.exports = { run, last: () => OUT.slice() };

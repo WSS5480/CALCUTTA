@@ -53,4 +53,4 @@ async function handle(req, res) {
   } catch (e) { send(res, 502, { error: String(e.message || e).slice(0, 200) }); return true; }
   return false;
 }
-module.exports = { handle };
+module.exports = { handle, claude, limited }; // claude + limited are reused by voicelog.js (same key, model and hourly limit)

@@ -405,3 +405,5 @@ async function handle(req, res) {
   } catch (e) { if (!e.status) console.error('groups:', e.message); send(res, e.status || 500, { error: e.status ? e.message : 'Groups error, try again' }); return true; }
 }
 module.exports = { handle, cleanRules, pot, judge, score, sportOk, typeOf, weekOf, chiDay, chiStart, _deps: D, _reset: () => { RL.clear(); CACHE.clear(); IDS.map = null; NAMES = { at: 0, v: {} }; KN.at = 0; KN.map = {}; } };
+// Player stats (stats.js, Nov 16 2026) reads standings and counted bets through these. Additive only.
+Object.assign(module.exports, { standings, memberBets });

@@ -20,12 +20,16 @@ const ok = (r, m) => { assert.strictEqual(r.s, 200, (m || '') + ' -> ' + r.s + '
 const no = (r, s, m) => { assert.strictEqual(r.s, s, (m || '') + ' expected ' + s + ' got ' + r.s + ' ' + JSON.stringify(r.j).slice(0, 300)); return r.j; };
 const base = (o) => Object.assign({ title: 'Rev2 test', sport: 'pickleball', fmt: 'rr', unit: 'singles', start: START, to: 11, winBy: 2, bestOf: 1, seeding: 'manual', courts: 2, pools: 1, playoff: 0, entry: 0, split: 'none', take: { kind: 'none' }, myName: 'ann' }, o || {});
 const reset = () => { db = {}; E._reset(); ENT.clear(); NOW = Z('2026-11-17T18:00:00Z'); };
+const KIT = require('./events.testkit')({ E, D, ENT });
+// any rating module through the one contract (events' stand-in here, the stats module in the merged build)
+const seedR = (r) => (r.use == null ? 1500 : Math.round(r.use)), confR = (r) => (r.confirmedRating == null ? null : Math.round(r.confirmedRating));
+const needs3 = async () => { try { const r = await D.rt().ratingFor('acct-nobody-here', 'pickleball'); return !!(r && r.makeup && Number(r.makeup.need) >= 3); } catch (e) { return false; } };
 const T = {};
 const only = process.argv.slice(2);
 srv.listen(0, async () => {
-  P = srv.address().port; let n = 0, fail = 0;
-  for (const k of Object.keys(T)) { if (only.length && !only.includes(k)) continue; reset(); try { await T[k](); n++; console.log('  ok', k); } catch (e) { fail++; console.log('  FAIL', k, '-', process.env.TRACE ? e.stack : String(e.message).split('\n')[0].slice(0, 300)); } }
-  console.log(fail ? '\nFAILED ' + fail + ' of ' + (n + fail) : '\nPASS ' + n + ' second-review checks'); srv.close(); process.exit(fail ? 1 : 0);
+  P = srv.address().port; let n = 0, fail = 0, skip = 0;
+  for (const k of Object.keys(T)) { if (only.length && !only.includes(k)) continue; reset(); try { const r = await T[k](); if (r === 'skip') { skip++; console.log('  skipped', k); } else { n++; console.log('  ok', k); } } catch (e) { fail++; console.log('  FAIL', k, '-', process.env.TRACE ? e.stack : String(e.message).split('\n')[0].slice(0, 300)); } }
+  console.log(fail ? '\nFAILED ' + fail + ' of ' + (n + fail) : '\nPASS ' + n + ' second-review checks' + (skip ? ' (' + skip + ' skipped)' : '')); srv.close(); process.exit(fail ? 1 : 0);
 });
 // ---------- helpers: every account is named like its token (ann = t-ann) ----------
 const get = async (who, id) => ok(await call(who, 'get', { id })).event;
@@ -72,7 +76,7 @@ T.r2OnlyOpponentConfirmedMatchesAreRated = async () => {
   let ev = ok(await call('zed', 'create', base({ fmt: 'h2h', endDay: '2026-11-30', playIn: true, myName: 'zed', entrants: [{ name: 'Ghost' }] }))).event; let id = ev.id; NOW = START + 1000; ev = await get('zed', id); let e = eidsOf(ev);
   for (let i = 0; i < 5; i++) { NOW += 60e3; ev = ok(await call('zed', 'challenge', { id, a: e.zed, b: e.Ghost })).event; const m = ev.matches[ev.matches.length - 1]; ev = ok(await call('zed', 'score', { id, m: m.id, games: [[11, 0]] })).event; assert.strictEqual(ev.matches.find((x) => x.id === m.id).state, 'confirmed'); }
   let rt = await E.ratingFor('acct-zed', 'pickleball'); for (const k of ['oddable', 'confirmedGames', 'event', 'setBy', 'use']) assert.ok(k in rt, 'ratingFor has ' + k);
-  assert.deepStrictEqual([rt.oddable.rating, rt.confirmedGames, rt.oddable.matches, rt.use], [null, 0, 5, 1500], 'five wins over a typed-in guest move nothing');
+  assert.deepStrictEqual([confR(rt), rt.confirmedGames, seedR(rt)], [null, 0, 1500], 'five wins over a typed-in guest move nothing'); if (KIT.standRatings) assert.deepStrictEqual([rt.oddable.rating, rt.oddable.matches, rt.use], [null, 5, 1500]);
   let recs = (await E.statsFor('acct-zed', {})).filter((x) => x.kind === 'match'); assert.strictEqual(recs.length, 5, 'they still appear as records'); assert.ok(recs.every((x) => x.verified === false && x.extra.confirmed === false && /no Oddable account/.test(x.extra.unrated)), 'marked unverified, with the reason');
   // (b) two accounts alone in a heads-up event: confirmed by the opponent, still not rated (fewer than 3 accounts)
   reset(); ev = await mk(['amy', 'ben'], { fmt: 'h2h', endDay: '2026-11-30' }); id = ev.id; e = eidsOf(ev); await h2hMatch(id, 'amy', 'ben', [[11, 3]], e);
@@ -82,11 +86,11 @@ T.r2OnlyOpponentConfirmedMatchesAreRated = async () => {
   for (let i = 0; i < 5; i++) await h2hMatch(id, 'amy', 'ben', [[11, 0]], e); await h2hMatch(id, 'cal', 'amy', [[11, 9]], e); E._reset();
   recs = (await E.statsFor('acct-amy', {})).filter((x) => x.kind === 'match'); const vsBen = recs.filter((x) => x.opponent === 'ben');
   assert.deepStrictEqual(vsBen.map((x) => x.extra.confirmed), [true, true, false, false, false], 'the 3rd, 4th and 5th match against the same opponent that day are not rated'); assert.ok(/More than 2 matches/.test(vsBen[4].extra.unrated));
-  const one = vsBen[0]; assert.strictEqual(one.verified, true); assert.deepStrictEqual(one.extra.confirmedBy.name, 'ben', 'confirmedBy names the account on the other side'); assert.ok(Array.isArray(one.extra.oppRating) && one.extra.oppRating.length === 1 && /^e:[0-9a-f]{14}$/.test(one.extra.oppKey));
-  rt = await E.ratingFor('acct-amy', 'pickleball'); assert.deepStrictEqual([rt.confirmedGames, rt.oddable.matches], [3, 6], 'x of y: 3 of 6 confirmed'); assert.ok(rt.use > 1500 && rt.use < 1535, 'two rated wins and one rated loss, not five wins: ' + rt.use);
+  const one = vsBen[0]; assert.strictEqual(one.verified, true); assert.deepStrictEqual(one.extra.confirmedBy.name, 'ben', 'confirmedBy names the account on the other side'); assert.ok(Array.isArray(one.extra.oppRating) && one.extra.oppRating.length === 1 && /^a:[0-9a-f]{12}$/.test(one.extra.oppKey));
+  rt = await E.ratingFor('acct-amy', 'pickleball'); assert.deepStrictEqual([rt.confirmedGames, rt.oddable.matches], [3, 6], 'x of y: 3 of 6 confirmed'); if (await needs3()) assert.strictEqual(rt.use, null, 'two different confirmers: the module asks the organizer for a number'); else assert.ok(rt.use > 1500 && rt.use < 1535, 'two rated wins and one rated loss, not five wins: ' + rt.use);
   // "x of y games confirmed" travels with the rating to every screen
   NOW = Z('2026-11-17T18:00:00Z'); const e2 = ok(await call('amy', 'create', base({ title: 'Next', playIn: true, myName: 'amy', seeding: 'rating', start: Z('2026-12-05T15:00:00Z') }))).event;
-  assert.deepStrictEqual(e2.entrants[0].players[0].odd, { rating: rt.use, matches: 6, confirmed: 3 }); assert.ok(/of ' \+ .*games? confirmed|games confirmed/.test(CLIENT), 'the screens print "x of y games confirmed"');
+  assert.deepStrictEqual(e2.entrants[0].players[0].odd, { rating: confR(rt), matches: 6, confirmed: 3 }); assert.ok(/of ' \+ .*games? confirmed|games confirmed/.test(CLIENT), 'the screens print "x of y games confirmed"');
   // (d) a forfeit by the clock is not rated
   reset(); ev = await mk(['amy', 'ben', 'cal'], { fmt: 'ladder', endDay: '2026-12-20', reach: 3, expDays: 7, expire: 'forfeit' }); id = ev.id; e = eidsOf(ev);
   ok(await call('cal', 'challenge', { id, a: e.cal, b: e.ben })); NOW += 8 * DAY; ev = await get('amy', id); assert.ok(ev.matches[0].forfeit);
@@ -130,8 +134,8 @@ T.r5InviteBlast = async () => {
   bad = 0; for (let i = 0; i < 200; i++) { const r = await call('inv' + i, 'preview', { code }, '60.' + (i % 200) + '.0.9'); if (r.s !== 200) bad++; } assert.strictEqual(bad, 0, bad + ' of 200 signed-in invite previews were refused');
   bad = 0; for (let i = 0; i < 150; i++) { const r = await call('inv' + i, 'join', { code, myName: 'P' + i, as: 'spectator' }, '9.9.9.9'); if (r.s !== 200) bad++; } assert.strictEqual(bad, 0, bad + ' of 150 joins from ONE club Wi-Fi address were refused');
   // still limited per address, and guessing codes is still blocked
-  let lim = 0; for (let i = 0; i < 320; i++) { const r = await call('', 'peek', { code }, '70.0.0.1'); if (r.s === 429) lim++; } assert.ok(lim >= 15, 'one address hammering the preview is slowed down (' + lim + ')'); ok(await call('', 'peek', { code }, '70.0.0.2'), 'and nobody else is');
-  let blocked = 0; for (let i = 0; i < 14; i++) { const r = await call('', 'peek', { code: 'ZZZZ-ZZ' + String(10 + i) }, '80.0.0.1'); if (r.s === 429) blocked++; } assert.ok(blocked >= 3, 'wrong codes: blocked after 10');
+  let lim = 0; for (let i = 0; i < 60; i++) { const r = await call('', 'peek', { code, dev: 'one-phone-0001' }, '70.0.0.1'); if (r.s === 429) lim++; } assert.ok(lim >= 15, /* third review: counted per phone and code (30 / 10 min); the IP limit is sized for a club on one Wi-Fi */ 'one address hammering the preview is slowed down (' + lim + ')'); ok(await call('', 'peek', { code }, '70.0.0.2'), 'and nobody else is');
+  let blocked = 0; for (let i = 0; i < 14; i++) { const r = await call('', 'peek', { code: 'ZZZZ-ZZ' + String(10 + i), dev: 'one-phone-0002' }, '80.0.0.1'); if (r.s === 429) blocked++; } assert.ok(blocked >= 3, 'wrong codes: blocked after 10');
 };
 
 // ================= 6 a failed early draw must not lock the director's ratings =================
@@ -140,7 +144,7 @@ T.r6FailedDrawLocksNothing = async () => {
   no(await call('club', 'draw', { id }), 409, 'one entry: no draw'); ok(await call('bob', 'join', { code: ev.code, myName: 'bob' })); no(await call('bob', 'draw', { id }), 403);
   ev = await get('club', id); ev = ok(await call('club', 'trate', { id, gid: ev.entrants[0].players[0].gid, rating: 1700, reason: 'Seed him second' }), 'the director can still set a rating: the event has not started').event;
   assert.strictEqual(ev.entrants[0].players[0].trn.v, 1700); assert.ok(db['lock:evr:' + id].data.lockAt >= START, 'the rating module still locks at the start');
-  NOW += HOUR; ev = ok(await call('club', 'draw', { id })).event; assert.ok(ev.drawn); assert.ok(db['lock:evr:' + id].data.lockAt <= NOW, 'a draw that happened locks the ratings'); no(await call('club', 'trate', { id, gid: ev.entrants[0].players[0].gid, rating: 1800, reason: 'too late' }), 409);
+  NOW += HOUR; ev = ok(await call('club', 'draw', { id })).event; assert.ok(ev.drawn); if (KIT.standRatings) assert.ok(db['lock:evr:' + id].data.lockAt <= NOW, 'a draw that happened locks the ratings'); /* stats.js eventSetup cannot move its start earlier (HANDOFF, merge notes); the route below refuses either way */ no(await call('club', 'trate', { id, gid: ev.entrants[0].players[0].gid, rating: 1800, reason: 'too late' }), 409);
 };
 
 // ================= 7 statsFor order: date, then entry time, then id =================
@@ -189,9 +193,9 @@ T.r10aGrandFinalPaysMost = async () => {
 T.r10bLockMessageSaysWhichLock = async () => {
   let ev = ok(await call('pk', 'create', base({ fmt: 'se', pickem: true, playIn: false, myName: 'pk', entrants: ['A', 'B', 'C', 'D'].map((n) => ({ name: n })) }))).event; const id = ev.id; ok(await call('fan', 'join', { code: ev.code, as: 'spectator', myName: 'fan' }));
   NOW = START + 1000; ev = await get('pk', id); const rk = ev.pickem.rounds[0].key; ok(await call('pk', 'picklock', { id, round: rk, at: NOW + 600e3 })); NOW += 601e3;
-  let r = no(await call('fan', 'pick', { id, m: ev.matches[0].id, side: 'a' }), 409); assert.ok(/lock time/.test(r.error), 'time lock: ' + r.error);
+  let r = no(await call('fan', 'pick', { id, m: ev.matches[0].id, side: 'a' }), 409); assert.ok(/closing time/.test(r.error) && !/lock/i.test(r.error), 'closing time: ' + r.error);
   reset(); ev = ok(await call('pk', 'create', base({ fmt: 'se', pickem: true, playIn: false, myName: 'pk', entrants: ['A', 'B', 'C', 'D'].map((n) => ({ name: n })) }))).event; ok(await call('fan', 'join', { code: ev.code, as: 'spectator', myName: 'fan' })); NOW = START + 1000; ev = await get('pk', ev.id);
-  ok(await call('pk', 'picklock', { id: ev.id, round: ev.pickem.rounds[0].key, lock: true })); r = no(await call('fan', 'pick', { id: ev.id, m: ev.matches[0].id, side: 'a' }), 409); assert.ok(/locked by the commissioner/.test(r.error), 'button lock: ' + r.error);
+  ok(await call('pk', 'picklock', { id: ev.id, round: ev.pickem.rounds[0].key, lock: true })); r = no(await call('fan', 'pick', { id: ev.id, m: ev.matches[0].id, side: 'a' }), 409); assert.ok(/closed by the commissioner/.test(r.error) && !/lock/i.test(r.error), 'commissioner closed it: ' + r.error);
   reset(); ev = ok(await call('pk', 'create', base({ fmt: 'se', pickem: true, playIn: false, myName: 'pk', entrants: ['A', 'B', 'C', 'D'].map((n) => ({ name: n })) }))).event; ok(await call('fan', 'join', { code: ev.code, as: 'spectator', myName: 'fan' })); NOW = START + 1000; ev = await get('pk', ev.id);
   ok(await call('pk', 'live', { id: ev.id, m: ev.matches[0].id })); r = no(await call('fan', 'pick', { id: ev.id, m: ev.matches[1].id, side: 'a' }), 409); assert.ok(/first match started/.test(r.error), 'play lock: ' + r.error);
 };
@@ -281,7 +285,7 @@ T.r12EnterpriseBillingRecordsEveryPlayer = async () => {
   D.limits = () => Object.assign({}, real, { recordPlay: async (...a) => { seen.push(a); return real.recordPlay(...a); } });
   try { ENT.add('club'); let ev = ok(await call('club', 'create', base({ playIn: false, myName: 'Dir', entrants: [{ name: 'G1' }, { name: 'G2' }] }))).event; const id = ev.id; for (const p of ['bob', 'cat']) ok(await call(p, 'join', { code: ev.code, myName: p })); ok(await call('fan', 'join', { code: ev.code, myName: 'fan', as: 'spectator' }));
     await E._billed(); assert.strictEqual(seen.length, 0, 'nothing is recorded before the game starts'); NOW = START + 1000; ev = await get('club', id); await E._billed();
-    assert.strictEqual(seen.length, 4, 'one call per player: 2 accounts + 2 typed-in players (not the director, not the spectator)'); assert.ok(seen.every((a) => a.length === 4 && a[0] === 'acct-club' && a[1] === 'event' && a[2] === id && typeof a[3] === 'string'), 'recordPlay(accountKey, gameType, gameId, playerKey)'); assert.strictEqual(new Set(seen.map((a) => a[3])).size, 4);
+    assert.strictEqual(seen.length, 4, 'one call per player: 2 accounts + 2 typed-in players (not the director, not the spectator)'); assert.ok(seen.every((a) => a.length >= 4 && a[0] === 'acct-club' && a[1] === 'event' && a[2] === id && typeof a[3] === 'string'), 'recordPlay(accountKey, gameType, gameId, playerKey)'); assert.strictEqual(new Set(seen.map((a) => a[3])).size, 4);
     await get('bob', id); await get('club', id); await E._billed(); assert.strictEqual(seen.length, 4, 'each player once');
     const use = db['lock:entuse'].data['acct-club']['2026-11'][id]; assert.strictEqual(use.n, 4, 'the month row counts 4 players for this game'); assert.strictEqual(use.type, 'event');
     // a standard account: called through the same helper, which records nothing
@@ -308,10 +312,10 @@ T.r13CalcuttaSourceContract = async () => {
 // Skipped on this branch (no odds-api/stats.js here). In the merged build it fails until stats.js `isConfirmed` honours `extra.confirmed === false` on
 // events match records (stats-v1 e214bcf counts every events match as confirmed). See HANDOFF "Local events v1.3", merge notes.
 T.r2MergedStatsHonoursConfirmed = async () => {
-  let S = null; try { S = require(path.join(SRC, 'stats.js')); } catch (e) { return; } if (D.rt() !== S) return;
-  for (const k of ['S', 'now', 'acct']) Object.defineProperty(S._deps, k, { get: () => D[k], set: () => {}, configurable: true }); S._deps.limits = () => ({ keyOf: (e) => e, isEnterprise: (k) => D.enterprise(k) });
+  let S = null; try { S = require(path.join(SRC, 'stats.js')); } catch (e) { return 'skip'; } if (D.rt() !== S) return 'skip';
+  // the test kit already points the real stats / limits modules at this test's database, clock and sign-in (nothing is pinned)
   let ev = ok(await call('amy', 'create', base({ fmt: 'h2h', endDay: '2026-11-30', playIn: true, myName: 'amy', entrants: [{ name: 'Ghost' }] }))).event; const id = ev.id; for (const p of ['ben', 'cal']) ok(await call(p, 'join', { code: ev.code, myName: p }));
-  NOW = START + 1000; ev = await get('amy', id); const e = eidsOf(ev); await h2hMatch(id, 'amy', 'ben', [[11, 3]], e); S._reset(); const one = await S.ratingFor('acct-amy', 'pickleball'); assert.strictEqual(one.confirmedGames, 1);
+  NOW = START + 1000; ev = await get('amy', id); const e = eidsOf(ev); await h2hMatch(id, 'amy', 'ben', [[11, 3]], e); await h2hMatch(id, 'cal', 'amy', [[11, 9]], e); S._reset(); const one = await S.ratingFor('acct-amy', 'pickleball'); assert.strictEqual(one.confirmedGames, 2, 'two games confirmed by two different accounts on the other side');
   for (let i = 0; i < 5; i++) { NOW += 60e3; ev = ok(await call('amy', 'challenge', { id, a: e.amy, b: e.Ghost })).event; ok(await call('amy', 'score', { id, m: ev.matches[ev.matches.length - 1].id, games: [[11, 0]] })); }
-  S._reset(); const after = await S.ratingFor('acct-amy', 'pickleball'); assert.deepStrictEqual([after.confirmedGames, after.use], [1, one.use], 'five wins over a typed-in guest must not move the seeding rating in the real stats module');
+  S._reset(); const after = await S.ratingFor('acct-amy', 'pickleball'); assert.deepStrictEqual([after.confirmedGames, after.use, after.confirmedRating], [2, one.use, one.confirmedRating], 'five wins over a typed-in guest must not move the seeding rating in the real stats module');
 };

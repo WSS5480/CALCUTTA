@@ -17,6 +17,7 @@ const ok = (r, m) => { assert.strictEqual(r.s, 200, (m || '') + ' -> ' + r.s + '
 const no = (r, s, m) => assert.strictEqual(r.s, s, (m || '') + ' expected ' + s + ' got ' + r.s + ' ' + JSON.stringify(r.j).slice(0, 300));
 const base = (o) => Object.assign({ title: 'Fix test', sport: 'pickleball', fmt: 'rr', unit: 'singles', start: START, to: 11, winBy: 2, bestOf: 1, seeding: 'manual', courts: 2, pools: 1, playoff: 0, entry: 0, split: 'none', take: { kind: 'none' }, myName: 'Ann' }, o || {});
 const reset = () => { db = {}; E._reset(); NOW = Z('2026-11-17T18:00:00Z'); };
+const KIT = require('./events.testkit')({ E, D, ENT: null });
 const T = {};
 module.exports = { T };
 const only = process.argv.slice(2);

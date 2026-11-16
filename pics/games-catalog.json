@@ -73,7 +73,7 @@
   "winner": {
    "name": "Pick the winner",
    "line": "Pick who wins each race or fight on the card.",
-   "info": "For every race (or fight) members pick the winner before it starts; optional bonus for method or round. Picks lock at each start. Most points wins."
+   "info": "For every race (or fight) members pick the winner before it starts; optional bonus for method or round. Picks close at each start. Most points wins."
   },
   "rr": {
    "name": "Round robin + playoff",

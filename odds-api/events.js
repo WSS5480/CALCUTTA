@@ -17,6 +17,7 @@ const D = {
   // H1 / E-H (owner Nov 16 2026): the rating module. The stats branch's own (odds-api/stats.js: ratingFor, eventSetup, eventOverride, eventLog) when it is
   // in the build, else the STAND-IN at the bottom of this file with the same names, arguments and result shapes.
   rt: () => { const m = realMod('./stats'); return m && ['ratingFor', 'eventSetup', 'eventOverride', 'eventLog'].every((f) => typeof m[f] === 'function') ? m : STAND; },
+  groups: () => realMod('./groups'), // the Groups engine when it is in the build: memberCheck(groupId, accountId), canAttach(groupId, accountId), attachGame(groupId, accountId, {type, ref, name, pot})
   pairing: () => realFn('./pairing', 'suggestPartners'), // P1 shared contract suggestPartners(players, {mode, teamSize, history}) (odds-api/pairing.js; stand-in in this branch)
 };
 function realMod(mod) { try { return require(mod); } catch (e) { return null; } }
@@ -29,14 +30,28 @@ const LIMSTAND = { standIn: true, keyOf: (e) => e, isEnterprise: (key) => D.ente
   maxPeople: async (accountKey, groupOrGameId) => ((await D.enterprise(accountKey)) ? Math.max(8, Math.min(5000, Math.round(Number(process.env.ENTERPRISE_MAX_PEOPLE) || 500))) : 8) };
 // Enterprise billing ($20 per player per game): every player of a started event is recorded through the SHARED limits.recordPlay(accountKey, gameType,
 // gameId, playerKey) (Groups branch limits.js; idempotent, a no-op for standard accounts). Stand-in with the same signature and the same 'lock:entuse' row.
-LIMSTAND.recordPlay = async (accountKey, gameType, gameId, playerKey, title) => { if (!accountKey || !(await D.enterprise(accountKey))) return false; const mo = new Date(D.now()).toISOString().slice(0, 7), gid = String(gameId || '').slice(0, 60);
+// Third review (H2): a play is filed under the month THE GAME STARTED (opt.at), never the month of the call, so re-opening an old event bills nothing new.
+LIMSTAND.recordPlay = async (accountKey, gameType, gameId, playerKey, title, opt) => { if (!accountKey || !(await D.enterprise(accountKey))) return false; const at = opt && Number(opt.at) > 0 ? Number(opt.at) : D.now(), mo = new Date(at).toISOString().slice(0, 7), gid = String(gameId || '').slice(0, 60);
   const pks = (Array.isArray(playerKey) ? playerKey : [playerKey]).filter((p) => p != null && p !== '').map((p) => crypto.createHash('sha256').update('oddable-play|' + String(p)).digest('hex').slice(0, 12)); if (!gid || !pks.length) return false;
   await mutateRow('lock:entuse', () => ({}), async (x) => { const a = (x[accountKey] = x[accountKey] || {}), m = (a[mo] = a[mo] || {}), o = (m[gid] = m[gid] || { n: 0 }); o.p = Array.isArray(o.p) ? o.p : []; const add = pks.filter((pk) => !o.p.includes(pk)); if (!add.length && o.type) return { nochange: true }; add.forEach((pk) => o.p.push(pk)); o.type = String(gameType || 'game'); o.n = Math.max(Number(o.n) || 0, o.p.length); if (title) o.title = String(title).slice(0, 40); return {}; }); return true; };
+// ONCE PER PLAYER PER GAME, EVER (third review, H2): the billed seat ids live ON THE EVENT ROW (evt.billed = {<seat id>: 'YYYY-MM'}, evt.billAt = when the
+// game started), written BEFORE limits.recordPlay is called, so a restart, a later month or anyone re-opening an old event can never bill a seat again.
+// A failed recordPlay takes its seat off the row again (retried on the next read). BILL only stops two answers of this process working on the same seat.
 const BILL = new Map(); let BILLQ = Promise.resolve();
+const hasStarted = (evt, now) => !!(evt.fin || evt.done || now >= evt.start || (evt.matches || []).some((m) => m.live || PLAYED.has(m.state)) || Object.keys(evt.solo || {}).length);
 function bill(evt) { // called after every answer that carries an event: once it has started, each player (accounts and typed-in players, by seat id) is recorded once
-  try { if (!evt || !(evt.drawn || evt.fin) || evt.deleted) return; const L = D.limits(); if (typeof L.recordPlay !== 'function') return; const done = BILL.get(evt.id) || new Set(), todo = seatsPlaying(evt).map((p) => p.gid).filter((g) => !done.has(g)); if (!todo.length) return;
-    todo.forEach((g) => done.add(g)); BILL.set(evt.id, done); if (BILL.size > 5000) BILL.delete(BILL.keys().next().value); const ak = L.keyOf(evt.ce), id = evt.id;
-    BILLQ = BILLQ.then(async () => { for (const g of todo) { try { await L.recordPlay(ak, 'event', id, g); } catch (e) { done.delete(g); console.error('events recordPlay:', e.message); } } }); } catch (e) { console.error('events bill:', e.message); }
+  try { if (!evt || !evt.id || evt.deleted || !hasStarted(evt, D.now())) return; const L = D.limits(); if (typeof L.recordPlay !== 'function') return; const done = evt.billed || {}, fly = BILL.get(evt.id) || new Set(), todo = seatsPlaying(evt).map((p) => p.gid).filter((g) => !done[g] && !fly.has(g)); if (!todo.length) return;
+    todo.forEach((g) => fly.add(g)); BILL.set(evt.id, fly); if (BILL.size > 5000) BILL.delete(BILL.keys().next().value); const id = evt.id;
+    BILLQ = BILLQ.then(() => billRun(id, todo, L)).catch((e) => console.error('events bill:', e.message)).then(() => { todo.forEach((g) => fly.delete(g)); if (!fly.size) BILL.delete(id); }); } catch (e) { console.error('events bill:', e.message); }
+}
+async function billRun(id, todo, L) {
+  const r0 = await D.S.dbGet(ROW(id)); if (!r0 || !r0.data || r0.data.deleted) return; const ak = L.keyOf(r0.data.ce);
+  if (typeof L.isEnterprise === 'function' && !(await L.isEnterprise(ak))) return; // standard accounts are never billed: nothing is written for them
+  let mine = [], at = 0, title = '';
+  await mutateRow(ROW(id), null, async (d) => { mine = []; if (d.deleted) return { nochange: true }; const now = D.now(); d.billed = d.billed || {}; const playing = new Set(seatsPlaying(d).map((p) => p.gid));
+    mine = todo.filter((g) => playing.has(g) && !d.billed[g]); if (!mine.length) return { nochange: true }; d.billAt = d.billAt || Math.min(Number(d.start) || now, now); at = d.billAt; title = d.title; const mo = new Date(at).toISOString().slice(0, 7); mine.forEach((g) => (d.billed[g] = mo)); return {}; });
+  const failed = []; for (const g of mine) { try { await L.recordPlay(ak, 'event', id, g, title, { at, month: new Date(at).toISOString().slice(0, 7) }); } catch (e) { failed.push(g); console.error('events recordPlay:', e.message); } }
+  if (failed.length) await mutateRow(ROW(id), null, async (d) => { failed.forEach((g) => { if (d.billed) delete d.billed[g]; }); return {}; });
 }
 const limits = { get ENTERPRISE_TEXT() { return D.limits().ENTERPRISE_TEXT || ENT_TEXT; }, maxPeople: (k, id) => D.limits().maxPeople(k, id) }; // kept for callers of events.limits
 const ENTF = new Map(); // event id -> is the organizer an Enterprise account (asked from limits.isEnterprise, never guessed from the cap: extra seats are not Enterprise)
@@ -48,7 +63,7 @@ const send = (res, code, o) => { if (o && o.event && o.event.id && o.event._bill
 const bad = (status, error) => Object.assign(new Error(error), { status });
 const body = (req) => new Promise((ok, no) => { let n = 0; const c = []; req.on('data', (d) => { n += d.length; if (n <= 30000) c.push(d); }); req.on('end', () => { if (n > 30000) return no(bad(413, 'Too big')); try { ok(JSON.parse(Buffer.concat(c).toString() || '{}')); } catch (e) { no(bad(400, 'Bad request')); } }); req.on('error', no); });
 const clone = (o) => JSON.parse(JSON.stringify(o));
-const cleanName = (n, max) => String(n == null ? '' : n).replace(/[<>&"'`\\\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, max || 30);
+const cleanName = (n, max) => String(typeof n === 'string' || typeof n === 'number' ? n : '').replace(/[<>&"'`\\\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, max || 30);
 const chiDay = (ms) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date(ms));
 const okDay = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && new Date(s + 'T12:00:00Z').toISOString().slice(0, 10) === s;
 function chiStart(day) { for (const off of ['-05:00', '-06:00']) { const t = Date.parse(day + 'T00:00:00' + off); if (chiDay(t) === day && chiDay(t - 1) !== day) return t; } return Date.parse(day + 'T06:00:00Z'); }
@@ -128,13 +143,18 @@ function seedOrder(P) { let a = [1, 2]; while (a.length < P) { const n = a.lengt
 function seedList(evt) {
   const E = evt.entrants.slice(), R = evt.rules;
   const typed = (e) => (e.rating != null ? e.rating : -1), odd = R.seeding === 'oddable' || (evt.sport === 'pickleball' && R.seeding === 'rating'); // H1: pickleball "by rating" = the Oddable rating
-  // Seeds come from the rating module's `use` (tournament rating, else Oddable rating, else the 1500 start). Equal numbers: real results before a new player's 1500, then the typed number (e.g. DUPR, shown only).
+  // Seeds come from the rating module's `use` (tournament rating, else Oddable rating, else the 1500 start). Equal numbers: real results before a new player's 1500, then the typed number (shown only).
   const u = (e) => (odd && Number.isFinite(e.or) ? e.or : null);
   if (odd) E.sort((a, b) => (u(b) != null) - (u(a) != null) || (u(a) != null ? u(b) - u(a) : 0) || (b.orReal ? 1 : 0) - (a.orReal ? 1 : 0) || typed(b) - typed(a) || a.at - b.at);
   else if (R.seeding === 'rating') E.sort((a, b) => typed(b) - typed(a) || a.at - b.at);
   else if (R.seeding === 'random') { for (let i = E.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); [E[i], E[j]] = [E[j], E[i]]; } }
-  return E.map((e) => e.eid); // manual = the order the commissioner entered (or moved) them
+  const ids = E.map((e) => e.eid); // manual = the order the commissioner entered (or moved) them
+  // Seeds the organizer set by hand (Playbook: a money event is not seeded by the Oddable rating alone). Entries added afterwards follow in the usual order.
+  if (R.seeding !== 'random' && Array.isArray(evt.seedSet)) { const have = new Set(ids), set = evt.seedSet.filter((x, i, a) => have.has(x) && a.indexOf(x) === i); return set.concat(ids.filter((x) => !set.includes(x))); }
+  return ids;
 }
+const needSeats = (evt) => { const o = []; evt.entrants.forEach((e) => (e.players || []).forEach((p) => { if (!isBlank(p) && p.need) o.push(p); })); return o; };
+const seedHow = (evt) => { const R = evt.rules; return Array.isArray(evt.seedSet) && R.seeding !== 'random' ? 'by the organizer (set by hand; the ratings and confirmed games were shown)' : R.seeding === 'oddable' || (evt.sport === 'pickleball' && R.seeding === 'rating') ? 'by Oddable rating' : R.seeding === 'rating' ? 'by rating' : R.seeding === 'random' ? 'at random' : 'as entered'; };
 // Round robin, circle method. Odd count: a bye each round (exactly one entrant sits out per round, each entrant sits once).
 function roundRobin(ids) {
   const L = ids.slice(); if (L.length % 2) L.push(null); const n = L.length, rounds = [];
@@ -200,7 +220,8 @@ function draw(evt, now) {
     evt.matches = buildElim(ids.length, 'x', evt.fmt === 'de').M; advance(evt); courtsElim(evt);
   } else if (evt.fmt === 'ladder') evt.ladder = { order: ids.slice() };
   else if (evt.fmt === 'solo') evt.solo = evt.solo || {};
-  audit(evt, now, 'Commissioner', 'draw', null, (evt.fmt === 'ladder' ? 'Ladder set: ' : 'Draw made: ') + ids.length + ' entries, seeded ' + (R.seeding === 'oddable' || (evt.sport === 'pickleball' && R.seeding === 'rating') ? 'by Oddable rating' : R.seeding === 'rating' ? 'by rating' : R.seeding === 'random' ? 'at random' : 'as entered'));
+  audit(evt, now, 'Commissioner', 'draw', null, (evt.fmt === 'ladder' ? 'Ladder set: ' : 'Draw made: ') + ids.length + ' entries, seeded ' + seedHow(evt));
+  { const nd = usesOdd(evt) && R.seeding !== 'random' && R.seeding !== 'manual' && !Array.isArray(evt.seedSet) ? needSeats(evt) : []; if (nd.length) audit(evt, now, 'Oddable', 'seeds', null, (nd.length === 1 ? cleanName(nd[0].name, 24) + ' has' : nd.length + ' players have') + ' no usable rating yet and ' + (nd.length === 1 ? 'was seeded as a new player' : 'were seeded as new players') + ' (1500). The organizer did not set the seeds.'); }
 }
 function courtsElim(evt) { const by = {}; evt.matches.filter((m) => m.fa && !m.court).forEach((m) => { const k = m.st + m.r; (by[k] = by[k] || []).push(m); }); Object.values(by).forEach((l) => placeCourts(l, evt.rules.courts)); }
 
@@ -257,10 +278,31 @@ function tbAdvance(evt, now) { Object.keys(evt.tb || {}).forEach((key) => { cons
   const prev = k ? evt.matches.find((x) => x.id === t.ms[k - 1]) : null; if (k && !(prev && prev.state === 'confirmed')) return;
   const m = mkMatch({ id: 'T' + rnd(6), st: 'tb', r: k + 1, pool: t.pool, a: t.ladder[N - 2 - k], b: k ? winnerOf(prev) : t.ladder[N - 1], state: 'ready', at0: now }); evt.matches.push(m); t.ms = (t.ms || []).concat(m.id);
   audit(evt, now, 'Oddable', 'tiebreak', m.id, 'Tiebreak playoff match ' + (k + 1) + ' of ' + (N - 1) + ': ' + nameOf(evt, m.a) + ' v ' + nameOf(evt, m.b)); }); }
-// Ties the rulebook order could not break, once every pool match is in: the event waits for the organizer's choice (never the seed).
+// THE LAST PLAYOFF SPOT(S) ACROSS POOLS (third review M2). When the playoff size is not a multiple of the pool count (3 pools, top 4), every pool's top
+// floor(N / pools) go through and the spots left go to the best of the pools' next places, compared by record: wins, then point differential, then points
+// scored (stated on the standings screen and written to the history). When those records are LEVEL across the cut, nothing decides it silently (never the
+// pool order): it is an OPEN tie like any other. The organizer settles it with a coin flip (the default) or a playoff, logged and shown, and the event waits.
+const recCmp = (a, b) => b.w - a.w || b.diff - a.diff || b.pf - a.pf, recEq = (a, b) => a.w === b.w && a.diff === b.diff && a.pf === b.pf;
+function wildcard(evt, tables) { // null when every playoff spot belongs to a pool position
+  const P = tables.length, N = (evt.rules && evt.rules.playoff) || 0, full = Math.floor(N / Math.max(1, P)), rem = P ? N % P : 0; if (!N || !rem || P < 2) return null;
+  const c = tables.map((t) => t[full]).filter(Boolean).sort(recCmp), entIx = (id) => (evt.entrants || []).findIndex((e) => e.eid === id), out = { pos: full + 1, spots: rem, take: [], how: {}, open: null, key: null };
+  if (c.length <= rem) { c.forEach((r) => { out.take.push(r.eid); out.how[r.eid] = 'record'; }); return out; }
+  for (let i = 0; i < c.length && out.take.length < rem;) { let j = i; while (j + 1 < c.length && recEq(c[j + 1], c[i])) j++; const grp = c.slice(i, j + 1), left = rem - out.take.length;
+    if (grp.length <= left) { grp.forEach((r) => { out.take.push(r.eid); out.how[r.eid] = 'record'; }); i = j + 1; continue; }
+    const ids = grp.map((r) => r.eid).sort((a, b) => entIx(a) - entIx(b)), key = tieKey(ids), t = evt.tb && evt.tb[key]; out.key = key; let order = null;
+    if (t && t.how === 'coin' && Array.isArray(t.order) && t.order.length === ids.length && t.order.every((e) => ids.includes(e))) order = t.order;
+    else if (t && t.how === 'game') { const ms = (t.ms || []).map((id) => evt.matches.find((x) => x.id === id)); if (ms.length === ids.length - 1 && ms.every((m) => m && m.state === 'confirmed')) { const o = [winnerOf(ms[ms.length - 1])].concat(ms.slice().reverse().map(loserOf)); if (o.every((e) => ids.includes(e))) order = o; } }
+    if (order) order.slice(0, left).forEach((e) => { out.take.push(e); out.how[e] = t.how === 'coin' ? 'coin flip' : 'tiebreak playoff'; });
+    else out.open = { key, pool: null, x: true, spots: left, pos: full + 1, eids: ids, game: t && t.how === 'game' ? (t.ms || [])[(t.ms || []).length - 1] || null : null };
+    break; }
+  return out;
+}
+// Ties the rulebook order could not break, once every pool match is in: the event waits for the organizer's choice (never the seed, never the pool order).
 function openTies(evt) {
   if (evt.fmt !== 'rr' || !evt.drawn) return []; const pool = evt.matches.filter((m) => m.st === 'pool'); if (!pool.length || pool.some((m) => m.state !== 'confirmed')) return [];
-  const out = {}; (evt.pools || []).forEach((p, i) => poolTable(evt, p, i).forEach((r) => { if (r.tie && r.tieOpen) (out[r.tie] = out[r.tie] || { key: r.tie, pool: i, eids: [], game: r.tieGame || null }).eids.push(r.eid); })); return Object.values(out);
+  const out = {}, tables = (evt.pools || []).map((p, i) => poolTable(evt, p, i)); tables.forEach((t, i) => t.forEach((r) => { if (r.tie && r.tieOpen) (out[r.tie] = out[r.tie] || { key: r.tie, pool: i, eids: [], game: r.tieGame || null }).eids.push(r.eid); }));
+  const list = Object.values(out); if (!list.length) { const w = wildcard(evt, tables); if (w && w.open) list.push(w.open); } // pool ties first: the cross-pool spot needs every pool's order
+  return list;
 }
 function h2hTable(evt) { // heads-up / ladder records (all confirmed non-pool matches, side matches included)
   const T = {}; evt.entrants.forEach((e) => (T[e.eid] = { eid: e.eid, w: 0, l: 0, pf: 0, pa: 0 }));
@@ -297,12 +339,13 @@ function soloRows(evt) { // solo / skills: one score per entry (latest entered);
 function maybePlayoff(evt, now) { // round robin: when every pool match is confirmed, the top N go to a single-elimination playoff
   if (evt.fmt !== 'rr' || !evt.rules.playoff || evt.poSeeds || !evt.drawn || evt.poHold) return; // poHold: the commissioner reset the playoff and has not redrawn it yet
   const pool = evt.matches.filter((m) => m.st === 'pool'); if (!pool.length || pool.some((m) => m.state !== 'confirmed')) return; if (openTies(evt).length) return;
-  const tables = evt.pools.map((p, i) => poolTable(evt, p, i)), per = Math.ceil(evt.rules.playoff / tables.length), seeds = [];
-  const tiers = []; for (let r = 0; r < per; r++) tiers.push(tables.map((t) => t[r]).filter(Boolean).sort((a, b) => b.w - a.w || b.diff - a.diff || b.pf - a.pf).map((x) => x.eid)); // pool winners first, then 2nd places...
-  tiers.forEach((t) => t.forEach((e) => seeds.push(e)));
+  const tables = evt.pools.map((p, i) => poolTable(evt, p, i)), fullT = Math.floor(evt.rules.playoff / tables.length), w = wildcard(evt, tables);
+  const tiers = []; for (let r = 0; r < fullT; r++) tiers.push(tables.map((t) => t[r]).filter(Boolean).sort(recCmp).map((x) => x.eid)); // pool winners first, then 2nd places... (this order only seeds the bracket)
+  if (w && w.take.length) tiers.push(w.take.slice()); // the spots left over: by record across pools, a level record settled by the organizer (openTies), never by pool order
   evt.poSeeds = crossPool(evt, tiers, evt.rules.playoff); if (evt.poSeeds.length < 2) return;
   buildElim(evt.poSeeds.length, 'p', false).M.forEach((m) => evt.matches.push(m)); advance(evt); courtsElim(evt);
   audit(evt, now, 'Oddable', 'playoff', null, 'Pool play done. Playoff: top ' + evt.poSeeds.length);
+  if (w && w.take.length) audit(evt, now, 'Oddable', 'playoff', null, 'Last playoff spot' + (w.spots > 1 ? 's' : '') + ' across pools (best of the ' + ord(w.pos) + ' places): ' + w.take.map((e) => nameOf(evt, e) + ' (' + (w.how[e] === 'record' ? 'by record: wins, point differential, points scored' : 'records level: ' + w.how[e]) + ')').join(', '));
 }
 // Review fix 7: reorder players within each finishing tier (2nd places, 3rd places...) so round one of the playoff pairs players from different pools
 // whenever possible (2 pools, top 4: A1 v B2, B1 v A2). Tier by tier, the order with the fewest same-pool first-round pairs wins; ties keep the record order.
@@ -355,21 +398,43 @@ const seatsPlaying = (evt) => { const o = []; evt.entrants.forEach((e) => (e.pla
 const seatPaid = (evt, p) => { if (p.pid) { const m = evt.members.find((x) => x.pid === p.pid); return !!(m && m.paid); } return !!p.paid; };
 const takeText = (M) => (M.take.kind === 'pct' && M.take.v ? 'Commissioner keeps ' + M.take.v + '% of the pot' : M.take.kind === 'flat' && M.take.v ? 'Commissioner keeps $' + (Number.isInteger(M.take.v) ? M.take.v : M.take.v.toFixed(2)) + ' of the pot' : 'Commissioner keeps nothing');
 
+// MONEY RULES ARE FINAL ONCE ANYONE OTHER THAN THE ORGANIZER HAS JOINED (third review M1; owner rule from Groups). Entry, commissioner's take, payout split
+// (the payout table), pot and format cannot change while another account is in the event: `edit` answers 409. Every other detail may still change before
+// the start, but each change is written to the history with its old and new value and every member gets a notice (shown for 3 days).
+const SPLITTXT = { '100': 'winner takes all', '60/30/10': '60 / 30 / 10', '50/30/20': '50 / 30 / 20', '70/30': '70 / 30', none: 'no prizes' };
+const usdT = (n) => '$' + (Number.isInteger(Number(n)) ? Number(n).toLocaleString('en-US') : Number(n).toFixed(2));
+const ctTime = (ms) => new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(ms)) + ' CT';
+const othersIn = (evt) => evt.members.some((m) => m.mk !== evt.comm);
+const moneyFields = (x) => ({ Entry: x.money.entry ? usdT(x.money.entry) + ' per player' : 'no entry', "Commissioner's take": takeText(x.money).replace(/^Commissioner keeps /, ''), 'Payout split': SPLITTXT[x.money.split] || x.money.split, Pot: x.money.pot === 'side' ? 'side pot' : 'main pot', Format: FMTN[x.fmt] });
+const yn = (v) => (v ? 'yes' : 'no');
+const otherFields = (x) => { const r = x.rules || {}, solo = x.fmt === 'solo'; return { Name: x.title, Sport: x.sport, Starts: ctTime(x.start), 'Last day': x.endDay || undefined, Play: solo ? undefined : r.unit, 'Games to': solo ? undefined : r.to || 'highest score wins', 'Win by': solo ? undefined : r.winBy, 'Best of': solo ? undefined : r.bestOf, Scoring: r.scoring ? (r.scoring === 'rally' ? 'rally' : 'side-out') : undefined,
+  Seeding: solo ? undefined : { rating: 'by rating', oddable: 'by Oddable rating', random: 'random draw', manual: 'as entered' }[r.seeding], Courts: solo ? undefined : r.courts, 'Who enters scores': solo ? undefined : { a: 'first-listed side', either: 'either side', comm: 'the commissioner' }[r.scorer], 'Side matches': solo || x.fmt === 'h2h' ? undefined : yn(r.side),
+  Pools: r.pools, Playoff: x.fmt === 'rr' ? (r.playoff ? 'top ' + r.playoff : 'none') : undefined, 'Bracket reset': r.reset ? (r.reset === 'game15' ? 'one game to 15' : 'a full match') : undefined, 'Challenge reach': r.reach, 'Play within (days)': r.expDays, 'Not played in time': r.expire ? (r.expire === 'void' ? 'cancelled' : 'challenger wins') : undefined, 'Winner moves': r.move ? (r.move === 'swap' ? 'swap places' : 'take the spot') : undefined,
+  "Pick'em": solo ? undefined : yn(r.pickem), "Pick'em points": r.pickem ? (r.weight === 'round' ? 'later rounds worth more' : '1 per right pick') : undefined, 'Lowest score wins': solo ? yn(r.low) : undefined, 'What is counted': solo ? r.unitLabel : undefined, 'Players add themselves': yn(x.join && x.join.self), Spectators: yn(x.join && x.join.spectators) }; };
+const fieldDiff = (a, b) => { const out = []; [...new Set(Object.keys(a).concat(Object.keys(b)))].forEach((k) => { const x = a[k] == null ? 'not set' : String(a[k]), y = b[k] == null ? 'not set' : String(b[k]); if (x !== y) out.push({ k, a: x, b: y }); }); return out; };
+// A notice every member sees on the event for 3 days (rule changes, a playoff reset, picks voided by a seat claim). The last few are kept.
+function notify(evt, now, by, text) { const n = { at: now, by: cleanName(by, 30) || 'Oddable', text: String(text || '').replace(/[<>]/g, '').slice(0, 700) }; evt.notice = n; evt.notices = (evt.notices || []).filter((x) => now - x.at < 3 * DAY).concat(n).slice(-6); }
+const noticesOf = (evt, now) => (Array.isArray(evt.notices) ? evt.notices : evt.notice ? [evt.notice] : []).filter((x) => x && now - x.at < 3 * DAY).slice().reverse();
+
 // ---------- people (cap: 8 per game for standard accounts, organizer included) ----------
 // People = every account in the event (organizer, players, spectators) + the typed-in players of entries that nobody has claimed yet.
 function people(evt) { const n = evt.members.length; let typed = 0; evt.entrants.forEach((e) => { typed += (e.players || []).filter((p) => !p.pid).length; }); return n + typed; }
 async function capOf(evt) { const n = await capFor(evt.ce, evt.id); ENTF.set(evt.id, await entFor(evt.ce)); if (ENTF.size > 5000) ENTF.delete(ENTF.keys().next().value); return n; }
 
 // ---------- rate limits ----------
-const RL = new Map();
+const RL = new Map(), GONE = new Map();
 function limit(key, n, ms) { const t = D.now(), a = (RL.get(key) || []).filter((x) => t - x < ms); if (a.length >= n) { RL.set(key, a); return true; } a.push(t); RL.set(key, a); if (RL.size > 20000) { let k = 0; for (const x of RL.keys()) { RL.delete(x); if (++k > 5000) break; } } return false; }
 // [per account n, ms, per IP n, ms]. Every bucket is keyed by ONE account or ONE IP (the signed-out invite preview used to share a single bucket for
 // everybody, so a league invite to 200 people locked itself out). The IP buckets are flood guards sized for a whole club on one Wi-Fi; guessing codes is
 // stopped separately (10 wrong codes per account / IP = 15 minutes blocked).
-const LIM = { create: [6, 3600e3, 15, 3600e3], join: [40, 600e3, 600, 600e3], score: [60, 600e3, 1200, 600e3], peek: [0, 0, 300, 600e3] };
+// Third review (L3): sized for 500 people on ONE Wi-Fi each opening the invite twice (1,000 opens in a few minutes) with room to spare. The signed-out
+// preview is also counted per phone and code (the app's device token + the code + the IP: 30 / 10 min), and wrong codes block the PHONE that sent them
+// (10 = 15 minutes); the whole IP is blocked only after 200 wrong codes in 15 minutes, so one person's typos never shut out a club.
+const LIM = { create: [6, 3600e3, 15, 3600e3], join: [40, 600e3, 3000, 600e3], score: [60, 600e3, 1200, 600e3], peek: [0, 0, 3000, 600e3] }, PEEK_DEV = [30, 600e3], WRONG_IP = 200;
+const devOf = (b) => { const d = String((b && b.dev) || ''); return /^[A-Za-z0-9_-]{8,40}$/.test(d) ? d : '-'; };
 function rate(kind, who, ip) { const L = LIM[kind]; if ((who && L[0] && limit(kind + '|a|' + who, L[0], L[1])) || limit(kind + '|i|' + ip, L[2], L[3])) throw bad(429, 'Too many tries. Wait a few minutes.'); }
 const codeFail = (k) => { const t = D.now(), a = (RL.get(k) || []).filter((x) => t - x < 900e3); a.push(t); RL.set(k, a); };
-const codeBlocked = (k) => (RL.get(k) || []).filter((x) => D.now() - x < 900e3).length >= 10;
+const codeBlocked = (k, n) => (RL.get(k) || []).filter((x) => D.now() - x < 900e3).length >= (n || 10);
 
 // ---------- storage ----------
 async function load(id) { if (!/^[A-Z2-9]{10}$/.test(String(id || ''))) return null; const r = await D.S.dbGet(ROW(id)); return r && r.data && !r.data.deleted ? r : null; } // review fix 10a: a deleted event is gone
@@ -390,14 +455,33 @@ async function mutateRow(rowId, init, fn) {
 // draw, then frozen (what the draw used). userKey = the account id, or 'guest:<seat id>' for a player typed in by name.
 const usesOdd = (evt) => !!evt.rules && evt.fmt !== 'solo' && (evt.sport === 'pickleball' || evt.rules.seeding === 'oddable');
 const ratingSport = (evt) => STAT_SPORT[evt.sport] || 'other';
+// Third review M6 (Playbook play 40: one rating per sport): cornhole, darts, bowling, pool and basketball are all sport 'other' in the stats contract, with
+// the game's name in extra.game. Each NAMED game has its own rating: events asks ratingFor(userKey, 'other', {game}) and, when the rating module answers
+// without keying by game (stats-v1 e214bcf), builds that game's rating from the same records with the module's own maths (ratings.js eloSet).
+// The stats contract's rating key: the sport, or 'other:<name>' for a named game ('other:cornhole'); the unnamed "Other game" stays 'other'.
+const rtSport = (evt) => (D.rt() === STAND || typeof D.rt().rateKey === 'function' ? rateKeyOf(evt) : ratingSport(evt)); // what eventSetup / eventOverride are told: the per-game key when the rating module knows it
+const rateKeyOf = (evt) => STAT_SPORT[evt.sport] || 'other:' + String(evt.sport || 'other'); // the plain "Other game" = 'other:other', as stats.js rateKey reads its records
+async function rateFor(evt, userKey, opts) {
+  const RT = D.rt(), key = rateKeyOf(evt); if (!/^other:/.test(key)) return RT.ratingFor(userKey, key, opts || {}); const game = evt.sport; let r = null;
+  try { r = await RT.ratingFor(userKey, key, opts || {}); } catch (e) { r = null; } if (r && r.sport === key) return r; // the rating module keys by game itself
+  r = await RT.ratingFor(userKey, 'other', Object.assign({}, opts || {}, { game })); // an older module: every "other" game in one rating; split it here
+  if (!r || r.game === game || /^guest:/.test(String(userKey))) return r;
+  try { const R = realMod('./ratings'); if (!R || typeof R.eloSet !== 'function' || typeof RT.statsFor !== 'function') return r;
+    const recs = (await RT.statsFor(userKey, {})).filter((x) => x.kind === 'match' && x.sport === 'other' && x.result && (x.src === 'events' || x.src === 'self') && x.extra && x.extra.game === game).map((x) => Object.assign({}, x, { confirmed: !(x.src === 'events' && x.extra.confirmed === false) && (typeof RT.isConfirmed === 'function' ? RT.isConfirmed(x) : !!x.extra.confirmed) }));
+    const S = recs.length ? R.eloSet(recs.map((x) => (x.confirmed ? x : Object.assign({}, x, { extra: Object.assign({}, x.extra, { confirmed: false }) })))) : null, cg = S ? S.confirmedGames : 0, cr = S && cg ? S.confirmedRating : null, trn = r.setBy === 'tournament';
+    return Object.assign({}, r, { game, oddable: Object.assign({}, r.oddable, { rating: S ? S.rating : null, matches: S ? S.matches : 0, text: S ? S.text : 'No games yet' }), confirmedRating: cr, confirmedGames: cg, use: trn ? r.event : cr != null ? cr : 1500, start: !trn && cr == null });
+  } catch (e) { return r; }
+}
 const seatKey = (evt, p) => { const m = p.pid && evt.members.find((x) => x.pid === p.pid); return m ? m.ak : 'guest:' + String(p.gid).toLowerCase(); };
 const useR = (p) => (Number.isFinite(p.use) ? p.use : null);
-function entryRatings(evt) { evt.entrants.forEach((e) => { const ps = (e.players || []).filter((p) => !isBlank(p)), rs = ps.map((p) => (Number.isFinite(useR(p)) ? useR(p) : 1500)); /* no confirmed games yet = seeded at the 1500 start */ e.or = rs.length ? Math.round(rs.reduce((a, x) => a + x, 0) / rs.length) : null; e.orReal = ps.some((p) => Number.isFinite(p.or) || Number.isFinite(p.tv)); }); }
+function entryRatings(evt) { evt.entrants.forEach((e) => { const ps = (e.players || []).filter((p) => !isBlank(p)), rs = ps.map((p) => (Number.isFinite(useR(p)) ? useR(p) : Number.isFinite(p.sd) ? p.sd : 1500)); /* no confirmed games yet = seeded at the 1500 start */ e.or = rs.length ? Math.round(rs.reduce((a, x) => a + x, 0) / rs.length) : null; e.orReal = ps.some((p) => Number.isFinite(p.or) || Number.isFinite(p.tv)); }); }
 async function prepRatings(evt) {
   if (evt.drawn || !usesOdd(evt)) return; const RT = D.rt();
-  for (const e of evt.entrants) for (const p of e.players || []) { if (isBlank(p)) { delete p.or; delete p.use; delete p.tv; continue; } let r = null; try { r = await RT.ratingFor(seatKey(evt, p), ratingSport(evt), { eventId: evt.id }); } catch (x) { r = null; }
+  for (const e of evt.entrants) for (const p of e.players || []) { if (isBlank(p)) { delete p.or; delete p.use; delete p.tv; delete p.need; delete p.why; delete p.sd; continue; } let r = null; try { r = await rateFor(evt, seatKey(evt, p), { eventId: evt.id }); } catch (x) { r = null; }
     const od = (r && r.oddable) || {}, num = (v) => (v != null && Number.isFinite(Number(v)) ? Math.round(Number(v)) : null);
-    p.or = num(r && 'confirmedRating' in r ? r.confirmedRating : od.rating); p.orn = Number(od.matches) || 0; p.orc = r && Number.isFinite(Number(r.confirmedGames)) ? Number(r.confirmedGames) : null; /* the rating shown and used = confirmed games only ("x of y games confirmed") */ p.tv = r && r.setBy === 'tournament' ? num(r.event) : null; p.tat = p.tv != null ? r.at || null : null; p.treason = p.tv != null ? cleanName(r.reason, 120) : null; p.use = r ? num(r.use) : null; }
+    p.or = num(r && 'confirmedRating' in r ? r.confirmedRating : od.rating); p.orn = Number(od.matches) || 0; p.orc = r && Number.isFinite(Number(r.confirmedGames)) ? Number(r.confirmedGames) : null; /* the rating shown and used = confirmed games only ("x of y games confirmed") */ p.tv = r && r.setBy === 'tournament' ? num(r.event) : null; p.tat = p.tv != null ? r.at || null : null; p.treason = p.tv != null ? cleanName(r.reason, 120) : null; p.use = r ? num(r.use) : null;
+    // stats v1.2: `use` is null until the player's confirmed games come from 3 different accounts (then the organizer sets the number); `seed` is always a number
+    p.need = !!(r && p.tv == null && (r.needsSet === true || r.use == null)); p.why = p.need ? cleanName(r.why || 'no confirmed games yet', 90) : null; p.sd = r && num(r.seed) != null ? num(r.seed) : p.use != null ? p.use : 1500; if (!p.need) { delete p.need; delete p.why; } }
   entryRatings(evt);
 }
 const mutate = (id, fn) => mutateRow(ROW(id), null, async (data) => { const now = D.now(); await prepRatings(data); const t = tick(data, now); const out = await fn(data, now); if (out && out.nochange) { if (t) { data.u = now; return out.v; } return out; } tick(data, now); data.u = now; return out; });
@@ -421,11 +505,11 @@ const roundKey = (m) => m.id[0] + '|' + m.st + '|' + m.r;
 const roundLock = (evt, m, now) => { const p = evt.plock && evt.plock[roundKey(m)]; return !!(p && (p.locked || (p.at && now >= p.at))); };
 const pickable = (m) => ['pool', 'po', 'w', 'l', 'gf'].includes(m.st);
 const lockWhy = (evt, m, now) => { const p = (evt.plock || {})[roundKey(m)] || {}; // which lock applied (button, lock time, or play)
-  if (p.locked) return 'Picks for this round were locked by the commissioner' + (p.by ? ' (' + p.by + ')' : '') + '.'; if (p.at && now >= p.at) return 'Picks for this round locked at the lock time the commissioner set.';
-  if (m.live || PLAYED.has(m.state) || DONE.has(m.state)) return 'Picks for this match locked when it started.'; return 'Picks for this round locked when its first match started or got a score.'; };
+  if (p.locked) return 'Picks for this round were closed by the commissioner' + (p.by ? ' (' + p.by + ')' : '') + '.'; if (p.at && now >= p.at) return 'Picks for this round closed at the closing time the commissioner set.';
+  if (m.live || PLAYED.has(m.state) || DONE.has(m.state)) return 'Picks for this match closed when it started.'; return 'Picks for this round closed when its first match started or got a score.'; };
 const pickLocked = (evt, m, now) => locked(m, now) || roundLock(evt, m, now) || evt.matches.some((x) => x !== m && roundKey(x) === roundKey(m) && (x.live || PLAYED.has(x.state) || x.state === 'confirmed'));
 function pub(evt, now) {
-  return { id: evt.id, title: evt.title, sport: evt.sport, fmt: evt.fmt, fmtName: FMTN[evt.fmt], start: evt.start, endDay: evt.endDay, rules: evt.rules, money: evt.money, join: evt.join, takeText: takeText(evt.money), pot: potSummary(evt),
+  return { group: evt.group ? { id: evt.group.gid } : null, id: evt.id, title: evt.title, sport: evt.sport, fmt: evt.fmt, fmtName: FMTN[evt.fmt], start: evt.start, endDay: evt.endDay, rules: evt.rules, money: evt.money, join: evt.join, takeText: takeText(evt.money), pot: potSummary(evt),
     entries: evt.entrants.length, people: people(evt), commName: (evt.members.find((m) => m.mk === evt.comm) || {}).name || '', started: now >= evt.start, drawn: !!evt.drawn, locked: now >= evt.start || !!evt.drawn, fin: evt.fin || 0, inGroup: !!evt.group, entText: limits.ENTERPRISE_TEXT };
 }
 function full(evt, mk, now, cap) {
@@ -434,14 +518,16 @@ function full(evt, mk, now, cap) {
   const seedIx = (id) => (evt.seeds || []).indexOf(id), odd = usesOdd(evt);
   o.entrants = evt.entrants.map((e) => ({ eid: e.eid, name: e.name, rating: e.rating == null ? null : e.rating, seed: seedIx(e.eid) + 1 || null, linked: pidsOf(e).length, open: (e.players || []).filter((p) => !p.pid).length, oddRating: e.or == null ? null : e.or,
     players: (e.players || []).map((p) => Object.assign({ gid: p.gid, name: p.name, guest: !p.pid, me: !!(me && p.pid === me.pid), blank: isBlank(p), paid: isBlank(p) ? false : seatPaid(evt, p) }, comm && !p.pid ? { claim: evt.code + '.' + p.ct } : {},
-      odd && !isBlank(p) ? { odd: Number.isFinite(p.or) || p.orn ? { rating: Number.isFinite(p.or) ? p.or : null, matches: p.orn || 0, confirmed: Number.isFinite(p.orc) ? p.orc : Number.isFinite(p.or) ? p.orn || 0 : 0 } : null, trn: Number.isFinite(p.tv) ? { v: p.tv, at: p.tat || null, reason: p.treason || '' } : null, use: useR(p) } : {})) }));
+      odd && !isBlank(p) ? { odd: Number.isFinite(p.or) || p.orn ? { rating: Number.isFinite(p.or) ? p.or : null, matches: p.orn || 0, confirmed: Number.isFinite(p.orc) ? p.orc : Number.isFinite(p.or) ? p.orn || 0 : 0 } : null, trn: Number.isFinite(p.tv) ? { v: p.tv, at: p.tat || null, reason: p.treason || '' } : null, use: useR(p), seed: Number.isFinite(p.sd) ? p.sd : useR(p) != null ? useR(p) : 1500, needsSet: !!p.need, why: p.need ? p.why : undefined } : {})) }));
+  o.seedSet = Array.isArray(evt.seedSet) && evt.rules.seeding !== 'random'; o.moneyEvent = Number(evt.money.entry) > 0; o.seedPlan = comm && !evt.drawn && evt.fmt !== 'solo' && evt.rules.seeding !== 'random' ? seedList(evt) : null; // the seeds the draw would use now (organizer only)
+  o.seedNeed = odd && !evt.drawn ? needSeats(evt).map((p) => p.name) : []; // players whose rating cannot be used yet: in a money event the organizer sets the seeds
   o.odd = odd; o.ent = !!ENTF.get(evt.id); o.tlog = (evt.tlog || []).slice(-100).reverse(); o.teams = UNITS[evt.rules.unit] > 1 && evt.fmt !== 'solo';
   o.members = evt.members.map((m) => ({ pid: m.pid, name: m.name, role: m.role, paid: !!m.paid, comm: m.mk === evt.comm, plays: evt.entrants.some((e) => pidsOf(e).includes(m.pid)) })); // plays: false = no entry owed (a non-playing organizer, a spectator)
-  const np = evt.drawn ? [] : needPartner(evt); o.hold = np.length ? { names: np.map((e) => e.name), eids: np.map((e) => e.eid), late: now >= evt.start } : null; o.notice = evt.notice && now - evt.notice.at < 3 * DAY ? evt.notice : null; o.poHold = evt.poHold || null;
+  const np = evt.drawn ? [] : needPartner(evt); o.hold = np.length ? { names: np.map((e) => e.name), eids: np.map((e) => e.eid), late: now >= evt.start } : null; o.notices = noticesOf(evt, now); o.notice = o.notices[0] || null; o.moneyFinal = othersIn(evt); o.poHold = evt.poHold || null;
   o.matches = evt.matches.map((m) => { const s = sideOf(evt, mk, m); return { id: m.id, st: m.st, r: m.r, pool: m.pool, court: m.court, wave: m.wave, a: m.a, b: m.b, an: nameOf(evt, m.a), bn: nameOf(evt, m.b), state: m.state, games: m.games, win: m.win, v: m.v, live: !!m.live, start: m.start || null, exp: m.exp || null, forfeit: !!m.forfeit, reset: !!m.reset, rule: m.reset && evt.rules.reset === 'game15' ? { to: 15, winBy: 2, bestOf: 1 } : null,
     sub: m.sub ? { side: m.sub.side, games: m.sub.games, by: m.sub.by, at: m.sub.at, note: m.sub.note || '' } : null, mine: s, canScore: canScore(evt, mk, m, now).ok, canConfirm: canConfirm(evt, mk, m).ok, needsComm: m.state === 'disputed' || (m.state === 'pending' && !linked(evt, m.sub && m.sub.side === 'a' ? m.b : m.a)) }; });
   o.byes = evt.byes || {}; o.pools = evt.pools || null;
-  if (evt.fmt === 'rr' && evt.drawn) { o.ties = openTies(evt).map((t) => ({ key: t.key, names: t.eids.map((e) => nameOf(evt, e)), game: t.game, matches: t.eids.length - 1 })); o.poStarted = poStarted(evt); o.hasPlayoff = !!evt.poSeeds; o.tbLog = Object.values(evt.tb || {}).map((t) => ({ how: t.how, at: t.at, by: t.by, text: t.text })); }
+  if (evt.fmt === 'rr' && evt.drawn) { o.ties = openTies(evt).map((t) => ({ key: t.key, names: t.eids.map((e) => nameOf(evt, e)), game: t.game, matches: t.eids.length - 1, cross: !!t.x, spots: t.spots || null, pos: t.pos || null })); o.wild = wildView(evt); o.poStarted = poStarted(evt); o.hasPlayoff = !!evt.poSeeds; o.tbLog = Object.values(evt.tb || {}).map((t) => ({ how: t.how, at: t.at, by: t.by, text: t.text })); }
   if (evt.fmt === 'rr' && evt.drawn) o.tables = (evt.pools || []).map((p, i) => poolTable(evt, p, i).map((r) => Object.assign(r, { name: nameOf(evt, r.eid) })));
   if (evt.fmt === 'h2h' || evt.fmt === 'ladder' || evt.rules.side) o.records = h2hTable(evt).map((r) => Object.assign(r, { name: nameOf(evt, r.eid) }));
   if (evt.fmt === 'solo') o.solo = soloRows(evt);
@@ -476,10 +562,13 @@ function canConfirm(evt, mk, m) {
   const s = sideOf(evt, mk, m); if (s && s === m.sub.side) return { ok: false }; // nobody confirms their own side's score, the commissioner included
   if (s) return { ok: true }; return isComm(evt, mk) ? { ok: true, comm: true } : { ok: false };
 }
-const seats = (evt, eid) => { const e = evt.entrants.find((x) => x.eid === eid); return e ? (e.players || []).filter((p) => !isBlank(p)).map((p) => ({ gid: p.gid, pid: p.pid || null, name: p.name })) : []; };
+// The people on a side as frozen on the match. k = the account's key in the STATS form ('a:' + sha256('oddable-opp|' + stats member key).slice(0, 12), the
+// same key stats.js builds for a self-logged match, so the two can be matched): a hash, never the account id. Typed-in players have no k.
+const sKey = (ak) => 'a:' + crypto.createHash('sha256').update('oddable-opp|' + crypto.createHash('sha256').update('oddable-group|' + ak).digest('hex').slice(0, 24)).digest('hex').slice(0, 12);
+const seats = (evt, eid) => { const e = evt.entrants.find((x) => x.eid === eid); return e ? (e.players || []).filter((p) => !isBlank(p)).map((p) => { const m = p.pid && evt.members.find((x) => x.pid === p.pid); return Object.assign({ gid: p.gid, pid: p.pid || null, name: p.name }, m && m.ak ? { k: sKey(m.ak) } : {}); }) : []; };
 // Playbook fix (manager, Nov 16 2026): every match record carries the ratings of the people in it, so the Oddable rating is a real Elo (beating a
 // higher-rated opponent gains more). snapRatings reads each seat's lifetime Oddable rating (never a tournament rating) just before the result is saved.
-async function snapRatings(evt, m) { const out = {}, RT = D.rt(); if (!m) return out; for (const eid of [m.a, m.b]) { const e = evt.entrants.find((x) => x.eid === eid); for (const p of (e && e.players) || []) { if (isBlank(p)) continue; try { const r = await RT.ratingFor(seatKey(evt, p), ratingSport(evt)), v = r && 'confirmedRating' in r ? r.confirmedRating : r && r.oddable ? r.oddable.rating : null; if (v != null && Number.isFinite(Number(v))) out[p.gid] = Math.round(Number(v)); } catch (x) {} } } return out; }
+async function snapRatings(evt, m) { const out = {}, RT = D.rt(); if (!m) return out; for (const eid of [m.a, m.b]) { const e = evt.entrants.find((x) => x.eid === eid); for (const p of (e && e.players) || []) { if (isBlank(p)) continue; try { const r = await rateFor(evt, seatKey(evt, p)), v = r && 'confirmedRating' in r ? r.confirmedRating : r && r.oddable ? r.oddable.rating : null; if (v != null && Number.isFinite(Number(v))) out[p.gid] = Math.round(Number(v)); } catch (x) {} } } return out; }
 function settle(evt, m, now, snap) { // a confirmed result takes effect. The people on each side are frozen on the match (doubles: both players), with their ratings at that moment
   const withR = (list) => list.map((p) => (snap && snap[p.gid] != null ? Object.assign(p, { r: snap[p.gid] }) : p));
   m.pp = { a: withR(seats(evt, m.a)), b: withR(seats(evt, m.b)) }; RC.clear();
@@ -503,7 +592,7 @@ function pickemView(evt, me, now) {
   const P = evt.picks || {}, mine = me && P[me.pid] ? P[me.pid] : { m: {} }, t = pickTable(evt), cnt = {};
   evt.matches.forEach((m) => { if (!pickLocked(evt, m, now)) return; let a = 0, b = 0; Object.values(P).forEach((p) => { const k = p.m && p.m[m.id]; if (k && k.s === 'a') a++; else if (k && k.s === 'b') b++; }); cnt[m.id] = { a, b }; }); // others' picks only as counts, and only once the match is locked
   const fm = finalMatch(evt), tbOpen = !!evt.fin || !!(fm && pickLocked(evt, fm, now)); // review fix 8: others' tiebreak guesses only once the final has locked
-  return { mine: mine.m || {}, tb: mine.tb == null ? null : mine.tb, table: t.rows.map((r) => (tbOpen || (me && r.pid === me.pid) ? r : Object.assign({}, r, { tb: null }))), finalTotal: t.finalTotal, counts: cnt, open: evt.matches.filter((m) => pickable(m) && m.state === 'ready' && !pickLocked(evt, m, now) && m.a && m.b && m.a !== 'BYE' && m.b !== 'BYE' && !(me && sideOf(evt, me.mk, m))).map((m) => m.id), own: me ? evt.matches.filter((m) => pickable(m) && sideOf(evt, me.mk, m)).map((m) => m.id) : [], pts: (() => { const o = {}; evt.matches.forEach((m) => { if (pickable(m)) o[m.id] = pickPoints(evt, m); }); return o; })(),
+  return { mine: mine.m || {}, voided: Object.keys(mine.void || {}).map((k) => { const m = evt.matches.find((x) => x.id === k); return { m: k, an: m ? nameOf(evt, m.a) : null, bn: m ? nameOf(evt, m.b) : null, s: mine.void[k].s, at: mine.void[k].at }; }), tb: mine.tb == null ? null : mine.tb, table: t.rows.map((r) => (tbOpen || (me && r.pid === me.pid) ? r : Object.assign({}, r, { tb: null }))), finalTotal: t.finalTotal, counts: cnt, open: evt.matches.filter((m) => pickable(m) && m.state === 'ready' && !pickLocked(evt, m, now) && m.a && m.b && m.a !== 'BYE' && m.b !== 'BYE' && !(me && sideOf(evt, me.mk, m))).map((m) => m.id), own: me ? evt.matches.filter((m) => pickable(m) && sideOf(evt, me.mk, m)).map((m) => m.id) : [], pts: (() => { const o = {}; evt.matches.forEach((m) => { if (pickable(m)) o[m.id] = pickPoints(evt, m); }); return o; })(),
     rounds: (() => { const by = {}; evt.matches.filter((m) => pickable(m) && m.state !== 'bye').forEach((m) => { const k = roundKey(m), p = (evt.plock || {})[k] || {}; const r = by[k] = by[k] || { key: k, label: matchLabel(m), lockAt: p.at || null, locked: false, how: null, matches: 0 }; r.matches++; if (!r.locked && pickLocked(evt, m, now)) { r.locked = true; r.how = p.locked ? 'button' : p.at && now >= p.at ? 'time' : 'play'; } }); return Object.values(by); })() };
 }
 
@@ -517,47 +606,14 @@ function addEntrant(evt, name, rating, by, now, players) {
   const size = UNITS[evt.rules.unit] || 1; let nm = cleanName(name, 40); const typed = (Array.isArray(players) ? players : size > 1 ? String(name || '').split(/\s*(?:\/|&|\+| and )\s*/i) : [name]).map((x) => cleanName(x, 24)).filter(Boolean).slice(0, size);
   if (!nm && typed.length) nm = typed.join(' / '); if (nm.length < 1) throw bad(400, 'Type a name');
   if (evt.entrants.some((e) => e.name.toLowerCase() === nm.toLowerCase())) throw bad(409, 'That name is already in the event');
-  let r = null; if (rating !== '' && rating != null) { r = Number(rating); if (!(Number.isFinite(r) && r >= 0 && r <= 9999)) throw bad(400, 'Rating: a number from 0 to 9999 (e.g. DUPR 4.25)'); r = Math.round(r * 1000) / 1000; }
+  let r = null; if (rating !== '' && rating != null) { r = Number(rating); if (!(Number.isFinite(r) && r >= 0 && r <= 9999)) throw bad(400, 'Rating: a number from 0 to 9999 (e.g. 3.5 skill level)'); r = Math.round(r * 1000) / 1000; }
   const pl = []; for (let i = 0; i < size; i++) pl.push(Object.assign({ gid: 'g' + rnd(8), ct: rnd(10), name: typed[i] || (i ? 'Partner ' + (i + 1) : nm), pid: null }, typed[i] || !i ? {} : { blank: true })); // blank = an unnamed partner spot anyone with the link may take (review fix 2); named seats need their claim code
   const e = { eid: newEid(evt), name: nm, rating: r, players: pl, at: now, by }; evt.entrants.push(e); return e;
 }
-async function handle(req, res) {
-  const path = req.url.split('?')[0]; if (!path.startsWith('/events')) return false;
-  if (req.method !== 'POST') { send(res, 405, { error: 'POST only' }); return true; }
-  try {
-    const b = await body(req), ip = D.ip(req), op = path.slice(8);
-    if (op === 'peek') { // PUBLIC: a shared link shows only the event's title and kind before sign-up
-      rate('peek', null, ip); if (codeBlocked('ec|i|' + ip)) throw bad(429, 'Too many wrong codes. Wait 15 minutes.');
-      const code = normCode(b.code), id = code ? await byCode(code) : null, evt = id ? (await load(id) || {}).data : null;
-      if (!evt) { codeFail('ec|i|' + ip); throw bad(404, 'No event with that code'); }
-      send(res, 200, { title: evt.title, kind: FMTN[evt.fmt] + ' · ' + evt.sport }); return true;
-    }
-    const u = await me(req), now = D.now();
-    if (op === 'mine') {
-      const ix = await D.S.dbGet(IDX), ev = (ix && ix.data && ix.data.ev) || {}, out = [];
-      for (const id of Object.keys(ev)) { if (!(ev[id].mk || []).includes(u.mk)) continue; const r = await load(id); if (!r) continue; const evt = r.data; tick(evt, now); const o = pub(evt, now), m = memberOf(evt, u.mk); o.role = isComm(evt, u.mk) ? 'comm' : m ? m.role : 'none'; const mp = m && evt.places ? evt.entrants.filter((e) => pidsOf(e).includes(m.pid)).map((e) => evt.places[e.eid]).filter(Boolean)[0] : null; o.myPlace = mp || null; o.todo = evt.matches.filter((x) => canConfirm(evt, u.mk, x).ok || (x.state === 'ready' && canScore(evt, u.mk, x, now).ok && sideOf(evt, u.mk, x))).length; out.push(o); if (out.length >= 40) break; }
-      out.sort((a, c) => (a.fin ? 1 : 0) - (c.fin ? 1 : 0) || a.start - c.start); send(res, 200, { events: out, now }); return true;
-    }
-    if (op === 'create') {
-      rate('create', u.mk, ip); const R = cleanRules(b, now), cap = await capFor(u.e, ''), isEnt = await entFor(u.e);
-      const nm = cleanName(b.myName, 24) || 'Organizer'; let id; do { id = rnd(10); } while (await D.S.dbGet(ROW(id)));
-      const evt = Object.assign({ id, code: newCode(), comm: u.mk, ce: u.e, created: now, u: now, members: [], entrants: [], matches: [], picks: {}, audit: [], ops: [] }, R);
-      evt.members.push({ pid: newPid(evt), mk: u.mk, ak: u.e, name: nm, role: 'comm', joined: now, paid: false });
-      const list = Array.isArray(b.entrants) ? b.entrants.slice(0, cap) : []; list.forEach((x) => addEntrant(evt, x && x.name, x && x.rating, u.mk, now));
-      if (b.playIn) { const e = addEntrant(evt, b.entryName || nm, b.myRating, u.mk, now); e.players[0].pid = evt.members[0].pid; e.players[0].name = nm; }
-      if (people(evt) > cap) throw bad(403, fullMsg(cap));
-      ENTF.set(id, isEnt); if (isEnt && usesOdd(evt)) { try { await D.rt().eventSetup(u.e, id, { title: evt.title, sport: ratingSport(evt), lockAt: evt.start }); } catch (x) { if (!x.status) console.error('events eventSetup:', x.message); } } // E-H: register the Enterprise tournament with the rating module
-      await prepRatings(evt); audit(evt, now, nm, 'create', null, 'Event created'); tick(evt, now);
-      await D.S.dbPut({ id: ROW(id), salt: 'x', pinhash: 'x', data: evt, updated: now }, true); await idxSet(id, () => idxEntry(evt));
-      send(res, 200, { event: full(evt, u.mk, now, cap) }); return true;
-    }
-    if (op === 'preview' || op === 'join') {
-      if (codeBlocked('ec|a|' + u.mk) || codeBlocked('ec|i|' + ip)) throw bad(429, 'Too many wrong codes. Wait 15 minutes.');
-      rate('join', u.mk, ip); const code = normCode(b.code), id = code ? await byCode(code) : null;
-      if (!id) { codeFail('ec|a|' + u.mk); codeFail('ec|i|' + ip); throw bad(404, 'No event with that code'); }
-      if (op === 'preview') { const r = await load(id); if (!r) throw bad(404, 'No event with that code'); const evt = r.data; tick(evt, now); const cap = await capOf(evt); const o = memberOf(evt, u.mk) ? full(evt, u.mk, now, cap) : Object.assign(pub(evt, now), { role: 'none', cap, open: !evt.join.self ? [] : evt.entrants.filter((e) => (e.players || []).some(isBlank)).map((e, i) => ({ eid: e.eid, name: pidsOf(e).length ? e.name : 'Open spot ' + (i + 1), open: (e.players || []).filter(isBlank).length, seats: (e.players || []).filter(isBlank).map((p) => ({ gid: p.gid, name: 'Partner spot' })) })) }); send(res, 200, { event: o }); return true; }
-      const r0 = await load(id), cap = r0 ? await capOf(r0.data) : 8, as = b.as === 'spectator' ? 'spectator' : 'player', nm = cleanName(b.myName, 24) || 'Player';
-      const evt = await mutate(id, (evt, now) => {
+// One way into an event as a player or a spectator: the `join` route (invite code) and the `gjoin` route (from the event's group) both end here.
+async function joinEvent(id, u, b) {
+  const r0 = await load(id), cap = r0 ? await capOf(r0.data) : 8, as = b.as === 'spectator' ? 'spectator' : 'player', nm = cleanName(b.myName, 24) || 'Player';
+  const evt = await mutate(id, (evt, now) => {
         const m0 = memberOf(evt, u.mk); if (m0 && (as === 'spectator' || evt.entrants.some((e) => pidsOf(e).includes(m0.pid)))) return { nochange: true, v: evt };
         if (as === 'player' && (now >= evt.start || evt.drawn)) throw bad(409, 'Entries closed when the event started' + (evt.join.spectators ? '. You can still join to watch' + (evt.rules.pickem ? ' and pick' : '') + '.' : '.'));
         if (as === 'spectator' && !evt.join.spectators) throw bad(409, 'This event has no spectators');
@@ -572,24 +628,87 @@ async function handle(req, res) {
         } else audit(evt, now, m.name, 'join', null, 'Joined to watch');
         if (people(evt) > cap) throw bad(403, fullMsg(cap));
         return evt;
-      });
-      await idxSet(id, () => idxEntry(evt)); send(res, 200, { event: full(evt, u.mk, now, cap) }); return true;
+  });
+  return { evt, cap };
+}
+const previewOf = (evt, now, cap) => Object.assign(pub(evt, now), { role: 'none', cap, open: !evt.join.self ? [] : evt.entrants.filter((e) => (e.players || []).some(isBlank)).map((e, i) => ({ eid: e.eid, name: pidsOf(e).length ? e.name : 'Open spot ' + (i + 1), open: (e.players || []).filter(isBlank).length, seats: (e.players || []).filter(isBlank).map((p) => ({ gid: p.gid, name: 'Partner spot' })) })) });
+// ---------- an event that belongs to a group ----------
+// Who is in a group: the Groups engine's own memberCheck when it is in the build, else the group's row (same member key as Groups). Unreadable = not a member.
+async function groupRole(groupId, accountId) {
+  try { const gid = String(groupId || ''); if (!/^[\w:-]{1,40}$/.test(gid) || !accountId) return null; const G = D.groups();
+    if (G && typeof G.memberCheck === 'function') { const r = await G.memberCheck(gid, accountId); return r && r.member ? (r.comm ? 'comm' : 'member') : null; }
+    const mk = crypto.createHash('sha256').update('oddable-group|' + accountId).digest('hex').slice(0, 24), r1 = await D.S.dbGet('lock:grp:' + gid), g = r1 && r1.data; if (!g || g.deleted) return null; return g.comm === mk ? 'comm' : (g.members || []).some((m) => m.mk === mk) ? 'member' : null;
+  } catch (e) { return null; }
+}
+async function needGroup(evt, u) { if (memberOf(evt, u.mk)) return; if (!(await groupRole(evt.group.gid, u.e))) throw Object.assign(bad(403, 'Join the group first: this event is for its members.'), { code: 'group' }); }
+async function handle(req, res) {
+  const path = req.url.split('?')[0]; if (!path.startsWith('/events')) return false;
+  if (req.method !== 'POST') { send(res, 405, { error: 'POST only' }); return true; }
+  try {
+    const b = await body(req), ip = D.ip(req), op = path.slice(8);
+    if (op === 'peek') { // PUBLIC: a shared link shows only the event's title and kind before sign-up
+      const dev = devOf(b), kd = 'ec|d|' + ip + '|' + dev, code = normCode(b.code); rate('peek', null, ip); if (dev !== '-' && limit('peek|d|' + ip + '|' + dev + '|' + code, PEEK_DEV[0], PEEK_DEV[1])) throw bad(429, 'Too many tries. Wait a few minutes.'); // an app version that sends no device id is held by the IP limits only
+      if ((dev !== '-' && codeBlocked(kd)) || codeBlocked('ec|i|' + ip, WRONG_IP)) throw bad(429, 'Too many wrong codes. Wait 15 minutes.');
+      const id = code ? await byCode(code) : null, evt = id ? (await load(id) || {}).data : null;
+      if (!evt) { if (dev !== '-') codeFail(kd); codeFail('ec|i|' + ip); throw bad(404, 'No event with that code'); }
+      send(res, 200, { title: evt.title, kind: FMTN[evt.fmt] + ' · ' + evt.sport }); return true;
+    }
+    const u = await me(req), now = D.now();
+    if (op === 'mine') {
+      const ix = await D.S.dbGet(IDX), ev = (ix && ix.data && ix.data.ev) || {}, out = [];
+      for (const id of Object.keys(ev)) { if (!(ev[id].mk || []).includes(u.mk)) continue; const r = await load(id); if (!r) continue; const evt = r.data; tick(evt, now); const o = pub(evt, now), m = memberOf(evt, u.mk); o.role = isComm(evt, u.mk) ? 'comm' : m ? m.role : 'none'; const mp = m && evt.places ? evt.entrants.filter((e) => pidsOf(e).includes(m.pid)).map((e) => evt.places[e.eid]).filter(Boolean)[0] : null; o.myPlace = mp || null; o.todo = evt.matches.filter((x) => canConfirm(evt, u.mk, x).ok || (x.state === 'ready' && canScore(evt, u.mk, x, now).ok && sideOf(evt, u.mk, x))).length; out.push(o); if (out.length >= 40) break; }
+      out.sort((a, c) => (a.fin ? 1 : 0) - (c.fin ? 1 : 0) || a.start - c.start); send(res, 200, { events: out, now }); return true;
+    }
+    if (op === 'create') {
+      rate('create', u.mk, ip); const R = cleanRules(b, now), cap = await capFor(u.e, ''), isEnt = await entFor(u.e);
+      // Created from a group hub (OddJoin.openGame('events', '', {groupId, create: true})): only that group's commissioner, checked BEFORE anything is saved.
+      const forGroup = b.groupId != null && b.groupId !== '' ? String(b.groupId) : ''; if (forGroup) { if (!/^[\w:-]{1,40}$/.test(forGroup)) throw bad(400, 'Which group?'); if ((await groupRole(forGroup, u.e)) !== 'comm') throw Object.assign(bad(403, "Only the group's commissioner can add a game to the group."), { code: 'groupcomm' }); }
+      const nm = cleanName(b.myName, 24) || 'Organizer'; let id; do { id = rnd(10); } while (await D.S.dbGet(ROW(id)));
+      const evt = Object.assign({ id, code: newCode(), comm: u.mk, ce: u.e, created: now, u: now, members: [], entrants: [], matches: [], picks: {}, audit: [], ops: [] }, R);
+      evt.members.push({ pid: newPid(evt), mk: u.mk, ak: u.e, name: nm, role: 'comm', joined: now, paid: false });
+      const list = Array.isArray(b.entrants) ? b.entrants.slice(0, cap) : []; list.forEach((x) => addEntrant(evt, x && x.name, x && x.rating, u.mk, now));
+      if (b.playIn) { const e = addEntrant(evt, b.entryName || nm, b.myRating, u.mk, now); e.players[0].pid = evt.members[0].pid; e.players[0].name = nm; }
+      if (people(evt) > cap) throw bad(403, fullMsg(cap));
+      ENTF.set(id, isEnt); if (isEnt && usesOdd(evt)) { try { await D.rt().eventSetup(u.e, id, { title: evt.title, sport: rtSport(evt), lockAt: evt.start }); } catch (x) { if (!x.status) console.error('events eventSetup:', x.message); } } // E-H: register the Enterprise tournament with the rating module
+      await prepRatings(evt); audit(evt, now, nm, 'create', null, 'Event created'); tick(evt, now);
+      await D.S.dbPut({ id: ROW(id), salt: 'x', pinhash: 'x', data: evt, updated: now }, true); await idxSet(id, () => idxEntry(evt));
+      let ev2 = evt, groupError; if (forGroup) { try { const G = D.groups(); let at = null; if (G && typeof G.attachGame === 'function') at = await G.attachGame(forGroup, u.e, { type: 'event', ref: id, name: evt.title, pot: evt.money.pot }); /* Groups lists it as a contest and, when it is wired (groups.wire), calls attachToGroup back */ await attachToGroup(id, forGroup, (at && at.cid) || ''); ev2 = (await load(id)).data; } catch (x) { groupError = x.status ? x.message : 'The event was created, but it could not be added to the group. Add it from the group.'; if (!x.status) console.error('events group attach:', x.message); } }
+      send(res, 200, Object.assign({ event: full(ev2, u.mk, now, cap) }, groupError ? { groupError } : {})); return true;
+    }
+    if (op === 'preview' || op === 'join') {
+      if (codeBlocked('ec|a|' + u.mk) || codeBlocked('ec|i|' + ip, WRONG_IP)) throw bad(429, 'Too many wrong codes. Wait 15 minutes.');
+      rate('join', u.mk, ip); const code = normCode(b.code), id = code ? await byCode(code) : null;
+      if (!id) { codeFail('ec|a|' + u.mk); codeFail('ec|i|' + ip); throw bad(404, 'No event with that code'); }
+      if (op === 'preview') { const r = await load(id); if (!r) throw bad(404, 'No event with that code'); const evt = r.data; tick(evt, now); const cap = await capOf(evt); const o = memberOf(evt, u.mk) ? full(evt, u.mk, now, cap) : previewOf(evt, now, cap); if (evt.group && o.role === 'none') o.groupOnly = !(await groupRole(evt.group.gid, u.e)); send(res, 200, { event: o }); return true; }
+      const r0 = await load(id); if (r0 && r0.data.group) await needGroup(r0.data, u); // an event that belongs to a group is for that group's members, also by code
+      const { evt, cap } = await joinEvent(id, u, b); await idxSet(id, () => idxEntry(evt)); send(res, 200, { event: full(evt, u.mk, now, cap) }); return true;
+    }
+    // JOIN FROM THE GROUP (integration, Nov 16 2026; like /calcutta/gjoin): an event that is on a group is opened and joined by ANY MEMBER OF THAT GROUP with
+    // the event's id (the group hub has it; no invite code needed). { preview: true } = look first. Everybody else: 403 code 'group'. The people cap holds.
+    if (op === 'gjoin') {
+      rate('join', u.mk, ip); const gid = String(b.id || ''), r0 = await load(gid); if (!r0 || !r0.data.group) throw bad(404, 'Event not found'); await needGroup(r0.data, u);
+      if (b.preview) { const evt = r0.data; tick(evt, now); const cap = await capOf(evt); send(res, 200, { event: memberOf(evt, u.mk) ? full(evt, u.mk, now, cap) : previewOf(evt, now, cap) }); return true; }
+      const { evt, cap } = await joinEvent(gid, u, b); await idxSet(gid, () => idxEntry(evt)); send(res, 200, { event: full(evt, u.mk, now, cap) }); return true;
     }
     if (op === 'claim') { // a guest typed in by name claims their seat (and every result it has) into this account: code + the guest's claim token
-      if (codeBlocked('ec|a|' + u.mk) || codeBlocked('ec|i|' + ip)) throw bad(429, 'Too many wrong codes. Wait 15 minutes.'); rate('join', u.mk, ip);
+      if (codeBlocked('ec|a|' + u.mk) || codeBlocked('ec|i|' + ip, WRONG_IP)) throw bad(429, 'Too many wrong codes. Wait 15 minutes.'); rate('join', u.mk, ip);
       const parts = String(b.claim || '').toUpperCase().split('.'), code = normCode(parts[0]), ct = String(parts[1] || '').replace(/[^A-Z0-9]/g, ''), eid0 = code && ct.length === 10 ? await byCode(code) : null;
       if (!eid0) { codeFail('ec|a|' + u.mk); codeFail('ec|i|' + ip); throw bad(404, 'That claim code does not match'); }
-      const nm = cleanName(b.myName, 24) || 'Player';
+      const nm = cleanName(b.myName, 24) || 'Player', rg = await load(eid0); if (rg && rg.data.group) await needGroup(rg.data, u);
       const evt = await mutate(eid0, (evt, now) => { let seat = null, ent = null; evt.entrants.forEach((e) => (e.players || []).forEach((p) => { if (!p.pid && p.ct && sameCode(p.ct, ct)) { seat = p; ent = e; } }));
         if (!seat) { codeFail('ec|a|' + u.mk); codeFail('ec|i|' + ip); throw bad(404, 'That claim code does not match (or was already used)'); }
         let m = memberOf(evt, u.mk); if (m && pidsOf(ent).includes(m.pid)) throw bad(409, 'You are already in ' + ent.name);
         const mine = m && evt.entrants.find((e) => pidsOf(e).includes(m.pid)); if (mine) throw bad(409, 'You already have an entry in this event (' + mine.name + '). One account, one entry: a claim code cannot add a second.');
         if (!m) { m = { pid: newPid(evt), mk: u.mk, ak: u.e, name: nm, role: 'player', joined: now, paid: false }; evt.members.push(m); restorePicks(evt, m); } else if (m.role === 'spectator') m.role = 'player';
-        seat.orig = seat.orig || seat.name; seat.pid = m.pid; seat.claimed = now; if (seat.paid) m.paid = true; /* the organizer had marked the typed-in player paid */ audit(evt, now, m.name, 'claim', null, 'Claimed the guest seat "' + seat.name + '" in ' + ent.name); return evt; });
+        seat.orig = seat.orig || seat.name; seat.pid = m.pid; seat.claimed = now; if (seat.paid) m.paid = true; delete seat.paid; /* the "paid" mark moves to the account (one mark per player: L1, no stale copy on the seat) */ audit(evt, now, m.name, 'claim', null, 'Claimed the guest seat "' + seat.name + '" in ' + ent.name);
+        // Third review M3: taking a seat makes this account a player in that entry's matches. Its picks on those matches are voided (kept as a record, never scored) and it cannot pick them from now on (sideOf).
+        const vd = voidOwnPicks(evt, m, ent, now); if (vd.length) { const txt = m.name + ' took the seat "' + seat.orig + '" in ' + ent.name + ', so ' + (vd.length > 1 ? 'their ' + vd.length + ' picks on their own matches were' : 'their pick on their own match was') + ' voided (' + vd.map((x) => nameOf(evt, x.a) + ' v ' + nameOf(evt, x.b)).join('; ').slice(0, 300) + '). Players cannot pick matches they play in.'; audit(evt, now, 'Oddable', 'pickvoid', null, txt); notify(evt, now, 'Oddable', txt); }
+        return evt; });
       await idxSet(eid0, () => idxEntry(evt)); send(res, 200, { event: full(evt, u.mk, now, await capOf(evt)) }); return true;
     }
     const id = String(b.id || ''); const r0 = await load(id); if (!r0) throw bad(404, 'Event not found');
-    const known = memberOf(r0.data, u.mk); if (!known) throw bad(404, 'Event not found'); // private: members only (non-members use the invite code)
+    const known = memberOf(r0.data, u.mk); if (!known && op === 'leave' && D.now() - (GONE.get(id + '|' + u.mk) || 0) < 120e3) { send(res, 200, { ok: true }); return true; } // L9: the same Leave tap arriving twice
+    if (!known) throw bad(404, 'Event not found'); // private: members only (non-members use the invite code)
     const cap = await capOf(r0.data), isEnt = !!ENTF.get(id);
     if (op === 'get') {
       if (op === 'get' && b.since && Number(b.since) === Number(r0.data.u) && !(r0.data.start <= now && !r0.data.drawn) && !r0.data.matches.some((m) => m.exp && now > m.exp && m.state === 'ready') && !(r0.data.endDay && !r0.data.fin && now > chiEnd(r0.data.endDay)) && !Object.values(r0.data.plock || {}).some((p) => p.at && now >= p.at && now - p.at < 90e3) && !(r0.data.fmt === 'rr' && !r0.data.fin && r0.data.drawn && rrAuto(r0.data, now))) { send(res, 200, { same: true, u: r0.data.u }); return true; } // cheap poll (review fix 10c: not after the last day)
@@ -597,12 +716,20 @@ async function handle(req, res) {
     }
     const ok = (evt) => { send(res, 200, { event: full(evt, u.mk, D.now(), cap) }); return true; };
     const comm = (evt) => { if (!isComm(evt, u.mk)) throw bad(403, 'Only the commissioner can do that'); };
-    const notLocked = (evt, now) => { if (now >= evt.start || evt.drawn) throw bad(409, 'Rules are locked. The event has started.'); };
-    if (op === 'edit') { const evt = await mutate(id, (evt, now) => { comm(evt); notLocked(evt, now); const R = cleanRules(b, now); Object.assign(evt, R); if (people(evt) > cap) throw bad(403, fullMsg(cap)); audit(evt, now, 'Commissioner', 'edit', null, 'Rules changed'); return evt; }); if (isEnt && usesOdd(evt)) { try { await D.rt().eventSetup(u.e, id, { title: evt.title, sport: ratingSport(evt), lockAt: evt.start }); } catch (x) {} } await idxSet(id, () => idxEntry(evt)); return ok(evt); }
+    const notLocked = (evt, now) => { if (now >= evt.start || evt.drawn) throw bad(409, 'Rules are final. The event has started.'); };
+    if (op === 'edit') { const evt = await mutate(id, (evt, now) => { comm(evt); notLocked(evt, now); const R = cleanRules(b, now), nx = Object.assign({}, evt, R), mch = fieldDiff(moneyFields(evt), moneyFields(nx)), och = fieldDiff(otherFields(evt), otherFields(nx)), others = othersIn(evt), by = (memberOf(evt, u.mk) || {}).name || 'Commissioner';
+        if (others && mch.length) throw bad(409, 'Money rules are final once anyone has joined: entry, take, payout split, pot and format cannot change. Refused: ' + mch.map((c) => c.k + ' stays ' + c.a + ' (not ' + c.b + ')').join('; ') + '. Other details can still change before the start, and everyone is told.');
+        if (evt.entrants.length && (UNITS[R.rules.unit] || 1) !== (UNITS[evt.rules.unit] || 1) && R.fmt !== 'solo') throw bad(409, 'Singles, doubles or teams cannot change while there are entries. Remove the entries first.');
+        if (!mch.length && !och.length) return { nochange: true, v: evt };
+        const feeChanged = Number(evt.money.entry) !== Number(R.money.entry), hadPaid = evt.members.some((m) => m.paid) || evt.entrants.some((e) => (e.players || []).some((p) => p.paid)); Object.assign(evt, R); if (people(evt) > cap) throw bad(403, fullMsg(cap));
+        mch.concat(och).forEach((c) => audit(evt, now, by + ' (commissioner)', 'edit', null, 'Rules changed. ' + c.k + ': ' + c.a + ' → ' + c.b));
+        if (feeChanged && hadPaid) { evt.members.forEach((m) => { m.paid = false; }); evt.entrants.forEach((e) => (e.players || []).forEach((p) => { delete p.paid; })); audit(evt, now, 'Oddable', 'paid', null, 'The entry changed, so every "paid" mark was cleared'); }
+        if (others && och.length) notify(evt, now, by, 'The commissioner changed the rules. ' + och.map((c) => c.k + ': ' + c.a + ' → ' + c.b).join('; ') + '. Money rules (entry, take, payout split, pot, format) did not change: they are final.');
+        return evt; }); if (isEnt && usesOdd(evt)) { try { await D.rt().eventSetup(u.e, id, { title: evt.title, sport: rtSport(evt), lockAt: evt.start }); } catch (x) {} } await idxSet(id, () => idxEntry(evt)); return ok(evt); }
     if (op === 'entrant') { // commissioner adds / renames / re-rates / removes / moves an entry, before the draw
       const evt = await mutate(id, (evt, now) => { comm(evt);
         // At the start a pair with an empty partner spot holds the draw: until it is made the commissioner may only name the missing partner or remove that entry.
-        const fixing = holdFix(evt, now); if (!fixing) notLocked(evt, now); else if (!((b.do === 'partner' || b.do === 'remove') && needPartner(evt).some((e) => e.eid === String(b.eid)))) throw bad(409, 'Rules are locked. Only an entry with an empty partner spot can be completed or removed now.');
+        const fixing = holdFix(evt, now); if (!fixing) notLocked(evt, now); else if (!((b.do === 'partner' || b.do === 'remove') && needPartner(evt).some((e) => e.eid === String(b.eid)))) throw bad(409, 'Rules are final. Only an entry with an empty partner spot can be completed or removed now.');
         if (b.do === 'partner') { const e = evt.entrants.find((x) => x.eid === String(b.eid)), seat = e && (e.players || []).find(isBlank); if (!e) throw bad(404, 'That entry is gone'); if (!seat) throw bad(409, e.name + ' has no empty spot'); const nm = cleanName(b.name, 24); if (nm.length < 1) throw bad(400, "Type the partner's name"); if (/^(Partner \d|Open seat)$/.test(nm)) throw bad(400, 'Type a real name');
           const first = e.players[0].name; seat.name = nm; delete seat.blank; seat.ct = rnd(10); if (e.name === first) e.name = cleanName(e.players.filter((p) => !isBlank(p)).map((p) => p.name).join(' / '), 40) || e.name; audit(evt, now, 'Commissioner', 'entries', null, 'Partner added: ' + nm + ' with ' + first); return evt; }
         if (b.do === 'add') { addEntrant(evt, b.name, b.rating, u.mk, now); if (people(evt) > cap) throw bad(403, fullMsg(cap)); }
@@ -614,11 +741,19 @@ async function handle(req, res) {
         audit(evt, now, 'Commissioner', 'entries', null, 'Entries changed (' + evt.entrants.length + ')'); return evt; });
       return ok(evt);
     }
+    // Playbook (play 40) + manager, Nov 16 2026: a money event is not seeded by the Oddable rating alone. The organizer sees every player's rating with
+    // "x of y games confirmed" and may set the seeds by hand before the start: POST /events/seeds {id, eid, do: 'up' | 'down'} or {id, eid, to: <seed>} or {id, clear: true}.
+    if (op === 'seeds') { const evt = await mutate(id, (evt, now) => { comm(evt); notLocked(evt, now); if (evt.fmt === 'solo') throw bad(409, 'A solo event has no seeds'); if (evt.rules.seeding === 'random') throw bad(409, 'This event is drawn at random. Choose another seeding rule to set seeds by hand.');
+        const by = ((memberOf(evt, u.mk) || {}).name || 'Commissioner') + ' (commissioner)';
+        if (b.keep) { if (evt.seedSet) return { nochange: true, v: evt }; evt.seedSet = seedList(evt); audit(evt, now, by, 'seeds', null, 'Seeds confirmed by the organizer as shown: ' + evt.seedSet.map((x, i) => (i + 1) + '. ' + nameOf(evt, x)).join(', ')); return evt; } // "these are my seeds": the order shown becomes the organizer's own
+        if (b.clear) { if (!evt.seedSet) return { nochange: true, v: evt }; delete evt.seedSet; audit(evt, now, by, 'seeds', null, 'Seeds set by hand were removed: seeded ' + seedHow(evt) + ' again'); return evt; }
+        const cur = seedList(evt), eid = String(b.eid || ''), i = cur.indexOf(eid); if (i < 0) throw bad(404, 'That entry is gone'); const j = b.to != null ? Math.round(Number(b.to)) - 1 : i + (b.do === 'up' ? -1 : b.do === 'down' ? 1 : NaN); if (!(j >= 0 && j < cur.length)) throw bad(400, 'Seed: 1 to ' + cur.length); if (j === i) return { nochange: true, v: evt };
+        cur.splice(i, 1); cur.splice(j, 0, eid); evt.seedSet = cur; audit(evt, now, by, 'seeds', null, 'Seed set by the organizer: ' + nameOf(evt, eid) + ' from ' + ord(i + 1) + ' to ' + ord(j + 1) + ' seed'); return evt; }); return ok(evt); }
     if (op === 'draw') { // an early draw locks the tournament ratings in the rating module too, but ONLY once the draw has really been made (a refused draw locks nothing)
       const early = !r0.data.drawn && now < r0.data.start; const evt = await mutate(id, (evt, now) => { comm(evt); if (evt.drawn) return { nochange: true, v: evt }; draw(evt, now); return evt; });
-      if (early && evt.drawn && isEnt && usesOdd(evt)) { try { await D.rt().eventSetup(u.e, id, { title: evt.title, sport: ratingSport(evt), lockAt: evt.drawn }); } catch (x) { if (!x.status) console.error('events eventSetup (draw):', x.message); } }
+      if (early && evt.drawn && isEnt && usesOdd(evt)) { try { await D.rt().eventSetup(u.e, id, { title: evt.title, sport: rtSport(evt), lockAt: evt.drawn }); } catch (x) { if (!x.status) console.error('events eventSetup (draw):', x.message); } }
       return ok(evt); }
-    if (op === 'leave') { const evt = await mutate(id, (evt, now) => { const m = memberOf(evt, u.mk); if (isComm(evt, u.mk)) throw bad(409, 'The commissioner cannot leave. Delete the event instead (before it starts).'); const inE = evt.entrants.some((e) => pidsOf(e).includes(m.pid)); if (inE && (now >= evt.start || evt.drawn)) throw bad(409, 'The event has started. Players stay to the end.'); evt.entrants.forEach((e) => (e.players || []).forEach((p, i) => { if (p.pid === m.pid) { p.pid = null; p.name = p.orig || (p.blank ? 'Partner ' + (i + 1) : 'Open seat'); p.ct = rnd(10); if (p.orig && m.paid) p.paid = true; else if (!p.orig) delete p.paid; delete p.claimed; delete p.orig; } })); /* review fix 9: the guest gets its name back and a NEW claim code */ evt.entrants = evt.entrants.filter((e) => !(e.by === u.mk && !pidsOf(e).length && !isComm(evt, e.by))); evt.members = evt.members.filter((x) => x !== m); if (evt.picks[m.pid]) { evt.pk = evt.pk || {}; evt.pk[m.mk] = evt.picks[m.pid]; delete evt.picks[m.pid]; } /* G16: picks belong to the account; rejoining brings them back, still locked */ return evt; }); await idxSet(id, () => idxEntry(evt)); send(res, 200, { ok: true }); return true; }
+    if (op === 'leave') { const evt = await mutate(id, (evt, now) => { const m = memberOf(evt, u.mk); if (!m) return { nochange: true, v: evt }; /* L9: the same tap sent twice: already gone */ if (isComm(evt, u.mk)) throw bad(409, 'The commissioner cannot leave. Delete the event instead (before it starts).'); const inE = evt.entrants.some((e) => pidsOf(e).includes(m.pid)); if (inE && (now >= evt.start || evt.drawn)) throw bad(409, 'The event has started. Players stay to the end.'); evt.entrants.forEach((e) => (e.players || []).forEach((p, i) => { if (p.pid === m.pid) { p.pid = null; p.name = p.orig || (p.blank ? 'Partner ' + (i + 1) : 'Open seat'); p.ct = rnd(10); if (p.orig && m.paid) p.paid = true; else delete p.paid; /* L1: the typed-in seat is "paid" only if the account leaving it is marked paid right now */ delete p.claimed; delete p.orig; } })); /* review fix 9: the guest gets its name back and a NEW claim code */ evt.entrants = evt.entrants.filter((e) => !(e.by === u.mk && !pidsOf(e).length && !isComm(evt, e.by))); evt.members = evt.members.filter((x) => x !== m); if (evt.picks[m.pid]) { evt.pk = evt.pk || {}; evt.pk[m.mk] = evt.picks[m.pid]; delete evt.picks[m.pid]; } /* G16: picks belong to the account; rejoining brings them back, still locked */ return evt; }); GONE.set(id + '|' + u.mk, D.now()); if (GONE.size > 5000) GONE.clear(); await idxSet(id, () => idxEntry(evt)); send(res, 200, { ok: true }); return true; }
     if (op === 'delete') { await mutate(id, (evt, now) => { comm(evt); notLocked(evt, now); evt.deleted = now; evt.code = ''; return evt; }); await idxSet(id, () => null); send(res, 200, { ok: true }); return true; }
     if (op === 'paid') { const evt = await mutate(id, (evt, now) => { comm(evt);
       if (b.gid) { let seat = null; evt.entrants.forEach((e) => (e.players || []).forEach((p) => { if (p.gid === String(b.gid) && !p.pid && !isBlank(p)) seat = p; })); if (!seat) throw bad(404, 'That typed-in player is not in the event'); if (!!seat.paid === !!b.paid) return { nochange: true, v: evt }; seat.paid = !!b.paid; audit(evt, now, 'Commissioner', 'paid', null, seat.name + ' (typed-in player)' + (seat.paid ? ' marked paid' : ' marked not paid')); return evt; }
@@ -642,14 +777,14 @@ async function handle(req, res) {
     // player's real-results Oddable rating (never hidden). Locked when the event starts or the draw is made. The lifetime rating is never touched.
     if (op === 'trate') { // storage, rules and the log live in the rating module (eventSetup / eventOverride / eventLog); this is the director's form's route
       const e0 = r0.data, RT = D.rt(); comm(e0); if (!isEnt) throw bad(403, 'Tournament ratings are for Enterprise events (courses, clubs and leagues). ' + limits.ENTERPRISE_TEXT); if (!usesOdd(e0)) throw bad(409, 'This event does not use the Oddable rating');
-      if (now >= e0.start || e0.drawn) throw bad(409, 'Ratings are locked. The event has started.');
+      if (now >= e0.start || e0.drawn) throw bad(409, 'Ratings are final. The event has started.');
       let seat = null; e0.entrants.forEach((e) => (e.players || []).forEach((p) => { if (p.gid === String(b.gid || '')) seat = p; })); if (!seat || isBlank(seat)) throw bad(404, 'That player is not in the event');
       const clear = b.rating === '' || b.rating == null, v = clear ? null : Math.round(Number(b.rating)); if (!clear && !(Number.isFinite(Number(b.rating)) && Number(b.rating) >= 100 && v <= 3500)) throw bad(400, 'Tournament rating: a whole number from 100 to 3500 (Oddable scale: new players start at 1500)');
       const reason = cleanName(b.reason, 120); if (reason.length < 2) throw bad(400, 'Give a reason (it is logged and shown to the players)');
-      const by = myName(e0); await RT.eventSetup(u.e, id, { title: e0.title, sport: ratingSport(e0), lockAt: e0.start });
-      const out = await RT.eventOverride(u.e, id, seatKey(e0, seat), { rating: v, sport: ratingSport(e0), reason, name: seat.name, byName: by }); RC.clear();
+      const by = myName(e0); await RT.eventSetup(u.e, id, { title: e0.title, sport: rtSport(e0), lockAt: e0.start });
+      const out = await RT.eventOverride(u.e, id, seatKey(e0, seat), { rating: v, sport: rtSport(e0), reason, name: seat.name, byName: by }); RC.clear();
       const log = out && out.changed === false ? null : ((await RT.eventLog(u.e, id)) || {}).log || [];
-      const evt = await mutate(id, (evt, now) => { if (!log) return { nochange: true, v: evt }; evt.tlog = log.slice(-100).map((x) => ({ at: x.at, by: x.by, player: x.player, old: x.old == null ? null : x.old, new: x.new == null ? null : x.new, oddable: x.oddable == null ? null : x.oddable, reason: x.reason }));
+      const evt = await mutate(id, (evt, now) => { if (!log) return { nochange: true, v: evt }; evt.tlog = log.filter((x) => x && (x.field == null || x.field === 'rating') && x.player).slice(-100).map((x) => ({ at: x.at, by: !x.by || x.by === 'Tournament director' ? by : x.by, player: x.player, old: x.old == null ? null : x.old, new: x.new == null ? null : x.new, oddable: x.oddable == null ? null : x.oddable, reason: x.reason }));
         audit(evt, now, by + ' (director)', 'rating', null, seat.name + ': tournament rating ' + (v == null ? 'removed (Oddable rating used)' : 'set to ' + v) + ' · ' + reason); return evt; });
       return ok(evt);
     }
@@ -657,17 +792,17 @@ async function handle(req, res) {
     // is logged and every member gets a notice. The bracket is redrawn from the table when the commissioner taps Redraw (after the corrections).
     if (op === 'poreset') { const evt = await mutate(id, (evt, now) => { comm(evt); notFin(evt); if (evt.fmt !== 'rr' || !evt.poSeeds) throw bad(409, 'There is no playoff to reset'); const reason = cleanName(b.reason, 120); if (reason.length < 2) throw bad(400, 'Give a reason (everyone sees it)');
         const n = evt.matches.filter((x) => x.st === 'po' && PLAYED.has(x.state)).length, by = myName(evt); dropPlayoff(evt); evt.poHold = { at: now, by, reason };
-        evt.notice = { at: now, by, text: 'The commissioner reset the playoff: ' + reason + '. ' + (n ? n + ' playoff result' + (n > 1 ? 's were' : ' was') + ' wiped. ' : '') + 'The bracket will be redrawn from the standings.' }; audit(evt, now, by + ' (commissioner)', 'playoff', null, 'Playoff reset (' + n + ' result' + (n === 1 ? '' : 's') + ' wiped). Reason: ' + reason); return evt; }); return ok(evt); }
-    if (op === 'poredraw') { const evt = await mutate(id, (evt, now) => { comm(evt); notFin(evt); if (!evt.poHold) return { nochange: true, v: evt }; if (openTies(evt).length) throw bad(409, 'A tie for a playoff spot is open. Settle it first.'); delete evt.poHold; maybePlayoff(evt, now); evt.notice = { at: now, by: myName(evt), text: 'The playoff was redrawn from the corrected standings.' }; return evt; }); return ok(evt); }
+        notify(evt, now, by, 'The commissioner reset the playoff: ' + reason + '. ' + (n ? n + ' playoff result' + (n > 1 ? 's were' : ' was') + ' wiped. ' : '') + (evt.rules.pickem ? "Pick'em picks on the playoff matches were wiped with them. " : '') + 'The bracket will be redrawn from the standings.'); audit(evt, now, by + ' (commissioner)', 'playoff', null, 'Playoff reset (' + n + ' result' + (n === 1 ? '' : 's') + ' wiped). Reason: ' + reason); return evt; }); return ok(evt); }
+    if (op === 'poredraw') { const evt = await mutate(id, (evt, now) => { comm(evt); notFin(evt); if (!evt.poHold) return { nochange: true, v: evt }; if (openTies(evt).length) throw bad(409, 'A tie for a playoff spot is open. Settle it first.'); delete evt.poHold; maybePlayoff(evt, now); notify(evt, now, myName(evt), 'The playoff was redrawn from the corrected standings.'); return evt; }); return ok(evt); }
     if (op === 'tiebreak') { // round robin: a tie the rulebook order could not break. The organizer chooses a playoff match (two entries) or a coin flip; logged.
       const evt = await mutate(id, (evt, now) => { comm(evt); notFin(evt); const t = openTies(evt).find((x) => x.key === String(b.key || '')); if (!t) throw bad(409, 'That tie is already decided'); if (t.game || (evt.tb && evt.tb[t.key])) throw bad(409, 'A tiebreak playoff is already set. Enter its score.');
-        const how = b.how === 'game' ? 'game' : b.how === 'coin' || b.how == null ? 'coin' : null; if (!how) throw bad(400, 'Choose a coin flip (the default) or a playoff'); /* manager, Nov 16 2026: coin flip is the default; the playoff is a house rule */ evt.tb = evt.tb || {}; const names = t.eids.map((e) => nameOf(evt, e)), by = myName(evt), why = ' (level after every tiebreak step)';
+        const how = b.how === 'game' ? 'game' : b.how === 'coin' || b.how == null ? 'coin' : null; if (!how) throw bad(400, 'Choose a coin flip (the default) or a playoff'); /* manager, Nov 16 2026: coin flip is the default; the playoff is a house rule */ evt.tb = evt.tb || {}; const names = t.eids.map((e) => nameOf(evt, e)), by = myName(evt), why = t.x ? ' for the last ' + (t.spots > 1 ? t.spots + ' playoff spots' : 'playoff spot') + ' across pools (records level: wins, point differential, points scored)' : ' (level after every tiebreak step)', xf = t.x ? { x: true, spots: t.spots } : {};
         const shuffle = (a) => { const o = a.slice(); for (let i = o.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); [o[i], o[j]] = [o[j], o[i]]; } return o; };
         if (how === 'game') { const ladder = shuffle(t.eids), n = ladder.length - 1; const drawn = ladder.map((e) => nameOf(evt, e)), house = n > 1 ? 'House rule (not in the rulebook): playoff, order drawn at random: ' + drawn.join(', then ') + ' (' + drawn[n] + ' plays ' + drawn[n - 1] + ' first; the winner plays the next one up)' : 'Tiebreak playoff: one match, ' + drawn.join(' v ');
-          evt.tb[t.key] = { how, ladder, ms: [], pool: t.pool, at: now, by, house: n > 1, text: house };
+          evt.tb[t.key] = Object.assign({ how, ladder, ms: [], pool: t.pool, at: now, by, house: n > 1, text: house }, xf);
           audit(evt, now, by + ' (commissioner)', 'tiebreak', null, 'Tie between ' + names.join(', ') + why + '. ' + house); tbAdvance(evt, now); }
         else { const order = shuffle(t.eids), txt = order.map((e) => nameOf(evt, e)).join(', then ');
-          evt.tb[t.key] = { how, order, at: now, by, text: 'Coin flip: ' + txt }; audit(evt, now, by + ' (commissioner)', 'tiebreak', null, 'Tie between ' + names.join(', ') + why + ': the organizer chose a coin flip. Oddable flipped: ' + txt); }
+          evt.tb[t.key] = Object.assign({ how, order, at: now, by, text: (t.x ? 'Last playoff spot across pools, coin flip: ' : 'Coin flip: ') + txt }, xf); audit(evt, now, by + ' (commissioner)', 'tiebreak', null, 'Tie between ' + names.join(', ') + why + ': the organizer chose a coin flip. Oddable flipped: ' + txt); }
         return evt; });
       await idxSet(id, () => idxEntry(evt)); return ok(evt);
     }
@@ -696,34 +831,34 @@ async function handle(req, res) {
         notFin(evt); const m = findM(evt); vOk(m); const c = canScore(evt, u.mk, m, now); if (!c.ok) throw bad(403, c.why);
         const g = checkGames(ruleOf(evt, m), b.games); m.v++; m.live = m.live || now;
         const s0 = sideOf(evt, u.mk, m), asComm = isComm(evt, u.mk) && (!s0 || m.state === 'disputed' || !linked(evt, s0 === 'a' ? m.b : m.a)); // a commissioner playing in the match enters like any player (the opponent confirms); final only on a dispute or vs a guest
-        if (asComm) { const was = m.state === 'confirmed' ? m.win : null; if (was && was !== g.win && downstreamPlayed(evt, m)) throw bad(409, 'Later matches are already played. Fix those first.'); if (m.st === 'lad' && m.state === 'confirmed') throw bad(409, 'Ladder results cannot be changed after they move the ladder'); if (was && (m.st === 'pool' || m.st === 'tb')) reflow(evt, m, was !== g.win, now); /* review fix 3 + tiebreak-playoff corrections */ Object.assign(m, { games: g.games, win: g.win, state: 'confirmed', sub: { side: 'comm', games: g.games, by: myName(evt), at: now }, at: now, cf: { by: 'comm', at: now } }); if (was && m.st === 'pool') pruneTb(evt); audit(evt, now, myName(evt) + ' (commissioner' + (s0 ? ', own match' : '') + ')', was ? 'correct' : 'final', m.id, scoreText(evt, m)); settle(evt, m, now, snap); }
-        else { const s = sideOf(evt, u.mk, m); m.state = 'pending'; m.sub = { side: s, games: g.games, win: g.win, by: myName(evt), at: now }; audit(evt, now, myName(evt), 'score', m.id, scoreText(evt, Object.assign({}, m, { win: g.win, games: g.games })) + ' (waiting for ' + (linked(evt, s === 'a' ? m.b : m.a) ? 'the other side' : 'the commissioner') + ' to confirm)'); }
+        if (asComm) { const was = m.state === 'confirmed' ? m.win : null; if (was && was !== g.win && downstreamPlayed(evt, m)) throw bad(409, 'Later matches are already played. Fix those first.'); if (m.st === 'lad' && m.state === 'confirmed') throw bad(409, 'Ladder results cannot be changed after they move the ladder'); if (was && (m.st === 'pool' || m.st === 'tb')) reflow(evt, m, was !== g.win, now); /* review fix 3 + tiebreak-playoff corrections */ Object.assign(m, { games: g.games, win: g.win, state: 'confirmed', sub: { side: 'comm', games: g.games, by: myName(evt), at: now, k: sKey(u.e) }, at: now, cf: { by: 'comm', name: myName(evt), at: now, k: sKey(u.e), own: s0 || null } }); if (was && m.st === 'pool') pruneTb(evt); audit(evt, now, myName(evt) + ' (commissioner' + (s0 ? ', own match' : '') + ')', was ? 'correct' : 'final', m.id, scoreText(evt, m)); settle(evt, m, now, snap); }
+        else { const s = sideOf(evt, u.mk, m); m.state = 'pending'; m.sub = { side: s, games: g.games, win: g.win, by: myName(evt), at: now, k: sKey(u.e) }; audit(evt, now, myName(evt), 'score', m.id, scoreText(evt, Object.assign({}, m, { win: g.win, games: g.games })) + ' (waiting for ' + (linked(evt, s === 'a' ? m.b : m.a) ? 'the other side' : 'the commissioner') + ' to confirm)'); }
         return evt; }).catch(async (e) => { if (e && e.code === 'postarted') { try { await mutate(id, (evt, now) => { audit(evt, now, myName(evt) + ' (commissioner)', 'refused', String(b.m || ''), 'Correction refused: the playoff has started, so pool and tiebreak results are final unless the commissioner resets the playoff'); return evt; }); } catch (x) {} } throw e; });
       return ok(evt);
     }
     if (op === 'confirm' || op === 'dispute') {
       const evt = await mutate(id, (evt, now) => { if (opSeen(evt)) return { nochange: true, v: evt }; notFin(evt); const m = findM(evt); vOk(m); const c = canConfirm(evt, u.mk, m); if (!c.ok) throw bad(403, 'Only the other side (or the commissioner) can ' + op + ' this score'); m.v++;
-        if (op === 'confirm') { Object.assign(m, { games: m.sub.games, win: m.sub.win, state: 'confirmed', at: now, cf: { by: c.comm ? 'comm' : 'opp', name: myName(evt), at: now } }); /* cf: who made it final. Only 'opp' (an account on the other side) is a confirmed, rated result */ audit(evt, now, myName(evt) + (c.comm ? ' (commissioner)' : ''), 'confirm', m.id, scoreText(evt, m)); settle(evt, m, now, snap); }
+        if (op === 'confirm') { Object.assign(m, { games: m.sub.games, win: m.sub.win, state: 'confirmed', at: now, cf: { by: c.comm ? 'comm' : 'opp', name: myName(evt), at: now, k: sKey(u.e) } }); /* cf: who made it final. Only 'opp' (an account on the other side) is a confirmed, rated result */ audit(evt, now, myName(evt) + (c.comm ? ' (commissioner)' : ''), 'confirm', m.id, scoreText(evt, m)); settle(evt, m, now, snap); }
         else { if (c.comm) throw bad(400, 'Commissioner: enter the right score instead'); m.state = 'disputed'; m.sub.note = cleanName(b.note, 120); audit(evt, now, myName(evt), 'dispute', m.id, 'Disputed' + (m.sub.note ? ': ' + m.sub.note : '') + '. The commissioner decides.'); }
         return evt; });
       return ok(evt);
     }
-    if (op === 'live') { const evt = await mutate(id, (evt, now) => { notFin(evt); const m = findM(evt); if (m.live || m.state !== 'ready') return { nochange: true, v: evt }; if (!isComm(evt, u.mk) && !sideOf(evt, u.mk, m)) throw bad(403, 'Only the players or the commissioner start a match'); m.live = now; m.v++; audit(evt, now, myName(evt), 'start', m.id, 'Match started (picks locked)'); return evt; }); return ok(evt); }
+    if (op === 'live') { const evt = await mutate(id, (evt, now) => { notFin(evt); const m = findM(evt); if (m.live || m.state !== 'ready') return { nochange: true, v: evt }; if (!isComm(evt, u.mk) && !sideOf(evt, u.mk, m)) throw bad(403, 'Only the players or the commissioner start a match'); m.live = now; m.v++; audit(evt, now, myName(evt), 'start', m.id, 'Match started (picks closed)'); return evt; }); return ok(evt); }
     if (op === 'pick') {
       rate('score', u.mk, ip); const evt = await mutate(id, (evt, now) => { if (!evt.rules.pickem) throw bad(409, 'This event has no pick\'em'); const pm = memberOf(evt, u.mk), P = evt.picks[pm.pid] = evt.picks[pm.pid] || { m: {} };
         // Locked on entry, like group bets (G16): the server stamps a pick the moment it is made and it can never be changed or removed. The same pick sent again is fine (resend).
         let changed = false;
-        if (b.tb !== undefined) { const fm = finalMatch(evt); if (fm && pickLocked(evt, fm, now)) throw bad(409, 'The final has started. The tiebreak is locked.'); const t = Number(b.tb); if (!(Number.isInteger(t) && t >= 0 && t <= 999)) throw bad(400, 'Tiebreak: total points in the final, 0 to 999'); if (P.tb != null && P.tb !== t) throw bad(409, 'Your tiebreak guess is locked. It cannot be changed once made.'); if (P.tb == null) { P.tb = t; P.tbAt = now; changed = true; } }
-        if (b.m) { const m = findM(evt); if (!pickable(m)) throw bad(409, 'This match is not part of the pick\'em'); if (sideOf(evt, u.mk, m)) throw bad(403, 'You are playing in this match, so you cannot pick it. Pick the other matches.'); /* manager, Nov 16 2026 */ if (pickLocked(evt, m, now)) throw bad(409, lockWhy(evt, m, now)); if (!(m.state === 'ready' && m.a && m.b)) throw bad(409, 'This match is not set yet'); if (!['a', 'b'].includes(b.side)) throw bad(400, 'Pick a side'); const had = P.m[m.id]; if (had && had.s !== b.side) throw bad(409, 'Your pick is locked. Picks cannot be changed once made.'); if (!had) { P.m[m.id] = { s: b.side, t: now }; changed = true; } }
+        if (b.tb !== undefined) { const fm = finalMatch(evt); if (fm && pickLocked(evt, fm, now)) throw bad(409, 'The final has started. The tiebreak is closed.'); const t = Number(b.tb); if (!(Number.isInteger(t) && t >= 0 && t <= 999)) throw bad(400, 'Tiebreak: total points in the final, 0 to 999'); if (P.tb != null && P.tb !== t) throw bad(409, 'Your tiebreak guess is final. It cannot be changed once made.'); if (P.tb == null) { P.tb = t; P.tbAt = now; changed = true; } }
+        if (b.m) { const m = findM(evt); if (!pickable(m)) throw bad(409, 'This match is not part of the pick\'em'); if (sideOf(evt, u.mk, m)) throw bad(403, 'You are playing in this match, so you cannot pick it. Pick the other matches.'); /* manager, Nov 16 2026 */ if (pickLocked(evt, m, now)) throw bad(409, lockWhy(evt, m, now)); if (!(m.state === 'ready' && m.a && m.b)) throw bad(409, 'This match is not set yet'); if (!['a', 'b'].includes(b.side)) throw bad(400, 'Pick a side'); const had = P.m[m.id]; if (had && had.s !== b.side) throw bad(409, 'Your pick is final. Picks are final when you enter them.'); if (!had) { P.m[m.id] = { s: b.side, t: now }; changed = true; } }
         if (!changed) return { nochange: true, v: evt }; P.last = now; return evt; });
       return ok(evt);
     }
     if (op === 'picklock') { // the commissioner sets a round's lock time, or locks its picks now
       const evt = await mutate(id, (evt, now) => { comm(evt); notFin(evt); if (!evt.rules.pickem) throw bad(409, 'This event has no pick\'em'); const k = String(b.round || ''), ms = evt.matches.filter((m) => pickable(m) && roundKey(m) === k); if (!ms.length) throw bad(404, 'No such round');
-        if (ms.some((m) => pickLocked(evt, m, now))) throw bad(409, 'Picks for this round are already locked'); evt.plock = evt.plock || {}; const p = evt.plock[k] = evt.plock[k] || {}, lab = matchLabel(ms[0]), by = myName(evt);
-        if (b.lock === true) { p.locked = now; p.by = by; audit(evt, now, by + ' (commissioner)', 'picklock', null, lab + ': picks locked now'); }
-        else if (b.at === null || b.at === '') { delete p.at; audit(evt, now, by + ' (commissioner)', 'picklock', null, lab + ': lock time removed (still locks when its first match starts)'); }
-        else { const at = Number(b.at); if (!(Number.isFinite(at) && at > now && at < now + 400 * DAY)) throw bad(400, 'The lock time must be in the future'); p.at = at; p.by = by; audit(evt, now, by + ' (commissioner)', 'picklock', null, lab + ': picks lock at ' + new Date(at).toISOString().replace('T', ' ').slice(0, 16) + ' UTC'); }
+        if (ms.some((m) => pickLocked(evt, m, now))) throw bad(409, 'Picks for this round are already closed'); evt.plock = evt.plock || {}; const p = evt.plock[k] = evt.plock[k] || {}, lab = matchLabel(ms[0]), by = myName(evt);
+        if (b.lock === true) { p.locked = now; p.by = by; audit(evt, now, by + ' (commissioner)', 'picklock', null, lab + ': picks closed now'); }
+        else if (b.at === null || b.at === '') { delete p.at; audit(evt, now, by + ' (commissioner)', 'picklock', null, lab + ': closing time removed (picks still close when its first match starts)'); }
+        else { const at = Number(b.at); if (!(Number.isFinite(at) && at > now && at < now + 400 * DAY)) throw bad(400, 'The closing time must be in the future'); p.at = at; p.by = by; audit(evt, now, by + ' (commissioner)', 'picklock', null, lab + ': picks close at ' + ctTime(at)); }
         return evt; });
       return ok(evt);
     }
@@ -744,8 +879,12 @@ async function handle(req, res) {
     }
     if (op === 'accept' || op === 'decline') { const evt = await mutate(id, (evt, now) => { notFin(evt); const m = findM(evt); if (m.state !== 'offered') return { nochange: true, v: evt }; if (!isComm(evt, u.mk) && sideOf(evt, u.mk, m) !== 'b') throw bad(403, 'Only the challenged side can answer'); m.state = op === 'accept' ? 'ready' : 'void'; m.v++; audit(evt, now, myName(evt), op, m.id, op === 'accept' ? 'Challenge accepted' : 'Challenge declined'); return evt; }); return ok(evt); }
     send(res, 404, { error: 'not found' }); return true;
-  } catch (e) { if (!e.status) console.error('events:', process.env.EVT_DEBUG ? e.stack : e.message); send(res, e.status || 500, { error: e.status ? e.message : 'Events error, try again' }); return true; }
+  } catch (e) { if (!e.status) console.error('events:', process.env.EVT_DEBUG ? e.stack : e.message); send(res, e.status || 500, Object.assign({ error: e.status ? e.message : 'Events error, try again' }, e.status && e.code ? { code: e.code } : {})); return true; }
 }
+// What the standings screen says about the playoff spots left over across pools (null when the playoff size is a multiple of the pool count)
+function wildView(evt) { const P = (evt.pools || []).length, N = evt.rules.playoff || 0; if (!N || P < 2 || !(N % P)) return null; const o = { pos: Math.floor(N / P) + 1, spots: N % P, per: Math.floor(N / P), decided: null };
+  const pool = evt.matches.filter((m) => m.st === 'pool'); if (!pool.length || pool.some((m) => m.state !== 'confirmed')) return o; const tables = evt.pools.map((p, i) => poolTable(evt, p, i)); if (tables.some((t) => t.some((r) => r.tie && r.tieOpen))) return o;
+  const w = wildcard(evt, tables); if (w && !w.open) o.decided = w.take.map((e) => ({ name: nameOf(evt, e), how: w.how[e] })); return o; }
 const poStarted = (evt) => evt.matches.some((x) => x.st === 'po' && (x.live || PLAYED.has(x.state)));
 function dropMatches(evt, list) { const ids = new Set(list.map((x) => x.id)); if (!ids.size) return; evt.matches = evt.matches.filter((x) => !ids.has(x.id)); Object.values(evt.picks || {}).concat(Object.values(evt.pk || {})).forEach((p) => { Object.keys(p.m || {}).forEach((k) => { if (ids.has(k)) delete p.m[k]; }); }); } // picks on a match that no longer exists go with it (the new bracket may reuse the id for other players)
 function dropPlayoff(evt) { dropMatches(evt, evt.matches.filter((x) => x.st === 'po')); delete evt.poSeeds; Object.keys(evt.plock || {}).forEach((k) => { if (k.startsWith('p|')) delete evt.plock[k]; }); }
@@ -757,9 +896,11 @@ function reflow(evt, m, flipped, now) {
   dropPlayoff(evt); audit(evt, now, 'Oddable', 'playoff', null, (m.st === 'tb' ? 'Tiebreak' : 'Pool') + ' result corrected: playoff redrawn');
 }
 function pruneTb(evt) { // after a pool correction: a tiebreak choice for a tie that no longer exists is dropped, unless one of its matches was played
-  const used = new Set(); (evt.pools || []).forEach((p, i) => poolTable(evt, p, i).forEach((r) => { if (r.tbKey) used.add(r.tbKey); if (r.tie) used.add(r.tie); }));
-  Object.keys(evt.tb || {}).forEach((k) => { if (used.has(k)) return; const ms = (evt.tb[k].ms || []).map((id) => evt.matches.find((x) => x.id === id)).filter(Boolean); if (ms.some((x) => x.live || PLAYED.has(x.state))) return; dropMatches(evt, ms); delete evt.tb[k]; });
+  const used = new Set(), tables = (evt.pools || []).map((p, i) => poolTable(evt, p, i)); let poolOpen = false; tables.forEach((t) => t.forEach((r) => { if (r.tbKey) used.add(r.tbKey); if (r.tie) used.add(r.tie); if (r.tie && r.tieOpen) poolOpen = true; }));
+  const w = wildcard(evt, tables); if (w && w.key) used.add(w.key);
+  Object.keys(evt.tb || {}).forEach((k) => { if (used.has(k)) return; if (evt.tb[k].x && poolOpen) return; /* a cross-pool choice is judged only once every pool's order is known */ const ms = (evt.tb[k].ms || []).map((id) => evt.matches.find((x) => x.id === id)).filter(Boolean); if (ms.some((x) => x.live || PLAYED.has(x.state))) return; dropMatches(evt, ms); delete evt.tb[k]; });
 }
+function voidOwnPicks(evt, m, ent, now) { const P = evt.picks && evt.picks[m.pid]; if (!P || !P.m) return []; const out = []; evt.matches.forEach((x) => { if ((x.a === ent.eid || x.b === ent.eid) && P.m[x.id]) { P.void = P.void || {}; P.void[x.id] = Object.assign({}, P.m[x.id], { at: now }); delete P.m[x.id]; out.push(x); } }); return out; }
 const restorePicks = (evt, m) => { if (evt.pk && evt.pk[m.mk]) { evt.picks[m.pid] = evt.pk[m.mk]; delete evt.pk[m.mk]; } };
 function downstreamPlayed(evt, m) { const kids = evt.matches.filter((x) => x.fa && ((x.fa.m === m.id) || (x.fb && x.fb.m === m.id))); return kids.some((k) => PLAYED.has(k.state) || k.live || downstreamPlayed(evt, k)); }
 function scoreText(evt, m) { const w = m.win === 'a' ? m.a : m.b, l = m.win === 'a' ? m.b : m.a; return nameOf(evt, w) + ' beat ' + nameOf(evt, l) + ' ' + m.games.map(([x, y]) => (m.win === 'a' ? x + '-' + y : y + '-' + x)).join(', '); }
@@ -781,16 +922,29 @@ async function statsFor(userKey, opt) {
     const myGids = new Set(); evt.entrants.forEach((e) => (e.players || []).forEach((p) => { if (p.pid === m0.pid) myGids.add(p.gid); })); // seats this account holds (typed-in guest seats it claimed included)
     const mySide = (pp) => (pp && pp.a.some((p) => myGids.has(p.gid)) ? 'a' : pp && pp.b.some((p) => myGids.has(p.gid)) ? 'b' : null);
     const base = { src: 'events', sport: STAT_SPORT[evt.sport] || 'other', game: evt.sport, groupId: evt.group ? evt.group.gid : undefined, contestId: evt.group ? evt.group.cid : undefined };
-    const accts = new Set(); evt.entrants.forEach((e) => pidsOf(e).forEach((p) => accts.add(p))); const mkOfPid = {}; evt.members.forEach((m) => (mkOfPid[m.pid] = m.mk));
+    const akOfPid = {}; evt.members.forEach((m) => (akOfPid[m.pid] = m.ak)); const kOf = (p) => (p.pid ? p.k || (akOfPid[p.pid] ? sKey(akOfPid[p.pid]) : 'p:' + p.pid) : null);
+    // Third review M4: in ANY format, an event rates nothing until 3 distinct accounts have confirmed play in it (a match an account on the other side confirmed).
+    const live = new Set(); evt.matches.forEach((m) => { if (m.state === 'confirmed' && m.pp && m.cf && m.cf.by === 'opp' && !m.forfeit && m.pp.a.some((p) => p.pid) && m.pp.b.some((p) => p.pid)) m.pp.a.concat(m.pp.b).forEach((p) => { if (p.pid) live.add(kOf(p)); }); }); const small = live.size < 3;
     evt.matches.filter((m) => m.state === 'confirmed' && m.pp).forEach((m) => {
       const side = mySide(m.pp); if (!side) return; const opp = side === 'a' ? m.b : m.a, mine = m.pp[side], theirs = m.pp[side === 'a' ? 'b' : 'a'], meSeat = mine.find((p) => myGids.has(p.gid));
       const games = m.games.map(([x, y]) => (side === 'a' ? [x, y] : [y, x])), diff = games.reduce((t, [x, y]) => t + x - y, 0), mates = mine.filter((p) => p !== meSeat), partner = mates.map((p) => p.name)[0];
-      const oppAcct = theirs.some((p) => p.pid), conf = !!(m.cf && m.cf.by === 'opp' && !m.forfeit && oppAcct), small = (m.st === 'h2h' || m.st === 'side') && accts.size < 3;
-      const why = m.forfeit ? 'Forfeit: not rated' : !oppAcct ? 'The other side has no Oddable account: not rated' : !conf ? 'Made final by the commissioner, not confirmed by the other side: not rated' : small ? 'Heads-up or side match in an event with fewer than 3 accounts: not rated' : undefined;
+      const oppAcct = theirs.some((p) => p.pid), conf = !!(m.cf && m.cf.by === 'opp' && !m.forfeit && oppAcct);
+      const why = m.forfeit ? 'Forfeit: not rated' : !oppAcct ? 'The other side has no Oddable account: not rated' : !conf ? 'Made final by the commissioner, not confirmed by the other side: not rated' : small ? 'This event has fewer than 3 accounts with confirmed play: not rated' : undefined;
+      // H1 (third review): an explicit, truthful confirmation record for the stats module. Keys are the stats-form account hashes (sKey), never account ids.
+      // A confirmed result = two accounts on OPPOSITE sides agreed: one entered it (sub), the other confirmed it (cf). For the player this record belongs to,
+      // `agreedWith` is the account on the OTHER side that took part (the confirmer, or the scorer when this player's own side confirmed).
+      const cf = m.cf || {}, sub = m.sub || {}, flag = (p) => (p.pid ? { key: kOf(p), guest: false } : { key: null, guest: true }), confSide = cf.by === 'opp' ? (sub.side === 'a' ? 'b' : sub.side === 'b' ? 'a' : side === 'a' ? 'b' : 'a') : null;
+      const cside = cf.by === 'opp' ? (confSide === side ? 'own' : 'opponent') : cf.by === 'comm' ? (cf.own ? (cf.own === side ? 'own' : 'opponent') : 'commissioner') : m.forfeit ? 'clock' : 'unknown';
+      const other = conf ? (confSide === side ? { key: sub.k || theirs.filter((p) => p.pid).map(kOf)[0] || null, name: sub.by || 'the other side' } : { key: cf.k || theirs.filter((p) => p.pid).map(kOf)[0] || null, name: cf.name || 'the other side' }) : null;
+      const confirmation = { agreedWith: other, v: 1, confirmed: conf, rated: conf && !small, by: m.forfeit && !m.cf ? 'clock' : cf.by === 'opp' ? 'opponent' : cf.by === 'comm' ? 'commissioner' : 'unknown', byKey: cf.k || null, bySide: cside, byName: cf.name || null, at: cf.at || m.at || null,
+        enteredByKey: sub.k || null, enteredBySide: sub.side === 'comm' ? 'commissioner' : sub.side ? (sub.side === side ? 'own' : 'opponent') : null, forfeit: !!m.forfeit, played: { mine: mine.map(flag), opp: theirs.map(flag) }, oppAccounts: theirs.filter((p) => p.pid).length, oppGuests: theirs.filter((p) => !p.pid).length, eventAccounts: live.size };
       const rt = (p) => (Number.isFinite(p.r) ? p.r : null), avg = (l) => Math.round(l.reduce((t, p) => t + (Number.isFinite(p.r) ? p.r : 1500), 0) / l.length), big = mine.length > 2 || theirs.length > 2; // teams of 3-4: each player is rated against the opposing team's AVERAGE
       out.push(Object.assign({}, base, { id: evt.id + ':' + m.id, date: chiDay(m.at || evt.start), kind: 'match', title: evt.title + ' · ' + matchLabel(m), result: m.win === side ? 'W' : 'L', opponent: nameOf(evt, opp), verified: conf,
         extra: { fmt: big ? 'teams' : mine.length === 2 ? 'doubles' : 'singles', at: m.at || undefined, myRating: Number.isFinite(meSeat.r) ? meSeat.r : undefined, oppRating: big ? [avg(theirs)] : theirs.map(rt), oppRatings: big ? theirs.map(rt) : undefined, partnerRating: big ? undefined : mates.length ? rt(mates[0]) : undefined, partnerRatings: big ? mates.map(rt) : undefined, // rating inputs: null = no confirmed games yet (counted at the 1500 start)
-          confirmed: conf && !small, confirmedBy: conf ? { name: m.cf.name || 'the other side', at: m.cf.at || m.at || 0 } : undefined, unrated: why, oppKey: oppAcct ? 'e:' + crypto.createHash('sha256').update('oddable-opp|' + theirs.filter((p) => p.pid).map((p) => mkOfPid[p.pid] || p.pid).sort().join('|')).digest('hex').slice(0, 14) : undefined,
+          confirmed: conf && !small, confirmedBy: conf ? { name: m.cf.name || 'the other side', at: m.cf.at || m.at || 0, key: m.cf.k || undefined, ref: cside === 'opponent' ? m.cf.k || undefined : undefined, played: true, side: cside } : undefined, unrated: why, confirmation, ratingKey: rateKeyOf(evt),
+          card: { others: theirs.filter((p) => p.pid).length, by: other ? other.key : null, byName: other ? other.name : null, at: (m.cf && m.cf.at) || m.at || 0 }, // stats contract (confInfo): the score was agreed with an account on the other team (card.by = stats.acctRef of that account)
+          // oppKey = the same opponents in any event. ONE opposing account: exactly the key stats.js gives a self-logged match against that account (L8), so its repeat-opponent weight sees both.
+          oppKey: oppAcct ? ((ks) => (ks.length === 1 && /^a:/.test(ks[0]) ? ks[0] : 'e:' + crypto.createHash('sha256').update('oddable-opp|' + ks.join('|')).digest('hex').slice(0, 14)))(theirs.filter((p) => p.pid).map(kOf).sort()) : undefined,
           place: null, entry: 0, payout: 0, net: 0, moneyOn: evt.id + ':event', scoreText: m.forfeit ? 'forfeit' : games.map((g) => g.join('-')).join(', '), games, partner: partner || undefined, pointDiff: diff, guestId: meSeat.gid, side: mine.map((p) => ({ id: p.gid, name: p.name, account: !!p.pid })), opp: theirs.map((p) => ({ id: p.gid, name: p.name, account: !!p.pid })), forfeit: !!m.forfeit || undefined } }));
     });
     const myE = evt.entrants.filter((e) => (e.players || []).some((p) => myGids.has(p.gid)));
@@ -804,8 +958,10 @@ async function statsFor(userKey, opt) {
         extra: { guestId: [...myGids][0], fmt: evt.fmt, at: fin ? evt.fin : undefined, live: !fin || undefined, ended: fin || undefined, entry: mo.entry, owed: mo.owed || undefined, payout: fin ? mo.payout : null, net: fin ? mo.net : null, paid: mo.paid, moneyNote: 'Information only: Oddable never collects or pays.', solo: evt.fmt === 'solo' || undefined, scoreText: sr ? sr.score + ' ' + evt.rules.unitLabel : fin ? ord(Math.min(...ps)) + ' of ' + Object.keys(evt.places).length : 'In progress', unit: sr ? evt.rules.unitLabel : undefined } })); }
     if (evt.rules.pickem && evt.fin && evt.picks[m0.pid]) { const t = pickTable(evt).rows, row = t.find((x) => x.pid === m0.pid); if (row) out.push(Object.assign({}, base, { id: evt.id + ':pickem', date: chiDay(evt.fin), kind: 'contest', title: evt.title + " · bracket pick'em", result: null, place: { n: row.place, of: t.length }, verified: true, won: 0, extra: { pickem: true, at: evt.fin, entry: 0, payout: 0, net: 0, right: row.right, of: row.n, pts: row.pts, scoreText: row.right + ' of ' + row.n + ' right' } })); }
   }
-  // At most 2 confirmed (rated) matches against the same opponents per day, across every event of this player; the 3rd and later are records only.
-  const seen = {}; out.filter((x) => x.kind === 'match').sort(recOrder).forEach((x) => { const e = x.extra; if (!e.confirmed || !e.oppKey) return; const k = e.oppKey + '|' + x.date; seen[k] = (seen[k] || 0) + 1; if (seen[k] > 2) { e.confirmed = false; e.unrated = 'More than 2 matches against the same opponents in one day: not rated'; } });
+  // At most 2 confirmed (rated) matches against the same opponents in any ROLLING 24 HOURS (server time of the confirmation; no calendar day to straddle),
+  // across every event of this player; the 3rd and later are records only.
+  const seen = {}; out.filter((x) => x.kind === 'match').sort((a, b) => (a.extra.at || 0) - (b.extra.at || 0) || recOrder(a, b)).forEach((x) => { const e = x.extra; if (!e.confirmed || !e.oppKey) return; const at = e.at || 0, l = (seen[e.oppKey] = (seen[e.oppKey] || []).filter((t) => at - t < DAY)); if (l.length >= 2) { e.confirmed = false; e.unrated = 'More than 2 matches against the same opponents in 24 hours: not rated'; e.confirmation.rated = false; } else l.push(at); });
+  out.forEach((x) => { if (x.kind === 'match' && x.extra.confirmation) x.extra.confirmation.reason = x.extra.unrated || null; });
   out.forEach((x) => { x.extra = Object.assign({ game: x.game }, x.extra || {}); delete x.game; Object.keys(x).forEach((k) => { if (x[k] === undefined) delete x[k]; }); Object.keys(x.extra).forEach((k) => { if (x.extra[k] === undefined) delete x.extra[k]; }); });
   return out.filter((x) => x.date >= from && x.date <= to).sort(recOrder);
 }
@@ -831,23 +987,23 @@ async function pairHistory(evt) {
 const RC = new Map(), EVR = (id) => 'lock:evr:' + id, RLABEL = 'Oddable rating (unofficial, from app play)';
 const pkey = (userKey) => { const m = /^guest:([a-z0-9]{6,24})$/.exec(String(userKey || '')); return m ? 'g:' + m[1] : mkOf(userKey); };
 const evrLocked = (d) => !!(d && d.lockAt && D.now() >= d.lockAt);
-async function oddableOf(userKey, sport) { // STAND-IN only (this branch on its own). In the build the stats module (ratings.js eloSet) is the ONE rating calculation.
-  if (/^guest:/.test(String(userKey))) return { rating: null, matches: 0, confirmed: 0 }; const key = userKey + '|' + sport, c = RC.get(key); if (c && D.now() - c.at < 30e3 && D.now() >= c.at) return c.v;
-  const recs = (await statsFor(userKey, {})).filter((r) => r.kind === 'match' && r.sport === sport && (r.result === 'W' || r.result === 'L')), exp = (a, b) => 1 / (1 + Math.pow(10, (b - a) / 400)), avg = (x) => x.reduce((t, y) => t + y, 0) / x.length, n = (x) => (Number.isFinite(x) ? x : 1500);
+async function oddableOf(userKey, sport, game) { // STAND-IN only (this branch on its own). In the build the stats module (ratings.js eloSet) is the ONE rating calculation.
+  if (/^guest:/.test(String(userKey))) return { rating: null, matches: 0, confirmed: 0 }; const key = userKey + '|' + sport + '|' + (game || ''), c = RC.get(key); if (c && D.now() - c.at < 30e3 && D.now() >= c.at) return c.v;
+  const recs = (await statsFor(userKey, {})).filter((r) => r.kind === 'match' && r.sport === sport && (sport !== 'other' || !game || (r.extra && r.extra.game === game)) && (r.result === 'W' || r.result === 'L')), exp = (a, b) => 1 / (1 + Math.pow(10, (b - a) / 400)), avg = (x) => x.reduce((t, y) => t + y, 0) / x.length, n = (x) => (Number.isFinite(x) ? x : 1500);
   let r = 1500, k = 0; recs.forEach((m) => { const x = m.extra || {}; if (!x.confirmed) return; k++; const dbl = x.fmt === 'doubles', opp = (Array.isArray(x.oppRating) ? x.oppRating : [x.oppRating]).map(n).slice(0, dbl ? 2 : 1), mine = dbl ? [r, n(x.partnerRating)] : [r]; r += 32 * ((m.result === 'W' ? 1 : 0) - exp(avg(mine), avg(opp.length ? opp : [1500]))); });
   const v = { rating: k ? Math.round(r) : null, matches: recs.length, confirmed: k }; RC.set(key, { at: D.now(), v }); if (RC.size > 5000) RC.clear(); return v;
 }
 const STAND = {
   standIn: true,
-  ratingFor: async (userKey, sport, opts) => { const sp = sport && sport !== 'golf' ? sport : 'pickleball', o = opts || {}, od = await oddableOf(userKey, sp); let d = null; if (o.eventId) { const r = await D.S.dbGet(EVR(o.eventId)); d = (r && r.data) || null; }
+  ratingFor: async (userKey, sport, opts) => { const named = /^other:([a-z0-9-]{1,24})$/.exec(String(sport || '')), sp = named ? 'other' : sport && sport !== 'golf' ? sport : 'pickleball', o = Object.assign({}, opts || {}, named ? { game: named[1] } : {}), od = await oddableOf(userKey, sp, sp === 'other' ? o.game : null); let d = null; if (o.eventId) { const r = await D.S.dbGet(EVR(o.eventId)); d = (r && r.data) || null; }
     const s = d && d.set && d.set[pkey(userKey)] && d.set[pkey(userKey)].rating != null ? d.set[pkey(userKey)] : null;
     const text = od.matches ? (od.rating != null ? od.rating + ' · ' : '') + od.confirmed + ' of ' + od.matches + ' game' + (od.matches === 1 ? '' : 's') + ' confirmed' : 'No games yet';
-    return { sport: sp, oddable: { rating: od.rating, matches: od.matches, text, label: RLABEL }, confirmedRating: od.rating, confirmedGames: od.confirmed, text, event: s ? s.rating : null, setBy: s ? 'tournament' : null, use: s ? s.rating : od.rating != null ? od.rating : 1500, start: !s && od.rating == null, label: RLABEL, reason: s ? s.reason : undefined, at: s ? s.at : undefined, locked: d ? evrLocked(d) : undefined }; },
+    return { sport: named ? 'other:' + named[1] : sp, game: sp === 'other' && o.game ? o.game : undefined, oddable: { rating: od.rating, matches: od.matches, text, label: RLABEL }, confirmedRating: od.rating, confirmedGames: od.confirmed, text, event: s ? s.rating : null, setBy: s ? 'tournament' : null, use: s ? s.rating : od.rating != null ? od.rating : 1500, seed: s ? s.rating : od.rating != null ? od.rating : 1500, needsSet: false, start: !s && od.rating == null, label: RLABEL, reason: s ? s.reason : undefined, at: s ? s.at : undefined, locked: d ? evrLocked(d) : undefined }; },
   eventSetup: async (directorE, eventId, o) => { if (!(await entFor(directorE))) throw bad(403, 'Only Enterprise tournaments can set ratings'); const x = o || {}, dk = mkOf(directorE);
-    await mutateRow(EVR(eventId), () => ({ dir: dk, set: {}, log: [] }), async (d) => { if (d.dir !== dk) throw bad(403, 'Not your tournament'); if (evrLocked(d)) throw bad(409, 'The tournament has started; ratings are locked'); d.title = cleanName(x.title, 60) || d.title || 'Tournament'; d.sport = x.sport || d.sport || 'pickleball'; d.lockAt = Number(x.lockAt) > 0 ? Number(x.lockAt) : d.lockAt || null; return {}; }); return { ok: true }; },
+    await mutateRow(EVR(eventId), () => ({ dir: dk, set: {}, log: [] }), async (d) => { if (d.dir !== dk) throw bad(403, 'Not your tournament'); if (evrLocked(d)) throw bad(409, 'The tournament has started; ratings are final'); d.title = cleanName(x.title, 60) || d.title || 'Tournament'; d.sport = x.sport || d.sport || 'pickleball'; d.lockAt = Number(x.lockAt) > 0 ? Number(x.lockAt) : d.lockAt || null; return {}; }); return { ok: true }; },
   eventOverride: async (directorE, eventId, userKey, o) => { const x = o || {}, raw = x.rating, val = raw == null || raw === '' ? null : Math.round(Number(raw)); if (val != null && !(val >= 100 && val <= 3500)) throw bad(400, 'Rating must be 100 to 3500');
-    const dk = mkOf(directorE), pk = pkey(userKey), real = (await oddableOf(userKey, x.sport && x.sport !== 'golf' ? x.sport : 'pickleball')).rating;
-    return mutateRow(EVR(eventId), null, async (d) => { if (d.dir !== dk) throw bad(403, "Only this tournament's director can change ratings"); if (evrLocked(d)) throw bad(409, 'The tournament has started; ratings are locked');
+    const dk = mkOf(directorE), pk = pkey(userKey), nm0 = /^other:([a-z0-9-]{1,24})$/.exec(String(x.sport || '')), real = (await oddableOf(userKey, nm0 ? 'other' : x.sport && x.sport !== 'golf' ? x.sport : 'pickleball', nm0 ? nm0[1] : null)).rating;
+    return mutateRow(EVR(eventId), null, async (d) => { if (d.dir !== dk) throw bad(403, "Only this tournament's director can change ratings"); if (evrLocked(d)) throw bad(409, 'The tournament has started; ratings are final');
       d.set = d.set || {}; d.log = d.log || []; const cur = d.set[pk] || {}, old = cur.rating != null ? cur.rating : real; if ((cur.rating == null && val == null) || cur.rating === val) return { nochange: true, v: { ok: true, changed: false } };
       const nx = Object.assign({}, cur, { at: D.now(), reason: cleanName(x.reason, 120), name: cleanName(x.name, 30) || cur.name || '' }); if (val == null) delete d.set[pk]; else { nx.rating = val; d.set[pk] = nx; }
       d.log.push({ at: D.now(), by: cleanName(x.byName, 30) || 'Tournament director', player: nx.name || 'Player', field: 'rating', old: old == null ? null : old, new: val, oddable: real == null ? null : real, reason: cleanName(x.reason, 120) }); if (d.log.length > 2000) d.log = d.log.slice(-2000);
@@ -877,7 +1033,7 @@ const ADAPTER = {
   attachToGroup: (evtId, ctx) => ADAPTER.attach(evtId, ctx), // alias (name used in OWNER-DECISIONS / the Groups contests[] plan)
   attach: (evtId, ctx) => mutate(evtId, (evt) => { evt.group = { gid: String(ctx.gid).slice(0, 20), cid: String(ctx.cid).slice(0, 20) }; evt.money.pot = ctx.pot === 'side' ? 'side' : 'main'; return evt; }).then((evt) => idxSet(evtId, () => idxEntry(evt)).then(() => evt)),
   summary: async (evtId) => { const r = await load(evtId); if (!r) return null; const evt = r.data, now = D.now(); tick(evt, now); const pl = evt.places || places(evt, now); return { id: evt.id, title: evt.title, fmt: evt.fmt, status: evt.fin ? 'final' : evt.drawn ? 'live' : 'upcoming', start: evt.start, leader: pl ? nameOf(evt, Object.keys(pl).find((e) => pl[e] === 1)) : null, places: pl ? Object.entries(pl).map(([e, p]) => ({ lot: e, name: nameOf(evt, e), place: p })) : null }; },
-  potSummary: async (evtId) => { const r = await load(evtId); return r ? potSummary(r.data) : null; },
+  potSummary: async (evtId) => { const r = await load(evtId); return r ? potSummary(r.data) : null; }, joinFromGroup: (evtId, accountId, opts) => joinFromGroup(evtId, accountId, opts),
   // Calcutta `lots` source: one lot per entry (player or pair). result(lotId) tells the Calcutta engine how far that lot went.
   lots: async (evtId) => { const r = await load(evtId); if (!r) return []; const evt = r.data; return evt.entrants.map((e) => ({ id: e.eid, name: e.name, rating: e.rating, seed: (evt.seeds || []).indexOf(e.eid) + 1 || null, size: UNITS[evt.rules.unit] || 1 })); },
   lotResults: async (evtId) => { const r = await load(evtId); if (!r) return {}; const evt = r.data, now = D.now(); tick(evt, now); const pl = evt.places || places(evt, now) || {}, o = {}; evt.entrants.forEach((e) => { const ms = evt.matches.filter((m) => m.state === 'confirmed' && (m.a === e.eid || m.b === e.eid)); o[e.eid] = { place: pl[e.eid] || null, wins: ms.filter((m) => winnerOf(m) === e.eid).length, losses: ms.filter((m) => loserOf(m) === e.eid).length, alive: !pl[e.eid] && !ms.some((m) => loserOf(m) === e.eid && (m.st === 'po' || (m.st === 'w' && evt.fmt === 'se') || m.st === 'l')), final: !!evt.fin }; }); return o; },
@@ -908,4 +1064,17 @@ const ADAPTER = {
   // calcutta = require('./calcutta'); key defaults to 'evt:<id>'. Refuses (throws) when the Calcutta engine has no started()/startTime() support to hook into.
   registerCalcutta: (calcutta, evtId, key) => { if (!calcutta || typeof calcutta.registerSource !== 'function') throw new Error('calcutta.registerSource is missing'); const src = ADAPTER.calcuttaSource(evtId), k = key || (evtId ? 'evt:' + evtId : 'events'); calcutta.registerSource(k, src); return k; },
 };
-module.exports = { handle, statsFor, ratingFor, STAND, LIMSTAND, openTies, pickPoints, _billed: () => BILLQ, snapRatings, moneyFor, pairHistory, ADAPTER, limits, SPORTS, FMTN, cleanRules, checkGames, roundRobin, buildElim, seedOrder, poolTable, places, potSummary, people, _deps: D, _mkOf: mkOf, _reset: () => { RL.clear(); RC.clear(); ENTF.clear(); BILL.clear(); } };
+// ---------- for the Groups engine (groups.wire: registerGame('event', {potSummary, attachToGroup}), registerInvite('e', inviteInfo)) ----------
+// attachToGroup(eventId, groupId, contestId): the event's organizer must be THAT group's commissioner (asked from Groups, fail closed); one group per event.
+async function attachToGroup(evtId, groupId, contestId) {
+  const gid = String(groupId || ''), r = await load(String(evtId)); if (!r) throw bad(404, 'Event not found'); if (!/^[\w:-]{1,40}$/.test(gid)) throw bad(400, 'Which group?');
+  if ((await groupRole(gid, r.data.ce)) !== 'comm') throw Object.assign(bad(403, "Only the group's commissioner can add his own event to the group."), { code: 'groupcomm' });
+  const evt = await mutate(String(evtId), (evt, now) => { if (evt.group && evt.group.gid !== gid) throw Object.assign(bad(409, 'This event is already in another group'), { code: 'attached' }); const cid = String(contestId || (evt.group && evt.group.cid) || '').slice(0, 20); if (evt.group && evt.group.cid === cid) return { nochange: true, v: evt }; const first = !evt.group; evt.group = { gid: gid.slice(0, 40), cid }; if (first) audit(evt, now, 'Group', 'group', null, 'Added to a group: its members can join from the group'); return evt; });
+  await idxSet(String(evtId), () => idxEntry(evt)); return { id: evt.id, group: evt.group };
+}
+async function joinFromGroup(evtId, accountId, opts) { const u = { e: String(accountId), mk: mkOf(String(accountId)) }, r = await load(String(evtId)); if (!r || !r.data.group) throw bad(404, 'Event not found'); await needGroup(r.data, u); const { evt } = await joinEvent(String(evtId), u, opts || {}); await idxSet(evt.id, () => idxEntry(evt)); return { id: evt.id, people: people(evt) }; }
+// potSummary(<event id>) for a group's pot card: {pot, take, pool, paidOut, inPlay, main, over} in dollars (information only). potSummary(<event>) = the event screen's own summary.
+function potSummaryAny(x) { if (x && typeof x === 'object') return potSummary(x); return load(String(x || '')).then((r) => { if (!r) return null; const evt = r.data, p = potSummary(evt), fin = !!(evt.fin && evt.places); let paid = 0; if (fin) evt.entrants.forEach((e) => (e.players || []).forEach((s) => { if (!isBlank(s)) paid += Math.round((moneyFor(evt, e.eid, s.gid).payout || 0) * 100); }));
+  return { pot: p.total, take: p.take, pool: p.pool, paidOut: fin ? paid / 100 : 0, inPlay: fin ? 0 : p.pool, unclaimed: fin ? Math.round(p.pool * 100 - paid) / 100 : 0, over: fin, main: p.pot === 'main', players: p.players, paid: p.paid, entry: p.entry }; }); }
+async function inviteInfo(code, now) { try { const c = normCode(code), id = c ? await byCode(c) : null, r = id ? await load(id) : null; return r ? { kind: 'event', title: r.data.title } : null; } catch (e) { return null; } }
+module.exports = { handle, attachToGroup, joinFromGroup, inviteInfo, groupRole, statsFor, ratingFor, STAND, LIMSTAND, openTies, pickPoints, _billed: () => BILLQ, snapRatings, moneyFor, pairHistory, ADAPTER, limits, SPORTS, FMTN, cleanRules, checkGames, roundRobin, buildElim, seedOrder, poolTable, places, potSummary: potSummaryAny, people, _deps: D, _mkOf: mkOf, _reset: () => { RL.clear(); RC.clear(); ENTF.clear(); BILL.clear(); GONE.clear(); } };

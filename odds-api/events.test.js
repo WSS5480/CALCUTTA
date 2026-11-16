@@ -10,6 +10,7 @@ D.S = {
 const ENT = new Set(['club']);
 D.acct = () => ({ who: (req) => { const t = String(req.headers['x-token'] || ''); return t.startsWith('t-') ? 'acct-' + t.slice(2) : null; } });
 D.enterprise = async (k) => ENT.has(String(k).replace('acct-', ''));
+const KIT = require('./events.testkit')({ E, D, ENT });
 D.ip = (req) => String(req.headers['x-ip'] || '1.1.1.1');
 const Z = (s) => Date.parse(s), HOUR = 3600e3, DAY = 864e5;
 let NOW = Z('2026-11-17T18:00:00Z'); D.now = () => NOW;
@@ -280,7 +281,7 @@ srv.listen(0, async () => {
     await E.ADAPTER.attachToGroup(se, { gid: 'G1', cid: 'C1', pot: 'side' }); assert.strictEqual((await E.ADAPTER.potSummary(se)).pot, 'side'); await E.ADAPTER.attachToGroup(did, { gid: 'G2', cid: 'C2' }); assert.ok((await E.statsFor('acct-kim', {})).some((x) => x.kind === 'match' && x.groupId === 'G2' && x.contestId === 'C2'), 'attached event records carry groupId/contestId');
     t('no account ids, member keys or claim secrets leak; adapter lots / lotResults / summary / potSummary / attach work');
     // rate limit on public peek + wrong codes
-    E._reset(); for (let i = 0; i < 10; i++) no(await call(null, 'peek', { code: 'ZZZZ-ZZZ' + i }, '6.6.6.6'), 404); no(await call(null, 'peek', { code }, '6.6.6.6'), 429, 'blocked after 10 wrong codes');
+    E._reset(); for (let i = 0; i < 10; i++) no(await call(null, 'peek', { code: 'ZZZZ-ZZZ' + i, dev: 'guessing-phone-1' }, '6.6.6.6'), 404); no(await call(null, 'peek', { code, dev: 'guessing-phone-1' }, '6.6.6.6'), 429, 'the phone that sent 10 wrong codes is blocked (third review: the phone, not the whole Wi-Fi)');
     t('wrong invite codes blocked after 10 per IP (peek) ');
     // sport catalog: every 'Available now' game opens a flow that exists (an event format + sport the server accepts, or the Groups picks contest); required sports + exact cap line
     const CAT = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, '../pics/games-catalog.json'), 'utf8'));

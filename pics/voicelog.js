@@ -42,8 +42,8 @@
     }
     o.innerHTML = h + '</div>';
     const mic = o.querySelector('#vlmic'), ta = o.querySelector('#vltext'), say = (t) => { S.say = t; const m = o.querySelector('#vlmsg'); if (m) m.textContent = t; };
-    if (ta) ta.oninput = () => { S.heard = ta.value; };
-    if (mic && typeof window.aiPTT === 'function') window.aiPTT(mic, { say, idle: '🎤 Hold to talk', live: (t) => { if (ta) ta.value = t; S.heard = t; }, done: (t) => { if (ta) ta.value = t; S.heard = t; if (t) read(); } });
+    if (ta) ta.oninput = () => { if (S) S.heard = ta.value; }; // integration fix: the sheet can be closed while a late input / voice event still arrives
+    if (mic && typeof window.aiPTT === 'function') window.aiPTT(mic, { say, idle: '🎤 Hold to talk', live: (t) => { if (!S) return; if (ta) ta.value = t; S.heard = t; }, done: (t) => { if (!S) return; if (ta) ta.value = t; S.heard = t; if (t) read(); } });
     else if (mic) mic.onclick = () => say('Voice needs the Ask Claude module (ai.js). Type it instead.');
   }
   async function read() {

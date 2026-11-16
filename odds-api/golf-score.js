@@ -103,9 +103,13 @@ function skins(scores, nHoles, end) {
   if (out.carry && out.holes.length === nHoles && scores.length) {
     const last = out.holes[nHoles - 1];
     if (end === 'none') out.dead = out.carry;
-    else { const each = Math.round(out.carry / last.tied.length * 100) / 100; last.tied.forEach((id) => { out.won[id] = Math.round(((out.won[id] || 0) + each) * 100) / 100; }); out.split = { ids: last.tied, skins: out.carry, each }; }
+    else { // shared in hundredths of a skin, leftover hundredths one each in list order: the shares always add up to exactly what was riding (review fix)
+      const k = last.tied.length, tot = out.carry * 100, each = Math.floor(tot / k); let left = tot - each * k; const shares = {};
+      last.tied.forEach((id) => { const c = each + (left > 0 ? 1 : 0); if (left > 0) left--; shares[id] = c / 100; out.won[id] = Math.round((out.won[id] || 0) * 100 + c) / 100; });
+      out.split = { ids: last.tied, skins: out.carry, each: each / 100, shares }; }
     out.carry = 0;
   }
+  out.wonC = {}; Object.keys(out.won).forEach((id) => (out.wonC[id] = Math.round(out.won[id] * 100))); out.total = Object.values(out.wonC).reduce((a, x) => a + x, 0) / 100; // hundredths of a skin: exact sums
   return out;
 }
 
@@ -125,6 +129,8 @@ function match(a, b, from, len) {
   const short = closed && left > 0 ? Math.abs(up) + '&' + left : up === 0 ? (done ? 'HALVED' : 'AS') : Math.abs(up) + (up > 0 ? ' UP' : ' DN');
   return { up, played, left, dormie: !done && left > 0 && Math.abs(up) === left, closed: closed && left > 0, done, res, text, short, holes };
 }
+// Holes both sides have actually played in a stretch, in order (match() stops counting once a bet is closed out; the round goes on).
+function holesPlayed(a, b, from, len) { let k = 0; for (let i = from || 0; i < (from || 0) + (len || a.length); i++) { if (a[i] == null || b[i] == null) break; k++; } return k; }
 // Nassau between sides a and b on 18 holes: front 9, back 9, total 18; presses = [{nine:'front'|'back', from:hole number}] each a new bet from that hole to the end of its nine.
 // autoPress: when a side goes N down within a nine, a press starts automatically on the next hole (one per deficit trigger, counted from the newest bet of that nine).
 function nassau(a, b, presses, autoPress) {
@@ -198,11 +204,18 @@ function whsIndex(rounds) {
 // A commissioner split (whole percents adding to 100) is used when given; never more paid places than entrants.
 function defaultSplit(n) { n = Number(n) || 0; return n <= 3 ? [100] : n <= 6 ? [70, 30] : n <= 11 ? [50, 30, 20] : n <= 19 ? [40, 25, 20, 15] : [35, 22, 15, 11, 9, 8]; }
 function splitFor(split, n) { const s = Array.isArray(split) && split.length && split.reduce((a, x) => a + x, 0) === 100 ? split : defaultSplit(n); return s.slice(0, Math.max(1, n)); }
+// The prize for each paid place, in cents. FEWER FINISHERS THAN PLACES (review fix): the places that are left are re-scaled to 100% (50/30/20 with two
+// finishers pays 62.5% / 37.5%), so the whole pool is always paid. Sum is exact to the cent: every prize is floored and the leftover cents go to 1st.
+function prizes(poolCents, split, n) {
+  const s = splitFor(split, n), tot = s.reduce((a, x) => a + x, 0) || 1, pool = Math.max(0, Math.round(Number(poolCents) || 0)), out = s.map((p) => Math.floor(pool * p / tot));
+  if (out.length) out[0] += pool - out.reduce((a, x) => a + x, 0); return out;
+}
+// The share of each paid place as shown to people (percent of the pool, one decimal), after the same re-scale.
+function sharesFor(split, n) { const s = splitFor(split, n), tot = s.reduce((a, x) => a + x, 0) || 1; return s.map((p) => Math.round(p * 1000 / tot) / 10); }
 // places: [{id, place}] (ties share a place number). Tied places share the prizes of the places they cover, split evenly in cents (leftover cents go one
 // each in list order). Returns {id: cents}.
 function payouts(poolCents, places, split) {
-  const s = splitFor(split, places.length), out = {}; let used = s.reduce((a, x) => a + x, 0);
-  const prizeC = s.map((p) => Math.floor(poolCents * p / 100)); const rem = poolCents * used / 100 - prizeC.reduce((a, x) => a + x, 0); if (prizeC.length) prizeC[0] += Math.round(rem);
+  const out = {}, prizeC = places.length ? prizes(poolCents, split, places.length) : [];
   places.forEach((x) => (out[x.id] = 0));
   const byPlace = {}; places.forEach((x) => { (byPlace[x.place] = byPlace[x.place] || []).push(x.id); });
   Object.keys(byPlace).map(Number).sort((a, b) => a - b).forEach((pl) => { const ids = byPlace[pl], c = prizeC.slice(pl - 1, pl - 1 + ids.length).reduce((a, x) => a + x, 0), each = Math.floor(c / ids.length); let left = c - each * ids.length; ids.forEach((id) => { out[id] = each + (left > 0 ? 1 : 0); if (left > 0) left--; }); });
@@ -211,4 +224,4 @@ function payouts(poolCents, places, split) {
 // Nassau money for side a: front, back, total and every press are each a bet of amt (+ won, - lost, 0 halved or not finished).
 function nassauMoney(ns, amt) { if (!ns || !amt) return null; const one = (m) => (m && m.done ? (m.res === 'W' ? amt : m.res === 'L' ? -amt : 0) : 0); return [ns.front, ns.back, ns.total].concat((ns.presses || []).map((p) => p.m)).reduce((a, m) => a + one(m), 0); }
 
-module.exports = { courseHcp, whsIndex, defaultSplit, splitFor, payouts, nassauMoney, MIN_FIELD, holesAdj, strokesOn, teamHcp, playHcp, FORMATS, STABLEFORD, checkCourse, teamHole, teamRound, texasDrives, floridaCheck, skins, match, nassau, golferScore, pickSix, rankSix, tiers, finishPoints };
+module.exports = { courseHcp, whsIndex, defaultSplit, splitFor, prizes, sharesFor, holesPlayed, payouts, nassauMoney, MIN_FIELD, holesAdj, strokesOn, teamHcp, playHcp, FORMATS, STABLEFORD, checkCourse, teamHole, teamRound, texasDrives, floridaCheck, skins, match, nassau, golferScore, pickSix, rankSix, tiers, finishPoints };

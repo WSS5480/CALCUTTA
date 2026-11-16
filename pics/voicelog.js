@@ -7,7 +7,7 @@
 //   spec: { describe: string | (ctx) => string (shown to the player and sent as a screen note), save: (ctx, data) => Promise<{ok, pending?, note?}>  (a one-argument save gets {...ctx, ...data}) }
 // Targets: 'self' is registered by pics/stats.js; golf-hole / golf-round by pics/golf.js and match / solo by pics/events.js when those engines are merged.
 (function () {
-  const BASE = () => window.ODD_STATS_API || window.ODD_GROUPS_API || 'https://oddable-preview-api.onrender.com';
+  const BASE = () => window.ODD_STATS_API || window.ODD_GROUPS_API || location.origin + '';
   const T = {}, esc = (x) => String(x == null ? '' : x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const tok = () => { try { return localStorage.getItem('odd-tok') || ''; } catch (e) { return ''; } };
   const supported = () => !!(window.SpeechRecognition || window.webkitSpeechRecognition);

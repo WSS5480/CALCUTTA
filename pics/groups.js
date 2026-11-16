@@ -3,7 +3,7 @@
 // Every rule, standing and money figure comes from the server (odds-api/groups.js); this file only shows them. Money is information only:
 // Oddable never collects, holds or pays money. Results are graded by Oddable from final scores; other members' bets arrive only after their games kick off.
 (function () {
-  const API = (window.ODD_GROUPS_API || 'https://oddable-preview-api.onrender.com') + '/groups/';
+  const API = (window.ODD_GROUPS_API || location.origin + '') + '/groups/';
   const g = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const esc = (x) => String(x == null ? '' : x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const att = (x) => esc(String(x == null ? '' : x).replace(/[^\w.-]/g, ''));

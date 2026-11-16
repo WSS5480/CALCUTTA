@@ -1,7 +1,7 @@
 // Oddable owner dashboard. Shown to the owner (owner-PIN sign-in or an OWNER_PHONE account); the server refuses everyone else.
 // Phones are never available: players show as the name Steve typed for them, else a short id. Graphs are tappable; every tile and graph drills down, with a back button.
 (function () {
-  const API = 'https://oddable-preview-api.onrender.com/acct/dash';
+  const API = location.origin + '/acct/dash';
   const g = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const esc = (x) => String(x == null ? '' : x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const money = (n) => (n < 0 ? '-$' : '$') + Math.abs(Math.round(n)).toLocaleString();

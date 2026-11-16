@@ -2,7 +2,7 @@
 // and the My Bets banner 40). Every rule, score, standing and money figure comes from the server (odds-api/events.js); this file only shows them.
 // Money is information only: Oddable never collects, holds or pays money. Opened from Groups ("My events"), the sport catalog, or a shared link ?join=e.<code>.
 (function () {
-  const API = (window.ODD_GROUPS_API || 'https://oddable-preview-api.onrender.com') + '/events/';
+  const API = (window.ODD_GROUPS_API || location.origin + '') + '/events/';
   const ls = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return null; } };
   const esc = (x) => String(x == null ? '' : x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const att = (x) => esc(String(x == null ? '' : x).replace(/[^\w.-]/g, ''));
@@ -349,7 +349,7 @@
     if (s.t === 'create' && /^f/.test(id) && ev.target.tagName === 'SELECT') { readDraft(); paint(); }
   }
   // ---------- invite (shared router pics/join.js when present; local fallback otherwise) ----------
-  const link = (code) => 'https://oddable-preview.onrender.com/?join=e.' + encodeURIComponent(code);
+  const link = (code) => location.origin + '/?join=e.' + encodeURIComponent(code);
   function invite(e) {
     const text = 'Join "' + e.title + '" (' + FMTN[e.fmt] + ', ' + SPORTN[e.sport] + ') on Oddable';
     if (window.OddJoin && typeof window.OddJoin.share === 'function') { try { window.OddJoin.share({ type: 'e', code: e.code, title: e.title, text }); return; } catch (x) {} }

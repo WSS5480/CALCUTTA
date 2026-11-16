@@ -166,7 +166,7 @@ const HFA = CFB ? 3.5 : 2.0, CAP = CFB ? 100 : 14, DECAY = CFB ? 0.95 : 0.85, RI
 const PREV = {}; // last season's final power ratings (college), used as the starting point
 const wgt = (g) => Math.pow(DECAY, Math.max(0, (CUR || g.week) - g.week)); // recent games count more
 let INJ_AT = 0;
-const ODDS_URL = 'https://oddable-preview-api.onrender.com/odds';
+const ODDS_URL = location.origin + '/odds';
 const FIX = { WSH: 'WAS', JAC: 'JAX', LA: 'LAR' };
 const PTS = 0.14;
 const SD = CFB ? 16 : 12.5; // typical NFL scoring-margin spread around a game's expected margin
@@ -214,7 +214,7 @@ async function loadServerLines() {
   const merged = {};
   const add = (db) => Object.keys(db || {}).forEach((id) => { merged[id] = [...(merged[id] || []), ...db[id]]; });
   try { const r = await fetch(LINES_URL, { cache: 'no-store' }); if (r.ok) add(await r.json()); } catch (e) {}
-  try { const r = await fetch('https://oddable-preview-api.onrender.com/lines', { cache: 'no-store' }); if (r.ok) add(await r.json()); } catch (e) {}
+  try { const r = await fetch(location.origin + '/lines', { cache: 'no-store' }); if (r.ok) add(await r.json()); } catch (e) {}
   Object.keys(merged).forEach((id) => merged[id].sort((a, b) => a[0] - b[0]));
   SERVER_LM = merged; render();
 }
@@ -770,7 +770,7 @@ function betEdit(id) { const b = BETS.find((x) => x.id === id); if (!b) return;
   if (b.kind === 'parlay') { BF = { step: 'parlay', id, legs: JSON.parse(JSON.stringify(b.legs)), ...pay }; betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
   if (b.kind === 'prop') { BF = { step: 'prop', id, text: b.text, day: b.day, ...pay }; betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
   if (!ALL[b.gid]) return; BF = { step: 'form', id, gid: b.gid, side: b.side, type: b.type, line: b.line, stake: b.stake || '', odds: b.mult ? b.mult : (b.odds && b.odds !== -110 ? b.odds : ''), pt: b.mult ? 'x' : 'am' }; betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
-const PROXY = 'https://oddable-preview-api.onrender.com/kalshi/proxy', KAPI = '/trade-api/v2', lsg = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, lss = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+const PROXY = location.origin + '/kalshi/proxy', KAPI = '/trade-api/v2', lsg = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, lss = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
 let KERR = '', KST = '', KFORM = lsg('kal-formopen') === '1', KBUSY = false;
 const kDraft = () => { try { return JSON.parse(lsg('kal-draft')) || {}; } catch (e) { return {}; } };
 function kDraftSet(k, v) { const d = kDraft(); d[k] = v; lss('kal-draft', JSON.stringify(d)); }

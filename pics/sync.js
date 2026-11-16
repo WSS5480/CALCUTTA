@@ -1,7 +1,7 @@
 // Oddable cloud sync: sign in with a cell number + PIN on any device and your bets, watch list, daily logs and locked picks follow you.
 // Kalshi keys never leave the device. Server: calcutta-odds /sync/*.
 (function () {
-  const API = 'https://oddable-preview-api.onrender.com/sync';
+  const API = location.origin + '/sync';
   const g = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const s = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
   const escH = (x) => String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

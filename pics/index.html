@@ -257,7 +257,7 @@ const HFA = CFB ? 3.5 : 2.0, CAP = CFB ? 100 : 14, DECAY = CFB ? 0.95 : 0.85, RI
 const PREV = {}; // last season's final power ratings (college), used as the starting point
 const wgt = (g) => Math.pow(DECAY, Math.max(0, (CUR || g.week) - g.week)); // recent games count more
 let INJ_AT = 0;
-const ODDS_URL = 'https://oddable-preview-api.onrender.com/odds';
+const ODDS_URL = location.origin + '/odds';
 const FIX = { WSH: 'WAS', JAC: 'JAX', LA: 'LAR' };
 const PTS = 0.14;
 const SD = CFB ? 16 : 12.5; // typical NFL scoring-margin spread around a game's expected margin
@@ -305,7 +305,7 @@ async function loadServerLines() {
   const merged = {};
   const add = (db) => Object.keys(db || {}).forEach((id) => { merged[id] = [...(merged[id] || []), ...db[id]]; });
   try { const r = await fetch(LINES_URL, { cache: 'no-store' }); if (r.ok) add(await r.json()); } catch (e) {}
-  try { const r = await fetch('https://oddable-preview-api.onrender.com/lines', { cache: 'no-store' }); if (r.ok) add(await r.json()); } catch (e) {}
+  try { const r = await fetch(location.origin + '/lines', { cache: 'no-store' }); if (r.ok) add(await r.json()); } catch (e) {}
   Object.keys(merged).forEach((id) => merged[id].sort((a, b) => a[0] - b[0]));
   SERVER_LM = merged; renderBg();
 }
@@ -1210,7 +1210,7 @@ function betEdit(id) { const b = BETS.find((x) => x.id === id); if (!b) return;
   if (b.kind === 'parlay') { BF = { step: 'parlay', id, legs: JSON.parse(JSON.stringify(b.legs)), ...pay }; betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
   if (b.kind === 'prop') { BF = { step: 'prop', id, text: b.text, day: b.day, ...pay, ...(b.pp ? { pg: b.pp.gid, pl: b.pp.name, ps: b.pp.stat, pn: b.pp.line, pr: b.pp.dir } : {}) }; betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
   if (!ALL[b.gid]) return; BF = { step: 'form', id, gid: b.gid, side: b.side, type: b.type, line: b.line, stake: b.stake || '', odds: b.mult ? b.mult : (b.odds && b.odds !== -110 ? b.odds : ''), pt: b.mult ? 'x' : 'am' }; betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
-const PROXY = 'https://oddable-preview-api.onrender.com/kalshi/proxy', KAPI = '/trade-api/v2', lsg = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, lss = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+const PROXY = location.origin + '/kalshi/proxy', KAPI = '/trade-api/v2', lsg = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, lss = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
 let KERR = '', KST = '', KFORM = false, KBUSY = false, KLAST = 0;
 function kdotPaint() { const e = document.getElementById('kdot'); if (!e) return; const has = !!(lsg('kal-id') && lsg('kal-pem')); e.hidden = !has; if (!has) return; const s = KST || '', fresh = KLAST && Date.now() - KLAST < 20 * 60e3; e.className = 'kdot ' + (/rejected|could not/i.test(s) ? 'bad' : (/^Kalshi synced/.test(s) && fresh) ? 'ok' : 'busy'); e.title = (e.className.indexOf('ok') > 0 ? '🟢 Kalshi connected · ' : e.className.indexOf('bad') > 0 ? '🔴 Kalshi problem · ' : '🟠 Kalshi ') + (s || 'connected'); e.setAttribute('aria-label', e.title); } // green flashing = connected and synced in the last 20 min; orange = syncing / waiting; red = key rejected or cannot connect
 setInterval(kdotPaint, 3000); setTimeout(kdotPaint, 500); try { localStorage.removeItem('kal-formopen'); } catch (e) {} // never reopen the connect card on load;
@@ -1325,7 +1325,7 @@ async function kcoLoad() {
 }
 
 // ---- CASH OUT (a real sale on Kalshi, only after the confirm screen) ----
-const KORD = 'https://oddable-preview-api.onrender.com/kalshi/order'; let KCOM = null, KCOSEND = false;
+const KORD = location.origin + '/kalshi/order'; let KCOM = null, KCOSEND = false;
 async function kalshiOrder(order) {
   const { kind, key } = await kalshiKey(), ts = String(Date.now()), path = '/portfolio/orders', msg = new TextEncoder().encode(ts + 'POST' + KAPI + path);
   const sig = kind === 'rsa' ? await crypto.subtle.sign({ name: 'RSA-PSS', saltLength: 32 }, key, msg) : await crypto.subtle.sign('Ed25519', key, msg);
@@ -1498,7 +1498,7 @@ function merge(list) { list.forEach((g) => { const old = ALL[g.id]; if (g.state 
 // Many-book spreads (NFL, before kickoff): the line the app uses is the CONSENSUS (median) across books; ESPN's single-book line is kept as espnLine.
 let BOOKS = {}, BKT = 0;
 function applyBooks(g) { if (CFB || g.state !== 'pre') return; const b = BOOKS[g.away.abbr + '@' + g.home.abbr]; if (!b) return; if (g.espnLine === undefined) g.espnLine = g.line; g.line = b.line; g.books = b; }
-async function loadBooks() { if (CFB) { try { arbBarPaint(); } catch (e) {} return; } if (Date.now() - BKT < 60000) return; BKT = Date.now(); try { const r = await fetch('https://oddable-preview-api.onrender.com/games'); if (!r.ok) return; const j = await r.json(); const m = {}; (j.games || []).forEach((x) => { m[ab(x.away) + '@' + ab(x.home)] = x; }); BOOKS = m; Object.values(ALL).forEach(applyBooks); try { renderBg(); } catch (e) {} try { arbBarPaint(); } catch (e) {} } catch (e) {} }
+async function loadBooks() { if (CFB) { try { arbBarPaint(); } catch (e) {} return; } if (Date.now() - BKT < 60000) return; BKT = Date.now(); try { const r = await fetch(location.origin + '/games'); if (!r.ok) return; const j = await r.json(); const m = {}; (j.games || []).forEach((x) => { m[ab(x.away) + '@' + ab(x.home)] = x; }); BOOKS = m; Object.values(ALL).forEach(applyBooks); try { renderBg(); } catch (e) {} try { arbBarPaint(); } catch (e) {} } catch (e) {} }
 // Arbitrage / middle finder across books (spreads). Home leg = book A (home covers if margin > A.l), away leg = book B (away covers if margin < B.l). Line l = home favored by l.
 const decOf = (a) => (a > 0 ? 1 + a / 100 : 1 + 100 / -a);
 function arbOf(g) {
@@ -1607,7 +1607,7 @@ let AMM = (() => { try { const v = +localStorage.getItem('asvm26'); return v > 0
 const frzTxt = () => (AMM === 60 ? '1 hour' : AMM % 60 === 0 ? AMM / 60 + ' hours' : AMM + ' minutes');
 let ASV = (() => { try { const j = JSON.parse(localStorage.getItem('asv26')); return j && typeof j === 'object' && !Array.isArray(j) ? j : {}; } catch (e) { return {}; } })();
 let AST = (() => { try { return +localStorage.getItem('asvt26') || 0; } catch (e) { return 0; } })();
-const ALU = 'https://oddable-preview-api.onrender.com/alert';
+const ALU = location.origin + '/alert';
 function alertTake(w) { const s = JSON.stringify(w); if (s === JSON.stringify(ASV)) return false; ASV = w; ASN++; try { localStorage.setItem('asv26', s); } catch (e) {} TRC = null; return true; }
 async function alertPull(force) {
   if (CFB || (!force && Date.now() - ASP < 120000)) return; ASP = Date.now(); let ok = false;
@@ -2245,7 +2245,7 @@ function lockSnap(g) {
   try { if (localStorage.getItem(lkKey(g.id) + '-s') !== str) { localStorage.setItem(lkKey(g.id), JSON.stringify({ ...snap, t: Date.now() })); localStorage.setItem(lkKey(g.id) + '-s', str); lkQueue(g, snap); } } catch (e) {}
 }
 // Shared locks: the pre-kickoff pick is the same for everyone. Phones with the app open before kickoff upload it; every phone (and new sign-ins) pulls it, so no one is missing a lock.
-const LKQ = {}; let LKT = 0, LKP = 0; const LKU = 'https://oddable-preview-api.onrender.com/locks';
+const LKQ = {}; let LKT = 0, LKP = 0; const LKU = location.origin + '/locks';
 function lkQueue(g, snap) { LKQ[g.id] = { id: g.id, s: g.start, snap: { su: snap.su, conf: snap.conf, L: snap.L, ats: snap.ats } }; clearTimeout(LKT); LKT = setTimeout(lkPush, 4000); }
 async function lkPush() { const it = Object.values(LKQ).slice(0, 60); if (!it.length || window.MIRROR) return; try { const r = await fetch(LKU, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': (function () { try { return localStorage.getItem('odd-tok') || ''; } catch (e) { return ''; } })() }, body: JSON.stringify({ lg: LG, items: it }) }); if (r.ok) { const j = await r.json().catch(() => ({})); if (!j.rejected) it.forEach((i) => { delete LKQ[i.id]; }); } /* kept for a retry when the server could not match a game yet */ } catch (e) {} }
 async function lkPull(force) { if (!force && Date.now() - LKP < 60000) return; LKP = Date.now(); try { const r = await fetch(LKU + '?lg=' + LG); if (!r.ok) return; const j = (await r.json()).locks || {}; let n = 0; Object.values(ALL).forEach((g) => { if (g.state === 'pre' || j[g.id]) return; const lk = lkLoad(g.id); if (lk && lk.t && lk.t < g.start && Date.now() - g.start < 8 * 36e5) { LKQ[g.id] = { id: g.id, s: g.start, t: lk.t, snap: { su: lk.su, conf: lk.conf, L: lk.L, ats: lk.ats || null } }; } }); if (Object.keys(LKQ).length) lkPush(); Object.keys(j).forEach((id) => { const k = 'lk26-' + LG + '-' + id, v = j[id], g = ALL[id], cur = localStorage.getItem(k); if (cur === null || (g && g.state !== 'pre')) { const s2 = JSON.stringify({ su: v.su, conf: v.conf, L: v.L, ats: v.ats }); if (localStorage.getItem(k + '-s') !== s2) { localStorage.setItem(k, JSON.stringify(v)); localStorage.setItem(k + '-s', s2); n++; } } }); if (n) render(); } catch (e) {} }

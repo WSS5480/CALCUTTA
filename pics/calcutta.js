@@ -2,8 +2,8 @@
 // or an invite link (?join=c.<code>, routed by pics/join.js -> OddJoin.register('c', ...)). Every rule, bid, clock and dollar comes from the
 // server (odds-api/calcutta.js); this file only shows them. Money is information only: Oddable never collects, holds or pays money.
 (function () {
-  const API = (window.ODD_CALC_API || window.ODD_GROUPS_API || 'https://oddable-preview-api.onrender.com') + '/calcutta/';
-  const SITE = 'https://oddable-preview.onrender.com/';
+  const API = (window.ODD_CALC_API || window.ODD_GROUPS_API || location.origin + '') + '/calcutta/';
+  const SITE = location.origin + '/';
   const g = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const esc = (x) => String(x == null ? '' : x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const att = (x) => esc(String(x == null ? '' : x).replace(/[^\w.-]/g, ''));

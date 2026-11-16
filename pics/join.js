@@ -5,7 +5,7 @@
 // API: OddJoin = { register(type, handler), pending() -> {type, code} | null, clear(), share({type, code, title, text}) -> opens the share sheet,
 //                  run() (gate.js calls it after a sign-in), banner(el) (gate.js: "You're invited to join <title>") }.
 (function () {
-  const KEY = 'odd-join', API = (window.ODD_GROUPS_API || 'https://oddable-preview-api.onrender.com') + '/groups/invite', SITE = 'https://oddable-preview.onrender.com/';
+  const KEY = 'odd-join', API = (window.ODD_GROUPS_API || location.origin + '') + '/groups/invite', SITE = location.origin + '/';
   const H = {}, ss = (k, v) => { try { if (v === undefined) return sessionStorage.getItem(k); if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch (e) { return null; } };
   const esc = (x) => String(x == null ? '' : x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const parse = (v) => { const m = /^([a-z]{1,8})\.([A-Za-z0-9-]{4,40})$/.exec(String(v || '').trim()); return m ? { type: m[1], code: m[2] } : null; };

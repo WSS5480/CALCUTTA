@@ -5,7 +5,7 @@
 // Guest players + claim links; Course view (golf courses with an enterprise account, consenting players only). Back on every screen.
 // Public: window.oddStats(), window.OddStats = { open, askCourseConsent(course, via), reload }. Registers the 'self' VoiceLog target and the 'claim' join type.
 (function () {
-  const BASE = () => window.ODD_STATS_API || window.ODD_GROUPS_API || 'https://oddable-preview-api.onrender.com';
+  const BASE = () => window.ODD_STATS_API || window.ODD_GROUPS_API || location.origin + '';
   const g = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const esc = (x) => String(x == null ? '' : x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const att = (x) => esc(String(x == null ? '' : x).replace(/[^\w.:-]/g, ''));

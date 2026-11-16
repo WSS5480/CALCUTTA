@@ -79,6 +79,18 @@ process.on('uncaughtException', (e) => console.error('uncaught:', e && e.message
 http.createServer(async (req, res) => {
   // CORS preflight for every route (the sign-in/sign-up calls send JSON + an x-token header, so the browser asks first; without this answer they fail with "Failed to fetch")
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'content-type,x-token,x-dash', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Max-Age': '86400' }); return res.end(); }
+  if (PREVIEW && req.method === 'GET') { // one service for the whole test copy: the site's files (same layout steves-pics builds: pics/*, public/data, public/model.js) are served here too
+    const p = decodeURIComponent(req.url.split('?')[0]), f = p === '/' ? '/index.html' : p;
+    if (/^\/(data\/)?[A-Za-z0-9._-]+\.[A-Za-z0-9]+$/.test(f) && !f.includes('..')) {
+      const path = require('path'), fs = require('fs'), root = path.join(__dirname, '..');
+      const file = f.startsWith('/data/') || f === '/model.js' ? path.join(root, 'public', f) : path.join(root, 'pics', f);
+      if (fs.existsSync(file) && fs.statSync(file).isFile()) {
+        const TYPES = { html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8', json: 'application/json', css: 'text/css', png: 'image/png', webmanifest: 'application/manifest+json', gz: 'application/gzip', svg: 'image/svg+xml', ico: 'image/x-icon', wasm: 'application/wasm' };
+        res.setHeader('Content-Type', TYPES[f.split('.').pop().toLowerCase()] || 'application/octet-stream'); res.setHeader('Cache-Control', 'no-cache');
+        return fs.createReadStream(file).pipe(res);
+      }
+    }
+  }
   if (PREVIEW) {
     if (req.url.startsWith('/kalshi/order')) { res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json'); res.statusCode = 403; return res.end('{"error":"Test preview: no real orders are sent from here."}'); }
     if (req.url.startsWith('/preview')) { try { if (await require('./preview').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end(JSON.stringify({ error: 'preview: ' + (e && e.message) })); } }

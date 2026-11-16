@@ -5,7 +5,7 @@
 //  - Screens whose engine is not committed yet say "Preview: in progress" and read stand-in routes (/preview/pairing, /preview/hcp)
 // Money is display only. Nothing is collected, held or paid.
 (function () {
-  const API = 'https://oddable-preview-api.onrender.com';
+  const API = location.origin + '';
   const g = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const s = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} };
   const esc = (x) => String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

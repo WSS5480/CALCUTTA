@@ -1,6 +1,6 @@
 // Oddable sign-in wall + $99/month subscription (Cash App). Owner is free. Fail-open if the server has no gate configured.
 (function () {
-  const API = 'https://oddable-preview-api.onrender.com/acct';
+  const API = location.origin + '/acct';
   const g = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
     // Warning before opening any sport that has no pick model (everything but NFL and NCAA football). Shown on every tap.
   window.oddWarn = function (go) {

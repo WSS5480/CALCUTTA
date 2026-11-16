@@ -977,7 +977,7 @@ Owner decisions: OWNER-DECISIONS.md "Golf", "Invites", "Limits and pricing", "St
 Money is information only everywhere (entry, take, skins, per-match, prizes): Oddable never collects, holds or pays.
 
 ### Files
-- `odds-api/golf.js` (routes, storage, boards, adapter, stats), `odds-api/golf-score.js` (pure scoring), `odds-api/golf-feed.js` (ESPN), `odds-api/golf-courses.js` (OpenGolfAPI), fixtures in `odds-api/fixtures/` (all HAND-BUILT, marked so), tests `node odds-api/golf.test.js` (51 checks). Wired in server.js with one line (prefix `/golf/`).
+- `odds-api/golf.js` (routes, storage, boards, adapter, stats), `odds-api/golf-score.js` (pure scoring), `odds-api/golf-feed.js` (ESPN), `odds-api/golf-courses.js` (OpenGolfAPI), fixtures in `odds-api/fixtures/` (all HAND-BUILT, marked so), tests `node odds-api/golf.test.js` (78 checks; see "Golf v1.1" below). Wired in server.js with one line (prefix `/golf/`).
 - `pics/golf.js` overlay `#ogolf`; hooks in `pics/index.html`: nav item ⛳ Golf, `navGo('golf')` -> `window.oddGolf()`, script tag `golf.js?v=252` next to groups.js; every reload/pull-to-refresh guard is now `#odash,#ogrp,#ogolf` (index.html x3, sync.js x1). RULE: any new auto-reload or window gesture must check `#odash,#ogrp,#ogolf`.
 
 ### Routes (POST JSON, `x-token`; no new request header, CORS unchanged)
@@ -1242,3 +1242,42 @@ Owner decisions applied: Stats block, S-ALL, G16, H1, E-H (+ addendum), P1 input
 - `/groups/bet/add` and the other new routes use the existing headers only (`content-type`, `x-token`), so the CORS allow-list is unchanged; still test from the real page before shipping.
 - classic.html has no group add step.
 - To-do for the owner after this build: upgrade The Odds API plan if the app sells (this build spends no credits).
+
+## Golf v1.1 — review fixes, owner rules and Playbook decisions (Nov 16 2026, golf coder, branch `golf-v1`, NOT pushed, no version bump)
+Start here for golf: read OWNER-DECISIONS.md (Golf, G16, S-ALL, P1, H1, E-H) first. Run `node odds-api/golf.test.js` (78 checks, no network). Playwright harness lives in /tmp/golf-shots (not committed).
+
+### Decisions (date, reason)
+- 2026-11-16 G16 (owner): in group play a golf pick saves to the server and is LOCKED on entry. Group play = the game is attached to a group OR anyone besides the organizer is in it. Pick six and one-and-done re-picks answer 409. Phone shows "Not saved, try again." on a failed save; nothing is kept only on the phone. OPEN: the one free swap for a golfer who withdrew before teeing off is kept (a rule-driven replacement, logged, once). Owner to confirm.
+- 2026-11-16 S-ALL (owner): every finished round, solo round, pool, golf day, heads-up match and side prize gives each player a stats record with score, place, entry (`stake`), payout (`won`) and net (`pl`); `extra.net` holds the net score. Golf Calcutta records come from the Calcutta engine's own statsFor (golf only supplies the lots).
+- 2026-11-16 H1 (owner): the "Oddable Handicap Index" is THE handicap. Golf plays off `use` from the stats contract `handicapFor(userKey, {eventId})`; the course handicap (index x slope/113 + rating - par) gives the strokes. A typed number is used only for a player whose `use` is null (no rounds yet). Never called USGA or GHIN; the line "Calculated with the World Handicap System method." is shown.
+- 2026-11-16 E-H + addendum (owner): in an Enterprise tournament (`c.ent`, organizer = director) the director adds or changes any player's handicap for that tournament only, reason required, until lockAt (first tee time or Start). Storage, lock and log are the stats module's (`eventSetup`, `eventOverride`, `eventLog`, row `lock:evr:golf:<id>`). The real index always shows next to it: "Oddable 12.4 (real results) · Tournament 10.0, set by director", or "Oddable: no rounds yet", on the set-up screen, leaderboard, scorecard and Players and handicaps.
+- 2026-11-16 P1 (owner): "Suggest partners" on the team set-up screen: Balanced (default), Rotate, Hot pairs, each with a one-line reason. It only suggests; "Use these teams" is the organizer's choice.
+- 2026-11-16 Playbook (manager): (1) no Final with unconfirmed holes when money is shown; the commissioner can force it with a logged reason, and the board then shows "x holes never confirmed". (2) The pot counts only entrants marked paid, and only they can win pot money. (3) Texas scramble: penalty per missing drive set at set-up (default 2), allowances 35/15, 30/20/10, 25/20/15/10 by team size. (4) Best ball: 85% pairs, 75% best 1 of 4, 90% four-ball match, all editable. (5) Nassau: "press must be accepted" (default) or "auto press at 2 down". (6) Closest to the pin / longest drive winners are confirmed like a score. (7) One and done: "Oddable points"; organizer can enter prize money. (8) Pick six tiers neutral by default (world ranking if the free feed has it, else alphabetical by last name); organizer edits logged and shown. (9) One copy of the WHS maths: `odds-api/ratings.js` (copied unchanged from stats-v1 c084625); golf-score.js only calls it. (10) Golf registers its lot sources with the Calcutta engine.
+
+### The 12 review fixes
+1 lockAt stored once, only ever earlier; an event in progress or with a golfer started is locked. 2 Cut/WD read conservatively from the scoreboard (round-3 entry, final state; a suspended round is never WD). 3 A disputed hole stays disputed until the organizer settles it; nobody confirms a card of a team they play on or score for (organizer included); a solo round is never verified. 4 Four-ball net: strokes per player off the low player, best N net per hole. 5 9-hole card: half the 18-hole handicap. 6 Offline scores: written to the phone first, removed one by one by eid only after the server answers; no answer / 5xx / 429 / 401 = kept and retried (10 s, online, app reopened); a refusal moves it to a "Not saved" card with Try again / Discard. Nothing is dropped silently. 7 Payout tiers by field size (2-3 winner takes all, 4-6 70/30, 7-11 50/30/20, 12-19 four places, 20+ six), commissioner table optional; pick six tiers shrink in proportion under 50 golfers, under 12 refused. 8 Saved course key = OpenGolfAPI id + tee, else name + city + state + par + tees. 9 Putts credited only in individual formats to a one-player team or the scorer's own record. 10 Skins riding after the last hole: shared by those tied on it (default) or nobody. 11 Presses: only the side that is down, only from the next hole, once per hole, never from 1 or 10; Nassau money counts front, back, 18 and every press. 12 Names keep apostrophes (O'Neil); tags stripped on the way in, everything escaped on the way out.
+
+### Server (odds-api)
+- New ops: `suggest` {mode, teamSize}, `extraconfirm` {kind, hole}, `oadmoney` {event, money}, `endseason`, `match` op `accept` / `decline` {mid, from}, `team` op `hcp` now takes `reason` (director), `final` takes `force` + `reason`. `create` / `setup` day fields: `teeTime` (ms), `drivePen`, `hu.press` (accept|auto2), `hu.pct`; pot field `split` (whole percents adding to 100).
+- Game view adds: `g16`, `ent`, `payout` {entry, entrants, paidN, pot, pool, split, places, paid}, `day.hi[pid]` {used, ch, src, oddable, rounds, text, set}, `day.hlog` (director only), `day.lockAt`, `day.hlocked`, `day.unconfirmed`, `day.money`, `day.forced`, `tierBasis`, `tierLog`, `oad.pointsLabel`, `oad.log`, match `offers` and `press`, row `pen` (Texas).
+- Members now store `e` (account key) on the server for handicapFor; it is never sent to a phone (privacy test covers it).
+- `odds-api/pairing.js`: STAND-IN for the shared `suggestPartners(players, {mode, teamSize, history})`; up to 3 ranked suggestions, deterministic, every split checked for 10 players or fewer.
+- Calcutta: `calcuttaSource` {teams, results, startTime, started}, `registerCalcutta(calcModule)` (called from server.js when calcutta.js is in the build; registers `golf` and `golf-day`), `linkCalcutta(gameId, calcId, accountKey)`. started() fails closed (feed down or unknown game = started; results {}).
+
+### MERGE NOTES
+- Stats: set `golf._deps.handicapFor / eventSetup / eventOverride / eventLog = stats.<same>`; the stand-ins in golf.js have the same shapes and the same row. Register `stats.register('golf', golf.statsFor)`. Guest ids from golf are upper case, so the real `pkeyOf` hashes them (works, but differs from the 'g:<gid>' form).
+- Pairing: replace `odds-api/pairing.js` with the shared file (same signature).
+- Limits: `limits.maxPeople` / `isEnterprise` are still stand-ins.
+- Calcutta: the engine's `teams()` passes no calc, so `golf` lists this week's PGA field. For a chosen event or a golf-day's teams the engine must pass the Calcutta (`calc.golf = {tour, eventId}` or `{gameId}`) to `teams(calc)`, and needs a `golf-day` entry in EVENTS. Check the `started()` hook against calcutta-calc's HANDOFF when it lands.
+- `ratings.js` is byte-identical to stats-v1's, so it merges cleanly.
+
+### Verified
+- `node odds-api/golf.test.js` 78 checks; alert, groups, cfbd tests pass. Records pass `stats.validate` (run against /home/claude/calcutta-stats when present).
+- Playwright 430x900: 67 screens in /tmp/golf-shots, 41 text checks; every screen: no sideways scroll, tap targets 44 px or more, My Bets banner covered, 0 page errors.
+
+### Not verified / open
+- Live ESPN and OpenGolfAPI responses, Supabase rows, real sign-in, the real stats / pairing / limits / Calcutta modules wired together.
+- No free world-ranking field is read from ESPN yet (`golfer.wr` is honoured when a feed supplies it), so tiers are alphabetical today.
+- 9-hole rounds do not count toward the index (ratings.js does not combine them).
+- A player with no index and nothing typed plays off 0 strokes.
+- Enterprise handicap consent view for courses is still not built.

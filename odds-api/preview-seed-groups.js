@@ -29,6 +29,11 @@ async function seed(C) {
   reset(); await ok('groups', 'commish', '/groups/standings', { id: g.id, cid: main }); await C.mods.groups.tick().catch(() => {});
   // after the games: the server grades them from the final scores
   setNow(last + 14 * HOUR); reset(); await ok('groups', 'commish', '/groups/standings', { id: g.id, cid: main });
+  // the phones' own copy of those bets is settled too (My Bets and the personal dashboard show the same results the server graded)
+  const fin = (b) => { const G = C.GAMES.find((x) => x.id === b.gid), home = b.side === G.home.abbr, my = home ? G.hs : G.as, their = home ? G.as : G.hs; let r;
+    if (b.type === 'ou') { const tot = G.hs + G.as; r = tot === b.line ? 'push' : (/^O/i.test(b.side) ? tot > b.line : tot < b.line) ? 'won' : 'lost'; } else { const m = my - their + (b.type === 'sp' ? b.line : 0); r = m === 0 ? 'push' : m > 0 ? 'won' : 'lost'; }
+    b.fin = r; b.finPL = r === 'won' ? Math.round(b.stake * (b.odds > 0 ? b.odds / 100 : 100 / -b.odds) * 100) / 100 : r === 'lost' ? -b.stake : 0; };
+  for (const r of Object.keys(P)) await row(r, (d) => { (d.bets || []).forEach((b) => { if (P[r].some((x) => x.id === b.id)) fin(b); }); });
   // next Sunday's bets: already on the server, hidden from the others until kickoff
   const t1 = C.REAL - 5 * HOUR, N = (n, gid, side, type, line, stake, odds) => { const G = C.GAMES.find((x) => x.id === gid); return bet(t1, n, gid, G.away.abbr, G.home.abbr, chiDay(G.start), side, type, line, stake, odds); };
   const Q = { commish: [N(1, 'pv201', 'PHI', 'sp', -2.5, 50, -110), N(2, 'pv203', 'KC', 'ml', null, 40, -125)], player: [N(1, 'pv201', 'DAL', 'ml', null, 30, 125), N(2, 'pv202', 'Under', 'ou', 39.5, 25, -110), N(3, 'pv203', 'HOU', 'sp', 3, 20, -110)], p4: [N(1, 'pv202', 'BAL', 'sp', -1.5, 35, -108)], p5: [N(1, 'pv203', 'KC', 'sp', -3, 60, -110), N(2, 'pv201', 'PHI', 'ml', null, 45, -140)], p6: [N(1, 'pv203', 'HOU', 'ml', null, 15, 140)] };

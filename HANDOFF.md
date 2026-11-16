@@ -1142,3 +1142,41 @@ Owner decisions applied: Stats block, S-ALL, G16, H1, E-H (+ addendum), P1 input
 - The bottom bar now has 8 buttons (9 for the owner with Dashboard); they fit 430 px but each is narrower than 44 px. Moving Winning / Losing into a "More" sheet would fix it; owner's call.
 - Typed DUPR field kept as reference only (see Decisions).
 - Upgrade The Odds API plan (about $30/month) once Oddable sells (unchanged; stats spends no credits).
+
+## Preview (branch `preview` only) — the clickable TEST copy (Nov 16 2026, owner: "a clickable test copy… every new feature… its own private link"; "Build to the link.")
+**What it is.** One Render web service that serves both the site and the API from the branch `preview`, env `PREVIEW=1` and nothing else. It is the new Oddable with every feature branch merged, made-up people and made-up results, marked with a yellow "TEST PREVIEW, not live" strip above the app. It is NOT the live app and must never be merged to `main` as it is (the preview-only files and edits are listed below).
+
+**Hard rules it enforces in code (do not weaken):**
+- `PREVIEW=1` makes `odds-api/sync.js` keep every row in this process's MEMORY. It never calls Supabase, even if `SUPABASE_URL` is set by mistake (`MEM_ON()`); `server.js` also deletes `SUPABASE_*`, `MYAPPS_*`, `OWNER_PIN`, `OWNER_PHONE`, `ODDS_UPSTREAM` and any `ODDS_API*` variable from the process before anything loads. So: no live table `oddable_sync`, no My Apps, no owner PIN, no Odds API credit (`/odds` and `/games` answer "not set" there; picks and lines come from ESPN/nflverse and the saved json files).
+- `/kalshi/order` answers 403 in the preview (no real order can be sent from the test copy).
+- Money is display only, as everywhere in Oddable.
+- The data is rebuilt at every start of the service and is lost when it restarts (free plan sleeps; the keep-awake ping in server.js runs here too). Anything typed into the test copy can be gone the next day.
+
+**Merged heads (committed work only; the coders' working folders were not touched):** `v253-parlays` 9c10a65, `groups-v1` 5fac7bc, `calcutta-v1` c3d6bea, `golf-v1` 67c59e9, `local-v1` cfb6dff, `stats-v1` c084625. Conflicts were only in HANDOFF.md (both sides kept) and the shared hook lines of `pics/index.html`, `pics/sync.js`, `pics/groups.js`, `odds-api/server.js` (one route / one script tag / one overlay id per engine: all kept).
+
+**Preview-only files:** `odds-api/preview.js` (demo accounts, `/preview/status`, `/preview/as`, in-process calls to the real routes), `preview-seed.js` + `preview-seed-{groups,calcutta,golf,events,stats}.js` (demo data written THROUGH the real engine routes with the engines' clocks moved back, then put back), `preview-glue.js` (shared contracts), `preview-extra.js` (stand-in routes), `pics/preview.js` (ribbon, Demo user switcher, 🎮 Play hub, stand-in screens).
+**Preview-only edits to shared files:** `odds-api/sync.js` (memory store; also used when `SUPABASE_URL` is unset), `odds-api/acct.js` (`PREVIEW` branch: phone + PIN accounts in memory, no My Apps; `_pv` export), `odds-api/server.js` (secret scrub, static files, `/preview`, order block, groups tick), `pics/*.js` + `index.html` (API base = `location.origin` instead of calcutta-odds; invite links = this site), `pics/index.html` (one 🎮 Play button in the bottom bar; script tags), `pics/sw.js` cache name `pics-preview-1`.
+
+**Demo people** (cell 956-555-0101…0108, PIN 111111, all made up): Coach Mo = commissioner, RGV Ray = player, Pro Shop Pat = tournament director (Enterprise flag on), plus five more players. The yellow strip's button switches person; `?as=commish|player|director` in the link opens the copy as that person. Real sign-up with any other cell number + PIN also works there (memory only).
+**Demo data:** group "Valley Sharps" (NFL picks main pot $25 entry, 10% take, 60/30/10; graded bets from last Sunday on demo games pv101-pv105, bets for next Sunday hidden until kickoff; an opt-in Sunday-night side pot; an Enterprise request), "NFL Playoff Calcutta (Main)" (results entered, 13 lots sold) and "Super Bowl Side Calcutta" (live auction: two lots sold, the third on the block), golf day "Saturday Best Ball" (final: 8 players, skins, closest to the pin, longest drive, team Nassau), "Member-Guest Scramble" run by the director (next Saturday, 8 players + 2 guests, handicaps prefilled from the Oddable index), "Friday Night Pickleball" (round robin done, final waiting for a score), 8 to 20 self-logged golf rounds per person, pickleball matches. RGV Ray's Oddable Handicap Index is 12.4 from 20 real rounds and the director set him to 10.0 for the member-guest: "Oddable 12.4 (real results) · Tournament 10.0, set by director".
+
+**Shared contracts wired in the preview (`preview-glue.js`):** stats `groups` provider = `groups.statsFor`; golf `limits.maxPeople` and events `enterprise` = `limits.js`; golf `oddHcp` and events `oddRating` = stats.js. Stats picks up calcutta / golf / events `statsFor` by itself. Join links (`OddJoin`) and `VoiceLog` are the real modules.
+**Still stand-ins / "Preview: in progress" (labelled on screen in 🎮 Play):**
+- Suggest partners (P1): `/preview/pairing` + a test screen (real handicaps and ratings; the who-played-with-whom history is demo data). The Local coder's `pairing.js` was not committed when this was built.
+- Tournament handicaps by an Enterprise director (E-H): `/preview/hcp` + a test screen. It writes the number into the real golf day (`/golf/team` op `hcp`) and keeps its own who / when / old / new / reason log (`lock:pv:thcp`); the stats screens' own "Set by tournament" cards wait for the golf engine to report overrides.
+- Group bets lock on entry (G16): not in the committed Groups head.
+- `/stats/member` (a group member's stats inside a group): groups.js does not export `memberStats` yet, so stats.js uses its older path.
+- Calcutta's people cap still uses its own stand-in (it keys on its member key; still 8).
+- Voice score logging: the screen and the server are merged, but the preview has no `ANTHROPIC_API_KEY`, so it answers "not set up".
+- Pro golf pools and the Calcutta team picker need ESPN from the server (free); courses search needs OpenGolfAPI (free). No demo pro pool is seeded.
+- `odds-api/stats.test.js`: its group sections were written against Groups stage 1 and fail against the merged Groups engine (see the test note in the report); every other suite passes.
+
+**How to refresh it** (whenever a feature branch head moves):
+1. `cd /home/claude/calcutta-preview && git checkout preview`
+2. `git fetch /home/claude/<dir> <branch>:refs/remotes/local/<branch>` for each moved branch (dirs: calcutta = v253-parlays, calcutta-groups = groups-v1, calcutta-calc = calcutta-v1, calcutta-golf = golf-v1, calcutta-local = local-v1, calcutta-stats = stats-v1), then `git merge local/<branch>`.
+3. Conflicts: HANDOFF.md keep both; in `pics/index.html` / `pics/sync.js` keep the preview side and add the branch's new hook (nav item goes in the 🎮 Play hub in `pics/preview.js`, overlay id into the `#odash,#ogrp,…` lists, script tag before `preview.js`, route line in `server.js`). Then re-run: `sed -i "s#'https://calcutta-odds\.onrender\.com#location.origin + '#g; s#'https://steves-pics\.onrender\.com/#location.origin + '/#g" pics/*.js pics/index.html` so no file points at the live server.
+4. If a stand-in above now has a real engine, wire it in `preview-glue.js` and delete the stand-in route / screen.
+5. Run every `odds-api/*.test.js`, start it locally (`PREVIEW=1 PORT=10100 node odds-api/server.js`, open http://127.0.0.1:10100/?as=player) and run the Playwright walk at 430x900 (no page errors, My Bets banner covers nothing, no sideways tables).
+6. `git push origin preview` — ONLY this branch. Render redeploys the preview service by itself. Never push `main` from this clone.
+
+**How to delete it:** delete the Render service `oddable-preview` (dashboard, MY APPS workspace), then `git push origin --delete preview`. Nothing else was created: no database, no env secrets, no change to ODDABLE (calcutta-odds), steves-pics or calcutta-2026.

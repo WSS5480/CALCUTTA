@@ -3,7 +3,14 @@
 // (groups.js freezes it), the score comes from ESPN. Same ESPN scoreboard paths the app already uses (pics/index.html xlLoad / xlSports, sports.html).
 // Bets this file cannot grade (props, Kalshi markets it cannot map to a game, cash-outs, legs with no game) return {x: reason}; a contest counts
 // them only with the commissioner's honor-system rule on.
-const D = { fetch: (...a) => fetch(...a), now: () => Date.now() };
+const D = { fetch: (...a) => fetch(...a), now: () => Date.now(), peek: (lg) => { try { return require('./games').peek(lg); } catch (e) { return null; } } };
+// Round-2 review (Nov 16 2026): a bet's own price and stake come from the phone, so they are never trusted alone.
+//  - REFERENCE price/line: recorded when the server first resolves the bet's game (= first seen), from FREE sources only: ESPN's pregame odds in the scoreboard
+//    (moneyline, spread, total) and, for NFL spreads, the many-book consensus games.js already cached (games.peek, no Odds API call). Never a new paid call.
+//  - The bet is graded at the WORSE of its own price and the reference + TOL cents (American; +130 -> +140, -110 -> -100, -105 -> +105).
+//  - A spread/total line more than LINE_TOL points better than the reference line does not count ("line far from the market").
+//  - No reference: the profit is clamped to the contest's "Longest odds that count" (default +500).
+const TOL = 10, LINE_TOL = 2;
 const LG = {
   nfl: { p: 'football/nfl', q: '', name: 'NFL' },
   ncaaf: { p: 'football/college-football', q: '&groups=80', name: 'College football' },
@@ -30,7 +37,46 @@ function parseEv(e, lg) {
   const cs = c.competitors || []; const h = cs.find((x) => x.homeAway === 'home'), a = cs.find((x) => x.homeAway === 'away');
   const start = Date.parse(e.date || c.date || ''); if (!e.id || !h || !a || !Number.isFinite(start)) return null;
   const name = String(st.name || '');
-  return { lg, id: String(e.id), start, state: String(st.state || 'pre'), done: !!st.completed && String(st.state) === 'post', off: /POSTPON|CANCEL|SUSPEND|FORFEIT/i.test(name), home: side(h), away: side(a) };
+  return { lg, id: String(e.id), start, state: String(st.state || 'pre'), done: !!st.completed && String(st.state) === 'post', off: /POSTPON|CANCEL|SUSPEND|FORFEIT/i.test(name), home: side(h), away: side(a), odds: parseOdds(c, side(h).abbr, side(a).abbr) };
+}
+// ESPN pregame odds (scoreboard competitions[0].odds[0]): classic fields (homeTeamOdds.moneyLine, spread, overUnder, *Odds) and the newer
+// moneyline / pointSpread / total blocks (close, else open). Spread kept as the HOME team's line (home -2.5 = favored by 2.5). Prices must look American.
+const am = (v) => { const n = typeof v === 'string' ? Number(String(v).replace(/^\+/, '').replace(/^EVEN$/i, '100')) : Number(v); return Number.isFinite(n) && (n <= -100 || n >= 100) && Math.abs(n) <= 100000 ? n : null; };
+const num = (v) => { if (v == null || String(v).trim() === '') return null; const n = Number(String(v).trim().replace(/^[ou]/i, '')); return Number.isFinite(n) ? n : null; };
+function parseOdds(c, habbr, aabbr) {
+  const o = (c && Array.isArray(c.odds) && c.odds[0]) || null; if (!o) return null;
+  const pick = (blk, k) => blk && (blk.close && blk.close[k] != null ? blk.close[k] : blk.open && blk.open[k] != null ? blk.open[k] : null);
+  const H = o.homeTeamOdds || {}, A = o.awayTeamOdds || {}, out = {};
+  const mh = am(pick(o.moneyline && o.moneyline.home, 'odds')) || am(H.moneyLine), ma = am(pick(o.moneyline && o.moneyline.away, 'odds')) || am(A.moneyLine);
+  if (mh || ma) out.ml = { home: mh, away: ma };
+  let hl = num(pick(o.pointSpread && o.pointSpread.home, 'line'));
+  if (hl == null && typeof o.details === 'string') { const m = /^([A-Z0-9]{2,6})\s+([+-]?\d+(?:\.\d+)?)$/.exec(o.details.trim()); if (m) { const v = Number(m[2]); hl = m[1] === habbr ? v : m[1] === aabbr ? -v : null; } else if (/^(EVEN|PK|PICK)/i.test(o.details.trim())) hl = 0; }
+  if (hl != null) out.sp = { home: hl, ph: am(pick(o.pointSpread && o.pointSpread.home, 'odds')) || am(H.spreadOdds), pa: am(pick(o.pointSpread && o.pointSpread.away, 'odds')) || am(A.spreadOdds) };
+  const tl = num(pick(o.total && o.total.over, 'line')) || num(o.overUnder);
+  if (tl) out.ou = { line: tl, over: am(pick(o.total && o.total.over, 'odds')) || am(o.overOdds), under: am(pick(o.total && o.total.under, 'odds')) || am(o.underOdds) };
+  return Object.keys(out).length ? out : null;
+}
+// The reference for one resolved leg: { rp (American price, or null), rl (line for this side/total, or undefined), rs: source }. null = no reference.
+function refOf(r) {
+  const g = r && r.g; if (!g) return null; const O = g.odds || {}; let rp = null, rl, rs = 'espn';
+  const side = r.ks === 'no' ? (r.side === 'home' ? 'away' : 'home') : r.side; // Kalshi NO on a team = the other team
+  if (r.kind === 'ml' && side && O.ml) rp = O.ml[side];
+  else if (r.kind === 'sp' && side && !r.ks) {
+    if (O.sp) { rl = side === 'home' ? O.sp.home : -O.sp.home; rp = side === 'home' ? O.sp.ph : O.sp.pa; }
+    if (rl == null && g.lg === 'nfl') { const pk = D.peek('nfl'), b = pk && Array.isArray(pk.games) && pk.games.find((x) => x.home === g.home.abbr && x.away === g.away.abbr); // games.js cache: l = HOME favored points
+      if (b && Number.isFinite(b.line)) { rl = side === 'home' ? -b.line : b.line; rs = 'books'; const ps = (b.books || []).filter((k) => k.l === b.line).map((k) => (side === 'home' ? k.p : k.pa)).filter((x) => am(x)); if (ps.length) rp = ps.sort((x, y) => x - y)[ps.length >> 1]; } }
+  } else if (r.kind === 'ou' && !r.ks && O.ou) { rl = O.ou.line; rp = r.ovr ? O.ou.over : O.ou.under; }
+  if (rp == null && rl == null) return null;
+  return { rp: rp == null ? null : rp, rl, rs };
+}
+const fav = (a) => (a < 0 ? (a + TOL <= -100 ? a + TOL : 200 + a + TOL) : a + TOL); // TOL cents toward the bettor
+const pmOf = (a) => (a > 0 ? a / 100 : 100 / -a); // profit per $1 at an American price
+// The line rule: a spread/total line more than LINE_TOL points better for the bettor than the reference line is not counted.
+function lineFar(r) {
+  if (!(r.rl != null && Number.isFinite(Number(r.rl)))) return false;
+  if (r.kind === 'sp' && !r.ks) return Number(r.line) > Number(r.rl) + LINE_TOL;
+  if (r.kind === 'ou' && !r.ks) return r.ovr ? Number(r.line) < Number(r.rl) - LINE_TOL : Number(r.line) > Number(r.rl) + LINE_TOL;
+  return false;
 }
 async function day(lg, d, ctx) { // all games of one league on one date (ESPN's date), cached: 10 min for unfinished days, 12 h once every game is final
   const k = lg + '|' + d, c = DAYC.get(k), now = D.now();
@@ -125,10 +171,11 @@ async function resolveLeg(l, allowed, ctx, dayHint) {
 }
 // A stored leg resolution (no game object) -> the same with its current game attached (scores), for grading.
 async function withGame(r, ctx) { if (!r || r.x || !r.gid) return r; const g = await findGame([r.lg], String(r.gid), chiDay(r.kick), ctx); return Object.assign({}, r, { g: g || undefined }); }
-const store = (r) => { const o = {}; ['key', 'lg', 'gid', 'kick', 'side', 'kind', 'line', 'ovr', 'over', 'ks', 'lose'].forEach((k) => { if (r[k] !== undefined && r[k] !== null && !(typeof r[k] === 'number' && !isFinite(r[k]))) o[k] = r[k]; }); return o; };
+const store = (r) => { const o = {}; const ref = refOf(r); if (ref) { r.rp = ref.rp; r.rl = ref.rl; r.rs = ref.rs; } ['key', 'lg', 'gid', 'kick', 'side', 'kind', 'line', 'ovr', 'over', 'ks', 'lose', 'rp', 'rl', 'rs'].forEach((k) => { if (r[k] !== undefined && r[k] !== null && !(typeof r[k] === 'number' && !isFinite(r[k]))) o[k] = r[k]; }); return o; };
 // Result of one resolved leg from the final score: 'won' | 'lost' | 'push' | '' (not final yet)
 function legResult(r) {
-  const g = r.g; if (!g || !g.done || g.home.score == null || g.away.score == null) return '';
+  const g = r.g; if (g && g.off && !g.done && D.now() > g.start + 48 * 36e5) return 'push'; // postponed / cancelled and not played within 48 hours: void
+  if (!g || !g.done || g.home.score == null || g.away.score == null) return '';
   const hs = g.home.score, as = g.away.score, tot = hs + as;
   if (r.ks) { // Kalshi market (YES/NO contracts): a tie never says YES to "X wins"
     let yes;
@@ -155,28 +202,37 @@ const dec = (a) => (a < 0 ? 1 + 100 / -a : 1 + a / 100);
 
 // Grade a frozen bet snapshot. legs = resolved legs (same order as the bet's legs). Returns
 //   { res: 'won'|'lost'|'push', pl } (pl uncapped, for the whole stake) when final, { res: '' } when not final yet, { x: reason } when it cannot be graded.
-function gradeBet(b, legs) {
-  const stake = Number(b.stake); if (!(stake > 0 && stake <= 1e6)) return { x: 'No stake' };
+// Profit per $1 of one priced leg after the reference rule: worse of its own price and (reference + TOL); no reference -> at most maxOdds.
+// G16: the only way a group bet is voided is the void rule (postponed / cancelled game). The reason travels with the grade and is shown to members.
+const VOID = 'Void: the game was postponed or cancelled and not played within 48 hours';
+const isVoid = (r) => !!(r && r.g && r.g.off && !r.g.done && D.now() > r.g.start + 48 * 36e5);
+function capPm(pm, leg, maxOdds) { if (pm == null) return null; if (leg && leg.rp != null && am(leg.rp)) return Math.min(pm, pmOf(fav(leg.rp))); return Math.min(pm, (maxOdds || 500) / 100); }
+function gradeBet(b, legs, opt) {
+  opt = opt || {}; const MX = Number(opt.maxOdds) || 500;
+  const stake = Number(b.stake); if (!(stake > 0 && stake <= 1e9)) return { x: 'No stake' };
   if (b.kind === 'prop' && !b.kt) return { x: 'Player prop' };
   if (b.cash != null || Number(b.soldN) > 0) return { x: 'Cashed out on Kalshi (Oddable cannot check the sale)' };
   if (legs.some((r) => r.x)) return { x: legs.find((r) => r.x).x };
+  if (legs.some((r) => lineFar(r))) return { x: 'Line far from the market (more than ' + LINE_TOL + ' points better than the line when Oddable first saw the bet)', far: 1 };
   if (b.kind === 'parlay') {
     const rs = legs.map(legResult);
     if (rs.some((r) => r === 'lost')) return { res: 'lost', pl: -stake };
     if (rs.some((r) => !r)) return { res: '' };
-    const n = rs.length, live = rs.filter((r) => r !== 'push').length;
-    if (!live) return { res: 'push', pl: 0 };
+    const n = rs.length, live = rs.filter((r) => r !== 'push').length, vr = legs.some(isVoid) ? (legs.every(isVoid) ? VOID : 'A leg is void: its game was postponed or cancelled and not played within 48 hours (that leg drops out)') : '';
+    if (!live) return Object.assign({ res: 'push', pl: 0 }, vr ? { vr } : {});
     if (b.src === 'kalshi' && live < n) return { x: 'Kalshi combo with a void leg (Oddable cannot check its payout)' };
     const L = Array.isArray(b.legs) ? b.legs : [];
     let d; // own leg prices when every leg has one (v253 parlay rule: product of the legs' decimal prices); else the parlay's own multiplier, a pushed leg dropping out
-    if (L.length === n && L.every((l) => okPrice(Number(l.o)))) d = L.reduce((a, l, i) => (rs[i] === 'push' ? a : a * dec(Number(l.o))), 1);
-    else { const m = b.src === 'kalshi' ? Number(b.mult) : Number(b.mult) > 1 ? Number(b.mult) : null; if (!(m > 1 && m <= 1001)) return { x: 'Parlay with no payout' }; d = live < n ? Math.pow(m, live / n) : m; }
-    return { res: 'won', pl: Math.round(stake * (d - 1) * 100) / 100 };
+    const legPm = (i) => (legs[i].rp != null && am(legs[i].rp) ? pmOf(fav(legs[i].rp)) : MX / 100); // each leg's ceiling: its reference + TOL, else "Longest odds that count"
+    if (L.length === n && L.every((l) => okPrice(Number(l.o)))) d = L.reduce((a, l, i) => (rs[i] === 'push' ? a : a * (1 + Math.min(pmOf(Number(l.o)), legPm(i)))), 1); // each leg: worse of its own price and its ceiling
+    else { const m = b.src === 'kalshi' ? Number(b.mult) : Number(b.mult) > 1 ? Number(b.mult) : null; if (!(m > 1 && m <= 1001)) return { x: 'Parlay with no payout' }; d = live < n ? Math.pow(m, live / n) : m;
+      d = Math.min(d, rs.reduce((a, r, i) => (r === 'push' ? a : a * (1 + legPm(i))), 1)); } // round 2: a parlay's own multiplier never pays more than its live legs' ceilings multiplied
+    return Object.assign({ res: 'won', pl: Math.round(stake * (d - 1) * 100) / 100 }, vr ? { vr } : {});
   }
   const r = legResult(legs[0]); if (!r) return { res: '' };
-  if (r === 'lost') return { res: 'lost', pl: -stake }; if (r === 'push') return { res: 'push', pl: 0 };
-  const pm = priceMult(b); if (pm == null) return { x: 'Odds Oddable cannot use' };
-  return { res: 'won', pl: Math.round(stake * pm * 100) / 100 };
+  if (r === 'lost') return { res: 'lost', pl: -stake }; if (r === 'push') return Object.assign({ res: 'push', pl: 0 }, isVoid(legs[0]) ? { vr: VOID } : {});
+  const pm = capPm(priceMult(b), legs[0], MX); if (pm == null) return { x: 'Odds Oddable cannot use' };
+  return { res: 'won', pl: Math.round(stake * pm * 100) / 100, ref: legs[0].rp != null ? 1 : 0 };
 }
 // Is a game window open for any of these leagues right now (a game in progress, or one starting within 2 hours)? Used for the light server tick.
 async function windowOpen(lgs, ctx) {
@@ -184,4 +240,4 @@ async function windowOpen(lgs, ctx) {
   for (const lg of lgs) for (const dd of [d, addDay(d, 1)]) { const gs = await day(lg, dd, ctx); if (gs.some((g) => (g.state === 'in') || (g.start > now - 15 * 6e4 && g.start < now + 2 * 36e5))) return true; }
   return false;
 }
-module.exports = { LG, LGS, normLg, parseKt, ktLeague, ktType, legKey, resolveLeg, withGame, store, legResult, gradeBet, priceMult, windowOpen, day, chiDay, okDay, addDay, NFLAB, _deps: D, _reset: () => { DAYC.clear(); FLY.clear(); BYID.clear(); } };
+module.exports = { VOID, refOf, parseOdds, fav, TOL, LINE_TOL, LG, LGS, normLg, parseKt, ktLeague, ktType, legKey, resolveLeg, withGame, store, legResult, gradeBet, priceMult, windowOpen, day, chiDay, okDay, addDay, NFLAB, _deps: D, _reset: () => { DAYC.clear(); FLY.clear(); BYID.clear(); } };

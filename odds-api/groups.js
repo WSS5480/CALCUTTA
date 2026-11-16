@@ -55,7 +55,7 @@ const PLAYOFF_END = { all: '2027-06-25', nfl: '2027-02-15', ncaaf: '2027-01-20',
 const leaguesOf = (sport) => (sport === 'all' ? GR.LGS.slice() : [sport]);
 const SPLITS = { '60/30/10': [60, 30, 10], '100': [100], '50/30/20': [50, 30, 20], '70/30': [70, 30], 'none': [] };
 const FMTS = ['standings', 'best5'], METRICS = ['win', 'units', 'ret', 'pct'];
-const CAPS = [0, 10, 25, 50, 100, 250, 500], MAXM = [2, 3, 4, 5, 6, 7, 8, 10, 12, 16, 20, 30, 50, 100, 200, 300, 500, 1000, 2000, 5000], MINPAID = [0, 1, 2, 3, 5, 8, 10, 12, 15, 20, 25, 30];
+const MAXBETS = [0, 5, 6, 7, 8, 10, 12, 15, 20, 25], CAPS = [0, 10, 25, 50, 100, 250, 500, 1000], MAXODDS = [150, 200, 300, 400, 500, 750, 1000, 2000, 3000, 5000], NOCAP = 1000, MAXM = [2, 3, 4, 5, 6, 7, 8, 10, 12, 16, 20, 30, 50, 100, 200, 300, 500, 1000, 2000, 5000], MINPAID = [0, 1, 2, 3, 5, 8, 10, 12, 15, 20, 25, 30];
 const MSPLIT = { '50/50': [50, 50], '40/60': [40, 60], '60/40': [60, 40] };
 function runsEnd(runs, startDay, sport, endDay) {
   const wd = new Date(dnum(startDay) * DAY).getUTCDay(), toMon = (8 - wd) % 7;
@@ -90,13 +90,18 @@ function cleanContest(b, now, maxMembers) {
   const legs = types.parlay ? Math.round(Number(b.legs)) : 0; if (types.parlay && !(legs >= 2 && legs <= 10)) throw bad(400, 'Parlay legs must be 2 to 10');
   const metric = String(b.metric || ''); if (!METRICS.includes(metric)) throw bad(400, 'Pick how the winner is decided');
   const minBets = Math.round(Number(b.minBets || 0)); if (!(minBets >= 0 && minBets <= 10)) throw bad(400, 'Least bets a week: 0 to 10');
+  // Rules review (Nov 16 2026): Best five rewards betting MORE, not better. "Most bets per week" (default 10 in Best five, no limit in standings; 0 = no limit):
+  // only the first N bets a member adds for a week count; later ones are shown as "Over the weekly limit". Set before the start, locked with the bet rules.
+  const maxBets = b.maxBets == null ? (fmt === 'best5' ? 10 : 0) : Math.round(Number(b.maxBets)); if (!MAXBETS.includes(maxBets)) throw bad(400, 'Most bets a week: pick from the list (5 to 25, or no limit)');
+  if (maxBets && minBets > maxBets) throw bad(400, 'Least bets a week cannot be more than most bets a week');
   const minPaid = b.minPaid == null ? (shortRun(runs) ? 3 : 10) : Math.round(Number(b.minPaid)); if (!MINPAID.includes(minPaid)) throw bad(400, 'Pick the fewest bets to place in a paid spot from the list');
-  const cap = Math.round(Number(b.cap || 0)); if (!CAPS.includes(cap)) throw bad(400, 'Pick a cap from the list');
+  let cap = Math.round(Number(b.cap || 0)); if (!CAPS.includes(cap)) throw bad(400, 'Pick a cap from the list'); if (!cap) cap = NOCAP; // round 2: every bet has a cap; the old "no cap" means $1,000
+  const maxOdds = b.maxOdds == null ? 500 : Math.round(Number(b.maxOdds)); if (!MAXODDS.includes(maxOdds)) throw bad(400, 'Longest odds that count: pick from the list (+150 to +5000)');
   const entry = Number(b.entry || 0); if (!(Number.isFinite(entry) && entry >= 0 && entry <= 10000 && Math.round(entry) === entry)) throw bad(400, 'Entry must be a whole dollar amount from 0 to 10,000');
   const split = String(b.split || 'none'); if (!(split in SPLITS)) throw bad(400, 'Pick a payout split');
   const pot = b.pot === 'side' ? 'side' : 'main';
   const take = pot === 'side' ? cleanTake(b.take, entry * (maxMembers || 50)) : { kind: 'none', v: 0 };
-  return { kind: 'picks', name, pot, sport, fmt, start, startDay, endDay, runs, rules: { kalshi: !!b.kalshi, honor: !!b.honor, types, legs, metric, minBets, minPaid, cap, entry, split, take } };
+  return { kind: 'picks', name, pot, sport, fmt, start, startDay, endDay, runs, rules: { kalshi: !!b.kalshi, honor: !!b.honor, types, legs, metric, minBets, maxBets, minPaid, cap, maxOdds, entry, split, take } };
 }
 // Calcutta contest: DATA MODEL ONLY (G13; the auction and Calcutta screens are not built). Shape follows the CalcSetup / CalcAuction / CalcBoard mockups.
 function cleanCalc(b) {
@@ -106,15 +111,19 @@ function cleanCalc(b) {
   return { kind: 'calcutta', name: cleanName(b.cname || b.name || 'Calcutta', 30), pot: b.pot === 'side' ? 'side' : 'main', event: cleanName(b.event, 60), sport: SPORTS.includes(b.sport) ? b.sport : 'nfl', lots, payout,
     rules: { minBid: [1, 5, 10, 25].includes(Number(b.minBid)) ? Number(b.minBid) : 5, timer: [10, 20, 30].includes(Number(b.timer)) ? Number(b.timer) : 20, buyBack: !!b.buyBack, mode: b.mode === 'enter' ? 'enter' : 'live', take: cleanTake(b.take, 1e6), entry: 0 }, start: null, status: 'setup' };
 }
-function cleanJoin(J, cap) {
-  J = J || {}; const max = Math.round(Number(J.max)); if (!MAXM.includes(max)) throw bad(400, 'Pick the most members from the list');
+function cleanJoin(J, cap, keep) { // keep = the group's current max (an owner-raised max that is not on the list stays valid)
+  J = J || {}; const max = Math.round(Number(J.max)); if (!MAXM.includes(max) && max !== keep) throw bad(400, 'Pick the most members from the list');
   if (cap && max > cap) throw bad(400, 'Up to ' + cap + ' people. ' + LIM.ENTERPRISE_TEXT);
   const late = J.late === '2w' ? '2w' : J.late === 'no' || J.late == null ? 'no' : null; if (!late) throw bad(400, 'Pick when late joining is allowed');
   return { requests: !!J.requests, open: !!J.open, max, late };
 }
-function cleanMsplit(ms, mainIds) { // how the main pot's prize pool is shared between main-pot contests
-  if (mainIds.length <= 1) return { kind: 'even', pct: mainIds.length ? { [mainIds[0]]: 100 } : {} };
-  const kind = String((ms && ms.kind) || 'even');
+function cleanMsplit(ms, mains) { // how the main pot's prize pool is shared between main-pot contests (mains = contest objects)
+  const mainIds = mains.map((c) => c.cid);
+  if (mainIds.length <= 1) return { kind: 'entry', pct: mainIds.length ? { [mainIds[0]]: 100 } : {} };
+  const kind = String((ms && ms.kind) || 'entry');
+  if (kind === 'entry') { // round 2 default: weighted by each contest's entry ($0 entry -> 0); all $0 -> even. Whole cents of a percent, leftover to the biggest.
+    const E = mains.map((c) => Math.max(0, Number((c.rules && c.rules.entry) || 0))), tot = E.reduce((a, x) => a + x, 0); if (!tot) return cleanMsplit({ kind: 'even' }, mains);
+    const pct = {}; let used = 0; mains.forEach((c, i) => { pct[c.cid] = Math.floor(E[i] * 10000 / tot) / 100; used += pct[c.cid]; }); const big = mains[E.indexOf(Math.max(...E))].cid; pct[big] = Math.round((pct[big] + 100 - used) * 100) / 100; return { kind, pct }; }
   if (kind === 'even') { const pct = {}; mainIds.forEach((id) => (pct[id] = Math.round(10000 / mainIds.length) / 100)); return { kind, pct }; }
   if (MSPLIT[kind]) { if (mainIds.length !== 2) throw bad(400, 'That split is for two main-pot contests'); return { kind, pct: { [mainIds[0]]: MSPLIT[kind][0], [mainIds[1]]: MSPLIT[kind][1] } }; }
   if (kind === 'custom') { const pct = {}; let t = 0; mainIds.forEach((id) => { const v = Number(ms.pct && ms.pct[id]); if (!(Number.isInteger(v) && v >= 0 && v <= 100)) throw bad(400, 'Custom split: whole percents'); pct[id] = v; t += v; }); if (t !== 100) throw bad(400, 'Custom split must total 100%'); return { kind, pct }; }
@@ -122,12 +131,31 @@ function cleanMsplit(ms, mainIds) { // how the main pot's prize pool is shared b
 }
 
 // ---------- money (information only) ----------
+const splitOf = (g) => g.contests.filter((c) => c.pot === 'main' && c.kind !== 'ext'); // the main-pot contests that share the picks prize pool (an attached game pays by its own rules)
 const mainOf = (g) => g.contests.filter((c) => c.pot === 'main'), sideOf = (g) => g.contests.filter((c) => c.pot === 'side');
 const inContest = (c, g) => (c.pot === 'side' ? g.members.filter((m) => (c.inn || []).includes(m.pid)) : g.members);
 const placesOf = (poolC, split) => { const sp = SPLITS[split] || []; const parts = sp.map((p) => Math.floor(poolC * p / 100)); if (parts.length) parts[0] += poolC - parts.reduce((a, x) => a + x, 0); return parts.map((c, i) => ({ place: i + 1, pct: sp[i], amt: c / 100, c })); };
 const takeOf = (potC, tk) => (tk.kind === 'pct' ? Math.round(potC * tk.v / 100) : tk.kind === 'flat' ? Math.min(cents(tk.v), potC) : 0);
+// ---------- games built by other engines report their money into the group's pots (rules review, Nov 16 2026) ----------
+// registerGame(type, { potSummary(ref) -> { bids | pot, take, pool, paidOut?, inPlay?, main? }, attachToGroup?(ref, groupId, contestId) })
+//   Calcutta: registerGame('calc', { potSummary: C.potSummary, attachToGroup: C.attachToGroup }); golf: registerGame('golf', { potSummary: G.potSummary, attachToGroup: G.attach });
+//   events: registerGame('event', { potSummary: E.potSummary }). The manager wires these in server.js at merge.
+// A MAIN Calcutta (attached with pot 'main', and not reporting main: false) is listed in the group's main pot: its bids, take and prize pool are added to
+// the main pot's totals. Its own payout table decides who is paid (the main-pot split between picks contests never touches it). Side games are listed
+// with the side pots. Summaries are read through a 30-second cache when a group is read, so pots(g) stays a plain function. Display only, as always.
+const GAMES = {}, EXTC = new Map();
+function registerGame(type, api) { if (!/^[a-z]{1,8}$/.test(String(type)) || !api || typeof api.potSummary !== 'function') throw new Error('bad game type'); GAMES[type] = api; }
+const m2 = (v) => { const n = Math.round(Number(v) * 100) / 100; return Number.isFinite(n) && n >= 0 && n <= 1e9 ? n : 0; };
+async function extLoad(g) {
+  const list = (g.contests || []).filter((c) => c.kind === 'ext' && GAMES[c.type]); if (!list.length) return g;
+  await pmap(list, 4, async (c) => { const k = c.type + ':' + c.ref, hit = EXTC.get(k); if (hit && D.now() - hit.at < 30e3) return;
+    let v = null; try { const s = await GAMES[c.type].potSummary(c.ref); if (s) v = { pot: m2(s.bids != null ? s.bids : s.pot), take: m2(s.take), pool: m2(s.pool), paidOut: m2(s.paidOut), inPlay: m2(s.inPlay), main: s.main !== false }; } catch (e) { v = hit ? hit.v : null; }
+    EXTC.set(k, { at: D.now(), v }); if (EXTC.size > 2000) EXTC.delete(EXTC.keys().next().value); });
+  return g;
+}
+const extOf = (g) => (g.contests || []).filter((c) => c.kind === 'ext').map((c) => { const h = EXTC.get(c.type + ':' + c.ref), s = h && h.v; return s ? { cid: c.cid, name: c.name, type: c.type, where: c.pot === 'main' && s.main ? 'main' : 'side', pot: s.pot, take: s.take, pool: s.pool, paidOut: s.paidOut, inPlay: s.inPlay } : null; }).filter(Boolean);
 function pots(g) {
-  const M = mainOf(g), n = g.members.length, paid = g.members.filter((m) => m.paid).length, entryC = M.reduce((a, c) => a + cents(c.rules.entry || 0), 0);
+  const M = splitOf(g), n = g.members.length, paid = g.members.filter((m) => m.paid).length, entryC = M.reduce((a, c) => a + cents(c.rules.entry || 0), 0);
   const potC = entryC * paid, takeC = takeOf(potC, g.money.take), poolC = potC - takeC, ms = (g.money.msplit && g.money.msplit.pct) || {};
   const ids = M.map((c) => c.cid); let used = 0; const shareC = ids.map((id) => { const v = Math.floor(poolC * (Number(ms[id]) || 0) / 100); used += v; return v; }); if (shareC.length) shareC[0] += poolC - used;
   const main = { entry: entryC / 100, members: n, paid, expected: entryC * n / 100, pot: potC / 100, take: takeC / 100, takeText: takeText(g.money.take), pool: poolC / 100, msplit: g.money.msplit,
@@ -135,7 +163,9 @@ function pots(g) {
     shares: M.map((c, i) => ({ cid: c.cid, name: c.name, pct: Number(ms[c.cid]) || 0, amt: shareC[i] / 100, split: c.rules.split, places: placesOf(shareC[i], c.rules.split) })) };
   const sides = sideOf(g).map((c) => { const mem = inContest(c, g), pd = mem.filter((m) => (c.paid || {})[m.pid]).length, pC = cents(c.rules.entry || 0) * pd, tC = takeOf(pC, c.rules.take), pl = pC - tC;
     return { cid: c.cid, name: c.name, kind: c.kind, entry: c.rules.entry || 0, members: mem.length, paid: pd, expected: (c.rules.entry || 0) * mem.length, pot: pC / 100, take: tC / 100, takeText: takeText(c.rules.take), pool: pl / 100, split: c.rules.split, places: placesOf(pl, c.rules.split) }; });
-  return { main, sides, sideTotal: sides.reduce((a, s) => a + cents(s.pot), 0) / 100 };
+  const ext = extOf(g), em = ext.filter((x) => x.where === 'main'), es = ext.filter((x) => x.where === 'side'), sum = (l, k) => l.reduce((a, x) => a + cents(x[k]), 0);
+  main.games = em; main.total = (potC + sum(em, 'pot')) / 100; main.totalTake = (takeC + sum(em, 'take')) / 100; main.totalPool = (poolC + sum(em, 'pool')) / 100; // picks entries + main games (a Main Calcutta's bids)
+  return { main, sides, sideGames: es, sideTotal: (sides.reduce((a, s) => a + cents(s.pot), 0) + sum(es, 'pot')) / 100 };
 }
 const prizeOf = (g, c) => { const P = pots(g); if (c.pot === 'side') { const s = P.sides.find((x) => x.cid === c.cid); return s ? s.places : []; } const s = P.main.shares.find((x) => x.cid === c.cid); return s ? s.places : []; };
 const takeText = (tk) => (tk.kind === 'pct' ? (tk.v ? 'Commissioner keeps ' + tk.v + '% of the pot' : 'Commissioner keeps nothing') : tk.kind === 'flat' ? (tk.v ? 'Commissioner keeps $' + (Number.isInteger(tk.v) ? tk.v : tk.v.toFixed(2)) + ' of the pot' : 'Commissioner keeps nothing') : 'Commissioner keeps nothing');
@@ -167,7 +197,15 @@ const codeFail = (k) => { const t = D.now(), a = (RL.get(k) || []).filter((x) =>
 const codeBlocked = (k) => (RL.get(k) || []).filter((x) => D.now() - x < 900e3).length >= 10;
 
 // ---------- rows: read-change-write with back-off (fix 5) ----------
-async function rmw(key, init, fn, tries) {
+// One writer at a time per row INSIDE this process (a promise chain per key): 12 people joining at once no longer race each other, so nobody burns their
+// tries and sees "Busy, try again". The conditional write (dbPatchIf) stays as the guard against another server instance or sync.js writing the same row.
+const QUEUE = new Map();
+function serial(key, fn) {
+  const prev = QUEUE.get(key) || Promise.resolve(), run = prev.then(fn, fn), tail = run.then(() => {}, () => {});
+  QUEUE.set(key, tail); tail.then(() => { if (QUEUE.get(key) === tail) QUEUE.delete(key); }); return run;
+}
+const rmw = (key, init, fn, tries) => serial(key, () => rmw1(key, init, fn, tries));
+async function rmw1(key, init, fn, tries) {
   for (let i = 0; i < (tries || 16); i++) {
     let row = await D.S.dbGet(key);
     if (!row) { if (init === null) throw bad(404, 'Group not found'); await D.S.dbPut({ id: key, salt: 'x', pinhash: 'x', data: init, updated: 1 }, true); row = await D.S.dbGet(key); if (!row) continue; }
@@ -178,7 +216,7 @@ async function rmw(key, init, fn, tries) {
   }
   throw bad(409, 'Busy, try again');
 }
-const gread = async (id) => { if (!/^[A-Z2-9]{10}$/.test(String(id || ''))) return null; const r = await D.S.dbGet(GK(id)); return r && r.data && r.data.id ? r.data : null; };
+const gread = async (id) => { if (!/^[A-Z2-9]{10}$/.test(String(id || ''))) return null; const r = await D.S.dbGet(GK(id)); return r && r.data && r.data.id ? extLoad(r.data) : null; };
 const gmut = (id, fn) => rmw(GK(id), null, async (g) => { if (!g.id) throw bad(404, 'Group not found'); return fn(g); });
 async function memIdx(mk, fn) { try { await rmw(MK(mk), { g: [], q: [], own: {} }, async (x) => { x.g = x.g || []; x.q = x.q || []; x.own = x.own || {}; const before = JSON.stringify(x); fn(x); x.g = [...new Set(x.g)].slice(-200); x.q = [...new Set(x.q)].slice(-200); return JSON.stringify(x) === before ? { nochange: true } : {}; }); } catch (e) { console.error('groups: member index', e.message); } }
 const gEnd = (g) => g.contests.reduce((a, c) => (c.endDay && c.endDay > a ? c.endDay : a), '0000-00-00');
@@ -204,7 +242,8 @@ const isComm = (g, mk) => g.comm === mk;
 const newPid = (g) => { let p; do { p = rnd(6); } while (g.members.some((m) => m.pid === p) || (g.reqs || []).some((m) => m.pid === p)); return p; };
 // Fix 6: once anyone besides the commissioner has joined or asked to join, the money and bet rules are locked (entry, take, splits, cap, ranking, bet rules).
 const engaged = (g) => !!g.engaged || g.members.length > 1 || (g.reqs || []).length > 0;
-const MONEYKEYS = ['kalshi', 'honor', 'types', 'legs', 'metric', 'minBets', 'minPaid', 'cap', 'entry', 'split', 'take'];
+const MONEYKEYS = ['kalshi', 'honor', 'types', 'legs', 'metric', 'minBets', 'maxBets', 'minPaid', 'cap', 'maxOdds', 'entry', 'split', 'take'];
+const DATEKEYS = ['start', 'startDay', 'endDay', 'runs']; // owner (round 2): contest dates also lock once anyone else has joined
 
 // ---------- bets: the contest ledger (fixes 1-4, G11) ----------
 const N = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
@@ -236,12 +275,12 @@ function applyObs(L, obs, now) {
   let ch = 0; L.b = L.b || {};
   obs.forEach((o) => {
     const P = (L.b[o.pid] = L.b[o.pid] || {}); let e = P[o.id];
-    if (!e) { if (Object.keys(P).length >= 3000) return; e = P[o.id] = { f: Math.min(now, o.U), s: o.s, r: {} }; ch++; }
+    if (!e) { if (Object.keys(P).length >= 3000) return; e = P[o.id] = { f: Math.min(now, o.gl > 0 ? o.gl : o.sa > 0 ? o.sa : o.U), s: o.s, r: {} }; if (o.gl > 0) e.gl = o.gl; ch++; } // G16: a group bet's first-seen time is the moment the server saved it
     e.r = e.r || {};
     Object.keys(o.R || {}).forEach((k) => { if (!e.r[k] && o.R[k] && o.R[k].kick != null) { e.r[k] = o.R[k]; ch++; } }); // stored once, never re-decided
     if (o.s && !e.z && !e.g) {
       const ko = kicksOf(e.s, e.r), kn = kicksOf(o.s, e.r);
-      if (ko.all && kn.all && o.U < Math.min(ko.min, kn.min) && JSON.stringify(o.s) !== JSON.stringify(e.s)) { e.s = o.s; ch++; }
+      if (!e.gl && ko.all && kn.all && o.U < Math.min(ko.min, kn.min) && JSON.stringify(o.s) !== JSON.stringify(e.s)) { e.s = o.s; ch++; } // G16: a group bet is locked when added (never re-copied)
       const k2 = kicksOf(e.s, e.r); if (k2.all && (now >= k2.min || o.U >= k2.min)) { e.z = 1; ch++; }
     }
     if (o.h && !e.h) { e.h = o.h; ch++; }
@@ -258,11 +297,11 @@ function judge(c, e, id, rv, now, from) {
   if (k.min != null) { if (k.min < from || d < c.startDay || d > c.endDay) return null; } else if (d < chiDay(from) || d < c.startDay || d > c.endDay) return null;
   const type = s.kind === 'parlay' ? 'parlay' : s.kt ? GR.ktType(s.kt) : s.kind === 'prop' ? 'prop' : (s.type === 'sp' ? 'sp' : s.type === 'ou' || s.type === 'tot' ? 'ou' : 'ml');
   const g = e.g, h = e.h, srv = !!(g && g.res), stake = Math.round(N(s.stake) * 100) / 100;
-  const out = { id: String(id).slice(0, 60), d, what: lbl(s), type, kalshi: s.src === 'kalshi', stake, kick: k.min, last: k.max, gr: '', res: '', vis: false };
+  const out = { id: String(id).slice(0, 60), d, what: lbl(s), type, kalshi: s.src === 'kalshi', stake, kick: k.min, last: k.max, gr: '', res: '', vis: false, gl: !!e.gl, vr: (e.g && e.g.vr) || '' };
   // G6 + fix 3 + fix 9: every game known -> shown once the LAST one kicked off (a parlay stays hidden even after a leg lost); any unknown kickoff -> hidden until the bet is graded settled
   out.vis = k.all ? now >= k.max : (!k.any.length || now >= Math.max(...k.any)) && (srv || (!!(h && h.res) && !!sday && now > chiEnd(sday)));
   const no = (why) => Object.assign(out, { why });
-  if (r.kalshi && !out.kalshi) return no('Kalshi-synced bets only');
+  if (r.kalshi && !out.kalshi) return no('Kalshi-tagged bets only');
   if (!r.types[type]) return no('This kind of bet does not count here');
   if (type === 'parlay' && legsOf(s).length > r.legs) return no('More than ' + r.legs + ' legs');
   if (k.min != null && e.f >= k.min) return no('Synced after the game started');
@@ -274,19 +313,27 @@ function judge(c, e, id, rv, now, from) {
   }
   let res = '', pl = 0;
   if (srv) { res = g.res; pl = g.pl; out.gr = 'srv'; }
-  else if (rv && rv.x && r.honor && h && h.res) { res = h.res; pl = h.pl; out.gr = 'honor'; }
+  else if (rv && rv.x && r.honor && h && h.res && (k.all ? now >= k.max : !!sday && now > chiEnd(sday))) { res = h.res; pl = h.pl; out.gr = 'honor'; } // round 2: never before the game kicked off
   else if (rv && rv.x && r.honor) out.gr = 'honor';
-  out.res = res; const cs = r.cap && stake > r.cap ? r.cap : stake;
+  out.res = res; const capv = r.cap || NOCAP, cs = stake > capv ? capv : stake;
   out.cs = cs; out.capped = cs < stake; out.pl = res ? Math.round((stake > 0 ? pl * cs / stake : 0) * 100) / 100 : 0;
   out.u = res === 'won' ? Math.round((stake > 0 ? pl / stake : 0) * 1000) / 1000 : res === 'lost' ? -1 : 0;
-  out.ok = true; return out;
+  out.ok = true; out.f = e.f; const mk1 = mktOf(s, R); if (mk1) { out.mkt = mk1.k; out.ms = mk1.side; } return out;
 }
+// Round 2: the market and side of a single bet, to find a member's hedges (both sides of one market). null for parlays / props / unresolved.
+function mktOf(s, R) { if (s.kind === 'parlay' || (s.kind === 'prop' && !s.kt)) return null; const r = R[GR.legKey(s)]; if (!r || !r.gid || !r.kind || r.kind === 'prop') return null;
+  let side = r.kind === 'ou' ? (r.ks || r.ovr ? 'over' : 'under') : r.side; /* a Kalshi total is "over N": YES = over */ if (r.ks === 'no') side = r.kind === 'ou' ? (side === 'over' ? 'under' : 'over') : side === 'home' ? 'away' : 'home';
+  return side ? { k: r.lg + '|' + r.gid + '|' + (r.kind === 'sp' ? 'sp' : r.kind), side } : null; }
+function hedges(list) { const first = {}; list.filter((x) => x.ok && x.mkt).sort((a, b) => (a.f - b.f) || (a.id < b.id ? -1 : 1)).forEach((x) => { if (!first[x.mkt]) first[x.mkt] = x.ms; else if (first[x.mkt] !== x.ms) Object.assign(x, { ok: false, why: 'Hedge, not counted: the other side of a bet you already have on this game', res: x.res, pl: 0 }); }); return list; }
+// "Most bets per week": per member and contest week, only the first N counted bets (by the server's first-seen time, then id) count.
+function weekCap(c, list) { const n = Number(c.rules.maxBets) || 0; if (!n) return list; const seen = {};
+  list.filter((x) => x.ok).sort((a, b) => (a.f - b.f) || (a.id < b.id ? -1 : 1)).forEach((x) => { const w = weekOf(c, x.d); seen[w] = (seen[w] || 0) + 1; if (seen[w] > n) Object.assign(x, { ok: false, over: 1, why: 'Over the weekly limit: only the first ' + n + ' bets you add for a week count', pl: 0 }); }); return list; }
 // The sport a bet SAYS it is on (honor-system bets the server could not match to a game): its league, a Kalshi ticker, else football by team abbreviation.
 function claimSport(s) { const ls = legsOf(s).map((l) => GR.normLg(l.lg || s.lg) || GR.ktLeague(l.kt || s.kt) || ((l.home || l.away) ? (GR.NFLAB.has(String(l.home).toUpperCase()) || GR.NFLAB.has(String(l.away).toUpperCase()) ? 'nfl' : 'ncaaf') : '')); const u = [...new Set(ls)]; return u.length === 1 ? u[0] : ''; }
 const lbl = (b) => cleanName(String(b.text || (b.kind === 'parlay' ? (Array.isArray(b.legs) ? b.legs.length : 0) + '-leg parlay' : (b.side || '?') + ' ' + (b.type === 'ou' || b.type === 'tot' ? b.line : b.line ? (b.line > 0 ? '+' : '') + b.line : 'ML') + (b.away && b.home ? ' (' + b.away + '@' + b.home + ')' : ''))), 90);
 
 // Read every member's synced bets, update the contest ledger, grade from ESPN, and return the judged bets per member. Cached 60 s per contest.
-const CACHE = new Map();
+const CACHE = new Map(), USEM = new Map(); // USEM: last enterprise player count recorded per contest (write only on change)
 async function contestBets(g, c, ctx) {
   const key = g.id + ':' + c.cid, hit = CACHE.get(key);
   if (hit && D.now() - hit.at < 60e3 && hit.u === g.u) return hit.v;
@@ -301,9 +348,10 @@ async function contestBets(g, c, ctx) {
   for (let i = 0; i < mem.length; i++) {
     const m = mem[i], row = rows[i]; if (!row) continue; const bets = (row.data && Array.isArray(row.data.bets)) ? row.data.bets : [], U = Number(row.updated) || now;
     for (const b of bets) {
-      if (!b || b.id == null) continue; const id = String(b.id).slice(0, 60), s = snap(b), known = L0.b[m.pid] && L0.b[m.pid][id];
+      if (!b || b.id == null) continue; if (!(Number(b.gl) > 0) && b.src !== 'kalshi') continue; // G16: only bets saved to the server when added (/groups/bet/add) count; a phone-only (offline / personal) bet never does. Kalshi-tagged bets come in through the Kalshi sync.
+      const id = String(b.id).slice(0, 60), s = snap(b), known = L0.b[m.pid] && L0.b[m.pid][id];
       const dd = String(b.day || '').slice(0, 10), kp = b.kt ? GR.parseKt(b.kt) : null; if (!known && okDay(dd) && dd < minDay && !(kp && kp.day >= minDay)) continue;
-      const o = { pid: m.pid, id, s, U, R: {} }; if (b.kind === 'prop' || b.kind === 'parlay' || b.cash != null || c.rules.honor) { const h = phoneResult(b); if (h) o.h = h; }
+      const o = { pid: m.pid, id, s, U, sa: Number(b.sa) > 0 ? Number(b.sa) : 0, gl: Number(b.gl) > 0 ? Number(b.gl) : 0, R: {} }; /* sa = the server's own arrival stamp for this bet id (sync.js merge) */ if (b.kind === 'prop' || b.kind === 'parlay' || b.cash != null || c.rules.honor) { const h = phoneResult(b); if (h) o.h = h; }
       obs.push(o);
     }
   }
@@ -326,7 +374,7 @@ async function contestBets(g, c, ctx) {
   await pmap(Object.keys(L.b).filter((pid) => mem.some((m) => m.pid === pid)).flatMap((pid) => Object.keys(L.b[pid]).map((id) => [pid, id])), 6, async ([pid, id]) => {
     const e = L.b[pid][id]; if (e.g) return; const s = e.s || {}; const ks = legKeys(s), rv = { x: '' };
     const legs = []; for (const k of ks) { const st = e.r[k]; if (!st) { const r = RES[k]; legs.push(r && r.x ? r : { x: 'Game not found yet' }); continue; } legs.push(await GR.withGame(st, ctx)); }
-    let gb; try { gb = GR.gradeBet(s, legs); } catch (er) { gb = { x: 'Bet Oddable cannot read' }; } if (gb.x) { rv.x = gb.x; rv.sport = /sport/.test(gb.x); } else if (gb.res) grades.push({ pid, id, g: { res: gb.res, pl: gb.pl, at: now }, sj: JSON.stringify(s) });
+    let gb; try { gb = GR.gradeBet(s, legs, { maxOdds: c.rules.maxOdds || 500 }); } catch (er) { gb = { x: 'Bet Oddable cannot read' }; } if (gb.x) { rv.x = gb.x; rv.sport = /sport/.test(gb.x) || !!gb.far; } else if (gb.res) grades.push({ pid, id, g: Object.assign({ res: gb.res, pl: gb.pl, at: now }, gb.vr ? { vr: gb.vr } : {}), sj: JSON.stringify(s) });
     RV[pid + '|' + id] = rv;
   });
   ch += applyGrades(L, grades);
@@ -335,10 +383,75 @@ async function contestBets(g, c, ctx) {
   }
   // 4. judge every ledger bet for each member
   const out = {};
-  mem.forEach((m) => { const from = Math.max(c.start, m.joined || 0), P = L.b[m.pid] || {}; out[m.pid] = Object.keys(P).map((id) => { try { return judge(c, P[id], id, RV[m.pid + '|' + id], now, from); } catch (er) { return null; } }).filter(Boolean); });
-  if (now >= c.start && g.owner) LIM.recordUse(g.owner, g.id + ':' + c.cid, mem.length, g.name + ' · ' + c.name).catch(() => {}); // G15: enterprise usage counter (no-op for standard accounts)
+  mem.forEach((m) => { const from = Math.max(c.start, m.joined || 0), P = L.b[m.pid] || {}; out[m.pid] = weekCap(c, hedges(Object.keys(P).map((id) => { try { return judge(c, P[id], id, RV[m.pid + '|' + id], now, from); } catch (er) { return null; } }).filter(Boolean))); });
+  if (now >= c.start && g.owner && USEM.get(g.id + ':' + c.cid) !== mem.length) USEM.set(g.id + ':' + c.cid, mem.length), LIM.recordUse(g.owner, g.id + ':' + c.cid, mem.length, g.name + ' · ' + c.name).catch(() => {}); // G15: enterprise usage counter (no-op for standard accounts)
   CACHE.set(key, { at: D.now(), u: g.u, v: out }); if (CACHE.size > 500) CACHE.delete(CACHE.keys().next().value);
   return out;
+}
+
+// ---------- G16: group bets save to the server when added, then are locked (owner, Nov 16 2026) ----------
+// The phone calls /groups/bet/add BEFORE it keeps a new bet while its player is in a running or upcoming group contest. The server writes the bet straight into
+// the player's synced-bets row with `sa` = `gl` = the server's time; sync.js then keeps that copy forever (no edit, swap or delete from any phone). If this call
+// fails the phone does not keep the bet ("Not saved, try again"): there are no local-only group bets. A bet the server did not save this way never counts.
+const LOCKED_MSG = 'Group bets lock when you add them: they cannot be edited, deleted or swapped, even before kickoff. The commissioner can only void a bet under the void rules (a postponed or cancelled game), and the reason is shown to everyone.';
+RLIM.bet = [60, 600e3, 120, 600e3];
+const BETKEYS = ['id', 'kind', 'type', 'side', 'line', 'odds', 'mult', 'stake', 'lg', 'gid', 'day', 'home', 'away', 'week', 'text', 'note', 'appSu', 'appConf', 'appAts', 'appLine', 'noApp', 'pp', 'legs', 'pay'];
+function cleanBet(x) {
+  if (!x || typeof x !== 'object' || Array.isArray(x)) throw bad(400, 'No bet');
+  if (x.src === 'kalshi' || x.kt) throw bad(400, 'Kalshi bets come in through the Kalshi sync');
+  const id = String(x.id || ''); if (!/^[A-Za-z0-9_.-]{2,60}$/.test(id)) throw bad(400, 'Bad bet id');
+  const o = {}; BETKEYS.forEach((k) => { if (x[k] !== undefined && x[k] !== null) o[k] = x[k]; });
+  if (o.kind !== undefined && !['parlay', 'prop'].includes(o.kind)) throw bad(400, 'Unknown kind of bet');
+  if (o.kind === 'parlay' && !(Array.isArray(o.legs) && o.legs.length >= 2 && o.legs.length <= 12)) throw bad(400, 'A parlay needs 2 to 12 legs');
+  const st = Number(o.stake); if (!(Number.isFinite(st) && st > 0 && st <= 1e6)) throw bad(400, 'Enter the stake: group bets need one');
+  o.stake = Math.round(st * 100) / 100; if (o.line != null && !Number.isFinite(Number(o.line))) throw bad(400, 'Bad line');
+  if (!okDay(String(o.day || ''))) throw bad(400, 'Bad day');
+  const j = JSON.stringify(o); if (j.length > 8000) throw bad(413, 'Bet too big'); return JSON.parse(j);
+}
+async function inRunning(u, now) { // the groups (with a picks contest not yet over) this player is a member of
+  const mi = await D.S.dbGet(MK(u.mk)).catch(() => null), x = (mi && mi.data) || {}, ids = [...new Set([...(x.g || []), ...Object.keys(x.own || {})])].slice(-60);
+  const gs = (await pmap(ids, 6, (id) => gread(id).catch(() => null))).filter((g) => g && memberOf(g, u.mk));
+  return gs.filter((g) => g.contests.some((c) => c.kind === 'picks' && !cEnded(c, now) && inContest(c, g).some((m) => m.mk === u.mk)));
+}
+async function betAdd(u, ip, raw, now) {
+  rate('bet', u.mk, ip); const bet = cleanBet(raw);
+  const sid = await sidOf(u.e, true); if (!sid) throw bad(409, 'Turn on sync (sign in with your phone number) to add group bets');
+  const gs = await inRunning(u, now); if (!gs.length) throw bad(409, 'You are not in a running group contest');
+  return serial(sid, async () => { for (let i = 0; i < 8; i++) {
+    const row = await D.S.dbGet(sid); if (!row) throw bad(409, 'Turn on sync (sign in with your phone number) to add group bets');
+    const data = clone(row.data || {}); data.bets = Array.isArray(data.bets) ? data.bets : [];
+    if (data.bets.some((y) => y && String(y.id) === bet.id) || (Array.isArray(data.tomb) && data.tomb.map(String).includes(bet.id))) throw bad(409, LOCKED_MSG);
+    data.bets.push(Object.assign({}, bet, { t: now, sa: now, gl: now }));
+    if (await D.S.dbPatchIf(sid, row.updated, data, Math.max(now, Number(row.updated || 0) + 1))) { gs.forEach((g) => g.contests.forEach((c) => CACHE.delete(g.id + ':' + c.cid))); return { ok: true, id: bet.id, gl: now, sa: now, groups: gs.length, text: 'Saved to your group. Locked.' }; }
+    await D.sleep(3 + Math.random() * 20);
+  }
+  throw bad(409, 'Not saved, try again'); });
+}
+
+// ---------- P1: partner suggestions (owner, Nov 16 2026). The pairing itself is the shared odds-api/pairing.js; this only gathers the group's people. ----------
+// Strength of each member: a number the asker typed (vals), else D.profile(accountId, sport) -> {hcp?, rating?, winPct?}. D.profile asks the stats module for
+// `pairingProfile` (to be added by the stats coder so it can respect each player's sharing/consent switch); until then it returns nothing and people type
+// the numbers. Team history: D.teamHistory(group, sport) -> [{date, team:[pid], result}] (golf / events engines plug in; empty by default).
+// IT ONLY SUGGESTS: nothing is saved.
+const PAIR = require('./pairing');
+D.profile = async (e, sport) => { try { const st = require('./stats'); if (typeof st.pairingProfile === 'function') return (await st.pairingProfile(e, sport)) || {}; } catch (er) {} return {}; };
+D.teamHistory = async () => [];
+RLIM.partners = [60, 600e3, 120, 600e3];
+async function partners(u, b) {
+  if (limit('partners|a|' + u.mk, RLIM.partners[0], RLIM.partners[1])) throw bad(429, 'Too many tries. Wait a few minutes.');
+  const g = await gread(b.id); if (!g || !canSee(g, u.mk)) throw bad(404, 'Group not found');
+  const sport = ['golf', 'pickleball', 'other'].includes(b.sport) ? b.sport : 'golf', key = sport === 'golf' ? 'hcp' : 'rating', nm = await names();
+  const want = Array.isArray(b.pids) && b.pids.length ? new Set(b.pids.map(String)) : null, vals = (b.vals && typeof b.vals === 'object') ? b.vals : {};
+  const okv = (v) => { const n = Number(v); return v !== '' && v != null && Number.isFinite(n) && (sport === 'golf' ? n >= -10 && n <= 54 : n >= 0 && n <= 4000) ? n : null; };
+  const A = D.acct(), mem = g.members.filter((m) => !want || want.has(m.pid)).slice(0, 200);
+  const players = await pmap(mem, 6, async (m) => { const o = { id: m.pid, name: shownName(m, nm) }, typed = okv(vals[m.pid]);
+    if (typed !== null) o[key] = typed; else if (m.sid) { let pr = {}; try { pr = (await D.profile(A.phoneEmail(m.sid), sport)) || {}; } catch (e) {} ['hcp', 'rating', 'winPct'].forEach((k) => { if (okv(pr[k]) !== null || (k === 'winPct' && Number.isFinite(Number(pr[k])))) o[k] = Number(pr[k]); }); }
+    return o; });
+  (Array.isArray(b.guests) ? b.guests : []).slice(0, 40).forEach((x, i) => { const name = cleanName(x && x.name, 24); if (!name) return; const o = { id: 'guest' + i, name, guest: true }, v = okv(x.val); if (v !== null) o[key] = v; players.push(o); });
+  let history = []; try { history = (await D.teamHistory(g, sport)) || []; } catch (e) {}
+  const list = PAIR.suggestPartners(players, { mode: b.mode, teamSize: b.teamSize, sport, history, top: 3 });
+  const out = { mode: list.mode, teamSize: list.teamSize, sport, note: list.note, suggestions: list.map((x) => ({ rank: x.rank, reason: x.reason, spread: x.spread, repeats: x.repeats, teams: x.teamInfo.map((tm) => ({ names: tm.names, label: tm.label, strength: tm.strength })), sitOutNames: x.sitOutNames })) };
+  return Object.assign(out, { players: players.map((p) => ({ id: p.id, name: p.name, guest: !!p.guest, has: p[key] != null })), only: 'These are suggestions. People choose their own partners.', unit: sport === 'golf' ? 'Oddable Handicap Index' : 'Oddable rating' });
 }
 
 // ---------- scoring, ranking, prizes ----------
@@ -432,7 +545,13 @@ async function handle(req, res) {
     const u = await me(req);
     if (op === 'limits') { const ak = LIM.keyOf(u.e); send(res, 200, { max: await LIM.maxPeople(ak, ''), enterprise: await LIM.isEnterprise(ak), standard: LIM.STANDARD, capText: LIM.CAP_TEXT, text: LIM.ENTERPRISE_TEXT }); return true; }
     if (op === 'ent/contact') { send(res, 200, await LIM.contact(u.e, ip, b)); return true; }
-    if (op === 'ent/admin') { if (!D.acct().ownerOk(req)) throw bad(403, 'Owner only'); send(res, 200, await LIM.admin(b)); return true; }
+    if (op === 'ent/admin') { if (!D.acct().ownerOk(req)) throw bad(403, 'Owner only'); const out = await LIM.admin(b);
+      if (b.op === 'seats' && /^[A-Z2-9]{10}$/.test(String(b.id || '')) && out.extraSeats > 0) { const want = Math.min(LIM.CEILING(), LIM.STANDARD + out.extraSeats); try { await gmut(String(b.id), (g) => { if (g.join.max >= want) return { nochange: true }; g.join.max = want; g.u = now; return {}; }); out.groupMax = want; } catch (e) { if (e.status !== 404) throw e; } } // round 2: the owner's extra seats also raise the group's own max
+      send(res, 200, out); return true; }
+    if (op === 'bet/add') { send(res, 200, await betAdd(u, ip, b.bet, now)); return true; } // G16
+    if (op === 'bet/status') { const sid = await sidOf(u.e, true); send(res, 200, { betLock: (await inRunning(u, now)).length, canBet: !!sid }); return true; } // light: does this player's next bet go to a group?
+    if (op === 'bet/edit' || op === 'bet/delete' || op === 'bet/swap') throw bad(409, LOCKED_MSG); // G16: never, even before kickoff
+    if (op === 'partners') { send(res, 200, await partners(u, b)); return true; } // P1
     if (op === 'mine') {
       const mi = await D.S.dbGet(MK(u.mk)), x = (mi && mi.data) || {}, ids = [...new Set([...(x.g || []), ...Object.keys(x.own || {})])].slice(-60), qs = (x.q || []).slice(-60);
       const sid = await sidOf(u.e, true), ctx = { rows: new Map(), budget: 60 };
@@ -448,7 +567,8 @@ async function handle(req, res) {
       const oids = Object.keys(I).filter((id) => I[id].o && now < I[id].jc && !ids.includes(id) && !pend.some((p) => p.id === id)).sort((a, c2) => I[a].s - I[c2].s).slice(0, 30);
       const open = (await pmap(oids, 6, (id) => gread(id).catch(() => null))).filter((g) => g && g.join.open && g.join.requests && !ended(g, now) && now < joinOpenUntil(g) && g.members.length < g.join.max && !(g.denied || []).includes(u.mk) && !memberOf(g, u.mk)).map((g) => pub(g, now));
       out.sort((a, c2) => a.start - c2.start);
-      send(res, 200, { groups: out, open, pending: pend, now }); return true;
+      const betLock = mine.filter((g) => g.contests.some((c) => c.kind === 'picks' && !cEnded(c, now) && inContest(c, g).some((m) => m.mk === u.mk))).length; // G16: the phone sends new bets to /groups/bet/add while this is > 0
+      send(res, 200, { groups: out, open, pending: pend, now, betLock, canBet: !!sid }); return true;
     }
     if (op === 'create') {
       rate('create', u.mk, ip); const ak = LIM.keyOf(u.e), join = cleanJoin(b.join, await LIM.maxPeople(ak, '')), C = cleanContest(Object.assign({}, b.contest || {}, { pot: 'main' }), now, join.max), gname = cleanName(b.name, 30);
@@ -461,7 +581,7 @@ async function handle(req, res) {
       let id; do { id = rnd(10); } while (await D.S.dbGet(GK(id)));
       let code; do { code = newCode(); } while (await D.S.dbGet(CK(code)));
       await D.S.dbPut({ id: CK(code), salt: 'x', pinhash: 'x', data: { id }, updated: now }, true);
-      const cid = rnd(6), g = { id, name: gname, code, comm: u.mk, owner: ak, created: now, u: now, engaged: false, members: [], reqs: [], denied: [], join, money: { take, msplit: { kind: 'even', pct: { [cid]: 100 } } }, contests: [Object.assign({ cid, created: now }, C)] };
+      const cid = rnd(6), g = { id, name: gname, code, comm: u.mk, owner: ak, created: now, u: now, engaged: false, members: [], reqs: [], denied: [], join, money: { take, msplit: { kind: 'entry', pct: { [cid]: 100 } } }, contests: [Object.assign({ cid, created: now }, C)] };
       g.members.push({ pid: newPid(g), mk: u.mk, sid, name: nm, joined: now, paid: false, fixedName: fixed(u.e, sid) });
       await D.S.dbPut({ id: GK(id), salt: 'x', pinhash: 'x', data: g, updated: now }, true);
       await memIdx(u.mk, (y) => { y.g.push(id); y.own[id] = gEnd(g); }); await idxPut(g);
@@ -473,9 +593,9 @@ async function handle(req, res) {
         if (!isComm(g, u.mk)) throw bad(403, 'Only the commissioner can change the rules');
         if (started(g, now)) throw bad(409, 'Rules are locked. The group has started.');
         const name = cleanName(b.name, 30); if (name.length < 2) throw bad(400, 'Give the group a name (2+ characters)');
-        const join = cleanJoin(b.join, CAPNOW); if (join.max < g.members.length) throw bad(400, 'More members than that already');
+        const join = cleanJoin(b.join, Math.max(CAPNOW, g.join.max), g.join.max); if (join.max < g.members.length) throw bad(400, 'More members than that already');
         const mainE = mainOf(g).reduce((a, c) => a + (c.rules.entry || 0), 0), take = b.take ? cleanTake(b.take, mainE * join.max) : g.money.take;
-        const ms = b.msplit ? cleanMsplit(b.msplit, mainOf(g).map((c) => c.cid)) : g.money.msplit;
+        const ms = b.msplit ? cleanMsplit(b.msplit, splitOf(g)) : g.money.msplit;
         if (engaged(g) && (JSON.stringify(take) !== JSON.stringify(g.money.take) || JSON.stringify(ms) !== JSON.stringify(g.money.msplit) || join.max !== g.join.max)) throw bad(409, 'Money rules are locked: people have already joined or asked to join.');
         Object.assign(g, { name, join, u: now }); g.money = { take, msplit: ms }; return g; });
       await idxPut(g); send(res, 200, { group: full(g, u.mk, now) }); return true;
@@ -490,15 +610,15 @@ async function handle(req, res) {
         if (b.contest && b.contest.kind === 'calcutta') throw bad(400, 'Calcuttas are coming soon');
         const C = cleanContest(Object.assign({}, b.contest || {}, { pot }), now, g.join.max);
         if (add && pot === 'main' && engaged(g)) throw bad(409, 'The main pot is locked: people have already joined or asked to join. Add this contest as a side pot.');
-        if (old && engaged(g)) { const keep = MONEYKEYS.filter((k) => JSON.stringify(C.rules[k]) !== JSON.stringify(old.rules[k])); if (keep.length || C.sport !== old.sport || C.fmt !== old.fmt) throw bad(409, 'Money and bet rules are locked: people have already joined or asked to join. You can still change the name and dates.'); }
+        if (old && engaged(g)) { const keep = MONEYKEYS.filter((k) => JSON.stringify(C.rules[k]) !== JSON.stringify(old.rules[k])); if (keep.length || C.sport !== old.sport || C.fmt !== old.fmt || DATEKEYS.some((k) => String(C[k]) !== String(old[k]))) throw bad(409, 'Money, bet rules and dates are locked: people have already joined or asked to join. You can still change the name.'); }
         if (add) { const cid = rnd(6); const c = Object.assign({ cid, created: now }, C); if (pot === 'side') { c.inn = [memberOf(g, u.mk).pid]; c.paid = {}; } g.contests.push(c); }
         else { Object.assign(old, C); }
-        const mids = mainOf(g).map((c) => c.cid); if (pot === 'main') { g.money.msplit = cleanMsplit(b.msplit || (mids.length === 2 && g.money.msplit.kind !== 'even' ? g.money.msplit : { kind: 'even' }), mids); const mainE = mainOf(g).reduce((a, c) => a + (c.rules.entry || 0), 0); if (g.money.take.kind === 'flat' && cents(g.money.take.v) > cents(mainE * g.join.max)) throw bad(400, "The commissioner's take cannot be more than the pot (entries x most members)"); }
+        const mids = splitOf(g).map((c) => c.cid); if (pot === 'main') { g.money.msplit = cleanMsplit(b.msplit || (mids.length === 2 && !['even', 'entry'].includes(g.money.msplit.kind) ? g.money.msplit : { kind: 'entry' }), splitOf(g)); const mainE = mainOf(g).reduce((a, c) => a + (c.rules.entry || 0), 0); if (g.money.take.kind === 'flat' && cents(g.money.take.v) > cents(mainE * g.join.max)) throw bad(400, "The commissioner's take cannot be more than the pot (entries x most members)"); }
         g.u = now; return g; });
       await idxPut(g); await memIdx(u.mk, (y) => { y.own[g.id] = gEnd(g); }); send(res, 200, { group: full(g, u.mk, now) }); return true;
     }
     if (op === 'contest/delete') {
-      const g = await gmut(String(b.id || ''), (g) => { if (!isComm(g, u.mk)) throw bad(403, 'Only the commissioner can remove a contest'); const c = cfind(g, b.cid); if (cStarted(c, now)) throw bad(409, 'This contest has started'); if (g.contests.length < 2) throw bad(409, 'A group needs at least one contest. Delete the group instead.'); if (c.pot === 'main' && engaged(g)) throw bad(409, 'The main pot is locked: people have already joined or asked to join.'); if (c.pot === 'side' && (c.inn || []).length > 1) throw bad(409, 'Members are in this side pot'); g.contests = g.contests.filter((x) => x !== c); g.money.msplit = cleanMsplit({ kind: 'even' }, mainOf(g).map((x) => x.cid)); g.u = now; return g; });
+      const g = await gmut(String(b.id || ''), (g) => { if (!isComm(g, u.mk)) throw bad(403, 'Only the commissioner can remove a contest'); const c = cfind(g, b.cid); if (cStarted(c, now)) throw bad(409, 'This contest has started'); if (g.contests.length < 2) throw bad(409, 'A group needs at least one contest. Delete the group instead.'); if (c.pot === 'main' && engaged(g)) throw bad(409, 'The main pot is locked: people have already joined or asked to join.'); if (c.pot === 'side' && (c.inn || []).length > 1) throw bad(409, 'Members are in this side pot'); g.contests = g.contests.filter((x) => x !== c); g.money.msplit = cleanMsplit({ kind: 'entry' }, splitOf(g)); g.u = now; return g; });
       await idxPut(g); send(res, 200, { group: full(g, u.mk, now) }); return true;
     }
     if (op === 'sidepot') { // a member opts in or out of a side pot, before that contest starts
@@ -587,7 +707,7 @@ async function handle(req, res) {
       const cp = list.map((x) => Object.assign({}, x)), t = score(c, cp, scope, week, now), bestIds = new Set(cp.filter((x) => x.best).map((x) => x.id));
       const shown = list.filter((x) => mine || (x.vis && x.ok)); // G6: other members' bets only after their LAST game kicks off; unknown kickoff = only once graded; not-counted bets stay private
       const hidden = mine ? 0 : list.filter((x) => x.ok && !x.vis).length;
-      const bets = shown.sort((a, c2) => (c2.kick || chiStart(c2.d || '2000-01-01')) - (a.kick || chiStart(a.d || '2000-01-01'))).slice(0, 300).map((x) => ({ id: x.id.replace(/[^\w.-]/g, '').slice(0, 40), d: x.d, wk: weekOf(c, x.d), what: x.what, type: x.type, kalshi: x.kalshi, stake: x.stake, cs: x.cs, capped: !!x.capped, res: x.res, pl: x.pl, u: x.u, ok: !!x.ok, why: x.why || '', gr: x.gr || '', best: bestIds.has(x.id) }));
+      const bets = shown.sort((a, c2) => (c2.kick || chiStart(c2.d || '2000-01-01')) - (a.kick || chiStart(a.d || '2000-01-01'))).slice(0, 300).map((x) => ({ id: x.id.replace(/[^\w.-]/g, '').slice(0, 40), d: x.d, wk: weekOf(c, x.d), what: x.what, type: x.type, kalshi: x.kalshi, stake: x.stake, cs: x.cs, capped: !!x.capped, res: x.res, pl: x.pl, u: x.u, ok: !!x.ok, why: x.why || '', gr: x.gr || '', best: bestIds.has(x.id), locked: !!x.gl, vr: x.vr || '' }));
       send(res, 200, { name: shownName(m, await names()), pid: m.pid, me: mine, scope, week, t: Object.assign({}, t, { weeks: undefined }), bets, hidden }); return true;
     }
     send(res, 404, { error: 'not found' }); return true;
@@ -619,21 +739,53 @@ registerInvite('g', async (code, now) => { const c = normCode(code); if (!c) ret
 // ---------- lifetime stats CONTRACT (owner, Nov 16 2026) ----------
 // statsFor(userKey, {from, to}) -> one record per picks contest the user is in. userKey = the account id from acct.who(req) (server-only identity, e.g. '<hex>@phone.oddable').
 const STATSPORT = { nfl: 'nfl', ncaaf: 'cfb', nba: 'nba', mlb: 'mlb', nhl: 'nhl', ncaab: 'ncaab' };
+// One contract record for one member of one started picks contest (shared by statsFor and memberStats). null when out of the date range or not ranked.
+async function contestRec(g, c, m, now, ctx, o) {
+    o = o || {}; const live = !cEnded(c, now), date = live ? chiDay(now) : c.endDay;
+    if ((o.from && date < o.from) || (o.to && date > o.to)) return null;
+    const st = await standings(g, c, 'season', null, ctx), r = st.rows.find((y) => y.pid === m.pid); if (!r) return null;
+    const rec = { src: 'groups', id: g.id + ':' + c.cid, date, sport: STATSPORT[c.sport] || 'other', kind: 'contest', groupId: g.id, contestId: c.cid, title: cleanName(g.name + ' · ' + c.name, 60), result: live ? null : r.place === 1 ? 'W' : 'L', // finished: 1st place = a win (same rule as stats.js)
+     
+      place: { n: r.place, of: st.rows.length }, pl: r.t.win, units: r.t.units, stake: r.t.stake, verified: !c.rules.honor, extra: { record: r.t.w + '-' + r.t.l + '-' + r.t.p, metric: c.rules.metric } };
+    if (c.sport === 'all') rec.extra.sports = GR.LGS.map((l) => STATSPORT[l]); if (live) rec.extra.live = true; if (r.owed) rec.extra.owed = r.owed;
+    // S-ALL (owner, Nov 16 2026): every play lands in the player's personal dashboard with what they played, the result and the money, all from SERVER records
+    // (the contest ledger graded by grade.js, never the phone). entry = this contest's entry (display only), payout = what the standings say they are owed
+    // (final once the contest is over; while it runs it is "if it ended now", extra.money.final = false), net = payout - entry. Picks = the counted bets.
+    const entry = Math.round(Number(c.rules.entry || 0) * 100) / 100, payout = Math.round(Number(r.owed || 0) * 100) / 100;
+    const mb = (await contestBets(g, c, ctx))[m.pid] || [], counted = mb.filter((y) => y.ok).sort((p1, p2) => (p1.kick || chiStart(p1.d)) - (p2.kick || chiStart(p2.d)));
+    rec.spent = entry; if (!live) rec.won = payout;
+    rec.extra.derived = true; rec.extra.pot = c.pot; rec.extra.money = { entry, payout, net: Math.round((payout - entry) * 100) / 100, final: !live, paid: c.pot === 'side' ? !!(c.paid || {})[m.pid] : !!m.paid }; // paid = the commissioner marked this player's entry as paid (the prize pool only holds paid entries)
+    rec.extra.picks = { n: counted.length, w: r.t.w, l: r.t.l, p: r.t.p, open: r.t.open, list: counted.slice(-60).map((y) => ({ d: y.d, what: y.what, type: y.type, res: y.res || '', pl: y.pl, stake: y.cs, locked: !!y.gl, vr: y.vr || undefined })) };
+    while (rec.extra.picks.list.length && JSON.stringify(rec.extra).length > 3800) { rec.extra.picks.list.shift(); rec.extra.picks.more = counted.length - rec.extra.picks.list.length; } // stats.js caps extra at 4000 characters: keep the newest picks
+    return rec;
+}
 async function statsFor(userKey, o) {
   o = o || {}; const mk = mkOf(userKey), now = D.now(), mi = await D.S.dbGet(MK(mk)).catch(() => null), x = (mi && mi.data) || {};
   const ids = [...new Set([...(x.g || []), ...Object.keys(x.own || {})])], ctx = { rows: new Map(), budget: 60 }, out = [];
   const gs = (await pmap(ids, 6, (id) => gread(id).catch(() => null))).filter((g) => g && memberOf(g, mk));
   for (const g of gs) for (const c of g.contests.filter((c) => c.kind === 'picks' && cStarted(c, now))) {
-    const m = inContest(c, g).find((y) => y.mk === mk); if (!m) continue; const live = !cEnded(c, now), date = live ? chiDay(now) : c.endDay;
-    if ((o.from && date < o.from) || (o.to && date > o.to)) continue;
-    const st = await standings(g, c, 'season', null, ctx), r = st.rows.find((y) => y.pid === m.pid); if (!r) continue;
-    const rec = { src: 'groups', id: g.id + ':' + c.cid, date, sport: STATSPORT[c.sport] || 'other', kind: 'contest', groupId: g.id, contestId: c.cid, title: cleanName(g.name + ' · ' + c.name, 60), result: live ? null : r.place === 1 ? 'W' : 'L', // finished: 1st place = a win (same rule as stats.js)
-     
-      place: { n: r.place, of: st.rows.length }, pl: r.t.win, units: r.t.units, stake: r.t.stake, verified: !c.rules.honor, extra: { record: r.t.w + '-' + r.t.l + '-' + r.t.p, metric: c.rules.metric } };
-    if (c.sport === 'all') rec.extra.sports = GR.LGS.map((l) => STATSPORT[l]); if (live) rec.extra.live = true; if (r.owed) rec.extra.owed = r.owed;
-    out.push(rec);
+    const m = inContest(c, g).find((y) => y.mk === mk); if (!m) continue;
+    const rec = await contestRec(g, c, m, now, ctx, o); if (rec) out.push(rec);
   }
   return out;
+}
+// memberStats(viewerKey, groupId, pid) -> one member's group play for another member of that group (or themselves), from SERVER records only (G16):
+//   { name, me, group: {id, name, started}, contest (contract record of their first started picks contest), contests (all of them), records (one contract
+//     record per counted group bet; for other viewers only bets whose last game has kicked off), hidden (count still hidden), memberKey (server only) }
+// null when the group does not exist, the viewer is not in it, or pid is not a member. Used by stats.js /stats/member.
+const BETRES = { won: 'W', lost: 'L', push: 'P' };
+async function memberStats(viewerKey, groupId, pid) {
+  const vk = mkOf(viewerKey), now = D.now(), g = await gread(groupId).catch(() => null); if (!g || !canSee(g, vk)) return null;
+  const m = g.members.find((y) => y.pid === String(pid || '')); if (!m) return null; const mine = m.mk === vk, ctx = { rows: new Map(), budget: 60 }, nm = await names();
+  const contests = [], records = []; let hidden = 0;
+  for (const c of g.contests.filter((c) => c.kind === 'picks' && cStarted(c, now) && inContest(c, g).some((y) => y.pid === m.pid))) {
+    const rec = await contestRec(g, c, m, now, ctx).catch(() => null);
+    if (rec) { if (!mine) { delete rec.extra.picks.list; } contests.push(rec); } // another member's pick list is only given bet by bet below (hidden until kickoff)
+    const list = ((await contestBets(g, c, ctx))[m.pid] || []).filter((y) => y.ok), shown = list.filter((y) => mine || y.vis); hidden += list.length - shown.length;
+    shown.forEach((y) => records.push({ src: 'groups', id: (g.id + ':' + c.cid + ':' + String(y.id).replace(/[^\w.-]/g, '')).slice(0, 80), date: y.d, sport: STATSPORT[c.sport] || 'other', kind: 'bet', groupId: g.id, contestId: c.cid, title: y.what, result: BETRES[y.res] || null, stake: y.cs, pl: y.res ? y.pl : undefined, units: y.res ? y.u : undefined, verified: y.gr !== 'honor',
+      extra: { type: y.type, at: y.kick || 0, contest: c.name, locked: !!y.gl, kalshi: !!y.kalshi, server: true, vr: y.vr || undefined } }));
+  }
+  return { name: shownName(m, nm), me: mine, group: { id: g.id, name: g.name, started: started(g, now) }, contest: contests[0] || null, contests, records, hidden, memberKey: m.mk };
 }
 // ---------- groups as containers for games built elsewhere (golf day, local event, Calcutta engine) ----------
 // attachGame(groupId, accountId, {type, ref, name, pot}) - the commissioner attaches an external game (its own engine keeps the rules, people and results).
@@ -641,7 +793,10 @@ async function attachGame(groupId, e, x) {
   const mk = mkOf(e), now = D.now(); if (!/^[a-z]{1,8}$/.test(String(x && x.type))) throw bad(400, 'Unknown game type'); if (!/^[A-Za-z0-9:_-]{2,60}$/.test(String(x.ref))) throw bad(400, 'Bad game reference');
   const g = await gmut(groupId, (g) => { if (!isComm(g, mk)) throw bad(403, 'Only the commissioner can add games'); if (g.contests.length >= MAXC) throw bad(400, 'A group can hold up to ' + MAXC + ' contests'); const pot = x.pot === 'main' && !engaged(g) ? 'main' : 'side';
     g.contests.push({ cid: rnd(6), kind: 'ext', type: String(x.type), ref: String(x.ref), name: cleanName(x.name || 'Game', 30), pot, created: now, rules: { entry: 0, split: 'none', take: { kind: 'none', v: 0 } }, inn: pot === 'side' ? [memberOf(g, mk).pid] : undefined, paid: {} });
-    if (pot === 'main') g.money.msplit = cleanMsplit({ kind: 'even' }, mainOf(g).map((c) => c.cid)); g.u = now; return g; });
-  return { cid: g.contests[g.contests.length - 1].cid, pot: g.contests[g.contests.length - 1].pot };
+    if (pot === 'main') g.money.msplit = cleanMsplit({ kind: 'entry' }, splitOf(g)); g.u = now; return g; });
+  const nc = g.contests[g.contests.length - 1], api = GAMES[nc.type];
+  if (api && typeof api.attachToGroup === 'function') { try { await api.attachToGroup(nc.ref, g.id, nc.cid); } catch (er) { console.error('groups: attach', er.message); } } // the game learns which group pot it reports into
+  EXTC.delete(nc.type + ':' + nc.ref); await extLoad(g);
+  return { cid: nc.cid, pot: nc.pot };
 }
-module.exports = { handle, tick, statsFor, registerInvite, attachGame, cleanCalc, limits: LIM, cleanContest, cleanTake, pots, prizes, rank, score, judge, applyObs, weekOf, chiDay, chiStart, snap, _deps: D, _reset: () => { RL.clear(); CACHE.clear(); IDS.map = null; IDF.clear(); NAMES = { at: 0, v: {} }; TK.last.clear(); GR._reset(); } };
+module.exports = { handle, tick, statsFor, memberStats, registerGame, partners, betAdd, LOCKED_MSG, registerInvite, attachGame, cleanCalc, limits: LIM, cleanContest, cleanTake, pots, prizes, rank, score, judge, applyObs, weekOf, chiDay, chiStart, snap, _deps: D, _reset: () => { RL.clear(); QUEUE.clear(); EXTC.clear(); CACHE.clear(); IDS.map = null; IDF.clear(); NAMES = { at: 0, v: {} }; TK.last.clear(); GR._reset(); } };

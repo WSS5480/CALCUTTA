@@ -357,12 +357,14 @@ function betForm(g) {
     <div class="row"><button onclick="betSave('${g.id}')">Save bet</button><button class="x" onclick="OPEN=null;draw()">Cancel</button></div></div>`;
 }
 function betOpen(id) { OPEN = OPEN === id ? null : id; draw(); }
-function betSave(id) {
+async function betSave(id) { // G16: in a group contest a new bet goes to the server first (groups.js OddGroups.gate); not uploaded = not placed
   const g = GAMES.find((x) => x.id === id); if (!g) return; const v = ($('#bs') || {}).value || ''; const [side, type, ln] = v.split('|');
   const stake = parseFloat(($('#bk') || {}).value) || null, od = parseFloat(($('#bo') || {}).value);
   let bets = []; try { bets = JSON.parse(lsg('bets26')) || []; } catch (e) {}
   const p = pred(g), past = g.state === 'post'; let lk = null; try { lk = (JSON.parse(lsg('spm-' + LG)) || {})[g.id] || null; } catch (e) {}
-  bets.push({ id: 'b' + Date.now(), gid: g.id, lg: LG, week: 0, away: g.away.abbr, home: g.home.abbr, day: dashed(new Date(g.start)), t: Date.now(), side, type, line: type === 'sp' ? parseFloat(ln) : 0, stake, mult: null, odds: Math.abs(od) >= 100 ? od : -110, appSu: past ? (lk ? lk.su : null) : (p.ph >= 0.5 ? g.home.abbr : g.away.abbr), appConf: past ? (lk ? lk.c : null) : +Math.max(p.ph, p.pa).toFixed(3), noApp: past && !lk ? true : undefined, appAts: null, appLine: g.line });
+  const nb = { id: 'b' + Date.now(), gid: g.id, lg: LG, week: 0, away: g.away.abbr, home: g.home.abbr, day: dashed(new Date(g.start)), t: Date.now(), side, type, line: type === 'sp' ? parseFloat(ln) : 0, stake, mult: null, odds: Math.abs(od) >= 100 ? od : -110, appSu: past ? (lk ? lk.su : null) : (p.ph >= 0.5 ? g.home.abbr : g.away.abbr), appConf: past ? (lk ? lk.c : null) : +Math.max(p.ph, p.pa).toFixed(3), noApp: past && !lk ? true : undefined, appAts: null, appLine: g.line };
+  if (window.OddGroups && window.OddGroups.gate) { let r; try { r = await window.OddGroups.gate(nb); } catch (e) { r = 'Not saved — try again'; } if (r !== true) { if (typeof r === 'string') alert(r); return; } try { bets = JSON.parse(lsg('bets26')) || []; } catch (e) {} }
+  bets.push(nb);
   lss('bets26', JSON.stringify(bets)); OPEN = null; draw(); alert_('Saved to My Bets');
 }
 function alert_(t) { $('#upd').textContent = t; setTimeout(() => ($('#upd').textContent = upText()), 2500); }
@@ -449,7 +451,7 @@ setInterval(() => { if (!document.hidden && OFF === 0 && !OPEN && (GAMES.some((g
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !OPEN) load(); });
 </script>
 <script>setTimeout(()=>{const l=document.querySelector('.lg'),o=l&&l.querySelector('.on');if(o)l.scrollLeft=Math.max(0,o.offsetLeft-60);},500);</script>
-<script src="gate.js?v=253"></script><script src="ai.js"></script><script src="live.js"></script>
+<script src="gate.js?v=254"></script><script src="ai.js"></script><script src="live.js"></script><script>window.ODD_GROUPS_NOAUTO=1</script><script src="groups.js?v=254"></script>
 <script>
 function aiCtx(gid) {
   const pc = (v) => Math.round((v || 0) * 100) + '%';

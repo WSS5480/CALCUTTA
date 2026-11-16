@@ -12,12 +12,15 @@ function strokesOn(ch, si, n) {
 }
 // Team handicap from players' handicaps and the commissioner's allowance list, applied low handicap first.
 // e.g. 4-person scramble allowance [25,20,15,10]: 25% of the lowest + 20% of the next + ... ; alternate shot [50,50]; Chapman [60,40].
-function teamHcp(hcps, allow) {
-  const h = hcps.map(Number).filter(Number.isFinite).sort((a, b) => a - b), a = (allow || []).map(Number);
+// 9-HOLE ROUNDS (review fix, Nov 16 2026): handicaps are entered as 18-hole course handicaps; on a 9-hole card the playing handicap is HALF of it
+// (WHS 9-hole handling: a 9-hole course handicap is about half the 18-hole one; the stats coder computes the index side). holes = holes on the card.
+const holesAdj = (ch, holes) => (Number(holes) === 9 ? (Number(ch) || 0) / 2 : Number(ch) || 0);
+function teamHcp(hcps, allow, holes) {
+  const h = hcps.map((x) => holesAdj(x, holes)).map(Number).filter(Number.isFinite).sort((a, b) => a - b), a = (allow || []).map(Number);
   let t = 0; h.forEach((x, i) => { t += x * (Number.isFinite(a[i]) ? a[i] : 0) / 100; });
   return Math.round(t * 10) / 10; // stored to 0.1; strokes use Math.round
 }
-const playHcp = (ch, pct) => Math.round((Number(ch) || 0) * (pct == null ? 100 : Number(pct)) / 100);
+const playHcp = (ch, pct, holes) => Math.round(holesAdj(ch, holes) * (pct == null ? 100 : Number(pct)) / 100);
 
 // ---------- formats ----------
 // ballKind: 'team' = one ball / one score per team per hole (scrambles, alternate shot, Chapman); 'player' = each player's own score per hole.
@@ -88,13 +91,20 @@ function floridaCheck(shots, strokes) {
 
 // ---------- skins ----------
 // scores: [{id, s:[per-hole score or null]}]; lowest score alone wins the hole plus every carried skin; ties carry. Stops at the first hole not everyone has played.
-function skins(scores, nHoles) {
+// end: what happens to skins still carried after the LAST hole (commissioner-set; default 'split' = shared equally by those tied for low on the last hole; 'none' = nobody wins them).
+function skins(scores, nHoles, end) {
   const out = { holes: [], won: {}, carry: 0 };
   for (let i = 0; i < nHoles; i++) {
     const v = scores.map((x) => ({ id: x.id, s: x.s[i] })); if (v.some((x) => x.s == null)) break;
     const lo = Math.min(...v.map((x) => x.s)), w = v.filter((x) => x.s === lo); out.carry++;
     if (w.length === 1) { out.holes.push({ hole: i + 1, win: w[0].id, skins: out.carry }); out.won[w[0].id] = (out.won[w[0].id] || 0) + out.carry; out.carry = 0; }
-    else out.holes.push({ hole: i + 1, win: null, carried: out.carry });
+    else out.holes.push({ hole: i + 1, win: null, carried: out.carry, tied: w.map((x) => x.id) });
+  }
+  if (out.carry && out.holes.length === nHoles && scores.length) {
+    const last = out.holes[nHoles - 1];
+    if (end === 'none') out.dead = out.carry;
+    else { const each = Math.round(out.carry / last.tied.length * 100) / 100; last.tied.forEach((id) => { out.won[id] = Math.round(((out.won[id] || 0) + each) * 100) / 100; }); out.split = { ids: last.tied, skins: out.carry, each }; }
+    out.carry = 0;
   }
   return out;
 }
@@ -154,11 +164,51 @@ function rankSix(entries, field, mc, tb, winScore) {
   return rows;
 }
 // Tiers: ordered golfer ids -> 6 tiers (sizes 6, 6, 8, 10, 12, rest).
-function tiers(order) { const sz = [6, 6, 8, 10, 12], t = []; let k = 0; sz.forEach((n) => { t.push(order.slice(k, k + n)); k += n; }); t.push(order.slice(k)); return t; }
+// Small fields (review fix): under 50 golfers the six tiers shrink in the same proportions (6/6/8/10/12/rest of 50), every tier at least one golfer.
+const MIN_FIELD = 12;
+function tiers(order) {
+  const n = order.length; if (n < MIN_FIELD) return null;
+  let sz; if (n >= 50) sz = [6, 6, 8, 10, 12]; else { const w = [6, 6, 8, 10, 12]; sz = w.map((x) => Math.max(1, Math.floor(n * x / 50))); }
+  const t = []; let k = 0; sz.forEach((m) => { t.push(order.slice(k, k + m)); k += m; }); t.push(order.slice(k)); if (!t[5].length) { t[5] = t[4].slice(-1); t[4] = t[4].slice(0, -1); } return t;
+}
 
 // ---------- pro: one and done points (when the feed has no prize money) ----------
 const PTS = [100, 60, 45, 40, 35, 30, 28, 26, 24, 22, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
 // Tied places share the points of the places they cover, averaged (T3 for two = (45+40)/2).
 function finishPoints(pos, nTied) { const p = Math.max(1, pos | 0), k = Math.max(1, nTied | 0); let s = 0; for (let i = p; i < p + k; i++) s += PTS[i - 1] || 0; return Math.round(s / k * 10) / 10; }
 
-module.exports = { strokesOn, teamHcp, playHcp, FORMATS, STABLEFORD, checkCourse, teamHole, teamRound, texasDrives, floridaCheck, skins, match, nassau, golferScore, pickSix, rankSix, tiers, finishPoints };
+// ---------- handicaps (H1: the Oddable Handicap Index, WHS method; never called USGA or GHIN) ----------
+// ONE copy of the WHS maths in the app: odds-api/ratings.js (the stats module's file, copied unchanged from stats-v1 c084625). These are thin calls.
+const RT = require('./ratings');
+// Course handicap from a Handicap Index (Rule 6.1a, whole number). Without rating/slope the index is used as is. On a 9-hole card the result is the
+// 18-hole figure; playHcp/teamHcp halve it (holesAdj), so the 9-hole course handicap = index/2 x slope/113 + (CR9 - par9).
+function courseHcp(index, course) {
+  const i = Number(index) || 0, c = course || {}, par = (c.par || []).reduce((a, x) => a + x, 0), k = (c.par || []).length === 9 ? 2 : 1;
+  if (!(Number(c.slope) > 0) || !Number.isFinite(Number(c.rating))) return i;
+  const v = RT.courseHandicap(i, Number(c.slope), Number(c.rating) * k, par * k); return v == null ? i : v;
+}
+// Index from rounds [{id, date, holes:[gross], pars, si, rating, slope}]: ratings.handicap does all of it (net double bogey, differentials, the table).
+function whsIndex(rounds) {
+  const h = RT.handicap((rounds || []).filter((r) => Array.isArray(r.holes) && r.holes.length === 18 && r.holes.every((x) => x >= 1)).map((r) => ({ id: r.id, date: r.date, total: r.holes.reduce((a, x) => a + x, 0), cr: Number(r.rating), slope: Number(r.slope), par: (r.pars || []).reduce((a, x) => a + x, 0), strokes: r.holes, pars: r.pars, si: r.si })));
+  return { index: h.index, rounds: h.rounds, diffs: h.diffs.slice().reverse().map((d) => ({ id: d.id, date: d.date, ags: d.ags, diff: d.diff })) };
+}
+
+// ---------- payouts (display only: Oddable never collects, holds or pays) ----------
+// Small fields pay fewer places (review fix): 2-3 entrants winner takes all; 4-6 70/30; 7-11 50/30/20; 12-19 40/25/20/15; 20+ 35/22/15/11/9/8.
+// A commissioner split (whole percents adding to 100) is used when given; never more paid places than entrants.
+function defaultSplit(n) { n = Number(n) || 0; return n <= 3 ? [100] : n <= 6 ? [70, 30] : n <= 11 ? [50, 30, 20] : n <= 19 ? [40, 25, 20, 15] : [35, 22, 15, 11, 9, 8]; }
+function splitFor(split, n) { const s = Array.isArray(split) && split.length && split.reduce((a, x) => a + x, 0) === 100 ? split : defaultSplit(n); return s.slice(0, Math.max(1, n)); }
+// places: [{id, place}] (ties share a place number). Tied places share the prizes of the places they cover, split evenly in cents (leftover cents go one
+// each in list order). Returns {id: cents}.
+function payouts(poolCents, places, split) {
+  const s = splitFor(split, places.length), out = {}; let used = s.reduce((a, x) => a + x, 0);
+  const prizeC = s.map((p) => Math.floor(poolCents * p / 100)); const rem = poolCents * used / 100 - prizeC.reduce((a, x) => a + x, 0); if (prizeC.length) prizeC[0] += Math.round(rem);
+  places.forEach((x) => (out[x.id] = 0));
+  const byPlace = {}; places.forEach((x) => { (byPlace[x.place] = byPlace[x.place] || []).push(x.id); });
+  Object.keys(byPlace).map(Number).sort((a, b) => a - b).forEach((pl) => { const ids = byPlace[pl], c = prizeC.slice(pl - 1, pl - 1 + ids.length).reduce((a, x) => a + x, 0), each = Math.floor(c / ids.length); let left = c - each * ids.length; ids.forEach((id) => { out[id] = each + (left > 0 ? 1 : 0); if (left > 0) left--; }); });
+  return out;
+}
+// Nassau money for side a: front, back, total and every press are each a bet of amt (+ won, - lost, 0 halved or not finished).
+function nassauMoney(ns, amt) { if (!ns || !amt) return null; const one = (m) => (m && m.done ? (m.res === 'W' ? amt : m.res === 'L' ? -amt : 0) : 0); return [ns.front, ns.back, ns.total].concat((ns.presses || []).map((p) => p.m)).reduce((a, m) => a + one(m), 0); }
+
+module.exports = { courseHcp, whsIndex, defaultSplit, splitFor, payouts, nassauMoney, MIN_FIELD, holesAdj, strokesOn, teamHcp, playHcp, FORMATS, STABLEFORD, checkCourse, teamHole, teamRound, texasDrives, floridaCheck, skins, match, nassau, golferScore, pickSix, rankSix, tiers, finishPoints };

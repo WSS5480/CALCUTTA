@@ -12,7 +12,7 @@
 const D = { fetch: (...a) => fetch(...a), now: () => Date.now(), key: () => String(process.env.OPENGOLFAPI_KEY || '').trim() };
 const BASES = ['https://api.opengolfapi.org/v1', 'https://api.opengolfapi.org/api/v1'];
 const TTL = 24 * 3600e3, C = new Map(); let down = 0;
-const t = (s, n) => String(s == null ? '' : s).replace(/[<>&"'`\\\u0000-\u001f]/g, '').trim().slice(0, n || 60);
+const t = (s, n) => String(s == null ? '' : s).replace(/<[^>]*>/g, '').replace(/[<>`\\\u0000-\u001f]/g, '').trim().slice(0, n || 60); // keeps apostrophes (Pete Dye's); consumers escape
 const n0 = (v) => { const x = Number(v); return Number.isFinite(x) ? x : null; };
 const ATTR = 'Course data: OpenGolfAPI contributors (ODbL)';
 

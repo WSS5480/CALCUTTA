@@ -30,7 +30,7 @@ async function getJSON(url) {
   return c.p;
 }
 const num = (v) => { if (v == null || v === '') return null; if (typeof v === 'number') return Number.isFinite(v) ? v : null; const s = String(v).trim(); if (/^E$/i.test(s)) return 0; const n = Number(s.replace(/^\+/, '')); return Number.isFinite(n) ? n : null; };
-const txt = (s, n) => String(s == null ? '' : s).replace(/[<>&"'`\\\u0000-\u001f]/g, '').slice(0, n || 60);
+const txt = (s, n) => String(s == null ? '' : s).replace(/<[^>]*>/g, '').replace(/[<>`\\\u0000-\u001f]/g, '').slice(0, n || 60); // keeps apostrophes (Sean O'Hair); consumers escape
 
 // Events on a tour's scoreboard (this week + calendar when present).
 function parseEvents(j, tour) {
@@ -69,11 +69,19 @@ function parseBoard(j, tour) {
   golfers.sort((x, y) => x.sort - y.sort || x.name.localeCompare(y.name));
   // Scoreboard shape (no per-golfer status): infer. Missed cut = no score in a round that most of the field has played (rounds 3-4);
   // withdrew = a round with hole detail stopped short of 18 while the field has gone on to a later round (the parser in sports-skills reads WDs the same way).
+  // Scoreboard shape (no per-golfer status): infer, conservatively (review fix Nov 16 2026).
+  //  CUT: the golfer has no round-3 entry at all while others already carry one (ESPN adds the round-3 placeholder "-" for golfers who made the cut),
+  //       or the event is final and the golfer has round 2 but no round-3 score. A leader who simply has not teed off Saturday keeps the placeholder = active.
+  //  WD:  a round with hole detail that stopped short of 18, and either the event is final or a LATER round has been completed by every other golfer who has it
+  //       (a suspended round, where many golfers stop short, is never read as WD).
+  const done0 = String(est.state || '') === 'post' || /FINAL|COMPLETE/i.test(String(est.name || ''));
   if (golfers.length && !golfers.some((g) => g.hasSt)) {
-    const played = (n) => golfers.filter((g) => g.rounds2.some((r) => r.n === n && r.strokes != null)).length, maxR = [4, 3, 2, 1].find((n) => played(n) >= golfers.length * 0.3) || 0;
+    const has = (g, n) => g.rounds2.some((r) => r.n === n), full = (r) => (r.holes != null ? r.holes >= 18 : r.strokes != null);
+    const r3some = golfers.some((g) => has(g, 3));
+    const laterDone = (g, after) => [after + 1, after + 2, after + 3, 4].some((n) => { const o = golfers.filter((x) => x !== g && has(x, n)); return o.length > 0 && o.every((x) => full(x.rounds2.find((r) => r.n === n))); });
     golfers.forEach((g) => { const last = g.rounds2.filter((r) => r.strokes != null || r.holes > 0).pop();
-      if (last && last.holes != null && last.holes > 0 && last.holes < 18 && maxR > last.n) g.st = 'wd';
-      else if (maxR >= 3 && g.started && !g.rounds2.some((r) => r.n >= 3 && (r.strokes != null || r.holes > 0)) && g.rounds2.some((r) => r.n === 2 && r.strokes != null)) g.st = 'cut'; });
+      if (last && last.holes != null && last.holes > 0 && last.holes < 18 && (done0 || laterDone(g, last.n))) g.st = 'wd';
+      else if (g.rounds2.some((r) => r.n === 2 && full(r)) && ((r3some && !has(g, 3)) || (done0 && !g.rounds2.some((r) => r.n >= 3 && (r.strokes != null || r.holes > 0))))) g.st = 'cut'; });
   }
   golfers.forEach((g) => { delete g.hasSt; delete g.rounds2; });
   if (golfers.length && !golfers.some((g) => g.pos)) { const act = golfers.filter((g) => g.st === 'active' && g.toPar != null); act.forEach((g) => { const k = act.filter((x) => x.toPar < g.toPar).length + 1, tie = act.filter((x) => x.toPar === g.toPar).length > 1; g.pos = (tie ? 'T' : '') + k; }); golfers.forEach((g) => { if (g.st !== 'active') g.pos = g.st.toUpperCase(); }); }

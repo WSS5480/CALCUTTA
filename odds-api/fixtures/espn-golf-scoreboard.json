@@ -1,5 +1,5 @@
 {
- "_note": "HAND-BUILT test fixture in the SCOREBOARD shape read by the open-source parser sports-skills 0.40.5 (PyPI, golf/_connector.py): competitors[] id, order, athlete.displayName, score (to-par string), linescores[] per round (period, value, displayValue, '-' = unplayed, nested hole linescores with period). No status / teeTime per golfer (the parser reads WD from a round stopped short). NOT a captured live response: the sandbox cannot reach ESPN.",
+ "_note": "HAND-BUILT test fixture in the SCOREBOARD shape read by the open-source parser sports-skills 0.40.5 (PyPI, golf/_connector.py): competitors[] id, order, athlete.displayName, score (to-par string), linescores[] per round (period, value, displayValue, '-' = unplayed, nested hole linescores with period). Golfers who missed the cut have no round-3 entry; made-cut golfers get round-3/4 entries (a '-' placeholder before they tee off). No status / teeTime per golfer (the parser reads WD from a round stopped short). NOT a captured live response: the sandbox cannot reach ESPN.",
  "leagues": [
   {
    "calendar": [
@@ -1796,16 +1796,6 @@
            }
           }
          ]
-        },
-        {
-         "period": 3,
-         "value": 0,
-         "displayValue": "-"
-        },
-        {
-         "period": 4,
-         "value": 0,
-         "displayValue": "-"
         }
        ]
       },
@@ -1984,16 +1974,6 @@
            }
           }
          ]
-        },
-        {
-         "period": 3,
-         "value": 0,
-         "displayValue": "-"
-        },
-        {
-         "period": 4,
-         "value": 0,
-         "displayValue": "-"
         }
        ]
       }

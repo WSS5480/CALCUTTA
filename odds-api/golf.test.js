@@ -168,6 +168,75 @@ const COURSE = { name: 'Test CC', tees: 'White', holes: 18, par: PAR, hcp: SI };
   t('Nassau board: front lost 1 up, back lost 3&2, total closed out 4&3, back-nine press from 13 halved');
 })();
 
+
+// ======================= review fixes (Nov 16 2026), pure =======================
+(function reviewPure() {
+  const all = (f) => { const o = {}; PAR.forEach((par, i) => (o[i + 1] = f(par, i))); return o; };
+  // R5 four-ball net, hand-worked: A = 0 + 18, B = 9 + 9, best ball net, 100%, strokes off the low player (0): a1 0, a2 18 (one a hole), b1 9, b2 9 (index 1-9).
+  // Everyone makes gross par on every hole except hole 3 (par 3, index 15): a1 4, a2 4, b1 3, b2 4.
+  // Per hole net best ball: A = par - 1 everywhere (a2's stroke), except hole 3: A min(4, 4-1) = 3, B = 3 -> halved.
+  // B = par - 1 on index 1-9, par on index 10-18. So index 1-9 holes are halved and A wins every index 10-18 hole but hole 3:
+  // holes 5, 7, 8 (A 3 up after 8), 12 (4 up), 14 (5 up with 4 to play) -> A wins 5&4.
+  // (The old method averaged 9 v 9 = no strokes and played team gross: every hole halved but hole 3, which B won -> B 1 up.)
+  const c = { members: ['a1', 'a2', 'b1', 'b2'].map((p) => ({ pid: p, name: p })), day: { fmt: 'bestball', net: 'net', pct: 100, count: 1, allow: [], course: COURSE, hcp: { a1: 0, a2: 18, b1: 9, b2: 9 },
+    teams: [{ tid: 'A', name: 'A', players: ['a1', 'a2'] }, { tid: 'B', name: 'B', players: ['b1', 'b2'] }], matches: [], win: {}, extras: { skins: { on: false }, ctp: [], ld: [] },
+    scores: { A: all((par, i) => ({ p: i === 2 ? { a1: 4, a2: 4 } : { a1: par, a2: par } })), B: all((par, i) => ({ p: i === 2 ? { b1: 3, b2: 4 } : { b1: par, b2: par } })) } } };
+  const m = G.matchState(c, { mid: 'x', kind: 'team', type: 'match', a: 'A', b: 'B', net: true, offLow: true });
+  assert.strictEqual(m.m.holes[2], 0, 'hole 3 halved'); eq(m.m.holes.slice(0, 8), [0, 0, 0, 0, 1, 0, 1, 1]); assert.strictEqual(m.m.res, 'W'); assert.strictEqual(m.m.text, '5&4');
+  const m0 = G.matchState(c, { mid: 'y', kind: 'team', type: 'match', a: 'A', b: 'B', net: false }); assert.strictEqual(m0.m.res, 'L'); assert.strictEqual(m0.m.text, '1 up'); // gross best ball: B's birdie on 3
+  t('R5 four-ball net (0+18 vs 9+9): strokes per player off the low player, best ball net per hole -> hole 3 halved, A wins 5&4 (gross: B 1 up)');
+  // R6 9-hole: an 18 handicap plays as 9 on a 9-hole card (one stroke a hole), not 18 (two a hole)
+  const C9 = { name: 'Nine', tees: 'W', holes: 9, par: PAR.slice(0, 9), hcp: [7, 3, 9, 1, 6, 5, 8, 2, 4] };
+  assert.strictEqual(S.playHcp(18, 100, 9), 9); assert.strictEqual(S.playHcp(18, 100, 18), 18); assert.strictEqual(S.playHcp(15, 80, 9), 6); assert.strictEqual(S.teamHcp([10, 20], [50, 50], 9), 7.5);
+  const c9 = { members: [{ pid: 'p', name: 'p' }], day: { fmt: 'stroke', net: 'net', pct: 100, allow: [], course: C9, hcp: { p: 18 }, teams: [{ tid: 'T', name: 'T', players: ['p'] }], matches: [], win: {}, extras: { skins: { on: false }, ctp: [], ld: [] }, scores: { T: Object.fromEntries(C9.par.map((par, i) => [i + 1, { p: { p: par + 1 } }])) } } };
+  const r9 = G.dayBoard(c9).rows[0]; assert.strictEqual(r9.gross, 45); assert.strictEqual(r9.net, 36); assert.strictEqual(r9.toParN, 0);
+  t('R6 9-hole card: playing handicap = half the 18-hole handicap (18 -> 9, 15 at 80% -> 6, team 10/20 at 50/50 -> 7.5); bogey golf off 18 = net par on nine');
+  // R10 skins after the last hole: default split among those tied for low on the last hole; 'none' = nobody
+  const sc = [{ id: 'P1', s: [3, 4] }, { id: 'P2', s: [4, 4] }, { id: 'P3', s: [5, 5] }]; // hole 1 P1; hole 2 P1 and P2 tie -> the last skin is split between them
+  let k = S.skins(sc, 2); eq(k.won, { P1: 1.5, P2: 0.5 }); eq(k.split, { ids: ['P1', 'P2'], skins: 1, each: 0.5 }); assert.strictEqual(k.carry, 0);
+  k = S.skins([{ id: 'P1', s: [4, 4] }, { id: 'P2', s: [4, 4] }], 2); eq(k.won, { P1: 1, P2: 1 }); k = S.skins([{ id: 'P1', s: [4, 4] }, { id: 'P2', s: [4, 4] }], 2, 'none'); eq(k.won, {}); assert.strictEqual(k.dead, 2);
+  t('R10 skins carried past the last hole: split among the players tied for low on it (default, commissioner can set none)');
+  // R8 small field: tiers shrink in proportion; under 12 golfers no tiers
+  eq(S.tiers(Array.from({ length: 14 }, (_, i) => i)).map((x) => x.length), [1, 1, 2, 2, 3, 5]); assert.strictEqual(S.tiers(Array.from({ length: 11 }, (_, i) => i)), null);
+  const t30 = S.tiers(Array.from({ length: 30 }, (_, i) => i)); assert.ok(t30.every((x) => x.length > 0)); assert.strictEqual(t30.flat().length, 30); eq(S.tiers(Array.from({ length: 60 }, (_, i) => i)).map((x) => x.length), [6, 6, 8, 10, 12, 18]);
+  t('R8 pick six tiers on small fields: 14 golfers -> 1/1/2/2/3/5, 30 -> six non-empty tiers, under 12 -> none; 50+ unchanged');
+})();
+
+// ======================= owner rules H1 / S-ALL / P1 (Nov 16 2026), pure =======================
+(function ownerPure() {
+  // H1 WHS method, hand-worked. Par 72, Course Rating 70.1, Slope 121. Bogey golf = 90: differential = 113/121 x (90 - 70.1) = 18.58 -> 18.6.
+  const rd = (f, id) => ({ id, date: '2026-10-0' + id, holes: PAR.map((par, i) => f(par, i)), pars: PAR, si: SI, rating: 70.1, slope: 121 });
+  assert.strictEqual(S.whsIndex([rd((x) => x + 1, 1), rd((x) => x + 1, 2)]).index, null, 'two rounds: no index yet');
+  let h = S.whsIndex([rd((x) => x + 1, 1), rd((x) => x + 1, 2), rd((x) => x + 1, 3)]); assert.strictEqual(h.index, 16.6, '3 rounds: lowest 1 less 2.0 = 18.6 - 2.0'); assert.strictEqual(h.rounds, 3);
+  // 5 rounds (lowest 1, no adjustment): four 90s and one 85 -> 113/121 x 14.9 = 13.91 -> 13.9
+  h = S.whsIndex([1, 2, 3, 4].map((i) => rd((x) => x + 1, i)).concat(rd((x, i) => x + (i < 13 ? 1 : 0), 5))); assert.strictEqual(h.index, 13.9);
+  // net double bogey cap: with index 16.6 the course handicap here is 16.6 x 121/113 + (70.1 - 72) = 15.9 -> 16 strokes (index 1-16). A 12 on hole 1
+  // (par 4, index 7, one stroke) counts as 4 + 2 + 1 = 7: adjusted gross 90 - 5 + 7 = 92 instead of 97 -> differential 113/121 x 21.9 = 20.45 -> 20.5.
+  h = S.whsIndex([1, 2, 3].map((i) => rd((x) => x + 1, i)).concat(rd((x, i) => (i === 0 ? 12 : x + 1), 4))); assert.strictEqual(h.diffs[3].ags, 92); assert.strictEqual(h.diffs[3].diff, 20.5); assert.strictEqual(h.index, 17.6, '4 rounds: lowest 1 less 1.0');
+  assert.strictEqual(S.courseHcp(16.6, { par: PAR, rating: 70.1, slope: 121 }), 16); assert.strictEqual(S.courseHcp(16.6, { par: PAR }), 16.6, 'no rating/slope: the index is used as is');
+  assert.strictEqual(require('./ratings').indexFrom(Array.from({ length: 20 }, (_, i) => 10 + i)).index, 13.5, '20 rounds: best 8 averaged (10..17)'); assert.ok(!/WHS_T|whsIndexOf/.test(require('fs').readFileSync(__dirname + '/golf-score.js', 'utf8')) && /require\('\.\/ratings'\)/.test(require('fs').readFileSync(__dirname + '/golf-score.js', 'utf8')), 'one copy of the WHS maths: ratings.js');
+  { let same = null; try { same = require('fs').readFileSync('/home/claude/calcutta-stats/odds-api/ratings.js', 'utf8') === require('fs').readFileSync(__dirname + '/ratings.js', 'utf8'); } catch (e) {} if (same !== null) assert.ok(same, 'ratings.js is the stats module\'s file, unchanged'); }
+  t('H1 Oddable Handicap Index, WHS method: no index under 3 rounds; 3 rounds lowest less 2.0 = 16.6; net double bogey cap; best 8 of 20; course handicap = index x slope/113 + (rating - par); all of it from ratings.js (the stats module), no second copy');
+  // payouts: small fields pay fewer places; ties share the places they cover, in cents
+  eq([2, 3, 4, 6, 7, 11, 12, 19, 20, 60].map((n) => S.defaultSplit(n).length), [1, 1, 2, 2, 3, 3, 4, 4, 6, 6]); assert.ok([2, 5, 9, 15, 40].every((n) => S.defaultSplit(n).reduce((a, x) => a + x, 0) === 100));
+  eq(S.payouts(10000, [{ id: 'a', place: 1 }, { id: 'b', place: 2 }, { id: 'c', place: 2 }, { id: 'd', place: 4 }, { id: 'e', place: 5 }], null), { a: 7000, b: 1500, c: 1500, d: 0, e: 0 });
+  eq(S.payouts(1001, [{ id: 'a', place: 1 }, { id: 'b', place: 1 }, { id: 'c', place: 3 }, { id: 'd', place: 4 }], null), { a: 501, b: 500, c: 0, d: 0 }); // 70/30 of $10.01, two tied for first share all of it
+  eq(S.payouts(9000, [{ id: 'a', place: 1 }, { id: 'b', place: 2 }, { id: 'c', place: 3 }], [60, 30, 10]), { a: 5400, b: 2700, c: 900 }); eq(S.payouts(4000, [{ id: 'a', place: 1 }, { id: 'b', place: 2 }], null), { a: 4000, b: 0 });
+  t('R7 payout tiers by field size: 2-3 winner takes all, 4-6 70/30, 7-11 50/30/20, 12-19 four places, 20+ six; commissioner table when set; tied places split in cents');
+  // Nassau money with a press: a wins the front 1 up, loses the back 2 down, loses the 18 1 down, the press from 12 is halved -> +5 -5 -5 +0 = -5
+  const a = PAR.slice(), b = PAR.slice(); b[0]++; a[9]++; a[10]++; const ns = S.nassau(a, b, [{ nine: 'back', from: 12 }], 0);
+  assert.strictEqual(ns.front.res, 'W'); assert.strictEqual(ns.back.res, 'L'); assert.strictEqual(ns.total.res, 'L'); assert.strictEqual(ns.presses[0].m.res, 'T'); assert.strictEqual(S.nassauMoney(ns, 5), -5);
+  t('R11 Nassau money: front, back, 18 and every press are each one bet (+5 -5 -5 and a halved press = -5)');
+  // P1 suggestPartners(players, {mode, teamSize, history}): the shared contract
+  const PR = require('./pairing'), ps = [{ id: 'a', name: 'Ann', hcp: 2 }, { id: 'b', name: 'Bob', hcp: 10 }, { id: 'c', name: 'Cat', hcp: 18 }, { id: 'd', name: 'Dan', hcp: 26 }];
+  let sg = PR.suggestPartners(ps, { teamSize: 2 }); eq(sg[0].teams, [['a', 'd'], ['b', 'c']]); eq(sg[0].hcps, [14, 14]); assert.strictEqual(sg[0].mode, 'balanced'); assert.ok(/Team handicaps 14, 14: within 0 strokes/.test(sg[0].reason)); assert.strictEqual(sg.length, 3); assert.ok(sg[0].score <= sg[1].score && sg[1].score <= sg[2].score, 'ranked');
+  const hist = [{ players: ['a', 'd'], date: '2026-11-01', result: 'W' }, { players: ['a', 'd'], date: '2026-10-01', result: 'W' }, { players: ['b', 'c'], date: '2026-11-10', result: 'L' }];
+  sg = PR.suggestPartners(ps, { mode: 'rotate', teamSize: 2, history: hist }); assert.ok(!sg[0].teams.some((x) => x.join() === 'a,d' || x.join() === 'b,c'), 'rotate avoids pairs who just played together'); assert.ok(/No repeat pairs/.test(sg[0].reason)); assert.ok(/2 repeat pairs; most recent Bob \+ Cat \(2026-11-10\)/.test(sg[2].reason));
+  sg = PR.suggestPartners(ps, { mode: 'hot', teamSize: 2, history: hist }); eq(sg[0].teams[0], ['a', 'd']); assert.ok(/Ann \+ Dan: 2 good finishes in 2 rounds together \(2 wins\)/.test(sg[0].reason));
+  eq(PR.suggestPartners(ps, { mode: 'nonsense', teamSize: 2 })[0].mode, 'balanced'); eq(PR.suggestPartners(ps.slice(0, 1), {}), []); eq(JSON.stringify(PR.suggestPartners(ps, { teamSize: 2 })), JSON.stringify(PR.suggestPartners(ps, { teamSize: 2 })));
+  const big = PR.suggestPartners(Array.from({ length: 16 }, (_, i) => ({ id: 'p' + String(i).padStart(2, '0'), hcp: i * 2 })), { teamSize: 4 }); assert.strictEqual(big[0].teams.length, 4); assert.ok(big[0].teams.every((x) => x.length === 4)); assert.ok(big[0].score <= 1, 'sixteen players, four teams within a stroke');
+  t('P1 suggestPartners: Balanced (default) evens team handicaps, Rotate avoids recent partners, Hot pairs picks the best record together; each with a one-line reason; deterministic; only suggests');
+})();
 // ======================= server: fakes =======================
 let db = {}, slow = 0, lost = 0;
 const wait = () => new Promise((r) => setTimeout(r, slow ? Math.random() * slow : 0));
@@ -184,7 +253,7 @@ let NOW = Date.parse('2026-11-18T18:00:00Z'); D.now = () => NOW;
 const TEE = Date.parse('2026-11-19T12:00:00Z');
 const mkG = (i, o) => Object.assign({ id: 'p' + i, name: 'Golfer ' + String(i).padStart(2, '0'), pos: '', toPar: null, today: null, thru: '', rounds: [], st: 'active', tee: TEE + i * 60e3, started: false, earn: null, sort: i }, o || {});
 let FIELD = Array.from({ length: 50 }, (_, i) => mkG(i + 1)), EV = { E1: { done: false }, E2: { done: false, tee: Date.parse('2026-11-26T12:00:00Z') } }, feedDown = false;
-D.feed = { events: async () => [{ id: 'E1', name: 'Test Classic' }], board: async (tour, ev) => { if (feedDown) throw new Error('down'); const e = EV[ev] || EV.E1; const gs = (e.field || FIELD).map((g) => Object.assign({}, g)); return { event: { id: ev, tour, name: ev === 'E2' ? 'Next Open' : 'Test Classic', start: e.tee || TEE, end: (e.tee || TEE) + 4 * 864e5, state: e.done ? 'post' : 'pre', done: !!e.done }, golfers: gs, firstTee: Math.min(...gs.map((g) => g.tee || Infinity).filter(Number.isFinite)) || null, earnings: !!e.earnings }; } };
+D.feed = { events: async () => [{ id: 'E1', name: 'Test Classic' }], board: async (tour, ev) => { if (feedDown) throw new Error('down'); const e = EV[ev] || EV.E1; const gs = (e.field || FIELD).map((g) => Object.assign({}, g)); return { event: { id: ev, tour, name: ev === 'E2' ? 'Next Open' : 'Test Classic', start: e.tee || TEE, end: (e.tee || TEE) + 4 * 864e5, state: e.state || (e.done ? 'post' : 'pre'), done: !!e.done }, golfers: gs, firstTee: Math.min(...gs.map((g) => g.tee || Infinity).filter(Number.isFinite)) || null, earnings: !!e.earnings }; } };
 D.courses = { search: async () => { throw new Error('down'); }, detail: async () => CO.normCourse(require('./fixtures/opengolfapi-course.json')), ATTR: CO.ATTR };
 const srv = http.createServer(async (req, res) => { if (!(await G.handle(req, res))) { res.statusCode = 404; res.end('{}'); } });
 let P, raw = [];
@@ -203,7 +272,7 @@ async function netTests() {
   eq(b.golfers.map((g) => g.name), ['Ann Alpha', 'Bea Bravo', 'Eve Even', 'Cal Cutline', 'Dee Done']);
   assert.strictEqual(by['Ann Alpha'].toPar, -12); assert.strictEqual(by['Ann Alpha'].pos, '1'); assert.strictEqual(by['Ann Alpha'].thru, '10'); assert.strictEqual(by['Ann Alpha'].today, -1); eq(by['Ann Alpha'].rounds, [68, 68, 69, 33]);
   assert.strictEqual(by['Bea Bravo'].pos, 'T2'); assert.strictEqual(by['Eve Even'].pos, 'T2');
-  assert.strictEqual(by['Cal Cutline'].st, 'cut'); eq(by['Cal Cutline'].rounds, [74, 73, null, null]); assert.strictEqual(by['Dee Done'].st, 'wd'); assert.strictEqual(by['Dee Done'].started, true);
+  assert.strictEqual(by['Cal Cutline'].st, 'cut'); eq(by['Cal Cutline'].rounds, [74, 73]); assert.strictEqual(by['Dee Done'].st, 'wd'); assert.strictEqual(by['Dee Done'].started, true);
   assert.strictEqual(b.firstTee, null); assert.strictEqual(b.event.start, Date.parse('2026-11-19T05:00Z')); assert.strictEqual(b.event.round, 4);
   // pick six on the scoreboard shape: cut golfer = worst made-cut (-9) + 1 = -8 under 'w1'
   const fm = {}; b.golfers.forEach((g) => (fm[g.id] = g)); assert.strictEqual(S.golferScore(fm['103'], fm, 'w1').v, -8); assert.strictEqual(S.golferScore(fm['104'], fm, 'p10').v, 12);
@@ -213,6 +282,21 @@ async function netTests() {
   // 3) both down -> throws (callers fail closed: picks refused)
   FEED._reset(); FEED._deps.fetch = async () => resp(503, {}); await assert.rejects(FEED.board('pga', '401999001'));
   t('ESPN feed: leaderboard first; on failure the scoreboard (verified shape) by the event\'s start day; order/score strings/"-" rounds; T2 ties; cut and WD inferred; picks lock at event start without tee times');
+  { // R2 cut/WD guesses on the scoreboard shape
+    const H = (n) => Array.from({ length: n }, (_, i) => ({ period: i + 1, value: 4 })), R = (p, v, dv, n) => ({ period: p, value: v, displayValue: dv, linescores: H(n) }), U = (p) => ({ period: p, value: 0, displayValue: '-' });
+    const mk = (cs) => ({ events: [{ id: '9', name: 'Sat', date: '2026-11-19T05:00Z', status: { type: { state: 'in' } }, competitions: [{ status: { period: 3 }, competitors: cs.map((ls, i) => ({ id: 'g' + i, order: i + 1, athlete: { displayName: 'G' + i }, score: '-' + (10 - i), linescores: ls })) }] }] });
+    // Saturday morning: 4 golfers in round 3, 5 leaders with only the round-3 placeholder (not teed off), 1 with no round-3 entry
+    const sat = [].concat(Array.from({ length: 5 }, () => [R(1, 68, '-4', 18), R(2, 68, '-4', 18), U(3), U(4)]), Array.from({ length: 4 }, () => [R(1, 70, '-2', 18), R(2, 71, '-1', 18), R(3, 20, '-1', 5)]), [[R(1, 75, '+3', 18), R(2, 76, '+4', 18)]]);
+    let bb = FEED.parseBoard(mk(sat), 'pga'); eq(bb.golfers.map((g) => g.st), ['active', 'active', 'active', 'active', 'active', 'active', 'active', 'active', 'active', 'cut']);
+    // suspended round 2: three golfers stopped at 14 holes while others started round 3 -> nobody WD, nobody cut yet
+    const sus = [].concat(Array.from({ length: 4 }, () => [R(1, 70, '-2', 18), R(2, 70, '-2', 18), R(3, 22, '-2', 6)]), Array.from({ length: 3 }, () => [R(1, 70, '-2', 18), R(2, 52, '-2', 14)]), Array.from({ length: 3 }, () => [R(1, 70, '-2', 18), R(2, 70, '-2', 18), U(3)]));
+    bb = FEED.parseBoard(mk(sus), 'pga'); assert.ok(bb.golfers.every((g) => g.st === 'active'), bb.golfers.map((g) => g.st).join(','));
+    // final: the golfer who stopped at 4 holes of round 2 is WD
+    const fin = mk([[R(1, 70, '-2', 18), R(2, 70, '-2', 18), R(3, 70, '-2', 18), R(4, 70, '-2', 18)], [R(1, 72, 'E', 18), R(2, 18, '+2', 4)], [R(1, 76, '+4', 18), R(2, 76, '+4', 18)]]); fin.events[0].status.type.state = 'post';
+    bb = FEED.parseBoard(fin, 'pga'); eq(bb.golfers.map((g) => g.st), ['active', 'wd', 'cut']);
+    assert.strictEqual(FEED.parseBoard({ events: [{ id: '1', competitions: [{ competitors: [{ id: '5', athlete: { displayName: "Sean O'Hair" }, score: 'E' }] }] }] }, 'pga').golfers[0].name, "Sean O'Hair");
+    t('R2 scoreboard cut/WD: leaders not yet out on Saturday stay active, only the golfer without a round-3 entry is CUT; a suspended round is never WD; WD/cut settled at the final; names keep apostrophes');
+  }
   // ---- OpenGolfAPI ----
   CO._reset(); const hits = []; let fail = '';
   const SR = require('./fixtures/opengolfapi-search.json'), CD = require('./fixtures/opengolfapi-course.json');
@@ -254,6 +338,10 @@ srv.listen(0, async () => {
     r = await call('bob', 'pick', { id: pro.id, picks: [T[1][0]].concat(pk(0).slice(1)), guess: -12 }); assert.strictEqual(r.s, 400, 'wrong tier');
     r = await call('bob', 'pick', { id: pro.id, picks: pk(0), guess: -12 }); ok(r); r = await call('cat', 'pick', { id: pro.id, picks: pk(1), guess: -18 }); ok(r);
     r = await call('ann', 'get', { id: pro.id }); ok(r); const eB = r.j.game.entries.find((x) => x.pid === bobPid); assert.strictEqual(eB.picks, null, 'others\' picks hidden before the lock'); assert.strictEqual(eB.total, null);
+    r = await call('bob', 'pick', { id: pro.id, picks: pk(3), guess: -9 }); assert.strictEqual(r.s, 409, 'G16: locked on entry, a day before the first tee'); assert.ok(/locked/.test(r.j.error));
+    r = await call('bob', 'get', { id: pro.id }); eq(r.j.game.mine.picks, pk(0)); assert.strictEqual(r.j.game.g16, true); assert.ok(r.j.game.mine.at > 0, 'the server stamp');
+    { const a1 = await call('ann', 'create', { kind: 'pro', title: 'Just me', pro: { tour: 'pga', game: 'six', eventId: 'E1', tb: 'best' } }); ok(a1); const T1 = a1.j.game.tiers; let q = await call('ann', 'pick', { id: a1.j.game.id, picks: T1.map((x) => x[0]) }); ok(q); q = await call('ann', 'pick', { id: a1.j.game.id, picks: T1.map((x) => x[1]) }); ok(q, 'a game with nobody else in it is not group play yet'); }
+    t('G16 group picks: saved on the server and locked on entry (re-pick 409 before the first tee, picks unchanged, server time stamp); a one-person game is not group play');
     feedDown = true; r = await call('cat', 'pick', { id: pro.id, picks: pk(2), guess: -18 }); assert.strictEqual(r.s, 503, 'feed down: fail closed'); feedDown = false;
     NOW = TEE + 61e3; r = await call('cat', 'pick', { id: pro.id, picks: pk(2), guess: -18 }); assert.strictEqual(r.s, 409); assert.ok(/locked/i.test(r.j.error));
     r = await call('ann', 'get', { id: pro.id }); assert.ok(r.j.game.entries.find((x) => x.pid === bobPid).picks, 'shown after the lock');
@@ -273,12 +361,12 @@ srv.listen(0, async () => {
     // ---------------- PRO: one and done ----------------
     NOW = Date.parse('2026-11-18T18:00:00Z');
     r = await call('ann', 'create', { kind: 'pro', title: 'OAD 2026', pro: { tour: 'pga', game: 'oad' } }); ok(r); const oad = r.j.game; await call('bob', 'join', { code: oad.code });
-    EV.E3 = { done: false, tee: Date.parse('2026-11-25T12:00:00Z') }; EV.E1.done = false;
-    r = await call('bob', 'pick', { id: oad.id, event: 'E1', golfer: 'p7' }); ok(r); r = await call('bob', 'pick', { id: oad.id, event: 'E3', golfer: 'p7' }); assert.strictEqual(r.s, 409); assert.ok(/never the same golfer/.test(r.j.error));
-    r = await call('bob', 'pick', { id: oad.id, event: 'E1', golfer: 'p8' }); ok(r, 'changing this event\'s pick frees the old golfer'); r = await call('bob', 'pick', { id: oad.id, event: 'E3', golfer: 'p7' }); ok(r);
+    EV.E3 = { done: false, tee: Date.parse('2026-11-25T12:00:00Z') }; EV.E1.done = false; FIELD = FIELD.map((g) => Object.assign(g, { started: false, toPar: null, thru: '' })); // a fresh week: nobody has teed off
+    r = await call('bob', 'pick', { id: oad.id, event: 'E1', golfer: 'p8' }); ok(r); r = await call('bob', 'pick', { id: oad.id, event: 'E3', golfer: 'p8' }); assert.strictEqual(r.s, 409); assert.ok(/never the same golfer/.test(r.j.error));
+    r = await call('bob', 'pick', { id: oad.id, event: 'E1', golfer: 'p7' }); assert.strictEqual(r.s, 409, 'G16: a group pick is locked the moment it is added'); assert.ok(/locked/.test(r.j.error)); r = await call('bob', 'pick', { id: oad.id, event: 'E3', golfer: 'p7' }); ok(r);
     EV.E1.done = true; FIELD = FIELD.map((g) => Object.assign(g, { pos: g.id === 'p8' ? '1' : g.pos }));
     NOW = TEE + 5 * 864e5; r = await call('bob', 'get', { id: oad.id }); ok(r); const ev1 = r.j.game.oad.events.find((e) => e.id === 'E1'); assert.strictEqual(ev1.by, 'points'); assert.strictEqual(r.j.game.table.find((x) => x.pid === r.j.game.me).total, 100);
-    t('one and done: reuse refused across the season; changing a pick before lock frees the golfer; scored by finish points (feed has no prize money) -> win = 100');
+    t('one and done: reuse refused across the season; G16 a pick cannot be changed once added; scored by finish points (feed has no prize money) -> win = 100');
     NOW = Date.parse('2026-11-18T18:00:00Z');
     // ---------------- GOLF DAY ----------------
     const course = { name: 'Palm Valley', tees: 'White', holes: 18, par: PAR, hcp: SI, rating: 70.1, slope: 121 };
@@ -328,6 +416,9 @@ srv.listen(0, async () => {
     r = await call('eve', 'dispute', { id: day.id, tid: 'T1', hole: 3, note: 'Was a 4' }); ok(r); r = await call('eve', 'confirm', { id: day.id, tid: 'T1', from: 1, to: 9 }); ok(r);
     g = r.j.game; assert.strictEqual(g.day.scores.T1[3].st, 'disputed'); assert.strictEqual(g.day.scores.T1[1].st, 'confirmed');
     r = await call('bob', 'score', { id: day.id, tid: 'T1', hole: 1, p: full(3) }); assert.strictEqual(r.s, 409, 'confirmed hole locked for the scorer');
+    r = await call('bob', 'score', { id: day.id, tid: 'T1', hole: 3, p: full(5) }); assert.strictEqual(r.s, 409, 'R3: a disputed hole cannot be cleared by re-entering it'); assert.ok(/disputed/.test(r.j.error));
+    r = await call('ann', 'confirm', { id: day.id, tid: 'T1', from: 1, to: 9 }); assert.strictEqual(r.s, 403, 'R4: the organizer cannot confirm the card of a team they play on');
+    t('R3/R4: a disputed hole stays disputed until the organizer settles it (re-entry 409); nobody confirms their own team\'s card, organizer included');
     r = await call('ann', 'final', { id: day.id }); assert.strictEqual(r.s, 409, 'disputes block final');
     r = await call('ann', 'resolve', { id: day.id, tid: 'T1', hole: 3, p: full(4) }); ok(r); assert.strictEqual(r.j.game.day.scores.T1[3].st, 'confirmed');
     assert.ok(r.j.game.day.audit.some((a) => a.what === 'disputed') && r.j.game.day.audit.some((a) => a.what === 'settled' && a.from && a.from.note === 'Was a 4'));
@@ -335,12 +426,24 @@ srv.listen(0, async () => {
     // the board after nine: T1 best two net
     const bd = r.j.game.board; assert.strictEqual(bd.rows[0].tid, 'T1'); assert.strictEqual(bd.rows[0].thru, 9);
     const mt = bd.matches.find((x) => x.mid === mid); assert.ok(mt.nassau); assert.ok(mt.nassau.front.played >= 7 && mt.nassau.front.up > 0, JSON.stringify(mt.nassau.front));
-    r = await call('bob', 'match', { id: day.id, op: 'press', mid, from: 10 }); ok(r, 'scorer presses');
+    r = await call('bob', 'match', { id: day.id, op: 'press', mid, from: 10 }); assert.strictEqual(r.s, 400, 'a press from 10 is the back-nine bet itself'); r = await call('bob', 'match', { id: day.id, op: 'press', mid, from: 1 }); assert.strictEqual(r.s, 400);
+    r = await call('bob', 'match', { id: day.id, op: 'press', mid, from: 11 }); assert.strictEqual(r.s, 409, 'no back-nine hole played yet: nothing to press'); assert.ok(/next hole/.test(r.j.error));
+    r = await call('bob', 'match', { id: day.id, op: 'press', mid, from: 5 }); assert.strictEqual(r.s, 409, 'never back-dated'); assert.ok(/has been played/.test(r.j.error));
+    r = await call('bob', 'score', { id: day.id, tid: 'T1', hole: 10, p: full(PAR[9]) }); ok(r); r = await call('eve', 'score', { id: day.id, tid: 'T2', hole: 10, p: { [pid.eve]: 7, [pid.fay]: 7, [pid.gus]: 7, [pid.hal]: 7 } }); ok(r); // T2 goes 1 down on the back
+    r = await call('bob', 'match', { id: day.id, op: 'press', mid, from: 11 }); assert.strictEqual(r.s, 403, 'the side that is UP cannot press'); assert.ok(/down/.test(r.j.error));
     r = await call('cat', 'match', { id: day.id, op: 'press', mid, from: 11 }); assert.strictEqual(r.s, 403);
+    r = await call('eve', 'match', { id: day.id, op: 'press', mid, from: 12 }); assert.strictEqual(r.s, 409, 'only the next hole');
+    r = await call('eve', 'match', { id: day.id, op: 'press', mid, from: 11 }); ok(r, 'the scorer of the side that is down offers a press from the next hole'); { const mm = r.j.game.board.matches.find((x) => x.mid === mid); assert.strictEqual(mm.press, 'accept', 'default: a press must be accepted'); assert.strictEqual(mm.nassau.presses.length, 0, 'an offered press is not a bet yet'); eq(mm.offers.map((x) => [x.from, x.side, x.expired]), [[11, 'b', false]]); }
+    r = await call('eve', 'match', { id: day.id, op: 'accept', mid, from: 11 }); assert.strictEqual(r.s, 403, 'the side that offered cannot accept its own press');
+    r = await call('bob', 'match', { id: day.id, op: 'accept', mid, from: 11 }); ok(r, 'the other side\'s scorer accepts'); assert.strictEqual(r.j.game.board.matches.find((x) => x.mid === mid).nassau.presses.filter((x) => x.from === 11).length, 1); assert.strictEqual(r.j.game.board.matches.find((x) => x.mid === mid).offers.length, 0);
+    r = await call('eve', 'match', { id: day.id, op: 'press', mid, from: 11 }); assert.strictEqual(r.s, 409, 'one press per hole');
     assert.ok(bd.skins && bd.skins.net === true);
     r = await call('bob', 'extra', { id: day.id, kind: 'ctp', hole: 3, who: pid.cat, note: '4 ft 2 in' }); ok(r); r = await call('cat', 'extra', { id: day.id, kind: 'ctp', hole: 3, who: pid.cat }); assert.strictEqual(r.s, 403);
+    assert.strictEqual(r.j.game === undefined, true); assert.ok(!(await G.statsFor(ACC('cat'), {})).some((x) => x.extra && x.extra.side === 'ctp'), 'an unconfirmed closest-to-the-pin winner is not a result yet');
+    r = await call('bob', 'extraconfirm', { id: day.id, kind: 'ctp', hole: 3 }); assert.strictEqual(r.s, 403, 'not by the one who entered it / the winner\'s own team'); r = await call('ann', 'extraconfirm', { id: day.id, kind: 'ctp', hole: 3 }); assert.strictEqual(r.s, 403, 'the organizer plays on the winner\'s team');
+    r = await call('eve', 'extraconfirm', { id: day.id, kind: 'ctp', hole: 3 }); ok(r, 'another team\'s scorer confirms'); assert.strictEqual(r.j.game.day.win.ctp[3].st, 'confirmed'); assert.strictEqual(r.j.game.board.extras.ctp[0].win.st, 'confirmed');
     r = await call('bob', 'extra', { id: day.id, kind: 'ld', hole: 9, who: pid.cat }); assert.strictEqual(r.s, 400);
-    t('board: T1 leads after 9; Nassau front tracked; press by a scorer only; closest to the pin entered by a scorer');
+    t('board: T1 leads after 9; Nassau front tracked; R11 presses: must be ACCEPTED by the other side (default) before they count; only the side that is down, only from the next hole to be played, once per hole, never from 1 or 10 (the nine bet itself); closest to the pin entered by a scorer and CONFIRMED by another team\'s scorer before it counts');
     // guests + solo
     r = await call('ann', 'team', { id: day.id, op: 'guest', name: 'Uncle Joe' }); assert.strictEqual(r.s, 409, 'cap counts guests too (8)');
     r = await call('zed', 'create', { kind: 'day', solo: true, title: 'Solo round', course, day: { fmt: 'stroke', myHcp: 9 } }); ok(r); const solo = r.j.game; assert.strictEqual(solo.day.status, 'live'); assert.strictEqual(solo.day.teams[0].players.length, 1);
@@ -353,8 +456,8 @@ srv.listen(0, async () => {
     // ---------------- stats contract ----------------
     const st = await G.statsFor(ACC('zed'), { from: '2026-01-01', to: '2026-12-31' }); const rd = st.find((x) => x.kind === 'golf-round');
     assert.strictEqual(rd.src, 'golf'); assert.strictEqual(rd.sport, 'golf'); assert.strictEqual(rd.score, 72 + 6); assert.strictEqual(rd.toPar, 6); assert.strictEqual(rd.extra.course, 'Palm Valley'); assert.strictEqual(rd.extra.holes, 18); assert.strictEqual(rd.extra.putts, 36); assert.strictEqual(rd.extra.slope, 121); assert.strictEqual(rd.extra.holeScores.length, 18); assert.strictEqual(rd.extra.solo, true); assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(rd.date)); assert.strictEqual(typeof rd.verified, 'boolean');
-    const sa = await G.statsFor(ACC('cat'), {}); assert.ok(sa.some((x) => x.kind === 'golf-pool' && x.place && x.place.of === 2)); assert.ok(sa.some((x) => x.kind === 'golf-round' && /closest/.test(x.title) && x.result === 'W'));
-    assert.ok(sa.some((x) => x.kind === 'golf-round' && x.extra && x.extra.course === 'Palm Valley' && x.extra.holes === 9 && x.extra.who === undefined));
+    const sa = await G.statsFor(ACC('cat'), {}); assert.ok(sa.some((x) => x.kind === 'golf-pool' && x.place && x.place.of === 2)); assert.ok(sa.some((x) => x.kind === 'event' && /closest/.test(x.title) && x.result === 'W'));
+    assert.ok(sa.some((x) => x.kind === 'golf-round' && x.extra && x.extra.course === 'Palm Valley' && x.extra.holes === 10 && x.extra.who === undefined));
     const sb = await G.statsFor(ACC('bob'), {}); assert.ok(sb.some((x) => x.kind === 'golf-pool' && /Next Open|Test Classic/.test(x.title)), 'one and done record');
     const sg = await G.statsFor('guest:' + guest.gid, {}); assert.strictEqual(sg.length, 0, 'guest has no strokes yet'); assert.deepStrictEqual(await G.statsFor(ACC('nobody'), {}), []);
     assert.strictEqual((await G.statsFor(ACC('zed'), { from: '2027-01-01' })).length, 0, 'date filter');
@@ -393,6 +496,208 @@ srv.listen(0, async () => {
     r = await call('boss', 'ent', { account: ACC('club'), op: 'unlink', courseId: fl.courseId }); ok(r); assert.strictEqual(r.j.courses.length, 0);
     const sz = await G.statsFor(ACC('zed'), {}); assert.strictEqual(sz.find((x) => x.kind === 'golf-round').extra.courseId, solo.courseId);
     t('owner links an enterprise account to its course(s) (owner token only); coursesOwnedBy; enterprise flag lifts the 8 cap; events and stats records carry courseId');
+    // ---------------- review fixes: lock, course key, verified, putts, stats shape, one-and-done season, names ----------------
+    const T0 = NOW, F4 = Array.from({ length: 50 }, (_, i) => mkG(i + 1, { tee: T0 + 2 * 864e5 + i * 60e3 })); EV.E4 = { tee: T0 + 2 * 864e5, field: F4 };
+    r = await call('ann', 'create', { kind: 'pro', title: 'Lock test', pro: { tour: 'pga', game: 'six', eventId: 'E4', tb: 'best' } }); ok(r); const lk = r.j.game; await call('bob', 'join', { code: lk.code });
+    const pk4 = lk.tiers.map((x) => x[0]); r = await call('bob', 'pick', { id: lk.id, picks: pk4 }); ok(r);
+    NOW = T0 + 2 * 864e5 + 3600e3; EV.E4 = { tee: T0 + 5 * 864e5, field: F4.map((g) => Object.assign({}, g, { tee: g.tee + 3 * 864e5 })) }; // the feed now says a later start (glitch / reschedule)
+    r = await call('bob', 'pick', { id: lk.id, picks: lk.tiers.map((x) => x[1]) }); assert.strictEqual(r.s, 409, 'R1: the stored lock never moves later'); assert.strictEqual((await call('bob', 'get', { id: lk.id })).j.game.pro.locked, true);
+    NOW = T0; EV.E5 = { tee: T0 + 864e5, state: 'in', field: F4 }; r = await call('ann', 'create', { kind: 'pro', title: 'Begun', pro: { tour: 'pga', game: 'six', eventId: 'E5', tb: 'best' } }); assert.strictEqual(r.s, 409, 'R1: feed says in progress');
+    EV.E6 = { tee: T0 + 864e5, field: F4.map((g, i) => Object.assign({}, g, { started: i === 0 })) }; r = await call('ann', 'create', { kind: 'pro', title: 'Begun', pro: { tour: 'pga', game: 'six', eventId: 'E6', tb: 'best' } }); assert.strictEqual(r.s, 409, 'R1: a golfer has started');
+    EV.E7 = { tee: T0 + 864e5, field: F4.slice(0, 9) }; r = await call('ann', 'create', { kind: 'pro', title: 'Tiny', pro: { tour: 'pga', game: 'six', eventId: 'E7', tb: 'best' } }); assert.strictEqual(r.s, 409); assert.ok(/at least 12/.test(r.j.error), 'R8 clear message');
+    NOW = T0; t('R1 picks lock: stored once, only ever earlier (a later feed start does not reopen picks); an event already in progress or with a golfer started is locked; R8 tiny field refused clearly');
+    // R9 course key
+    const cA = { name: 'Lakeside', tees: 'White', holes: 18, par: PAR, hcp: SI, city: 'Mission' }, cB = Object.assign({}, cA, { city: 'Harlingen' });
+    const ra = await call('lee', 'course', { course: cA }), rb = await call('lee', 'course', { course: cB }); ok(ra); ok(rb); assert.notStrictEqual(ra.j.id, rb.j.id, 'R9: same name + tees in another town = another course');
+    const rC = await call('lee', 'course', { course: Object.assign({}, cA, { name: "Pete Dye's Links", src: 'opengolfapi', extId: 'og-9', teeKey: 'white-male' }) }), rD = await call('lee', 'course', { course: Object.assign({}, cA, { name: "Pete Dye's Links", city: 'Elsewhere', src: 'opengolfapi', extId: 'og-9', teeKey: 'white-male' }) });
+    assert.strictEqual(rC.j.id, rD.j.id, 'API id + tee is the key'); const sv = (await call('lee', 'courses', { q: 'pete' })).j.courses; assert.ok(sv.some((x) => x.name === "Pete Dye's Links"), 'R11 apostrophe kept');
+    t('R9 saved courses keyed by API id + tee, else name + city + state + par + tees; R11 course names keep apostrophes');
+    // R4/R10 verified and putts: solo is never verified; a 4-player stroke team's putts go only to the scorer's own record
+    r = await call('lee', 'create', { kind: 'day', solo: true, title: 'Solo', course, day: { myHcp: 5 } }); ok(r); const so = r.j.game;
+    for (let i = 0; i < 18; i++) { r = await call('lee', 'score', { id: so.id, tid: 'T1', hole: i + 1, p: { [so.me]: PAR[i] }, putts: 2 }); ok(r); }
+    r = await call('lee', 'confirm', { id: so.id, tid: 'T1', from: 1, to: 18 }); assert.strictEqual(r.s, 403, 'cannot confirm your own solo card');
+    let sl = (await G.statsFor(ACC('lee'), {})).find((x) => x.kind === 'golf-round'); assert.strictEqual(sl.verified, false); assert.strictEqual(sl.extra.putts, 36); assert.strictEqual(sl.result, null); assert.strictEqual(sl.place, undefined);
+    r = await call('lee', 'create', { kind: 'day', title: "O'Neil's stroke day", course, day: { fmt: 'stroke', teams: 1, teamSize: 2, net: 'gross' }, myName: "Sean O'Neil" }); ok(r); const sd = r.j.game; assert.strictEqual(sd.title, "O'Neil's stroke day"); assert.ok(sd.members.some((x) => x.name === "Sean O'Neil"), 'R11 name keeps the apostrophe');
+    r = await call('lee', 'team', { id: sd.id, op: 'guest', name: "Tom O'Hara<b>", tid: 'T1' }); ok(r); assert.ok(r.j.game.members.some((x) => x.name === "Tom O'Hara"), 'tags stripped, apostrophe kept');
+    r = await call('lee', 'team', { id: sd.id, op: 'assign', pid: sd.me, tid: 'T1' }); ok(r); r = await call('lee', 'start', { id: sd.id }); ok(r); const two = r.j.game.day.teams[0].players.map((p) => p.pid);
+    r = await call('lee', 'score', { id: sd.id, tid: 'T1', hole: 1, p: { [two[0]]: 4, [two[1]]: 5 }, putts: 2 }); ok(r);
+    const me2 = (await G.statsFor(ACC('lee'), {})).find((x) => x.contestId === sd.id && x.kind === 'golf-round');
+    assert.strictEqual(me2.extra.putts, 2, 'the scorer\'s own putts');
+    t('R4/R10 a solo round is never verified (and cannot be self-confirmed); putts typed for a team hole are credited only to the scorer, not to every player');
+    // R12 stats shape: skins / CTP / LD = kind 'event' with won; pools = result null + place; one and done = one season record, place once the season is over
+    const all12 = (await G.statsFor(ACC('cat'), {})).concat(await G.statsFor(ACC('bob'), {}), await G.statsFor(ACC('ann'), {}), await G.statsFor(ACC('zed'), {}), await G.statsFor(ACC('lee'), {}));
+    assert.ok(all12.filter((x) => x.extra && ['skins', 'ctp', 'ld'].includes(x.extra.side)).every((x) => x.kind === 'event' && x.result === 'W'), 'side prizes are events');
+    assert.ok(all12.filter((x) => x.kind === 'golf-pool').every((x) => x.result === null), 'pools carry a place, no W/L');
+    let oadRec = (await G.statsFor(ACC('bob'), {})).filter((x) => /one and done/.test(x.title)); assert.strictEqual(oadRec.length, 1, 'one record per season'); assert.strictEqual(oadRec[0].place, undefined, 'season still running: no place'); assert.strictEqual(oadRec[0].extra.live, true);
+    r = await call('bob', 'endseason', { id: oad.id }); assert.strictEqual(r.s, 403); r = await call('ann', 'endseason', { id: oad.id }); ok(r);
+    oadRec = (await G.statsFor(ACC('bob'), {})).filter((x) => /one and done/.test(x.title)); eq(oadRec[0].place, { n: 1, of: 2 }); assert.strictEqual(oadRec[0].score, 100);
+    let validate = null; try { validate = require('/home/claude/calcutta-stats/odds-api/stats.js').validate; } catch (e) { /* stats branch not on this machine: shape checked above */ }
+    if (validate) all12.concat(oadRec).forEach((x) => { const v = validate(x, 'golf'); assert.ok(v.ok, 'stats validate: ' + v.why + ' ' + x.id); });
+    t('R12 stats shape: side prizes are kind event with won; pools have a place and no W/L; one and done is one season record, placed once the organizer ends the season' + (validate ? '; every record passes stats.js validate' : ''));
+
+    // ---------------- owner rules: H1 (Oddable Handicap Index), E-H (tournament handicaps), S-ALL (entry / payout / net), P1 (suggest partners) ----------------
+    NOW = Date.parse('2026-11-18T18:00:00Z'); const HC = (w) => G.handicapFor(ACC(w));
+    { const h0 = await HC('kimmy'); eq([h0.oddable.index, h0.use, h0.event, h0.setBy], [null, null, null, null]); }
+    for (let k = 0; k < 3; k++) { r = await call('kimmy', 'create', { kind: 'day', solo: true, title: 'Bogey ' + k, course, day: {} }); ok(r); const sg0 = r.j.game; if (k === 0) { assert.strictEqual(sg0.day.hi[sg0.me].text, 'Oddable: no rounds yet'); assert.strictEqual(sg0.day.hi[sg0.me].src, 'none'); }
+      for (let i = 0; i < 18; i++) ok(await call('kimmy', 'score', { id: sg0.id, tid: 'T1', hole: i + 1, p: { [sg0.me]: PAR[i] + 1 } })); }
+    let hk = await HC('kimmy'); assert.strictEqual(hk.oddable.index, 16.6, 'three bogey rounds in the app = 16.6 (hand-worked above)'); assert.strictEqual(hk.use, 16.6); assert.strictEqual(hk.oddable.rounds, 3); assert.strictEqual(hk.label, 'Oddable Handicap Index'); assert.strictEqual(hk.method, 'Calculated with the World Handicap System method.');
+    // a standard game: the index IS the handicap (a typed number is ignored / refused); a player with no index may type one
+    r = await call('walter', 'create', { kind: 'day', title: 'Friday four', course, day: { fmt: 'stroke', teams: 2, teamSize: 1, net: 'net', myHcp: 14 } }); ok(r); const fr = r.j.game; assert.strictEqual(fr.ent, false); assert.strictEqual(fr.day.hi[fr.me].src, 'typed'); assert.strictEqual(fr.day.hi[fr.me].text, 'Oddable: no rounds yet · Entered 14.0');
+    r = await call('kimmy', 'join', { code: fr.code, hcp: 3 }); ok(r); const kf = r.j.game.me; assert.strictEqual(r.j.game.day.hcp[kf], 16.6, 'H1: the typed 3 is ignored, the app index is used'); assert.strictEqual(r.j.game.day.hi[kf].text, 'Oddable 16.6 (real results)'); assert.strictEqual(r.j.game.day.hi[kf].ch, 16, 'course handicap 15.9 -> 16 strokes');
+    r = await call('walter', 'team', { id: fr.id, op: 'hcp', pid: kf, hcp: 5 }); assert.strictEqual(r.s, 409, 'a standard organizer cannot override the Oddable index'); assert.ok(/Oddable Handicap Index/.test(r.j.error) && /World Handicap System method/.test(r.j.error));
+    r = await call('kimmy', 'team', { id: fr.id, op: 'hcp', pid: kf, hcp: 5 }); assert.strictEqual(r.s, 409); r = await call('walter', 'team', { id: fr.id, op: 'hcp', pid: fr.me, hcp: 15 }); ok(r, 'no index yet: a typed handicap is fine');
+    t('H1 every round in the app counts toward the Oddable Handicap Index (3 solo rounds -> 16.6, WHS method) and it is THE handicap: used on joining, typed numbers only for players with no index');
+    // E-H: an Enterprise tournament. Director = the organizer of an enterprise account.
+    db['lock:ent'] = { id: 'lock:ent', data: { keys: { [ACC('proshop')]: true } }, updated: 1 }; G._reset();
+    const TEE2 = NOW + 2 * 3600e3;
+    r = await call('proshop', 'create', { kind: 'day', title: 'Club Championship', course, pot: { entry: 20 }, day: { fmt: 'stroke', teams: 3, teamSize: 1, net: 'net', teeTime: TEE2, hu: { on: true, kind: 'player', type: 'match', amt: 10 } } }); ok(r); const tn = r.j.game; assert.strictEqual(tn.ent, true); assert.strictEqual(tn.day.lockAt, TEE2); assert.strictEqual(tn.day.hlocked, false);
+    r = await call('kimmy', 'join', { code: tn.code, tid: 'T2' }); ok(r); const kt = r.j.game.me; assert.strictEqual(r.j.game.day.hi[kt].text, 'Oddable 16.6 (real results)');
+    r = await call('proshop', 'team', { id: tn.id, op: 'assign', pid: tn.me, tid: 'T1' }); ok(r);
+    r = await call('proshop', 'team', { id: tn.id, op: 'guest', name: "Walk-in Joe O'Brien", tid: 'T3' }); ok(r); const joe = r.j.guest; assert.strictEqual(r.j.game.day.hi[joe.pid].text, 'Oddable: no rounds yet');
+    r = await call('proshop', 'team', { id: tn.id, op: 'hcp', pid: joe.pid, hcp: 20 }); assert.strictEqual(r.s, 400, 'a reason is required'); assert.ok(/reason/.test(r.j.error));
+    r = await call('kimmy', 'team', { id: tn.id, op: 'hcp', pid: joe.pid, hcp: 20, reason: 'trust me' }); assert.strictEqual(r.s, 403, 'only the director');
+    r = await call('proshop', 'team', { id: tn.id, op: 'hcp', pid: joe.pid, hcp: 20, reason: 'Club card, no app rounds' }); ok(r); assert.strictEqual(r.j.game.day.hi[joe.pid].text, 'Oddable: no rounds yet · Tournament 20.0, set by director'); assert.strictEqual(r.j.game.day.hi[joe.pid].src, 'tournament');
+    const before = await HC('kimmy');
+    r = await call('proshop', 'team', { id: tn.id, op: 'hcp', pid: kt, hcp: 10, reason: 'Committee review' }); ok(r); let tg = r.j.game;
+    assert.strictEqual(tg.day.hi[kt].text, 'Oddable 16.6 (real results) · Tournament 10.0, set by director', 'the real-results index still shows next to the override'); assert.strictEqual(tg.day.hi[kt].oddable, 16.6); assert.strictEqual(tg.day.hi[kt].used, 10); assert.strictEqual(tg.day.hi[kt].ch, 9);
+    assert.strictEqual(tg.day.teams.find((x) => x.tid === 'T2').players[0].hi.text, tg.day.hi[kt].text, 'same line on the player card');
+    eq(tg.day.hlog.map((x) => [x.name, x.by, x.old, x.new, x.oddable, x.reason]), [['Kimmy', 'Proshop', 16.6, 10, 16.6, 'Committee review'], ["Walk-in Joe O'Brien", 'Proshop', null, 20, null, 'Club card, no app rounds']]); assert.ok(tg.day.hlog.every((x) => x.at === NOW), 'who, when, old, new, reason');
+    eq(await HC('kimmy'), before, 'E-H: the lifetime Oddable Handicap Index is not touched by the director\'s edit');
+    { const he = await G.handicapFor(ACC('kimmy'), { eventId: 'golf:' + tn.id }); eq([he.oddable.index, he.event, he.setBy, he.use, he.reason], [16.6, 10, 'tournament', 10, 'Committee review'], 'the stats contract: {oddable, event, setBy, use}'); const hj2 = await G.handicapFor('guest:' + joe.gid, { eventId: 'golf:' + tn.id }); eq([hj2.oddable.index, hj2.event, hj2.use], [null, 20, 20]);
+      assert.ok(db['lock:evr:golf:' + tn.id] && db['lock:evr:golf:' + tn.id].data.lockAt === TEE2, 'eventSetup was called for the Enterprise tournament (lockAt = first tee time)'); assert.strictEqual(db['lock:evr:golf:' + fr.id], undefined, 'not for a standard game'); }
+    assert.strictEqual((await call('kimmy', 'get', { id: fr.id })).j.game.day.hcp[kf], 16.6, 'only that tournament: her other game still uses 16.6'); assert.strictEqual((await call('kimmy', 'get', { id: tn.id })).j.game.day.hlog, undefined, 'the log is the director\'s');
+    r = await call('proshop', 'match', { id: tn.id, op: 'add', a: kt, b: joe.pid }); ok(r);
+    r = await call('proshop', 'suggest', { id: tn.id, teamSize: 2 }); ok(r); assert.strictEqual(r.j.mode, 'balanced'); assert.ok(r.j.suggestions.length >= 1 && /Team handicaps/.test(r.j.suggestions[0].reason)); assert.ok(/Suggestions only/.test(r.j.note)); eq(r.j.modes.map((x) => x[1]), ['Balanced', 'Rotate', 'Hot pairs']);
+    assert.ok(r.j.suggestions[0].teams.flat().some((x) => x.hi.text === tg.day.hi[kt].text));
+    for (const md of ['rotate', 'hot']) { const q = await call('proshop', 'suggest', { id: tn.id, teamSize: 2, mode: md }); ok(q); assert.strictEqual(q.j.mode, md); assert.ok(q.j.suggestions[0].reason.length > 10); }
+    r = await call('kimmy', 'suggest', { id: tn.id, teamSize: 2 }); assert.strictEqual(r.s, 403); eq((await call('proshop', 'get', { id: tn.id })).j.game.day.teams.map((x) => x.players.length), [1, 1, 1], 'suggesting changes nothing');
+    t('P1 Suggest partners on the server: Balanced by default, Rotate and Hot pairs, a reason on each, organizer only, nothing is saved');
+    NOW = TEE2 + 60e3; r = await call('proshop', 'team', { id: tn.id, op: 'hcp', pid: kt, hcp: 12, reason: 'Late change' }); assert.strictEqual(r.s, 409, 'E-H: refused after lockAt (first tee time) even before Start is tapped'); assert.ok(/locked/.test(r.j.error));
+    assert.strictEqual((await call('proshop', 'get', { id: tn.id })).j.game.day.hlocked, true);
+    r = await call('proshop', 'start', { id: tn.id }); ok(r); assert.strictEqual(r.j.game.day.lockAt, TEE2, 'lockAt stored once, never later'); assert.strictEqual(r.j.game.day.hi[kt].used, 10, 'starting does not undo the director\'s number');
+    r = await call('proshop', 'team', { id: tn.id, op: 'hcp', pid: joe.pid, hcp: 30, reason: 'After start' }); assert.strictEqual(r.s, 409);
+    for (const [tid, p] of [['T1', tn.me], ['T2', kt], ['T3', joe.pid]]) for (let i = 0; i < 18; i++) ok(await call('proshop', 'score', { id: tn.id, tid, hole: i + 1, p: { [p]: PAR[i] } }));
+    r = await call('proshop', 'get', { id: tn.id }); assert.strictEqual(r.j.game.payout.pool, 0, 'nobody marked paid yet: the pot is empty'); for (const p of [tn.me, kt, joe.pid]) ok(await call('proshop', 'paid', { id: tn.id, pid: p, paid: true }));
+    r = await call('proshop', 'final', { id: tn.id }); assert.strictEqual(r.s, 409, 'money shown + unconfirmed holes: no Final'); assert.ok(/54 holes were never confirmed/.test(r.j.error), r.j.error); assert.strictEqual(r.j.unconfirmed, 54); assert.strictEqual(r.j.canForce, true);
+    r = await call('proshop', 'final', { id: tn.id, force: true }); assert.strictEqual(r.s, 400, 'forcing needs a reason'); r = await call('kimmy', 'final', { id: tn.id, force: true, reason: 'let us go' }); assert.strictEqual(r.s, 403);
+    r = await call('proshop', 'final', { id: tn.id, force: true, reason: 'Single scorer event, cards signed on paper' }); ok(r); tg = r.j.game; eq([tg.day.forced.holes, tg.day.forced.by, tg.day.forced.reason], [54, 'Proshop', 'Single scorer event, cards signed on paper']); assert.ok(tg.day.audit.some((a) => a.what === 'final forced'));
+    t('Final: a golf day with money shown cannot go Final with unconfirmed holes (409 "54 holes were never confirmed"); the commissioner can force it with a reason, logged and shown'); const rowT = (tid) => tg.board.rows.find((x) => x.tid === tid);
+    // everyone shoots 72. Joe: 20.0 x 121/113 - 1.9 = 19.5 -> 20 strokes -> net 52. Kim: tournament 10.0 -> 8.8 -> 9 strokes -> net 63 (her own 16.6 would be 16 strokes, net 56). Director: no handicap -> 72.
+    assert.strictEqual(rowT('T3').net, 52, 'the guest\'s director-entered handicap is used for net'); assert.strictEqual(rowT('T2').net, 63, 'the override (not 16.6) is used for net'); assert.strictEqual(rowT('T1').net, 72); eq(tg.board.rows.map((x) => [x.tid, x.place]), [['T3', 1], ['T2', 2], ['T1', 3]]);
+    assert.strictEqual((await HC('kimmy')).oddable.index, 0.8, 'the tournament round counts by its gross score only: 72 -> differential 1.8, 4 rounds = lowest less 1.0 (the same with or without the override)');
+    t('E-H Enterprise tournament: director enters a guest handicap and overrides a player (reason required, logged who/when/old/new/reason, "set by director" next to the real-results Oddable index); both are used for net; lifetime index unchanged; edits refused after lockAt');
+    // S-ALL: every play carries entry, payout and net. 3 entrants x $20 = $60, small field -> winner takes all.
+    eq(tg.payout.split, [100]); assert.strictEqual(tg.payout.pool, 60); eq(tg.payout.paid, [{ pid: joe.pid, name: "Walk-in Joe O'Brien", amt: 60 }]);
+    const sK = (await G.statsFor(ACC('kimmy'), {})).filter((x) => x.contestId === tn.id), sJ = await G.statsFor('guest:' + joe.gid, {}), rK = sK.find((x) => x.kind === 'golf-round'), rJ = sJ.find((x) => x.kind === 'golf-round');
+    eq([rK.score, rK.place, rK.stake, rK.won, rK.pl, rK.extra.net], [72, { n: 2, of: 3 }, 20, 0, -20, 63]); eq([rJ.score, rJ.place, rJ.stake, rJ.won, rJ.pl, rJ.extra.net, rJ.result], [72, { n: 1, of: 3 }, 20, 60, 40, 52, 'W']);
+    eq([rK.extra.hcpSrc, rK.extra.oddableIndex, rK.extra.playingHcp], ['tournament', 16.6, 9]);
+    const mK = sK.find((x) => x.kind === 'match'), mJ = sJ.find((x) => x.kind === 'match'); eq([mK.result, mK.stake, mK.won, mK.pl], ['L', 10, 0, -10]); eq([mJ.result, mJ.stake, mJ.won, mJ.pl], ['W', 10, 10, 10]); // Joe gets 20 - 9 = 11 strokes
+    // a pool: 2 entrants x $10, winner takes all
+    const F8 = Array.from({ length: 50 }, (_, i) => mkG(i + 1, { tee: NOW + 864e5 + i * 60e3 })); EV.E8 = { tee: NOW + 864e5, field: F8 };
+    r = await call('walter', 'create', { kind: 'pro', title: 'Money pool', pot: { entry: 10 }, pro: { tour: 'pga', game: 'six', eventId: 'E8', tb: 'best' } }); ok(r); const mp = r.j.game; eq(mp.payout.split, [100]); await call('stevie', 'join', { code: mp.code });
+    ok(await call('walter', 'pick', { id: mp.id, picks: mp.tiers.map((x) => x[0]) })); ok(await call('stevie', 'pick', { id: mp.id, picks: mp.tiers.map((x) => x[1]) })); const mpM = (await call('walter', 'get', { id: mp.id })).j.game.members;
+    ok(await call('walter', 'paid', { id: mp.id, pid: mpM[0].pid, paid: true })); assert.strictEqual((await call('walter', 'get', { id: mp.id })).j.game.payout.pool, 10, 'the pot counts only entrants marked paid: one of two so far'); ok(await call('walter', 'paid', { id: mp.id, pid: mpM[1].pid, paid: true }));
+    NOW += 5 * 864e5; EV.E8 = { done: true, tee: EV.E8.tee, field: F8.map((g, i) => Object.assign({}, g, { started: true, toPar: i - 10, thru: 'F', pos: String(i + 1) })) };
+    const pW = (await G.statsFor(ACC('walter'), {})).find((x) => x.contestId === mp.id), pS = (await G.statsFor(ACC('stevie'), {})).find((x) => x.contestId === mp.id);
+    eq([pW.kind, pW.place, pW.stake, pW.won, pW.pl], ['golf-pool', { n: 1, of: 2 }, 10, 20, 10]); eq([pS.place, pS.stake, pS.won, pS.pl], [{ n: 2, of: 2 }, 10, 0, -10]); assert.strictEqual(typeof pW.score, 'number');
+    assert.strictEqual((await call('walter', 'get', { id: mp.id })).j.game.entries[0].payout, 20);
+    // the whole book: every finished play of every kind has score-or-result, entry, payout and net
+    const book = []; for (const w of ['ann', 'bob', 'cat', 'zed', 'lee', 'kimmy', 'walter', 'stevie', 'proshop']) book.push(...await G.statsFor(ACC(w), {})); book.push(...sJ);
+    const kinds = new Set(book.map((x) => x.kind + (x.extra && x.extra.side ? ':' + x.extra.side : x.extra && x.extra.game ? ':' + x.extra.game : x.extra && x.extra.solo ? ':solo' : '')));
+    ['golf-round', 'golf-round:solo', 'golf-pool:pick six', 'golf-pool:one and done', 'match', 'event:ctp'].forEach((k) => assert.ok(kinds.has(k), 'S-ALL: a ' + k + ' record exists (' + [...kinds].join(', ') + ')'));
+    const settled = book.filter((x) => (x.kind === 'golf-round' && x.extra.final) || x.kind === 'match' || x.kind === 'event' || (x.kind === 'golf-pool' && x.place));
+    assert.ok(settled.length >= 8); settled.forEach((x) => { ['stake', 'won', 'pl'].forEach((k) => assert.strictEqual(typeof x[k], 'number', x.id + ' ' + k)); assert.strictEqual(Math.round((x.won - x.stake) * 100), Math.round(x.pl * 100) + (x.kind === 'match' ? Math.round((Math.max(0, x.pl) - x.stake - x.pl) * 100) : 0), x.id + ' net = payout - entry'); assert.ok(x.score != null || x.result != null || x.place, x.id); });
+    if (validate) book.forEach((x) => { const v = validate(x, 'golf'); assert.ok(v.ok, 'stats validate: ' + v.why + ' ' + x.id); });
+    t('S-ALL every round, solo round, pool, golf day, heads-up match and side prize gives each player a stats record with score, place, entry, payout and net (winner takes all on a 3-player field: +$40 / -$20)' + (validate ? '; all pass stats.js validate' : ''));
+    assert.ok(!/USGA|GHIN/i.test(raw.join('\n')), 'never called USGA or GHIN'); delete db['lock:ent']; G._reset(); NOW = Date.parse('2026-11-18T18:00:00Z');
+
+    // ---------------- Playbook decisions (manager, Nov 16 2026) ----------------
+    NOW = Date.parse('2026-11-18T18:00:00Z'); G._reset();
+    { // Texas scramble: allowances by team size + the missing-drive penalty chosen at set-up (default 2)
+      const mkTx = async (who, size, extra) => (await call(who, 'create', { kind: 'day', title: 'Texas ' + size, course, day: Object.assign({ fmt: 'texas', teams: 1, teamSize: size, net: 'net' }, extra || {}) })).j.game;
+      const t2 = await mkTx('tex2', 2), t3 = await mkTx('tex3x', 3), t4 = await mkTx('tex4xx', 4, { drivePen: 3 }), t5 = await mkTx('tex5xxx', 4, { allow: [20, 15, 10, 5] });
+      eq([t2.day.allow, t3.day.allow, t4.day.allow, t5.day.allow], [[35, 15], [30, 20, 10], [25, 20, 15, 10], [20, 15, 10, 5]]); eq([t2.day.drivePen, t4.day.drivePen, t2.day.allowStd, t5.day.allowStd], [2, 3, true, false]);
+      const sc = (n, who) => Object.fromEntries(PAR.slice(0, n).map((par, i) => [i + 1, { g: par, drive: who(i), st: 'confirmed' }]));
+      const mk = (o) => ({ members: ['a', 'b', 'c'].map((p) => ({ pid: p, name: p })), pot: { entry: 0, take: { kind: 'none' } }, day: Object.assign({ fmt: 'texas', net: 'net', pct: 100, allow: [25, 20, 15, 10], allowStd: true, drives: 4, drivePen: 2, course: COURSE, hcp: { a: 10, b: 20, c: 30 }, hsrc: {}, teams: [{ tid: 'T', name: 'T', players: ['a', 'b', 'c'] }], matches: [], win: {}, extras: { skins: { on: false }, ctp: [], ld: [] }, scores: {} }, o) });
+      // 18 holes, a's drive 12 times, b's 5, c's once: c is 3 drives short -> 3 x 2 = 6 penalty strokes on gross and net
+      let bd = G.dayBoard(mk({ scores: { T: sc(18, (i) => (i < 12 ? 'a' : i < 17 ? 'b' : 'c')) } })).rows[0]; eq(bd.pen, { strokes: 6, drives: 3, each: 2 }); assert.strictEqual(bd.gross, 78); assert.strictEqual(bd.toParG, 6);
+      // a 3-player team under the untouched 4-player list plays the 3-player allowance: 30% x 10 + 20% x 20 + 10% x 30 = 10.0 (25/20/15 would be 11.0)
+      assert.strictEqual(bd.thcp, 10); assert.strictEqual(bd.net, 78 - 10); assert.strictEqual(G.dayBoard(mk({ allowStd: false, scores: { T: sc(18, (i) => 'abc'[i % 3]) } })).rows[0].thcp, 11, 'an edited list is used as typed');
+      assert.strictEqual(G.dayBoard(mk({ scores: { T: sc(17, () => 'a') } })).rows[0].pen, undefined, 'no penalty until the round is finished'); assert.strictEqual(G.dayBoard(mk({ drivePen: 0, scores: { T: sc(18, () => 'a') } })).rows[0].pen, undefined, 'penalty 0 = none');
+      assert.strictEqual(G.dayBoard(mk({ scores: { T: sc(18, (i) => 'abc'[i % 3]) } })).rows[0].pen, undefined, 'six drives each: nothing missing');
+      t('Texas scramble: starting allowances 35/15 (2 players), 30/20/10 (3), 25/20/15/10 (4), editable; a team short a player uses the list for its size; each missing drive costs the set-up penalty (default 2 strokes) at the end of the round');
+    }
+    { // Best ball starting allowances, all editable
+      const mkB = async (who, o) => (await call(who, 'create', { kind: 'day', title: 'BB', course, day: Object.assign({ fmt: 'bestball', teams: 1, net: 'net' }, o) })).j.game.day;
+      const b2 = await mkB('bbtwo', { teamSize: 2, count: 1 }), b4 = await mkB('bbfourx', { teamSize: 4, count: 1 }), b42 = await mkB('bbfourxx', { teamSize: 4, count: 2 }), bE = await mkB('bbeditxxx', { teamSize: 2, count: 1, pct: 100, hu: { on: true, pct: 80 } });
+      eq([b2.pct, b4.pct, b42.pct, bE.pct], [85, 75, 90, 100]); eq([b2.heads.pct, b4.heads.pct, bE.heads.pct], [90, 90, 80]);
+      // the four-ball MATCH plays at its own 90%: handicaps 0 and 20 -> 18 strokes in the match (85% stroke play would be 17)
+      const c4 = { members: ['a1', 'a2', 'b1', 'b2'].map((p) => ({ pid: p, name: p })), day: { fmt: 'bestball', net: 'net', pct: 85, count: 1, allow: [], heads: { pct: 90 }, course: COURSE, hcp: { a1: 0, a2: 0, b1: 20, b2: 20 }, hsrc: {}, teams: [{ tid: 'A', name: 'A', players: ['a1', 'a2'] }, { tid: 'B', name: 'B', players: ['b1', 'b2'] }], matches: [], win: {}, extras: { skins: { on: false }, ctp: [], ld: [] },
+        scores: { A: Object.fromEntries(PAR.map((par, i) => [i + 1, { p: { a1: par, a2: par } }])), B: Object.fromEntries(PAR.map((par, i) => [i + 1, { p: { b1: par + 1, b2: par + 1 } }])) } } };
+      const m4 = G.matchState(c4, { mid: 'q', kind: 'team', type: 'match', a: 'A', b: 'B', net: true, offLow: true }); assert.strictEqual(m4.m.res, 'T', 'B bogeys every hole with 18 strokes: all square'); assert.strictEqual(G.matchState(c4, { mid: 'q', kind: 'team', type: 'match', a: 'A', b: 'B', net: true, offLow: true, pct: 85 }).m.res, 'W', '17 strokes: A wins the hole with no stroke');
+      t('Best ball starting allowances: pairs stroke play 85%, best 1 of 4 75%, four-ball match 90% (others 90%); every one editable at set-up');
+    }
+    { // Nassau press switch: "auto press at 2 down" (no manual presses) vs "press must be accepted" (default)
+      const a = PAR.slice(), b2 = PAR.slice(); b2[0]--; b2[1]--; const c2 = { members: ['x', 'y'].map((p) => ({ pid: p, name: p })), day: { fmt: 'nassau', net: 'gross', pct: 100, allow: [], course: COURSE, hcp: {}, hsrc: {}, teams: [{ tid: 'X', name: 'X', players: ['x'] }, { tid: 'Y', name: 'Y', players: ['y'] }], matches: [], win: {}, extras: { skins: { on: false }, ctp: [], ld: [] },
+        scores: { X: Object.fromEntries(a.map((v, i) => [i + 1, { p: { x: v } }])), Y: Object.fromEntries(b2.map((v, i) => [i + 1, { p: { y: v } }])) } } };
+      const au = G.matchState(c2, { mid: 'n', kind: 'player', type: 'nassau', a: 'x', b: 'y', auto: 2, press: 'auto2', presses: [] }); eq(au.nassau.presses.map((p) => p.from), [3], 'x is 2 down after two holes: a press starts by itself on hole 3'); assert.strictEqual(au.press, 'auto2');
+      const ac = G.matchState(c2, { mid: 'n', kind: 'player', type: 'nassau', a: 'x', b: 'y', auto: 0, press: 'accept', presses: [{ nine: 'front', from: 3, st: 'offered', side: 'a' }, { nine: 'back', from: 12, st: 'accepted', side: 'a' }] }); eq(ac.nassau.presses.map((p) => p.from), [12]); eq(ac.offers.map((o) => [o.from, o.expired]), [[3, true]], 'an offer nobody accepted before that hole was played has expired');
+      let r2 = await call('nasauto', 'create', { kind: 'day', title: 'Auto Nassau', course, day: { fmt: 'stroke', teams: 2, teamSize: 1, net: 'gross', hu: { on: true, kind: 'team', type: 'nassau', amt: 5, press: 'auto2' } } }); ok(r2); const na = r2.j.game; eq([na.day.heads.press, na.day.heads.auto], ['auto2', 2]);
+      r2 = await call('nasdefault', 'create', { kind: 'day', title: 'Nassau', course, day: { fmt: 'stroke', teams: 2, teamSize: 1, hu: { on: true, kind: 'team', type: 'nassau' } } }); eq([r2.j.game.day.heads.press, r2.j.game.day.heads.auto], ['accept', 0], 'default: a press must be accepted');
+      const g2 = await call('nasguest1', 'join', { code: na.code, tid: 'T2' }); ok(g2); ok(await call('nasauto', 'team', { id: na.id, op: 'assign', pid: na.me, tid: 'T1' })); r2 = await call('nasauto', 'match', { id: na.id, op: 'add', a: 'T1', b: 'T2' }); const mid2 = r2.j.game.day.matches[0].mid; ok(await call('nasauto', 'start', { id: na.id }));
+      ok(await call('nasauto', 'score', { id: na.id, tid: 'T1', hole: 1, p: { [na.me]: 6 } })); ok(await call('nasauto', 'score', { id: na.id, tid: 'T2', hole: 1, p: { [g2.j.game.me]: 4 } }));
+      r2 = await call('nasauto', 'match', { id: na.id, op: 'press', mid: mid2, from: 2 }); assert.strictEqual(r2.s, 409); assert.ok(/presses by itself/.test(r2.j.error));
+      t('Nassau presses: set-up switch "auto press at 2 down" (starts by itself, manual presses refused) or "press must be accepted" (default; an unaccepted offer never counts and expires once the hole is played)');
+    }
+    { // pot = paid entrants only; an unpaid finisher cannot win pot money
+      let r3 = await call('paytest', 'create', { kind: 'day', title: 'Paid only', course, pot: { entry: 10 }, day: { fmt: 'stroke', teams: 3, teamSize: 1, net: 'gross' } }); const pg = r3.j.game; const j1 = (await call('payjoinA', 'join', { code: pg.code, tid: 'T2' })).j.game.me, j2 = (await call('payjoinBB', 'join', { code: pg.code, tid: 'T3' })).j.game.me;
+      ok(await call('paytest', 'team', { id: pg.id, op: 'assign', pid: pg.me, tid: 'T1' })); ok(await call('paytest', 'paid', { id: pg.id, pid: pg.me, paid: true })); ok(await call('paytest', 'paid', { id: pg.id, pid: j2, paid: true })); ok(await call('paytest', 'start', { id: pg.id }));
+      for (const [tid, p, d] of [['T1', pg.me, 2], ['T2', j1, 0], ['T3', j2, 1]]) for (let i = 0; i < 18; i++) ok(await call('paytest', 'score', { id: pg.id, tid, hole: i + 1, p: { [p]: PAR[i] + (i < d ? 1 : 0) } }));
+      r3 = await call('paytest', 'final', { id: pg.id, force: true, reason: 'test round' }); ok(r3); eq([r3.j.game.payout.pot, r3.j.game.payout.paidN, r3.j.game.payout.entrants], [20, 2, 3]); eq(r3.j.game.payout.paid.map((x) => [x.pid, x.amt]), [[j2, 20]], 'the unpaid winner is skipped: the best PAID finisher takes the pot');
+      const u1 = (await G.statsFor(ACC('payjoinA'), {})).find((x) => x.contestId === pg.id); eq([u1.place, u1.stake, u1.won, u1.pl], [{ n: 1, of: 3 }, 0, 0, 0]); const u2 = (await G.statsFor(ACC('payjoinBB'), {})).find((x) => x.contestId === pg.id); eq([u2.place.n, u2.stake, u2.won, u2.pl], [2, 10, 20, 10]);
+      const ps2 = await G.potSummary(pg.id); assert.strictEqual(ps2.potTotal, 20);
+      t('Pot counts only entrants marked paid (same as Groups and local events): 2 of 3 paid -> $20 pot; an unpaid finisher wins no pot money and shows entry 0');
+    }
+    { // One and done: "Oddable points" label; the organizer can enter prize money instead
+      NOW = TEE - 3600e3; { const q = await call('ann', 'oadmoney', { id: oad.id, event: 'E1', money: { p8: 1 } }); assert.strictEqual(q.s, 409, 'not before that tournament starts'); }
+      NOW = TEE + 5 * 864e5; let r4 = await call('ann', 'get', { id: oad.id }); assert.strictEqual(r4.j.game.oad.pointsLabel, 'Oddable points'); const E1 = r4.j.game.oad.events.find((e) => e.id === 'E1'); assert.strictEqual(E1.by, 'points'); eq(E1.golfers.map((x) => x.id), ['p8']);
+      r4 = await call('bob', 'oadmoney', { id: oad.id, event: 'E1', money: { p8: 1500000 } }); assert.strictEqual(r4.s, 403); r4 = await call('ann', 'oadmoney', { id: oad.id, event: 'E1', money: {} }); assert.strictEqual(r4.s, 400);
+      r4 = await call('ann', 'oadmoney', { id: oad.id, event: 'E1', money: { p8: 1512000 } }); ok(r4); const e1 = r4.j.game.oad.events.find((e) => e.id === 'E1'); eq([e1.by, e1.manual.by, e1.picks[0].pts], ['money-manual', 'Ann', 1512000]); assert.strictEqual(r4.j.game.table[0].total, 1512000); assert.ok(/Prize money entered/.test(r4.j.game.oad.log[0].what));
+      t('One and done: the points table is labelled "Oddable points"; the organizer can enter the real prize money for a finished tournament instead (organizer only, logged)');
+    }
+    NOW = Date.parse('2026-11-18T18:00:00Z');
+    { // Pick six: neutral default tiers; every edit logged and shown
+      const NM = ['Zed Zulu', 'Amy Alpha', 'Bo Bravo', 'Cy Charlie', 'Di Delta', 'Ed Echo', 'Flo Foxtrot', 'Gil Golf', 'Hy Hotel', 'Ida India', 'Jo Juliet', 'Kit Kilo', 'Lu Lima', 'Mo Mike'];
+      const F9 = NM.map((n, i) => mkG(i + 1, { name: n, tee: NOW + 864e5 + i * 60e3 })); EV.E9 = { tee: NOW + 864e5, field: F9 };
+      let r5 = await call('tierorg', 'create', { kind: 'pro', title: 'Neutral tiers', pro: { tour: 'pga', game: 'six', eventId: 'E9', tb: 'best' } }); ok(r5); let tg9 = r5.j.game; const nameOf = (id) => F9.find((g) => g.id === id).name;
+      eq(tg9.tiers.flat().map(nameOf).slice(0, 4), ['Amy Alpha', 'Bo Bravo', 'Cy Charlie', 'Di Delta'], 'alphabetical by last name, not the feed order (Zed Zulu was listed first)'); assert.strictEqual(nameOf(tg9.tiers.flat().slice(-1)[0]), 'Zed Zulu'); eq([tg9.tierBasis.k, tg9.tierLog.length], ['alpha', 0]);
+      EV.E9.field = F9.map((g, i) => Object.assign({}, g, { wr: 14 - i })); r5 = await call('tierwrx', 'create', { kind: 'pro', title: 'By ranking', pro: { tour: 'pga', game: 'six', eventId: 'E9', tb: 'best' } }); eq([r5.j.game.tierBasis.k, nameOf(r5.j.game.tiers[0][0])], ['wr', 'Mo Mike'], 'world ranking when the free feed carries it'); EV.E9.field = F9;
+      await call('tierjoin1', 'join', { code: tg9.code }); r5 = await call('tierjoin1', 'tiers', { id: tg9.id, rank: ['Zed Zulu'] }); assert.strictEqual(r5.s, 403);
+      r5 = await call('tierorg', 'tiers', { id: tg9.id, rank: ['Zed Zulu', 'Mo Mike'] }); ok(r5); assert.strictEqual(nameOf(r5.j.game.tiers[0][0]), 'Zed Zulu'); assert.strictEqual(r5.j.game.tierBasis.k, 'list');
+      r5 = await call('tierjoin1', 'get', { id: tg9.id }); eq(r5.j.game.tierLog.map((x) => [x.by, x.n, x.top, x.moved > 0]), [['Tierorg', 2, ['Zed Zulu', 'Mo Mike'], true]], 'every entrant sees who changed the tiers and to what'); assert.ok(/organizer/.test(r5.j.game.tierBasis.text));
+      ok(await call('tierjoin1', 'pick', { id: tg9.id, picks: r5.j.game.tiers.map((x) => x[0]) })); r5 = await call('tierorg', 'tiers', { id: tg9.id, rank: [] }); assert.strictEqual(r5.s, 409, 'no edit once anyone has picked');
+      r5 = await call('tierset', 'create', { kind: 'pro', title: 'Rigged?', pro: { tour: 'pga', game: 'six', eventId: 'E9', tb: 'best', rank: ['Kit Kilo'] } }); eq([r5.j.game.tierLog.length, r5.j.game.tierBasis.k], [1, 'list'], 'a list given at set-up is logged too');
+      t('Pick six tiers: neutral by default (world ranking when the free feed has it, else alphabetical by last name); an organizer edit is allowed only before anyone picks, and is logged and shown to every entrant');
+    }
+    { // Golf Calcutta: golf registers its lot sources with the Calcutta engine; started() fails closed
+      const reg = {}; const fake = { registerSource: (k, src) => { reg[k] = src; }, attachToGroup: async (id, gid, cid) => { reg.attached = [id, gid, cid]; return { id }; } };
+      assert.strictEqual(G.registerCalcutta(fake), true); assert.strictEqual(G.registerCalcutta({}), false); eq(Object.keys(reg).sort(), ['golf', 'golf-day']); assert.strictEqual(reg['golf-day'].local, true);
+      ['teams', 'results', 'started', 'startTime'].forEach((k) => assert.strictEqual(typeof reg.golf[k], 'function', k));
+      let real = null; try { real = require('/home/claude/calcutta-calc/odds-api/calcutta.js'); } catch (e) {} if (real) { assert.strictEqual(G.registerCalcutta(real), true, 'the real Calcutta engine accepts the source'); G.registerCalcutta(fake); }
+      EV.EC = { tee: NOW + 864e5, field: Array.from({ length: 20 }, (_, i) => mkG(i + 1, { tee: NOW + 864e5 + i * 60e3 })) }; const pc = { golf: { tour: 'pga', eventId: 'EC' } };
+      let lots = await reg.golf.teams(pc); assert.strictEqual(lots.length, 20); eq([lots[0].id, lots[0].name], ['g:p1', 'Golfer 01']); assert.strictEqual(await reg.golf.started(pc), false); assert.strictEqual(await reg.golf.startTime(pc), NOW + 864e5); eq(await reg.golf.results(pc), {});
+      feedDown = true; assert.strictEqual(await reg.golf.started(pc), true, 'feed down: FAIL CLOSED, ownership stays frozen'); eq(await reg.golf.results(pc), {}, 'and nothing is paid'); feedDown = false;
+      EV.EC.field = EV.EC.field.map((g, i) => Object.assign({}, g, { started: i === 0 })); assert.strictEqual(await reg.golf.started(pc), true, 'a golfer has teed off');
+      EV.EC = { done: true, tee: NOW - 4 * 864e5, field: EV.EC.field.map((g, i) => Object.assign({}, g, { started: true, toPar: i - 8, pos: i === 0 ? '1' : i < 3 ? 'T2' : String(i + 1), st: i === 19 ? 'cut' : 'active' })) };
+      const rs = await reg.golf.results(pc); eq([rs['g:p1'].place, rs['g:p1'].champ, rs['g:p2'].place, rs['g:p2'].champ, rs['g:p20'].out], [1, true, 2, false, true]);
+      // a golf day's teams: local lots (players of record), started once the round starts, places when final
+      const dc = { golf: { gameId: tn.id } }; lots = await reg['golf-day'].teams(dc); eq(lots.map((x) => x.id), ['t:' + tn.id + ':T1', 't:' + tn.id + ':T2', 't:' + tn.id + ':T3']); assert.ok(lots[2].players.includes("Walk-in Joe O'Brien")); assert.strictEqual(await reg['golf-day'].started(dc), true);
+      const dr = await reg['golf-day'].results(dc); eq([dr['t:' + tn.id + ':T3'].place, dr['t:' + tn.id + ':T3'].champ, dr['t:' + tn.id + ':T1'].place], [1, true, 3]);
+      assert.strictEqual(await reg['golf-day'].started({ golf: { gameId: fr.id } }), false, 'a golf day still in set-up'); eq(await reg['golf-day'].results({ golf: { gameId: fr.id } }), {}); assert.strictEqual(await reg['golf-day'].started({ golf: { gameId: 'NOSUCHGAME' } }), true, 'unknown game: fail closed');
+      ok(await call('proshop', 'attach', { id: tn.id, groupId: 'GRP9', contestId: 'CT1' })); await assert.rejects(G.linkCalcutta(tn.id, 'CALC1', ACC('kimmy'))); const lk2 = await G.linkCalcutta(tn.id, 'CALC1', ACC('proshop')); eq([lk2.attached, reg.attached], [true, ['CALC1', 'GRP9', 'CT1']]);
+      t('Golf Calcutta: golf registers "golf" (tour field) and "golf-day" (teams, local) with the Calcutta engine (registerSource), with teams/results/startTime/started; started() fails closed (feed down or unknown game = started, nothing paid); linkCalcutta attaches the Calcutta to the game\'s group');
+    }
+    NOW = Date.parse('2026-11-18T18:00:00Z');
     // ---------------- privacy ----------------
     const all = raw.join('\n'); ['@phone.oddable', '"mk"', '"org":"', 'orgE', '"tok"'].forEach((s) => assert.ok(!all.includes(s), 'leaked ' + s));
     t('no account ids, member keys or guest token hashes in any response');

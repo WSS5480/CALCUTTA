@@ -495,3 +495,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 - Alert = 🔒 Lock + picked road dogs. 12-season history (ALH/ALY, 2014-2025, excluding Lock games): picked 141-120 (54.0%, +8.2u), NOT picked 198-173 (53.4%, +7.0u), Lock 110-99; Alert total 251-219 (+9.2u, ~39 picks/season). Honest finding: the two groups are nearly equal, so the filter trims volume, it does not find better dogs.
 - Test (2026 wk1-10 in app = Python): picked 8-4, not picked 9-7, Alert 14-6. Week 8 with filter: 0-2 picked (KC Lock, ATL), 0-4 not picked.
 - Double lock stays retired.
+
+## v247 — 🤝 Helper
+- User: "Add the highest probability team to the list... call it the helper". Each week's highest win-chance team (app win pick, pred().conf), straight-up/moneyline. Row in the Alert with ✓/✗ and a season W-L line that drills to all weeks (helperDrill). Saved per phone before the week's first kickoff (`hlp26-wN`); earlier weeks back-filled from current ratings. NOT counted in Alert units (no moneyline prices; heavy favorites are expensive). Local test wk1-9: 6-3 (losses: DAL 76%, LA 81%, HOU 77%).

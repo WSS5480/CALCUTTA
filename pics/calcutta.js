@@ -327,9 +327,12 @@
   async function loadBoard(o) { try { const j = await post('board', { id: o.id }); o.d = j; setCalc(j.calc); err = ''; } catch (e) { err = errText(e); } paint(); }
   function sched() { // poll: 1.5 s on the live auction, 30 s on boards; nothing while the page is hidden or the overlay is closed
     clearTimeout(POLL); const s = cur(); if (!el()) return;
-    if (s.t === 'auction' && s.c && s.c.a.status !== 'closed') POLL = setTimeout(async () => { if (!document.hidden && el() && cur() === s && !busy) { try { const j = await post('state', { id: s.id, rev: s.c.rev }); if (!j.same && cur() === s) { setCalc(j.calc); s.c = j.calc; paint(); } else if (j.same) { OFF = j.now - Date.now(); } } catch (e) {} } sched(); }, 1500);
+    if (s.t === 'auction' && s.c && s.c.a.status !== 'closed') POLL = setTimeout(async () => { if (!document.hidden && el() && cur() === s && !busy) { try { const j = await post('state', { id: s.id, rev: s.c.rev }); if (!j.same && cur() === s) { const was = s.c; setCalc(j.calc); s.c = j.calc; staleNote(was, j.calc); paint(); } else if (j.same) { OFF = j.now - Date.now(); } } catch (e) {} } sched(); }, 1500);
     else if (['board', 'owner', 'lot', 'pot'].includes(s.t) && s.d) POLL = setTimeout(async () => { if (!document.hidden && el() && cur() === s && !busy && s.t !== 'lot') await loadBoard(s); sched(); }, 30000);
   }
+  function staleNote(was, now) { // REVIEW FIX 10b: a "Bid in" message never outlives the bid
+    if (!/^Bid in/.test(note)) return; const a = now.a, h = a.high;
+    if (a.cur && a.cur === was.a.cur && h && h.pid !== now.me) note = 'Outbid: ' + h.name + ' bid ' + usd(h.amt) + '.'; else if (!a.cur || a.cur !== was.a.cur || !h) note = ''; }
   function tickClock() { // countdown between polls (server end time + clock offset)
     const s = cur(), t = document.getElementById('ctime'), b = document.getElementById('cbar'); if (!s || s.t !== 'auction' || !s.c || !t) return; const c = s.c; if (!c.a.high || c.a.paused) return;
     const l0 = left(c); t.textContent = clock(l0); t.className = 'ctimer ' + (l0 < 5000 ? 'cneg' : 'cgold'); if (b) b.style.width = Math.round(Math.max(0, Math.min(1, l0 / (c.a.timer * 1000))) * 100) + '%';

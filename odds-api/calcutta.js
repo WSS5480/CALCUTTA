@@ -154,7 +154,7 @@ const IDS = { at: 0, map: null };
 async function sidOf(e) { if (!/@phone\.oddable$/.test(e)) return null; const A = D.acct(); for (let i = 0; i < 2; i++) { if (!IDS.map || D.now() - IDS.at > 6e5 || i) { const m = {}; (await D.S.dbIds()).forEach((id) => { m[A.phoneEmail(id)] = id; }); IDS.map = m; IDS.at = D.now(); } if (IDS.map[e]) return IDS.map[e]; } return null; }
 let NAMES = { at: 0, v: {} };
 async function names() { if (D.now() - NAMES.at > 60e3) { try { NAMES = { at: D.now(), v: await D.acct().namesGet() }; } catch (e) { NAMES.at = D.now(); } } return NAMES.v; }
-async function nameOf(e, given) { const A = D.acct(); if (e === 'owner' || A.isOwnerPhone(e)) return A.ownerName(); let sid = null; try { sid = await sidOf(e); } catch (x) {} if (sid) { const n = (await names())[String(sid).slice(0, 8)]; if (n) return cleanName(n); } return cleanName(given) || 'Player'; }
+async function nameOf(e, given) { const A = D.acct(); if (e === 'owner' || A.isOwnerPhone(e)) return A.ownerName(); let sid = null; try { sid = await sidOf(e); } catch (x) {} if (sid) { const n = (await names())[String(sid).slice(0, 8)]; if (n) return cleanName(n); } void given; return 'Player ' + mkOf(e).slice(0, 4).toUpperCase(); } // REVIEW FIX 10: never a typed name (it could copy someone else's)
 async function me(req) { const e = D.acct().who(req); if (!e) throw bad(401, 'Sign in to use Calcutta'); return { e, mk: mkOf(e) }; }
 
 // ---------- rate limits ----------
@@ -187,8 +187,15 @@ async function mutRow(rowId, init, fn, after) {
 }
 const mutCalc = (id, fn, mk) => mutRow(ROW(id), null, async (c) => { if (c.deleted || (mk && !memberOf(c, mk))) throw bad(404, 'Calcutta not found'); settle(c, D.now()); return fn(c); }, (row) => RC.set(String(row.id).slice(10), { at: D.now(), row }));
 const idxEntry = (c) => ({ name: c.name, comm: c.comm, mks: c.members.map((m) => m.mk), code: c.code, status: c.a.status, ev: c.ev, created: c.created, group: c.group || null });
-async function syncIdx(c) { try { await mutRow(IDX, { calcs: {} }, (d) => { d.calcs = d.calcs || {}; const e = idxEntry(c); if (JSON.stringify(d.calcs[c.id]) === JSON.stringify(e)) return { nochange: true }; d.calcs[c.id] = e; return {}; }); } catch (e) { console.error('calcutta index:', e.message); } }
-async function idx() { const r = await D.S.dbGet(IDX); return (r && r.data && r.data.calcs) || {}; }
+// REVIEW FIX 8: index cached 1 s, abandoned set-ups (never started, 90+ days) pruned, failed updates retried on the next request
+const IDXC = { at: 0, v: null }, PENDING = new Set(), ABANDON = 90 * DAY;
+async function syncIdx(c) {
+  for (let k = 0; k < 3; k++) { try { await mutRow(IDX, { calcs: {} }, (d) => { d.calcs = d.calcs || {}; const e = idxEntry(c), now = D.now(); let ch = JSON.stringify(d.calcs[c.id]) !== JSON.stringify(e); d.calcs[c.id] = e;
+      Object.keys(d.calcs).forEach((id) => { const x = d.calcs[id]; if (id !== c.id && x.status === 'setup' && now - (x.created || 0) > ABANDON) { delete d.calcs[id]; ch = true; } });
+      if (!ch) return { nochange: true }; return {}; }, (row) => { IDXC.at = D.now(); IDXC.v = row.data.calcs; }); PENDING.delete(c.id); IDXC.at = 0; return; } catch (e) { if (k === 2) { console.error('calcutta index:', e.message); PENDING.add(c.id); } } }
+}
+async function repairIdx() { if (!PENDING.size) return; for (const id of [...PENDING].slice(0, 5)) { PENDING.delete(id); const r = await D.S.dbGet(ROW(id)); if (r && r.data && !r.data.deleted) await syncIdx(r.data); } }
+async function idx() { if (IDXC.v && D.now() - IDXC.at < 1000) return IDXC.v; const r = await D.S.dbGet(IDX); IDXC.v = (r && r.data && r.data.calcs) || {}; IDXC.at = D.now(); return IDXC.v; }
 
 // ---------- auction state machine (server is the clock) ----------
 // c.a = { status: 'setup'|'live'|'closed', order[lotIds], cur: lotId|null, endsAt, paused, left, nextAt, nextLeft, just: lotId|null }
@@ -372,11 +379,11 @@ async function handle(req, res) {
   try {
     const b = await body(req), ip = D.ip(req), now = D.now(), op = path.slice(10);
     if (op === 'peek') { // PUBLIC: an invite link's title before sign-in / sign-up. Only title + kind.
-      rate('peek', 'ip', ip); if (codeBlocked('c|i|' + ip)) throw bad(429, 'Too many wrong codes. Wait 15 minutes.');
+      rate('peek', ip, ip); /* REVIEW FIX 4: per IP (was one shared bucket) */ if (codeBlocked('c|i|' + ip)) throw bad(429, 'Too many wrong codes. Wait 15 minutes.');
       const code = normCode(b.code), all = await idx(); let hit = null; if (code) Object.keys(all).forEach((id) => { if (sameCode(all[id].code, code)) hit = all[id]; });
       if (!hit) { codeFail('c|i|' + ip); throw bad(404, 'No Calcutta with that code'); } send(res, 200, { title: hit.name, kind: 'calcutta' }); return true;
     }
-    const u = await me(req);
+    const u = await me(req); try { await repairIdx(); } catch (e) {}
     if (op === 'events') { send(res, 200, { events: Object.keys(EVENTS).map((k) => { const ev = EVENTS[k]; return { key: k, label: ev.label, sport: ev.sport, on: evOn(k), local: evLocal(k), teams: ev.teams || 0, kinds: ev.kinds, rounds: ev.rounds || [], manualOnly: !!ev.manualOnly, rows: ev.rows.map((r) => ({ k: r.k, r: r.r || null, n: r.n, pct: r.bp / 100, label: rowLabel(ev, r) })) }; }), minBids: MINB, incs: INCS, timers: TIMERS, max: limits.maxPeople(u.mk), capText: PRICE }); return true; }
     if (op === 'teams') { const k = String(b.ev || ''); if (!EVENTS[k]) throw bad(400, 'Pick an event'); if (!evOn(k)) throw bad(400, 'That event is coming soon'); try { send(res, 200, { teams: await teamsOf(k) }); } catch (e) { throw bad(502, 'Could not load the teams. Try again.'); } return true; }
     if (op === 'mine') { const all = await idx(), out = []; Object.keys(all).forEach((id) => { const x = all[id]; if ((x.mks || []).includes(u.mk)) out.push({ id, name: x.name, ev: x.ev, evLabel: (EVENTS[x.ev] || {}).label || '', status: x.status, comm: x.comm === u.mk, created: x.created, group: x.group }); }); out.sort((a, b2) => b2.created - a.created); send(res, 200, { calcs: out.slice(0, 50), max: limits.maxPeople(u.mk), capText: PRICE }); return true; }
@@ -475,7 +482,7 @@ async function handle(req, res) {
       rate('write', u.mk, ip); let idxSync = op === 'enter' || op === 'unenter' || op === 'close';
       if (op === 'edit') { const row0 = await loadRow(id, true); if (!row0 || !canSee(row0.data, u.mk)) throw bad(404, 'Calcutta not found'); const mem = row0.data.members.slice(); mem._me = memberOf(row0.data, u.mk); const R = await cleanRules(b, now, mem); const c = await mutCalc(id, (c) => { if (!isComm(c, u.mk)) throw bad(403, 'Only the commissioner can change the rules'); if (c.locked || c.a.status !== 'setup') throw bad(409, 'Rules are locked. The auction has started.'); Object.assign(c, R); c.a.order = c.lots.map((l) => l.id); c.rev++; audit(c, mName(c, memberOf(c, u.mk).pid), 'Edited the rules'); return c; }, u.mk); await syncIdx(c); send(res, 200, { calc: full(c, u.mk, now) }); return true; }
       if (op === 'delete') { await mutCalc(id, (c) => { if (!isComm(c, u.mk)) throw bad(403, 'Only the commissioner can delete it'); if (c.locked) throw bad(409, 'Bids are in. It cannot be deleted.'); c.a.status = 'closed'; c.deleted = true; c.members = c.members.filter((m) => m.mk === c.comm); c.rev++; return c; }, u.mk);
-        try { await mutRow(IDX, { calcs: {} }, (d) => { delete d.calcs[id]; return {}; }); } catch (e) {} send(res, 200, { ok: true }); return true; }
+        try { await mutRow(IDX, { calcs: {} }, (d) => { delete d.calcs[id]; return {}; }); } catch (e) {} IDXC.at = 0; send(res, 200, { ok: true }); return true; }
       let fz = false; if (op === 'enter' || op === 'unenter') { const r0 = await loadRow(id, true); if (r0) fz = await frozen(r0.data); }
       const c = await mutCalc(id, (c) => {
         if (!isComm(c, u.mk)) throw bad(403, 'Only the commissioner can do that'); if (fz) throw bad(409, FROZEN, { code: 'frozen' }); const wasClosed = c.a.status === 'closed'; const by = mName(c, memberOf(c, u.mk).pid), lot = String(b.lot || '');
@@ -516,11 +523,11 @@ async function statsFor(userKey, opt) {
   for (const id of Object.keys(all)) { if (!(all[id].mks || []).includes(mk)) continue; const row = await loadRow(id); if (!row || row.data.deleted) continue; const c = row.data, m = memberOf(c, mk); if (!m) continue;
     const sales = Object.values(c.sold).map((s) => s.at).filter(Boolean), date = chiDay(sales.length ? Math.min(...sales) : c.created); if (date < from || date > to) continue;
     const mo = money(c, await results(c, true)), o = mo.owners.find((x) => x.pid === m.pid); if (!o) continue;
-    out.push(Object.assign({ src: 'calcutta', id: c.id, date, sport: EVENTS[c.ev].sport, kind: 'calcutta' }, c.group ? { groupId: c.group.groupId, contestId: c.group.contestId } : {}, { title: c.name, result: null, place: o.place, spent: o.spent, won: o.won, pl: Math.round((o.won - o.spent) * 100) / 100, verified: true, extra: { lots: o.lots.map((l) => ({ name: l.name, cost: l.cost, earned: l.earned })) } }));
+    out.push(Object.assign({ src: 'calcutta', id: c.id, date, sport: EVENTS[c.ev].sport, kind: 'calcutta' }, c.group ? { groupId: c.group.groupId, contestId: c.group.contestId } : {}, { title: c.name, result: null, place: { n: o.place, of: mo.owners.length } /* REVIEW FIX 5: stats contract {n, of} */, spent: o.spent, won: o.won, pl: Math.round((o.won - o.spent) * 100) / 100, verified: true, extra: { lots: o.lots.map((l) => ({ name: l.name, cost: l.cost, earned: l.earned })) } }));
   }
   return out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 }
 // Players of record from the group side (golf-day teams, pickleball pairs): players = account ids, 24-hex member keys, 'g:<guest id>' or {name}.
 async function setPlayersOfRecord(id, lotId, players) { const c = await mutCalc(id, (c) => { if (!evLocal(c.ev)) throw bad(409, 'Players of record are only for local events'); const l = lotOf(c, String(lotId)); if (!l) throw bad(404, 'No such lot'); const s0 = c.sold[l.id]; if (s0 && s0.bb) throw bad(409, 'Remove the buy-back first'); l.por = cleanPor(players, c.members); audit(c, 'Group', 'Players of record for ' + l.name + ' set by the group'); c.rev++; return c; }); return { id: c.id, lot: lotId, count: lotOf(c, String(lotId)).por.length }; }
 const hooks = {}; // reserved for the manager (e.g. hooks.groupMember(groupId, mk) when membership moves into the group)
-module.exports = { handle, createCalc, attachToGroup, setPlayersOfRecord, evLocal, potSummary, statsFor, registerSource, limits, hooks, EVENTS, cleanRows, slotAmounts, money, teamResults, parseGames, settle, mkOf, _deps: D, _reset: () => { RL.clear(); RC.clear(); RES.clear(); GC.clear(); TEAMS.clear(); IDS.map = null; NAMES = { at: 0, v: {} }; writes = 0; }, _writes: () => writes };
+module.exports = { handle, createCalc, attachToGroup, setPlayersOfRecord, evLocal, potSummary, statsFor, registerSource, limits, hooks, EVENTS, cleanRows, slotAmounts, money, teamResults, parseGames, settle, mkOf, _deps: D, _reset: () => { RL.clear(); RC.clear(); RES.clear(); GC.clear(); TEAMS.clear(); IDS.map = null; IDXC.at = 0; STARTED.clear(); NAMES = { at: 0, v: {} }; writes = 0; }, _writes: () => writes };

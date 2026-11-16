@@ -36,6 +36,8 @@ srv.listen(0, async () => { P = srv.address().port; try {
   const sb = await C.statsFor(ACC('bob'), {}); assert.ok(Array.isArray(sb), 'statsFor answers for a player of record');
   t('players of record: accounts that joined the golf day themselves are sent accepted (never pending); a guest as g:<guest id>');
   // started(): false in set-up, true once the round starts (and for good); a read problem is thrown, never "started"
+  // Calcutta round 5 (ccf62a7): a source WITHOUT endTime() can never get a commissioner correction. Both golf sources carry it, with organizer(), teams(calc, {viewer}) and a started() that rethrows.
+  { const reg = {}; G.registerCalcutta({ registerSource: (k, v) => { reg[k] = v; } }); assert.deepStrictEqual(Object.keys(reg).sort(), ['golf', 'golf-day']); Object.values(reg).forEach((v) => ['endTime', 'organizer', 'teams', 'started', 'startTime', 'results'].forEach((fn) => assert.strictEqual(typeof v[fn], 'function', fn))); assert.strictEqual(reg['golf-day'].local, true); G.registerCalcutta(C); }
   const src = G.calcuttaSource; assert.strictEqual(await src.started(ref), false); assert.strictEqual(await src.startTime(ref), NOW + 2 * 3600e3); assert.strictEqual(await src.endTime(ref), NOW + 8 * 3600e3);
   { const g0 = S.dbGet; S.dbGet = async () => { throw new Error('db down'); }; await assert.rejects(src.started(ref), /db down/); S.dbGet = g0; } await assert.rejects(src.started({ golf: { gameId: 'NOSUCHGAME' } }));
   r = await call('ann', '/calcutta/get', { id: calc.id }); ok(r); assert.strictEqual(r.j.calc.started, false, 'the engine: not started while the golf day is in set-up');

@@ -454,6 +454,7 @@ function navGo(k) {
   if (k === 'surv') { setView('surv'); return; }
   if (k === 'dash') { if (window.oddDash) window.oddDash(); return; }
   if (k === 'groups') { if (window.oddGroups) window.oddGroups(); return; }
+  if (k === 'calc') { if (window.oddCalc) window.oddCalc(); return; }
   if (VIEW !== 'main') { VIEW = 'main'; try { localStorage.setItem('pics-view', 'main'); } catch (e) {} }
   FILT = k === 'won' ? 'won' : k; try { localStorage.setItem('pics-filt', FILT); } catch (e) {} if (STYLE === 'new') { GV = k === 'all' ? 'games' : 'best'; try { localStorage.setItem('pics-gv', GV); } catch (e) {} } DET.wkrank = true; render(true);
   const el = document.querySelector('[data-k="wkrank"]'); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); else window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2609,7 +2610,7 @@ loadAll();
 // Auto-update: when the app comes back to the front (or every 10 minutes) check for a newer version and reload into it
 const vnum = (x) => +((/(?:Pics|Oddable) v(\d+)/.exec(x) || [])[1] || 0);
 async function checkUpdate() {
-  if (document.querySelector('#odash,#ogrp')) return; // never reload under the owner dashboard or Groups
+  if (document.querySelector('#odash,#ogrp,#ocalc')) return; // never reload under the owner dashboard or Groups
   try {
     const t = await (await fetch('index.html?c=' + Date.now(), { cache: 'no-store' })).text();
     const mine = vnum(document.querySelector('header').textContent) || vnum(document.documentElement.innerHTML), theirs = vnum(t);
@@ -2627,7 +2628,7 @@ setTimeout(() => { if (lsg('kal-id')) kalshiSync(false); }, 3000); setTimeout(lo
 if ('serviceWorker' in navigator) {
   const had = !!navigator.serviceWorker.controller; let rl = false;
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((r) => { r.update().catch(() => {}); const up = () => { if (!document.hidden) r.update().catch(() => {}); }; document.addEventListener('visibilitychange', up); setInterval(up, 300000); }).catch(() => {});
-  navigator.serviceWorker.addEventListener('controllerchange', () => { if (had && !rl && !document.querySelector('#odash,#ogrp')) { rl = true; location.reload(); } });
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (had && !rl && !document.querySelector('#odash,#ogrp,#ocalc')) { rl = true; location.reload(); } });
 }
 
 // Pull down to refresh: wipes the saved app copy and reloads fresh code and data
@@ -2635,7 +2636,7 @@ if ('serviceWorker' in navigator) {
   const bar = document.createElement('div'); bar.id = 'ptr'; document.body.appendChild(bar);
   let y0 = null, d = 0, busy = false;
   const set = (h, t) => { bar.style.height = h + 'px'; bar.textContent = t || ''; };
-  window.addEventListener('touchstart', (e) => { y0 = window.scrollY <= 0 && !busy && !document.querySelector('#odash,#ogrp') ? e.touches[0].clientY : null; d = 0; }, { passive: true });
+  window.addEventListener('touchstart', (e) => { y0 = window.scrollY <= 0 && !busy && !document.querySelector('#odash,#ogrp,#ocalc') ? e.touches[0].clientY : null; d = 0; }, { passive: true });
   window.addEventListener('touchmove', (e) => {
     if (y0 === null) return;
     d = e.touches[0].clientY - y0;

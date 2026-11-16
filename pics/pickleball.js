@@ -29,7 +29,9 @@
   function load(id) { let ev = null; try { ev = JSON.parse(localStorage.getItem(PFX + id)); } catch (e) { return null; } try { if (ev && Array.isArray(ev.g) && migrate(ev)) localStorage.setItem(PFX + id, JSON.stringify(ev)); } catch (e) {} return ev; }
   function save(ev) { ev.up = Date.now(); try { localStorage.setItem(PFX + ev.id, JSON.stringify(ev)); return true; } catch (e) { MSG = 'Could not save on this device (storage is full or blocked).'; return false; } }
   function remove(id) { try { localStorage.removeItem(PFX + id); } catch (e) {} }
-  function listEvents() { const out = []; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.indexOf(PFX) === 0) { const e = load(k.slice(PFX.length)); if (e && e.id) out.push(e); } } } catch (e) {} return out.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || (b.up || 0) - (a.up || 0)); }
+  function listEvents() { // every pb1-ev- record; one that can't be read, has no id or whose id isn't its key comes back as { bad, key, name }
+    const out = []; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.indexOf(PFX) === 0) { const key = k.slice(PFX.length), e = load(key);
+      if (e && typeof e === 'object' && e.id && e.id === key) out.push(e); else out.push({ bad: 1, key, name: e && typeof e === 'object' && typeof e.name === 'string' ? e.name : '' }); } } } catch (e) {} return out.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || (b.up || 0) - (a.up || 0)); }
   function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 
@@ -198,6 +200,11 @@
     if (st >= ev.maxW) { q.push(W[0], W[1]); a = [q.shift(), q.shift()]; b = [q.shift(), q.shift()]; st = 0; } else { a = W.slice(); b = [q.shift(), q.shift()]; }
     ev.cq.st[g.c] = st; const n = ev.g.filter((x) => x.c === g.c).length + 1;
     const ng = { id: newGid(ev), c: g.c, n, a, b, sa: null, sb: null, hs: st }; ev.g.push(ng); g.nx = ng.id;
+  }
+
+  function chalResume(ev) { // after Reopen: a court whose newest game was scored while finished gets its next game
+    if (ev.fmt !== 'chal' || ev.done) return; [...new Set(ev.g.map((g) => g.c))].forEach((c) => {
+      const last = ev.g.filter((g) => g.c === c).reduce((m, g) => (!m || (g.n || 0) > (m.n || 0) ? g : m), null); if (last && isSc(last) && !last.nx) chalAfter(ev, last); });
   }
 
   /* ---------------- brackets ---------------- */
@@ -403,7 +410,8 @@
   }
 
   function chalUndo(ev, g) { // take back the game set up from g's result; only for the newest result, next game unscored
-    if (!g.nx) return ''; const nx = ev.g.find((x) => x.id === g.nx), maxK = ev.g.reduce((m, x) => Math.max(m, x.k || 0), 0);
+    if (!g.nx) return ''; if (ev.done) return 'This event is finished. Tap Reopen first, then change this result.';
+    const nx = ev.g.find((x) => x.id === g.nx), maxK = ev.g.reduce((m, x) => Math.max(m, x.k || 0), 0);
     if (!nx || isSc(nx) || !g.snap || g.k !== maxK) return 'The next game on this court already depends on this result (or a later game was scored), so the winner can\'t change now. You can still fix the points.';
     ev.cq.q = g.snap.q.slice(); ev.cq.st[g.c] = g.snap.st; ev.g = ev.g.filter((x) => x !== nx); delete ev.pk.g[nx.id]; delete g.nx; delete g.snap; return '';
   }
@@ -432,7 +440,7 @@
   function clearScore(ev, gid) {
     const g = ev.g.find((x) => x.id === gid); if (!g) return 'Game not found.';
     if (ev.fmt === 'king' && g.r < lastRound(ev)) return 'The next round is already set from this result, so it can\'t be cleared.';
-    if (ev.fmt === 'chal' && g.nx) { const e = chalUndo(ev, g); if (e) return e.replace('the winner can\'t change now. You can still fix the points.', 'it can\'t be cleared.'); }
+    if (ev.fmt === 'chal' && g.nx) { const e = chalUndo(ev, g); if (e) return e.replace('the winner can\'t change now. You can still fix the points.', 'it can\'t be cleared.').replace('change this result', 'clear this result'); }
     if (g.src) dependents(ev, gid).forEach((id) => { const x = ev.g.find((y) => y.id === id); x.sa = x.sb = null; });
     g.sa = g.sb = null; delete g.k; RES = ev.bk ? resolve(ev) : RES; save(ev); return '';
   }
@@ -453,7 +461,8 @@
       if (!R.length) h = viewHome();
       else if (R[0] === 'new') h = viewNew();
       else if (R[0] === 'join') h = viewJoin();
-      else if (R[0] === 'e') { const ev = load(R[1]); if (!ev) h = back('', 'My events') + '<div class="card">This event is not on this device.</div>'; else { try { RES = ev.bk ? resolve(ev) : null; h = viewEvent(ev, R.slice(2)); } catch (x) { h = back('', 'My events') + badCard(ev); } } }
+      else if (R[0] === 'e') { const ev = load(R[1]), raw = lsGet(PFX + R[1]); if (!ev && raw == null) h = back('', 'My events') + '<div class="card">This event is not on this device.</div>';
+        else if (!ev || typeof ev !== 'object' || ev.id !== R[1]) h = back('', 'My events') + badCard(ev && typeof ev === 'object' ? ev : null, R[1]); else { try { RES = ev.bk ? resolve(ev) : null; h = viewEvent(ev, R.slice(2)); } catch (x) { h = back('', 'My events') + badCard(ev, R[1]); } } }
       else h = viewHome();
     } catch (e) { h = back('', 'My events') + `<div class="card err">Something went wrong showing this page: ${esc(e.message)}</div>`; if (window.console) console.error(e); }
     main.innerHTML = (MSG ? `<div class="card err">${esc(MSG)}</div>` : '') + h; MSG = '';
@@ -469,15 +478,15 @@
 <div class="btns"><a class="pill pri" href="#/new">＋ New event</a><a class="pill" href="#/join">Join with code</a></div>
 <div class="gh">My events</div>`;
     if (!L.length) h += '<div class="card note">No events yet. Tap ＋ New event to set up a round robin, King of the Court, a bracket, a ladder or a Calcutta for your group.</div>';
-    L.forEach((ev) => { try { RES = ev.bk ? resolve(ev) : null; const f = FMT[ev.fmt], d = isDone(ev), G = realGames(ev), sc = G.filter(isSc).length;
+    L.forEach((ev) => { if (ev.bad) { h += badCard(ev, ev.key); return; } try { RES = ev.bk ? resolve(ev) : null; const f = FMT[ev.fmt], d = isDone(ev), G = realGames(ev), sc = G.filter(isSc).length;
       const top = finish(ev)[0] || []; const adds = Object.keys(ADDON).filter((k) => ev.add[k]).map((k) => ADDON[k].ico + ' ' + ADDON[k].n).join(' · ');
       h += `<a class="card ev" href="#/e/${esc(ev.id)}"><div class="row"><b>${esc(ev.name)}</b><span class="b ${d ? 'hit' : ''}">${d ? 'Final' : sc ? 'In progress' : 'Not started'}</span></div>
 <div class="sub2">${f.ico} ${esc(f.n)} · ${ev.date ? esc(ev.date) + ' · ' : ''}${ev.us.length} ${f.ind || ev.team === 's' ? 'players' : 'teams'}</div>${adds ? `<div class="sub2">${adds}</div>` : ''}
-${sc && top.length ? `<div class="sub2">${d ? '🏆 ' : 'Leading: '}${esc(top.slice(0, 2).map((u) => uName(ev, u)).join(' & ') + (top.length > 2 ? ' +' + (top.length - 2) : ''))}</div>` : ''}</a>`; } catch (e) { h += badCard(ev); } });
+${sc && top.length ? `<div class="sub2">${d ? '🏆 ' : 'Leading: '}${esc(top.slice(0, 2).map((u) => uName(ev, u)).join(' & ') + (top.length > 2 ? ' +' + (top.length - 2) : ''))}</div>` : ''}</a>`; } catch (e) { h += badCard(ev, ev.id); } });
     return h;
   }
 
-  function badCard(ev) { const id = String((ev && ev.id) || ''); return `<div class="card err bad" data-id="${esc(id)}"><b>${esc((ev && ev.name) || 'An event')}</b> can't be shown (its data is damaged). <div class="btns"><button class="pill dang" data-act="delbad" data-id="${esc(id)}">Delete it</button></div></div>`; }
+  function badCard(ev, key) { const id = String(key); return `<div class="card err bad" data-id="${esc(id)}"><b>${esc((ev && ev.name) || 'An event')}</b> can't be shown (its data is damaged). <div class="btns"><button class="pill dang" data-act="delbad" data-id="${esc(id)}">Delete it</button></div></div>`; }
   function viewNew() {
     const f = FORM || { name: '', date: new Date().toISOString().slice(0, 10), courts: 2, players: '', fmt: 'rr', team: 'd', timed: false, rounds: '', calc: false, skins: false, pick: false, extra: '', start: 100, split: '50,30,20', skinPts: 1, maxW: 3 };
     FORM = f; const ind = FMT[f.fmt].ind;
@@ -723,7 +732,7 @@ ${ERR ? `<div class="err">${esc(ERR)}</div>` : ''}<div class="btns"><button clas
     if (a === 'gsave') { const r = saveScore(ev, gid, ($('#sa') || {}).value, ($('#sb') || {}).value); if (typeof r === 'string' && r) { ERR = r; return render(); } OPEN = null; if (r && r.note) MSG = r.note; return render(); }
     if (a === 'gclear') { const r = clearScore(ev, gid); if (r) { ERR = r; return render(); } OPEN = null; return render(); }
     if (a === 'finish') { ev.done = true; save(ev); return render(); }
-    if (a === 'reopen') { ev.done = false; save(ev); return render(); }
+    if (a === 'reopen') { ev.done = false; chalResume(ev); save(ev); return render(); }
     if (a === 'del') { $('#delc').innerHTML = `<div class="card frm"><p>Delete “${esc(ev.name)}” from this phone? Copies you shared stay with your friends.</p><div class="btns"><button class="pill dang" data-act="delyes">Delete</button><button class="pill" data-act="delno">Keep</button></div></div>`; return; }
     if (a === 'delno') { $('#delc').innerHTML = ''; return; }
     if (a === 'delyes') { remove(ev.id); go(''); return; }

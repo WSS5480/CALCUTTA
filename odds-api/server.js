@@ -61,7 +61,8 @@ tickLines();
 const PL = require('./pricelog.js'); const plTick = () => PL.tick(LINES, require('./games')).catch((e) => console.error('pricelog:', e.message));
 setInterval(plTick, 20 * 60 * 1000); setTimeout(plTick, 90 * 1000);
 // Oddable Alert (v252): the server itself computes the weekly picks and freezes them 30 minutes before kickoff, every minute while it is awake (GET /alert also runs it), so no phone has to be open
-try { require('./calcutta').wireGroups(require('./groups')); } catch (e) { console.error('calcutta wiring:', e.message); } // Calcutta round 4 B3: groups.registerGame('calc', {potSummary, attachToGroup}) (a no-op until groups.js has registerGame)
+try { require('./calcutta').wireGroups(require('./groups')); } catch (e) { console.error('calcutta wiring:', e.message); }
+try { require('./calcutta').watch(); } catch (e) { console.error('calcutta watch:', e.message); } // Calcutta round 5: after an event started, the feed is re-read in the background (every 20 s) while a correction stands or a game is unfinished // Calcutta round 4 B3: groups.registerGame('calc', {potSummary, attachToGroup}) (a no-op until groups.js has registerGame)
 const ALERT = require('./alert'); ALERT._deps.lines = () => LINES; setInterval(() => ALERT.tick(), 60 * 1000); setTimeout(() => ALERT.tick(), 15 * 1000);
 // Free Render services sleep when idle; ping our own public URL so the tick keeps running (set KEEP_AWAKE=0 to turn off)
 if (process.env.RENDER_EXTERNAL_URL && process.env.KEEP_AWAKE !== '0') {

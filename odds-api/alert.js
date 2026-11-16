@@ -153,7 +153,9 @@ function compute(weeks, games, cur, nv, bx, now, ll) {
       // that appears late cannot move the live Lock. A line read before the mark still counts (the sleep path: frozen later with the line read in time).
       // This applies once there has been a live Lock; a week the server first sees after its games (asleep or down all week) is still ranked after the fact, flagged *.
       const prevL = rec.lock && !rec.lock.final ? rec.lock : null; // the live Lock as of the last tick
-      const lateLine = (g) => { const e = rec.gl[g.id]; return !!prevL && String(prevL.id) !== g.id && now >= g.start - MARK && (!e || e.s === 'close' || !(e.lt <= g.start - MARK + GRACE)); };
+      // v253 final re-review (blocking): the live Lock's OWN game is no exception. Ranking it at a line read after its mark let that line flip the Lock to the other team
+      // of the game or move it to another game. Its own game with a late line is handled before the ranking (ownLate, below): same game, same team, frozen line.
+      const lateLine = (g) => { const e = rec.gl[g.id]; return !!prevL && now >= g.start - MARK && (!e || e.s === 'close' || !(e.lt <= g.start - MARK + GRACE)); };
       const atMark = (g) => { const e = rec.gl[g.id], x = byId[g.id]; if (lateLine(g)) return null; return e && e.f && half(e.l) && e.l !== x.line ? Object.assign({}, x, { line: e.l }) : x; };
       const out = new Set(rec.lockOut || []), picks = wg.map(atMark).filter((g) => g && g.line !== null && g.line !== undefined).map((g) => Trophy.pickOf(g, rows, SEASON)).filter(Boolean).sort((a, b) => b.conf - a.conf);
       // owner (Nov 16 2026): never a week without a Lock: if no game after the #1 is still in contention, the top game still in contention is the Lock.
@@ -161,7 +163,19 @@ function compute(weeks, games, cur, nv, bx, now, ll) {
       const held = rec.lockWait && picks.find((x) => String(x.id) === String(rec.lockWait));
       const cand = () => held || picks.slice(1).find((x) => !out.has(String(x.id))) || picks.find((x) => !out.has(String(x.id))) || null, mk = (x) => Object.assign({ id: String(x.id), rank: 2, abbr: x.abbr, other: x.other, line: x.line, conf: r4(x.conf), dog: !!x.dog }, lockPrice(rec, byId[x.id], x));
       let L = null, wait = false;
-      for (const g of wg) {
+      // the live Lock's own game is at or past its mark and its frozen line was read after the mark (server down across the mark): NO ranking. The Lock stays on the
+      // same game and the same team, at that game's frozen line turned into that team's spread, with that side's stored price, flagged late: the line and price its
+      // road dog freezes at (N7). The confidence is the model's at that line if it still takes that team, else the last ranked one. With inputs incomplete before
+      // kickoff it is held (rec.lockWait) and frozen at kickoff (N5). No usable line at all (none, or pick'em) falls through to "line at the mark unavailable" below.
+      const own = prevL ? wg.find((g) => g.id === String(prevL.id)) : null, oe = own && rec.gl[own.id], ownLate = !!own && now >= own.start - MARK && lateLine(own) && !!oe && !!oe.f && half(oe.l) && oe.l !== 0;
+      if (ownLate) {
+        const home = prevL.abbr === own.home.abbr, line = home ? -oe.l : oe.l, m = Trophy.pickOf(Object.assign({}, byId[own.id], { line: oe.l }), rows, SEASON), x = Object.assign({}, prevL, { line, dog: line > 0 }, priceOf(oe, home ? 'home' : 'away'));
+        if (m && m.abbr === prevL.abbr) x.conf = r4(m.conf); delete x.part; delete x.nl;
+        for (const g of wg) { if (g.id === own.id) break; if (!out.has(g.id) && now >= g.start - MARK) { out.add(g.id); D.log(`week ${w} ${g.away.abbr}@${g.home.abbr} reached its mark while not the Lock: out of contention`); } }
+        if (full || now >= own.start) { if (!full) x.part = 1; L = stamp(x, own.start, now < own.start && oe.s !== 'close'); L.late = 1; delete rec.lockWait; rec.t = now; rec.pre = L.pre; D.log(`week ${w} LOCK final on its own game at the line frozen late (no re-ranking): ${L.abbr} ${L.line > 0 ? '+' : ''}${L.line}${L.o ? ' ' + L.o : ' no price'}${L.pre ? '' : ' AFTER KICKOFF'} late${L.part ? ' (inputs incomplete)' : ''}`); }
+        else { x.part = 1; L = x; wait = true; rec.lockWait = own.id; }
+      }
+      if (!ownLate) for (const g of wg) {
         if (out.has(g.id) || now < g.start - MARK) continue;
         // v253 re-review fix 1 (manager, applying the owner's "never a week without a Lock" + D9): the live Lock's game reaches its mark but cannot be ranked there
         // (pick'em or no line): the Lock is frozen at the last line and side it held before the mark (with its stored price), flagged nl ("line at mark unavailable").

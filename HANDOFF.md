@@ -75,6 +75,9 @@ Start here if you are a new AI session picking up this repo. Update this file in
 - 2026-11-16 (coder, v253) — 12-season tables (TRH / ALY / ALH) regenerated PRE-KICKOFF from the analyst's walk-forward (/tmp/parlay/work legs.pkl, scripts copied to backtest/parlay/, table script backtest/parlay/history_pregame.py). Reason: the old tables dropped push games before ranking each week (hindsight). Units shown at closing prices, with the flat -110 figure in the note.
 - 2026-11-16 (coder, v253) — key-number table: the v216 2006-2025 numbers (3 -131, 7 -125, 6 -119, 10 -120) are REPLACED by the 2014-2025 numbers computed from pics/linemove.json (3 -131, 7 -124, 6 -120, 10 -121, others about -116). They agree within 1 cent; one data file now feeds both the books sheet and the Move-the-line sheet.
 - 2026-11-16 (coder, v253) — Move-the-line advice: "Not worth it unless your book charges better than X" when buying gains less than 6 cents of price; this 6-cent cut-off is a rule of thumb, not measured. Without a stored price the sheet compares against -110 and says so in bold (it is never used for a payout).
+- 2026-11-16 ~1 AM CT (owner) — never a week without a Lock: if no game after the #1 is still in contention, the top game still in contention is the Lock (alert.js `cand()` fallback).
+- 2026-11-16 (coder, v253 review fix 1) — the weekly ranking reads every game at the line FROZEN at its mark (`rec.gl[id].f`), never a closing line posted later, so a finished game cannot move or remove the Lock and a Lock and road dog on one game share one line on every path (also the sleep path). Later weeks' model inputs still use the closing line.
+- 2026-11-16 (coder, v253 review fix 4) — a game that is the Lock at its mark but must wait for missing inputs is held as the Lock (`rec.lockWait`) until its kickoff, then frozen flagged; no other game can take its place meanwhile.
 - 2026-11-16 (coder, v253, v252 review item 4) — GET /alert is public: the owner's /alert/fix `why` note is NOT returned (only time, count, source).
 
 
@@ -726,3 +729,9 @@ Owner decisions D5-D9 are in the Decisions list at the top, with the coder's int
 - Move-the-line uses the model % at the pick's line; at spreads of 13+ the landing samples are small (band widened, 150-260 games) — the sheet prints the sample size.
 - Still open from before: unit rounding; Alert = all division road dogs vs 53%+; week-15 cutoff; ALY/TRH/PH2 static until season end (rerun backtest/parlay/history_pregame.py); 3-game 12-season history not run; one Odds API credit per freeze mark (off).
 - Upgrade The Odds API plan (about $30/month) once Oddable sells.
+
+### v253 review round (Nov 16 2026), fixes as new commits on `v253-parlays`
+- Independent review of 5bf01c1 = ship after fixes (repro scripts in /tmp/revwork; copies pointed at this repo in /tmp/v253/rev).
+- Fix 1 (medium): ranking at frozen lines. Repro t7: a finished Thursday/Sunday game whose nflverse close was pick'em or flipped dropped out of the ranking and moved the Lock with no line move; now the Lock stays (SF in all three close variants). Fix 2 (owner): fallback Lock — t11 and t12 printed NO LOCK; now WAS is the Lock and goes final at its mark. Fix 4: held waiting Lock. Tests in alert.test.js section 18 fail on the previous code (checked one by one) and pass now.
+- MANAGER, before deploy: LAC at BAL (week 10) plays Monday Nov 16 8:15 PM ET. After nflverse posts its final score and closing line (usually Tuesday morning), download a fresh games.csv (https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv) and run `node scripts/alert-data.js <games.csv>` (dry run: it must list only `trophy-season 10-LAC-BAL: (none) -> <line>` and no pick change), then the same with `--write`, then `node scripts/parlay-check.js <games.csv>` (must print "all results reproduced"), and commit trophy-season.json with a HANDOFF line. The coder did NOT run it.
+

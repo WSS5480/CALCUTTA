@@ -147,12 +147,18 @@ function compute(weeks, games, cur, nv, bx, now, ll) {
     // game at that game's frozen line and price (the same stored line a road dog on that game freezes at). A game that reaches its mark while NOT the Lock is out of
     // contention for the rest of the week (rec.lockOut), so the Lock is never moved onto a game that is about to start. Out games keep their place in the ranking.
     if (!(rec.lock && rec.lock.final)) {
-      const out = new Set(rec.lockOut || []), picks = wg.map((g) => byId[g.id]).filter((g) => g.line !== null && g.line !== undefined).map((g) => Trophy.pickOf(g, rows, SEASON)).filter(Boolean).sort((a, b) => b.conf - a.conf);
-      const cand = () => picks.slice(1).find((x) => !out.has(String(x.id))) || null, mk = (x) => Object.assign({ id: String(x.id), rank: 2, abbr: x.abbr, other: x.other, line: x.line, conf: r4(x.conf), dog: !!x.dog }, lockPrice(rec, byId[x.id], x));
+      // v253 review fix 1: each game is ranked at the line FROZEN at its mark (rec.gl[id].f), never at a closing line read later, so a finished game cannot move or
+      // remove the Lock (and the Lock and that game's road dog share one line on every path). Games not yet frozen use the line the server holds now.
+      const atMark = (g) => { const e = rec.gl[g.id], x = byId[g.id]; return e && e.f && half(e.l) && e.l !== x.line ? Object.assign({}, x, { line: e.l }) : x; };
+      const out = new Set(rec.lockOut || []), picks = wg.map(atMark).filter((g) => g.line !== null && g.line !== undefined).map((g) => Trophy.pickOf(g, rows, SEASON)).filter(Boolean).sort((a, b) => b.conf - a.conf);
+      // owner (Nov 16 2026): never a week without a Lock: if no game after the #1 is still in contention, the top game still in contention is the Lock.
+      // v253 review fix 4: a game that was the Lock at its mark but had to wait for missing inputs (rec.lockWait) stays the Lock until its kickoff.
+      const held = rec.lockWait && picks.find((x) => String(x.id) === String(rec.lockWait));
+      const cand = () => held || picks.slice(1).find((x) => !out.has(String(x.id))) || picks.find((x) => !out.has(String(x.id))) || null, mk = (x) => Object.assign({ id: String(x.id), rank: 2, abbr: x.abbr, other: x.other, line: x.line, conf: r4(x.conf), dog: !!x.dog }, lockPrice(rec, byId[x.id], x));
       let L = null, wait = false;
       for (const g of wg) {
         if (out.has(g.id) || now < g.start - MARK) continue; const c = cand(); if (!c) break;
-        if (String(c.id) === g.id) { if (full || now >= g.start) { L = stamp(mk(c), g.start, now < g.start); rec.t = now; rec.pre = L.pre; D.log(`week ${w} LOCK final: ${L.abbr} ${L.line > 0 ? '+' : ''}${L.line}${L.o ? ' ' + L.o : ' no price'} ${Math.round(L.conf * 100)}%${L.pre ? '' : ' AFTER KICKOFF'}${L.late ? ' late' : ''}${L.part ? ' (inputs incomplete)' : ''}`); } else wait = true; break; } // inputs incomplete at the mark: wait until kickoff, then freeze flagged
+        if (String(c.id) === g.id) { if (full || now >= g.start) { const x = mk(c); if (!full) x.part = 1; L = stamp(x, g.start, now < g.start); delete rec.lockWait; rec.t = now; rec.pre = L.pre; D.log(`week ${w} LOCK final: ${L.abbr} ${L.line > 0 ? '+' : ''}${L.line}${L.o ? ' ' + L.o : ' no price'} ${Math.round(L.conf * 100)}%${L.pre ? '' : ' AFTER KICKOFF'}${L.late ? ' late' : ''}${L.part ? ' (inputs incomplete)' : ''}`); } else { wait = true; rec.lockWait = g.id; } break; } // inputs incomplete at the mark: held as the Lock, frozen at kickoff, flagged
         out.add(g.id); D.log(`week ${w} ${g.away.abbr}@${g.home.abbr} reached its mark while not the Lock: out of contention`);
       }
       if (!L) { const c = cand(); L = c ? mk(c) : null; if (L && (!full || wait)) L.part = 1; }

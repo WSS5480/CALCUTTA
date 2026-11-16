@@ -205,6 +205,21 @@ srv.listen(0, async () => {
       fresh16(); CONF = { 401: 0.6, 402: 0.7, 403: 0.55, 404: 0.5, 405: 0.52 }; HC = { 401: 0.9, 402: 0.6 }; NOW = K1 - 59 * MIN; await A.tick(); w = stored(2);
       assert.ok(w.lock.final && w.lock.id === '401', 'Thursday Lock final at its mark'); assert.strictEqual(w.lock.line, dog(w, '401').line); assert.strictEqual(w.lock.o, -105, 'the away price at its frozen line'); assert.ok(w.helper.final && w.helper.id === '401');
       CONF = { 401: 0.1, 402: 0.9, 403: 0.8, 404: 0.7, 405: 0.6 }; HC = { 402: 0.99 }; NOW = KN; await A.tick(); w = stored(2); assert.strictEqual(w.lock.id, '401', 'still the Lock all week'); assert.strictEqual(w.helper.id, '401');
+      // --- 18 (v253 review fixes 1, 2, 4) ---
+      TR.pickOf = (g) => (g.line === 0 ? null : { id: g.id, week: g.week, abbr: g.away.abbr, other: g.home.abbr, line: g.line, conf: CONF[g.id] || 0.5, dog: g.line > 0 }); // a pick'em line ranks nothing (as in trophy.js)
+      // fix 1: a finished game is ranked at the line frozen at its mark, not at the closing line nflverse posts later (here pick'em, which would drop it from the ranking)
+      fresh16(); CONF = { 401: 0.9, 403: 0.8, 402: 0.7, 404: 0.6, 405: 0.5 }; NOW = K1 - 59 * MIN; await A.tick(); w = stored(2); assert.strictEqual(w.lock.id, '403'); assert.deepStrictEqual(w.lockOut, ['401']); assert.strictEqual(w.gl['401'].l, 3);
+      const g401 = SCHED.find((g) => g.id === '401'); g401.st = 'post'; g401.hs = 20; g401.as = 20; CSV.push('2026,REG,2,DAL,NYG,20,0'); NOW = K1 + 7 * 3600e3; await A.tick(); w = stored(2);
+      assert.strictEqual(w.lock.id, '403', 'the Thursday game, ranked at its frozen line, keeps its place: the Lock does not move without a live line move'); CSV.pop(); g401.st = 'pre';
+      // fix 2 (owner, Nov 16 2026): never a week without a Lock. Every game after the #1 is out of contention -> the top game still in contention is the Lock
+      fresh16(); CONF = { 402: 0.9, 405: 0.8, 403: 0.7, 404: 0.6, 401: 0.5 }; NOW = K1 - 59 * MIN; await A.tick(); NOW = KS - 59 * MIN; await A.tick(); w = stored(2); assert.strictEqual(w.lock.id, '405'); assert.deepStrictEqual(w.lockOut.slice().sort(), ['401', '402', '403', '404']);
+      CONF[405] = 0.95; NOW += 10 * MIN; await A.tick(); w = stored(2); assert.ok(w.lock && w.lock.id === '405', 'the only game left in contention is the Lock even though it now ranks first');
+      NOW = KN - 59 * MIN; await A.tick(); w = stored(2); assert.ok(w.lock.final && w.lock.id === '405', 'and it goes final at its mark');
+      // fix 4: the Lock at its mark with incomplete inputs waits for kickoff and stays the Lock meanwhile
+      fresh16(); const g108 = SCHED.find((g) => g.id === '108'); g108.st = 'in'; CONF = { 401: 0.5, 402: 0.9, 403: 0.8, 404: 0.6, 405: 0.7 };
+      NOW = K1 - 59 * MIN; await A.tick(); NOW = KS - 59 * MIN; await A.tick(); w = stored(2); assert.ok(w.lock.id === '403' && !w.lock.final && w.lock.part === 1 && w.lockWait === '403', 'held: inputs incomplete at the mark');
+      CONF[405] = 0.85; NOW = KS - 30 * MIN; await A.tick(); w = stored(2); assert.ok(w.lock.id === '403' && !w.lock.final, 'a game already past its mark stays the Lock while it waits (another game now ranks above it)');
+      NOW = KS + MIN; await A.tick(); w = stored(2); assert.ok(w.lock.final && w.lock.id === '403' && w.lock.pre === false && w.lock.part === 1, 'frozen at kickoff, flagged'); assert.ok(!w.lockWait); g108.st = 'post';
     } finally { TR.pickOf = keepT.pickOf; TR.dogCover = keepT.dogCover; H.win = keepW; }
     // --- 17 (v252 review fixes) ---
     const OLD = { lock: { id: '911', abbr: 'KC', line: 3, conf: 0.6 }, dogs: [], helper: null, t: 1, pre: true };

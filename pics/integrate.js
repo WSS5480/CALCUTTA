@@ -37,7 +37,9 @@
     // text on a --blue button (violet themes; the navy theme's buttons are navy with white text)
     + 'html:not(.cb) #ogrp .gpri,html:not(.cb) #ocalc .cpri,html:not(.cb) #ostat .spri,html:not(.cb) #ogolf .opri,html:not(.cb) #oevt .epri,html:not(.cb) #ocat .epri,html:not(.cb) #ovoice .vpri{background:var(--blue)!important;border-color:var(--blue)!important;color:var(--onblue)!important}'
     // gold as TEXT follows the theme (borders and fills keep the bright gold)
-    + '#ogrp .ggold,#ocalc .cgold,#ogolf .ogold,#oevt .egold,#ostat .sgold,#ostat .sy,#ogrp .gbadge.gside,#ogrp .gy{color:var(--gold)!important}'
+    + '#ogrp .ggold,#ocalc .cgold,#ogolf .ogold,#oevt .egold,#oevt .eyel,#ocat .eyel,#ostat .sgold,#ogrp .gbadge.gside,#ogrp .gyel,#ocalc .cmut.cgold,#ocalc .ctimer{color:var(--gold)!important}#ostat,#ostcons{--sy:var(--gold)!important}#oevt,#ocat{--gyt:var(--gold)!important}'
+    // the stats hero card is a band too
+    + '#ostat .sbigc{background:var(--band)!important;color:var(--onband)!important}#ostat .sbigc small,#ostat .sbigc em{color:#ffe9a8!important}#ostat .sbigc i,#ostat .sbigc b{color:#fff!important}'
     + '#oddtoast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(96px + env(safe-area-inset-bottom));z-index:400;max-width:min(92vw,480px);padding:12px 16px;border-radius:14px;background:var(--ink,#111);color:var(--bg,#fff);font:600 15px/1.35 system-ui,-apple-system,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.35);text-align:center}'
     + '#oddfor{position:sticky;top:0;z-index:5;margin:0;padding:10px 14px;background:var(--panel2,#1b1f29);color:var(--ink,#eee);border-bottom:1px solid var(--line,#333);font:600 14px/1.35 system-ui,-apple-system,sans-serif;display:flex;gap:10px;align-items:center;justify-content:space-between}#oddfor button{flex:none;min-height:44px;padding:0 12px;border-radius:10px;border:1px solid var(--line,#333);background:none;color:inherit;font:700 14px system-ui}';
   document.head.appendChild(st);
@@ -86,5 +88,17 @@
   };
   // leaving the engine's overlay without creating anything drops the "for the group" note
   document.addEventListener('DOMContentLoaded', () => new MutationObserver(() => { if (FOR && !document.querySelector(OVER[FOR.type][0])) FOR = null; if (window.__oddGroupsStale && !document.querySelector('#ocalc,#ogolf,#oevt,#ocat') && document.getElementById('ogrp') && window.OddGroups && typeof window.OddGroups.refresh === 'function') { window.__oddGroupsStale = false; window.OddGroups.refresh(); } }).observe(document.body, { childList: true }));
+  // ---------- "Contact us" is a real button wherever the Enterprise line appears ----------
+  // The engines print the shared sentence ("Need more than 8? ... Contact us.") as plain text, in notes and in error boxes. Here the words become a
+  // button that opens the Enterprise contact form (Groups). Re-applied whenever a screen is redrawn.
+  const SCOPE = '#ogrp,#ocalc,#ogolf,#oevt,#ocat,#ostat,#bnmore';
+  function linkContact() {
+    document.querySelectorAll(SCOPE).forEach((root) => { const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT), hits = []; for (let n = w.nextNode(); n; n = w.nextNode()) if (/Contact us\.?/.test(n.nodeValue) && !n.parentElement.closest('button,a,textarea,input,.oddcontact')) hits.push(n);
+      hits.forEach((n) => { const m = /Contact us\.?/.exec(n.nodeValue), after = n.splitText(m.index); after.nodeValue = after.nodeValue.slice(m[0].length); const b = document.createElement('button'); b.type = 'button'; b.className = 'oddcontact'; b.textContent = 'Contact us'; b.setAttribute('aria-label', 'Contact Oddable about more than 8 people'); after.parentNode.insertBefore(b, after); }); });
+  }
+  document.addEventListener('click', (ev) => { const b = ev.target.closest && ev.target.closest('.oddcontact'); if (!b) return; ev.preventDefault(); ev.stopPropagation(); document.querySelectorAll('#ocalc,#ogolf,#oevt,#ocat,#ostat,#bnmore').forEach((x) => x.remove()); if (window.OddGroups && window.OddGroups.contact) window.OddGroups.contact(); else toast('Open Groups to contact Oddable.'); }, true);
+  let LT = 0; const later = () => { clearTimeout(LT); LT = setTimeout(linkContact, 60); };
+  document.addEventListener('DOMContentLoaded', () => new MutationObserver(later).observe(document.body, { childList: true, subtree: true, characterData: true }));
+  st.textContent += '.oddcontact{display:inline-flex;align-items:center;min-height:44px;margin:4px 0 0 6px;padding:0 14px;border-radius:999px;border:1px solid currentColor;background:none;color:inherit;font:700 14px system-ui,-apple-system,sans-serif;text-decoration:underline;cursor:pointer;vertical-align:middle}';
   window.OddGames = { open, startFor };
 })();

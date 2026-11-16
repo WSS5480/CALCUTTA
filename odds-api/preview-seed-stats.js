@@ -34,5 +34,28 @@ async function seed(C) {
   await ok('golf', 'director', '/golf/team', { id: g.id, op: 'hcp', pid: pid.player, hcp: 10.0, reason: 'Club committee number for the member-guest' });
   const guest = g.members.find((m) => m.guest); if (guest) { const r = await X.call('golf', 'director', '/golf/team', { id: g.id, op: 'hcp', pid: guest.pid, hcp: 18.0, reason: 'Guest with no Oddable rounds yet: home club card' }); if (r.s !== 200) ids.tourGuestHcpNote = r.j && r.j.error; }
   const chk = (await ok('golf', 'player', '/golf/get', { id: g.id })).game; ids.tourRay = JSON.stringify((chk.day.teams || []).map((t) => t.players).flat().find((p) => p.pid === pid.player) || null).slice(0, 300);
+  // ---- extras so the commissioner-only and director-only screens have something to act on (each is optional: a refusal is noted, not fatal) ----
+  const soft = async (name, fn) => { try { await fn(); } catch (e) { ids['note_' + name] = String(e.message).slice(0, 160); } };
+  // a golf day in progress: scores to enter, holes to confirm, one hole disputed
+  await soft('liveGolf', async () => { const T0 = REAL - 2 * HOUR; setNow(T0 - HOUR);
+    let lg = (await ok('golf', 'commish', '/golf/create', { kind: 'day', title: 'Sunday Nine (in progress)', course: COURSE, pot: { entry: 0, take: { kind: 'none', v: 0 } }, myName: byRole('commish').name, day: { fmt: 'bestball', count: 1, pct: 100, teams: 2, teamSize: 2, net: 'net', date: chiDay(REAL), extras: { skins: { on: false }, ctp: [3], ld: [] }, hu: { on: false } } })).game; ids.golfLive = lg.id;
+    const lp = { commish: lg.me }; for (const r of ['player', 'p4', 'p5']) lp[r] = (await ok('golf', r, '/golf/join', { code: lg.code, myName: byRole(r).name })).game.me;
+    lg = (await ok('golf', 'commish', '/golf/get', { id: lg.id })).game; const [ta, tb] = lg.day.teams.map((t) => t.tid);
+    for (const [r, t] of [['commish', ta], ['player', ta], ['p4', tb], ['p5', tb]]) await ok('golf', 'commish', '/golf/team', { id: lg.id, op: 'assign', pid: lp[r], tid: t });
+    await ok('golf', 'commish', '/golf/team', { id: lg.id, op: 'scorer', tid: ta, pid: lp.player }); await ok('golf', 'commish', '/golf/team', { id: lg.id, op: 'scorer', tid: tb, pid: lp.p4 });
+    setNow(T0); await ok('golf', 'commish', '/golf/start', { id: lg.id });
+    for (let h = 1; h <= 6; h++) { setNow(T0 + h * 14 * 60e3); reset(); await ok('golf', 'player', '/golf/score', { id: lg.id, tid: ta, hole: h, p: { [lp.commish]: COURSE.par[h - 1] + (h % 3 === 0 ? 1 : 0), [lp.player]: COURSE.par[h - 1] + (h % 2) } }); await ok('golf', 'p4', '/golf/score', { id: lg.id, tid: tb, hole: h, p: { [lp.p4]: COURSE.par[h - 1] + 1, [lp.p5]: COURSE.par[h - 1] - (h === 5 ? 1 : 0) } }); }
+    await ok('golf', 'p4', '/golf/confirm', { id: lg.id, tid: ta, from: 1, to: 3 }); await ok('golf', 'player', '/golf/dispute', { id: lg.id, tid: tb, hole: 5, note: 'We saw a par, not a birdie' }); setNow(REAL); reset(); });
+  // an open group with a join request waiting for the commissioner
+  await soft('openGroup', async () => { setNow(REAL - 3 * HOUR); const og = (await ok('groups', 'commish', '/groups/create', { name: 'RGV Open Picks', take: { kind: 'none', v: 0 }, join: { requests: true, open: true, max: 8, late: 'no' },
+      contest: { cname: 'Thanksgiving week picks', sport: 'nfl', fmt: 'standings', start: next - HOUR, runs: 'w1', kalshi: false, honor: false, types: { sp: true, ml: true, ou: true, prop: false, parlay: true }, legs: 3, metric: 'win', minBets: 0, minPaid: 3, cap: 0, entry: 10, split: '100' } })).group; ids.openGroup = og.id;
+    await ok('groups', 'director', '/groups/request', { id: og.id }); await ok('groups', 'p8', '/groups/request', { id: og.id }); setNow(REAL); reset(); });
+  // a team Calcutta on the director's golf day, entered by hand, with buy back half
+  await soft('teamCalcutta', async () => { setNow(REAL - 90 * 60e3); const tm = await ok('calcutta', 'director', '/calcutta/teams', { ev: 'golf-day', golf: { gameId: ids.tour } });
+    const lots = (tm.teams || []).map((t) => ({ teams: [{ id: t.id, name: t.name }] })); if (lots.length < 2) throw new Error('golf day teams not offered: ' + JSON.stringify(tm).slice(0, 120));
+    let tc = (await ok('calcutta', 'director', '/calcutta/create', { name: 'Member-Guest Team Calcutta', ev: 'golf-day', golf: { gameId: ids.tour }, lots, rows: [{ k: 'place', r: 1, n: 1, pct: 60 }, { k: 'place', r: 2, n: 1, pct: 30 }, { k: 'place', r: 3, n: 1, pct: 10 }].slice(0, Math.max(1, Math.min(3, lots.length))).map((r, i, a) => (a.length === 2 ? Object.assign({}, r, { pct: i ? 30 : 70 }) : r)), minBid: 10, inc: 5, timer: 20, buyBack: true, main: false, take: { kind: 'none', v: 0 }, order: 'listed', mode: 'manual' })).calc; ids.calcTeam = tc.id;
+    const cp = {}; for (const r of ['commish', 'player', 'p4']) { await ok('calcutta', r, '/calcutta/join', { code: tc.code }); } tc = (await ok('calcutta', 'director', '/calcutta/get', { id: tc.id })).calc; tc.members.forEach((m) => { cp[m.name] = m.pid; });
+    await ok('calcutta', 'director', '/calcutta/enter', { id: tc.id, lot: tc.lots[0].id, pid: cp[byRole('commish').name], amt: 120 }); await ok('calcutta', 'director', '/calcutta/enter', { id: tc.id, lot: tc.lots[1].id, pid: cp[byRole('p4').name], amt: 90 });
+    const bb = await X.call('calcutta', 'director', '/calcutta/buyback', { id: tc.id, lot: tc.lots[0].id, who: 0 }); if (bb.s !== 200) ids.note_buyback = (bb.j && bb.j.error) || 'refused'; setNow(REAL); reset(); });
 }
 module.exports = { seed };

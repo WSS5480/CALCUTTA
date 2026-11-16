@@ -246,6 +246,28 @@ srv.listen(0, async () => {
       NOW = K1 + MIN; await A.tick(); w = stored(2); x = dog(w, '401');
       assert.ok(w.lock.final && w.lock.id === '401' && w.lock.pre === false && w.lock.part === 1 && !w.lock.nl && !w.lockWait, 'N5: frozen at kickoff, flagged'); assert.strictEqual(w.lock.line, x.line, 'N5: same line as its road dog'); assert.strictEqual(w.lock.o, -105); assert.strictEqual(x.o, -105);
       g108.st = 'post';
+      // Final re-review (blocking): a line read after the live Lock's own mark never re-ranks the Lock. Same game, same team, at the frozen line turned into that
+      // team's spread, with that side's price, flagged late. Here the model stub takes the FAVOURITE of game 403 (so a line that crosses zero would flip the team)
+      // and loses confidence in 403 under 16 points (so a shorter line would hand the Lock to another game). Each case fails on 9c10a65.
+      const keep21 = TR.pickOf, same = (b, a2, msg) => assert.deepStrictEqual([a2.id, a2.abbr], [b.id, b.abbr], msg + ': the Lock is on the same game and the same team before and after the tick');
+      const late21 = async (pick, open, moved, price) => {
+        fresh16(); const h = SCHED.find((g) => g.id === '403'); h.odds = open; h.op = [-110, -110]; TR.pickOf = (g) => (g.id === '403' ? pick(g) : keep21(g)); CONF = { 401: 0.9, 402: 0.7, 404: 0.6, 405: 0.5 };
+        NOW = K1 - 59 * MIN; await A.tick(); NOW = KS - 4 * 3600e3; await A.tick(); const b = Object.assign({}, stored(2).lock); assert.ok(b.id === '403' && !b.final, 'live Lock on 403 before the server goes down (' + open + ')');
+        h.odds = moved; h.op = price; NOW = KS - 30 * MIN; await A.tick(); const r = stored(2); same(b, r.lock, open + ' -> ' + moved);
+        assert.ok(r.lock.final && r.lock.late === 1 && r.lock.pre === true && !r.lock.nl, open + ' -> ' + moved + ': final, flagged late, not "line at mark unavailable"'); assert.ok(r.gl['403'].lt > KS - 55 * MIN, 'the line was read after the mark');
+        NOW = KS + 4 * 3600e3; await A.tick(); same(b, stored(2).lock, 'later ticks'); assert.strictEqual(stored(2).lock.line, r.lock.line); return { b, w: r };
+      };
+      const fav = (g) => (g.line > 0 ? { id: g.id, week: g.week, abbr: g.home.abbr, other: g.away.abbr, line: -g.line, conf: 0.8, dog: false } : { id: g.id, week: g.week, abbr: g.away.abbr, other: g.home.abbr, line: g.line, conf: 0.8, dog: false });
+      const big = (g) => (g.line < 0 ? { id: g.id, week: g.week, abbr: g.home.abbr, other: g.away.abbr, line: -g.line, conf: 0.8, dog: true } : { id: g.id, week: g.week, abbr: g.away.abbr, other: g.home.abbr, line: g.line, conf: g.line >= 16 ? 0.8 : 0.3, dog: true });
+      // home favourite by a half (IND@HOU, Lock HOU -0.5): the line crosses zero while the server is down -> still the home team, now +0.5 at the home price
+      x = await late21(fav, 'DET -0.5', 'CHI -0.5', [-120, 100]); assert.ok(x.b.abbr === 'DET' && x.b.line === -0.5); assert.strictEqual(x.w.lock.abbr, 'DET', 'home 0.5 -> -0.5: the Lock is not flipped to the road team'); assert.strictEqual(x.w.lock.line, 0.5); assert.strictEqual(x.w.lock.o, -120, "its own side's price"); assert.strictEqual(x.w.gl['403'].l, -0.5);
+      x = await late21(fav, 'DET -3', 'CHI -1', [-120, 100]); assert.ok(x.b.abbr === 'DET' && x.b.line === -3); assert.strictEqual(x.w.lock.abbr, 'DET', 'home 3 -> -1: still the home team'); assert.strictEqual(x.w.lock.line, 1); assert.strictEqual(x.w.lock.o, -120);
+      // road dog +16.5 (MIA@BUF, Lock MIA +16.5): the line shortens to 10 -> still that game and team at +10 (not moved to the next game); same line and price as its road dog (N7)
+      x = await late21(big, 'DET -16.5', 'DET -10', [-105, -115]); assert.ok(x.b.abbr === 'CHI' && x.b.line === 16.5); assert.strictEqual(x.w.lock.id, '403', '16.5 -> 10: the Lock does not move to another game'); assert.strictEqual(x.w.lock.abbr, 'CHI'); assert.strictEqual(x.w.lock.line, 10); assert.strictEqual(x.w.lock.o, -115);
+      assert.ok(dog(x.w, '403').final && dog(x.w, '403').line === 10 && dog(x.w, '403').o === -115, 'Lock and road dog: one line, one price'); assert.ok(!x.w.lockOut.includes('403'));
+      // ... and all the way through zero to road favourite by 3 -> still the road team, now -3
+      x = await late21(big, 'DET -16.5', 'CHI -3', [100, -120]); assert.strictEqual(x.w.lock.id, '403'); assert.strictEqual(x.w.lock.abbr, 'CHI', '16.5 -> -3: not flipped to the home team'); assert.strictEqual(x.w.lock.line, -3); assert.strictEqual(x.w.lock.o, -120); assert.strictEqual(x.w.lock.dog, false);
+      TR.pickOf = keep21;
     } finally { TR.pickOf = keepT.pickOf; TR.dogCover = keepT.dogCover; H.win = keepW; }
     // --- 17 (v252 review fixes) ---
     const OLD = { lock: { id: '911', abbr: 'KC', line: 3, conf: 0.6 }, dogs: [], helper: null, t: 1, pre: true };

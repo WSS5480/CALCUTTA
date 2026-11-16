@@ -806,3 +806,6 @@ Automatic on every screen: no sideways scroll, every button/input ≥ 44 px, the
 - index.html: bump `events.js?v=` / `catalog.js?v=` / `games-catalog.json?v=` with the version.
 - Env: `ENTERPRISE_MAX_PEOPLE` (optional, default 500; shared with limits.js). No other new env vars.
 
+### Review fixes (independent review of 2836bbc, Nov 16 2026; each fix has a check in `node odds-api/events.fix.test.js` that failed before it)
+- Fix 1 (HIGH) — a commissioner who plays could make their own score final by entering it twice. Now their own entry always waits for the other side; it is final only on a dispute (they decide) or when the other side is a typed-in guest with no account; no "corrections" of their own confirmed match. Decision 2026-11-16 (manager/reviewer): same rule as every player — nobody confirms their own score.
+

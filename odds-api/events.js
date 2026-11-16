@@ -320,7 +320,12 @@ function full(evt, mk, now, cap) {
 // ---------- scoring permissions ----------
 function canScore(evt, mk, m, now) {
   if (!evt.drawn && m.st !== 'h2h' && m.st !== 'side') return { ok: false, why: 'The draw is not made yet' };
-  if (isComm(evt, mk)) return m.state === 'wait' || m.state === 'bye' || m.state === 'void' || m.state === 'offered' ? { ok: false, why: 'This match is not ready' } : { ok: true };
+  if (isComm(evt, mk)) {
+    if (m.state === 'wait' || m.state === 'bye' || m.state === 'void' || m.state === 'offered') return { ok: false, why: 'This match is not ready' };
+    const own = sideOf(evt, mk, m); // review fix 1: a commissioner who plays never makes their own score final, except on a dispute or against a guest with no account
+    if (own && linked(evt, own === 'a' ? m.b : m.a) && !(m.state === 'ready' || m.state === 'disputed')) return { ok: false, why: m.state === 'pending' ? 'Waiting for the other side to confirm your score' : 'Your own match: only a dispute reopens it' };
+    return { ok: true };
+  }
   if (m.state !== 'ready') return { ok: false, why: m.state === 'pending' ? 'A score is waiting for confirmation' : m.state === 'disputed' ? 'Disputed: the commissioner decides' : 'This match is not ready' };
   const s = sideOf(evt, mk, m); if (!s) return { ok: false, why: 'Only the players in this match (or the commissioner) enter its score' };
   const R = evt.rules; if (R.scorer === 'comm') return { ok: false, why: 'The commissioner enters every score in this event' };
@@ -477,7 +482,7 @@ async function handle(req, res) {
         if (opSeen(evt)) return { nochange: true, v: evt }; // offline queue resend: already saved
         const m = findM(evt); vOk(m); const c = canScore(evt, u.mk, m, now); if (!c.ok) throw bad(403, c.why);
         const g = checkGames(evt.rules, b.games); m.v++; m.live = m.live || now;
-        const s0 = sideOf(evt, u.mk, m), asComm = isComm(evt, u.mk) && (!s0 || m.state !== 'ready' || !linked(evt, s0 === 'a' ? m.b : m.a)); // a commissioner playing in the match enters like any player (the opponent confirms)
+        const s0 = sideOf(evt, u.mk, m), asComm = isComm(evt, u.mk) && (!s0 || m.state === 'disputed' || !linked(evt, s0 === 'a' ? m.b : m.a)); // a commissioner playing in the match enters like any player (the opponent confirms); final only on a dispute or vs a guest
         if (asComm) { const was = m.state === 'confirmed' ? m.win : null; if (was && was !== g.win && downstreamPlayed(evt, m)) throw bad(409, 'Later matches are already played. Fix those first.'); if (m.st === 'lad' && m.state === 'confirmed') throw bad(409, 'Ladder results cannot be changed after they move the ladder'); Object.assign(m, { games: g.games, win: g.win, state: 'confirmed', sub: { side: 'comm', games: g.games, by: myName(evt), at: now }, at: now }); audit(evt, now, myName(evt) + ' (commissioner' + (s0 ? ', own match' : '') + ')', was ? 'correct' : 'final', m.id, scoreText(evt, m)); settle(evt, m, now); }
         else { const s = sideOf(evt, u.mk, m); m.state = 'pending'; m.sub = { side: s, games: g.games, win: g.win, by: myName(evt), at: now }; audit(evt, now, myName(evt), 'score', m.id, scoreText(evt, Object.assign({}, m, { win: g.win, games: g.games })) + ' (waiting for ' + (linked(evt, s === 'a' ? m.b : m.a) ? 'the other side' : 'the commissioner') + ' to confirm)'); }
         return evt; });

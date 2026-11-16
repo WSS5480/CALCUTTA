@@ -123,7 +123,7 @@ srv.listen(0, async () => {
     const rs2 = await Promise.all(left.map((m) => call('ann', 'score', { id: rr, m: m.id, games: [[11, 7]], v: m.v })));
     slow = 0; rs2.forEach((x) => ok(x, 'parallel commissioner scores'));
     ev = ok(await call('ann', 'get', { id: rr })).event; assert.ok(lost > 0, 'writes really collided (' + lost + ' redone)');
-    const pend = ev.matches.filter((m) => m.st === 'pool' && m.state !== 'confirmed'); for (const m of pend) ok(await call('ann', 'score', { id: rr, m: m.id, games: [[11, 8]] }));
+    const pend = ev.matches.filter((m) => m.st === 'pool' && m.state !== 'confirmed'); for (const m of pend) { const r = await call('ann', 'score', { id: rr, m: m.id, games: [[11, 8]] }); if (r.s === 403) { const c1 = await call('bob', 'confirm', { id: rr, m: m.id }); if (c1.s !== 200) ok(await call('cat', 'confirm', { id: rr, m: m.id }), 'her own pending match: the opponent confirms (review fix 1)'); } else ok(r); }
     ev = ok(await call('ann', 'get', { id: rr })).event; assert.strictEqual(ev.matches.filter((m) => m.st === 'pool' && m.state === 'confirmed').length, 10, 'no score lost');
     t('concurrency: one of two simultaneous entries on a match wins, ' + left.length + ' parallel entries on different matches all saved (' + lost + ' conflicting writes redone)');
     // playoff top 2 created after pool play

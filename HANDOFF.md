@@ -465,3 +465,6 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 - Test: 2026 weeks 1-10 in the app = 17-11, same as the Python backtest. Walk-forward (bet only if prior seasons > 52.4%): 2010-2026 501-453 (52.5%, +2.5u); since 2015 352-298 (54.2%, +22u); 2004-2025 685-599 (53.3%). Chance best of ~12 slices looks this good by luck ~10%. Honest label kept: tracker, not a proven edge.
 - Does not feed the Double lock / Lock picks.
 - `GET /cfbd/slices`: college road dog / home dog cover rates by conference-vs-non-conference game and by conference (user asked for the NFL division road dog test in college).
+
+## v239 — Locks that are also division road dogs get a 🏠 tag
+- Double lock / Lock cards, top-pick cards and Results rows show "🏠 + division road dog" when the pick is the road underdog in a division game (trDD). Info only; lock info sheet explains. 2014-2026: those locks 48-35 (57.8%) vs 51.7% for other locks (found in the same data, not proven). 2026 wk1-10: 5 tagged picks.

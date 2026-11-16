@@ -39,6 +39,6 @@ async function seed(C) {
   const st = await ok('groups', 'player', '/groups/standings', { id: g.id, cid: main, scope: 'season' });
   if (!st.rows || !st.rows.some((r) => r.t && (r.t.w || r.t.l))) throw new Error('demo bets were not graded: ' + JSON.stringify(st.rows && st.rows[0]).slice(0, 200));
   // an Enterprise request so the owner list has something (director asks for more than 8)
-  await X.call('groups', 'director', '/groups/ent/contact', { name: 'Pro Shop Pat', org: 'Tierra Verde Golf Club (demo)', contact: 'pat@example.com', people: 72, note: 'Member-guest in March, 18 teams.' });
+  await ok('groups', 'director', '/groups/ent/contact', { name: 'Pro Shop Pat', org: 'Tierra Verde Golf Club (demo)', reach: 'pat@example.com', people: 72, what: 'Member-guest in March, 18 teams.' });
 }
 module.exports = { seed };

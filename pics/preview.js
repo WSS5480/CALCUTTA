@@ -2,7 +2,6 @@
 //  - "TEST PREVIEW, not live" ribbon in its own strip above everything (the app and every overlay start below it, so it never covers UI)
 //  - Demo user switcher (commissioner / player / tournament director): POST /preview/as on the preview server, then reload as that person
 //  - 🎮 Play hub (#opv): one door to Groups, Calcutta, Golf, Start a game, My events, My stats, My handicap, Partner suggestions, Tournament handicaps
-//  - My stats (personal dashboard) from the real /stats/me route: totals by sport and by game type, each drilling down to the plays behind it, with Back
 //  - Screens whose engine is not committed yet say "Preview: in progress" and read stand-in routes (/preview/pairing, /preview/hcp)
 // Money is display only. Nothing is collected, held or paid.
 (function () {
@@ -78,29 +77,7 @@
   const top = (title) => '<div class="pvtop"><button data-a="back" aria-label="Back">' + (stack.length > 1 ? '‹ Back' : '✕ Close') + '</button><b>' + title + '</b></div>';
   function paint() { const e = el(); if (!e || !stack.length) return; const sc = stack[stack.length - 1]; e.firstChild.innerHTML = SCREENS[sc.t](sc); }
 
-  // ---------- data ----------
-  let ME = null, MEERR = '', ST = null;
-  async function loadMe(force) { if (ME && !force) return; try { ME = await post('/stats/me', {}); MEERR = ''; } catch (e) { MEERR = e.message; } paint(); }
-  const SPORT = { nfl: 'NFL', ncaaf: 'College football', cfb: 'College football', nba: 'NBA', mlb: 'MLB', nhl: 'NHL', ncaab: 'College basketball', golf: 'Golf', pickleball: 'Pickleball', tennis: 'Tennis', cornhole: 'Cornhole', other: 'Other', all: 'All sports' };
-  const KIND = { bet: 'My bets', contest: 'Group contests', calcutta: 'Calcuttas', 'golf-round': 'Golf rounds', 'golf-pool': 'Golf pools', 'golf-day': 'Golf days', 'golf-match': 'Heads-up golf', match: 'Matches', event: 'Events and tournaments', pickem: "Pick'em", tournament: 'Tournaments' };
-  const SRC = { bets: 'My bets', groups: 'Group contest', calcutta: 'Calcutta', golf: 'Golf', events: 'Local event', self: 'Logged by me' };
-  const lab = (map, k) => map[k] || String(k || 'Other').replace(/[-_]/g, ' ').replace(/^./, (c) => c.toUpperCase());
-  const paidIn = (r) => (r.spent != null ? +r.spent : r.stake != null ? +r.stake : null), cameBack = (r) => (r.won != null ? +r.won : r.pl != null && r.stake != null ? Math.max(0, +r.stake + +r.pl) : null);
-  const net = (r) => (r.pl != null ? +r.pl : r.won != null || r.spent != null ? (+r.won || 0) - (+r.spent || 0) : null);
-  function sum(list) { const o = { n: list.length, w: 0, l: 0, p: 0, open: 0, in: 0, out: 0, net: 0, money: false }; list.forEach((r) => { if (r.result === 'W') o.w++; else if (r.result === 'L') o.l++; else if (r.result === 'P' || r.result === 'T') o.p++; else if (r.result == null && r.score == null && !r.place) o.open++; const a = paidIn(r), b = cameBack(r), c = net(r); if (a != null) { o.in += a; o.money = true; } if (b != null) o.out += b; if (c != null) { o.net += c; o.money = true; } }); return o; }
-  const rec = (t) => t.w + '-' + t.l + (t.p ? '-' + t.p : '');
-  const cls = (n) => (n > 0 ? 'pvw' : n < 0 ? 'pvl' : 'pvm');
-  function groupBy(list, f) { const o = {}; list.forEach((r) => { const k = f(r) || 'other'; (o[k] = o[k] || []).push(r); }); return Object.keys(o).map((k) => ({ k, list: o[k], t: sum(o[k]) })).sort((a, b) => b.t.n - a.t.n); }
-  const tile = (attr, small, big, sub) => '<button class="pvt" ' + attr + '><small>' + small + '</small><b>' + big + '</b>' + (sub ? '<i>' + sub + '</i>' : '') + '</button>';
-  function playRow(r, i) {
-    const n = net(r), res = r.result === 'W' ? '<span class="pvw">WON</span>' : r.result === 'L' ? '<span class="pvl">LOST</span>' : r.result === 'P' ? '<span class="pvm">PUSH</span>' : r.result === 'T' ? '<span class="pvm">TIE</span>' : r.place ? '<span class="pvm">' + ord(r.place.n) + ' of ' + r.place.of + '</span>' : r.score != null ? '<span class="pvm">' + esc(r.score) + (r.toPar != null ? ' (' + (r.toPar > 0 ? '+' : '') + r.toPar + ')' : '') + '</span>' : '<span class="pvm">OPEN</span>';
-    return '<button class="pvc" data-a="play" data-i="' + i + '"><div class="pvr"><h3>' + esc(r.title || lab(KIND, r.kind)) + '</h3>' + res + '</div><div class="pvr"><p>' + esc(r.date) + ' · ' + esc(lab(SPORT, r.sport)) + ' · ' + esc(lab(SRC, r.src)) + (r.verified ? '' : ' · self-reported') + '</p>' + (n != null ? '<b class="' + cls(n) + '">' + signed(n) + '</b>' : '') + '</div></button>';
-  }
   const ord = (n) => n + (['th', 'st', 'nd', 'rd'][(n % 100 > 10 && n % 100 < 14) ? 0 : Math.min(n % 10, 4) % 4] || 'th');
-  const PER = [['all', 'Lifetime'], ['ytd', 'This year'], ['mtd', 'This month'], ['wtd', 'This week']];
-  function recsFor(sc) { if (!ME) return []; const f = (ME.from || {})[sc.per || 'all']; return (ME.records || []).filter((r) => !f || r.date >= f); }
-  function filt(sc) { return recsFor(sc).filter((r) => (!sc.sport || r.sport === sc.sport) && (!sc.kind || r.kind === sc.kind) && (!sc.res || (sc.res === 'open' ? r.result == null && r.score == null && !r.place : r.result === sc.res))); }
-
   // ---------- screens ----------
   const SCREENS = {
     hub() {
@@ -115,7 +92,8 @@
       h += card('go-events', '📅', 'My events', 'Round robins, brackets, ladders and pick\'em. Demo: Friday pickleball round robin.');
       h += '<div class="pvh">Me</div>';
       h += card('me', '📈', 'My stats', 'Every play you are in: bets, contests, Calcuttas, golf, events. Totals drill down to the plays.');
-      h += card('hcp', '🏌️', 'My handicap', 'Oddable Handicap Index from real app rounds, last 20 rounds, course handicap calculator.', WIP);
+      h += card('hcp', '🏌️', 'My handicap', 'Oddable Handicap Index from real app rounds, last 20 rounds, Post a round, course handicap calculator.');
+      h += card('log', '✍️', 'Log my play', 'Keep your own results: a golf round, a pickleball match, any game. One-player games count.');
       h += '<div class="pvh">Coming together</div>';
       h += card('pair', '🤝', 'Suggest partners', 'Balanced, Rotate or Hot pairs for scrambles and doubles. It only suggests; people choose.', WIP);
       h += card('thcp', '🎯', 'Tournament handicaps', 'Enterprise directors can add or change a handicap for one tournament. The real-results number always stays visible.', WIP);
@@ -127,49 +105,8 @@
       let h = top('About this test copy') + '<div class="pvc"><h3>TEST PREVIEW, not live</h3><p>Runs on its own test server with made-up data kept in memory. It never reads or writes the live database, never uses an Odds API credit (lines come from free sources and saved files only), and never collects, holds or pays money.</p></div>';
       if (!ST) { users().then((j) => { ST = j; paint(); }).catch(() => {}); return h + '<div class="pvc">Loading…</div>'; }
       h += '<div class="pvh">Demo data</div>' + ST.steps.map((x) => '<div class="pvc"><div class="pvr"><h3>' + esc(x.name) + '</h3>' + (x.ok ? '<span class="pvtag pvok">ready</span>' : '<span class="pvtag">not ready</span>') + '</div>' + (x.err ? '<p>' + esc(x.err) + '</p>' : '') + '</div>').join('');
-      h += '<div class="pvh">Built and in this copy</div>' + ['Server picks, 1-hour freeze, parlays, actual prices, Move the line (v252/v253)', 'Groups: contests, main and side pots, server grading, invites, 8-person limit, Enterprise contact', 'Calcutta: setup, live auction, enter results, payouts, buy-back half option', 'Golf: pro pools, golf days in every format, heads-up, courses', 'Local events: pickleball and more, round robin, brackets, ladder, pick\'em, sport catalog', 'Player stats on the server: lifetime records, Oddable handicap (WHS method), Oddable rating'].map((x) => '<div class="pvc"><p>✅ ' + esc(x) + '</p></div>').join('');
-      h += '<div class="pvh">Preview: in progress</div>' + ['My stats and My handicap screens: shown here with a simple test screen; the final screens are still being built', 'Suggest partners (Balanced / Rotate / Hot pairs): test version here', 'Tournament handicaps set by an Enterprise director: test version here', 'Group bets lock the moment they are added (G16): being built', 'Voice score logging: server part is built, the phone screen is not, and this copy has no AI key', 'Golf handicaps flowing into strokes, flights and pairings automatically (H1)'].map((x) => '<div class="pvc"><p>🚧 ' + esc(x) + '</p></div>').join('');
-      return h;
-    },
-    me(sc) {
-      let h = top('📈 My stats');
-      if (!ME) { loadMe(); return h + '<div class="pvc">' + (MEERR ? esc(MEERR) + ' <button class="pvbtn" data-a="reload">Try again</button>' : 'Loading your plays…') + '</div>'; }
-      h += '<div class="pvnote">' + WIP + ' Test screen on the real stats data. Money is information only; Oddable never collects or pays.</div>';
-      h += '<label class="pvm" for="pvper" style="font-size:13px">Showing</label><select class="pvsel" id="pvper">' + PER.map(([k, l]) => '<option value="' + k + '"' + ((sc.per || 'all') === k ? ' selected' : '') + '>' + l + '</option>').join('') + '</select>';
-      const all = recsFor(sc), t = sum(all);
-      if (!all.length) return h + '<div class="pvc">No plays in this period yet.</div>';
-      h += '<div class="pvg">' + tile('data-a="drill"', 'Plays', t.n, 'tap for the list') + tile('data-a="drill" data-res="W"', 'Record', rec(t), 'wins - losses' + (t.p ? ' - pushes/ties' : ''))
-        + tile('data-a="drill"', 'Net', '<span class="' + cls(t.net) + '">' + signed(Math.round(t.net * 100) / 100) + '</span>', 'paid in ' + money(Math.round(t.in * 100) / 100)) + tile('data-a="drill" data-res="open"', 'Open', t.open, 'not decided yet') + '</div>';
-      h += '<div class="pvh">By sport</div><div class="pvg">' + groupBy(all, (r) => r.sport).map((x) => tile('data-a="drill" data-sport="' + esc(x.k) + '"', esc(lab(SPORT, x.k)), x.t.n + (x.t.n === 1 ? ' play' : ' plays'), rec(x.t) + (x.t.money ? ' · <span class="' + cls(x.t.net) + '">' + signed(Math.round(x.t.net * 100) / 100) + '</span>' : ''))).join('') + '</div>';
-      h += '<div class="pvh">By game type</div><div class="pvg">' + groupBy(all, (r) => r.kind).map((x) => tile('data-a="drill" data-kind="' + esc(x.k) + '"', esc(lab(KIND, x.k)), x.t.n + (x.t.n === 1 ? ' play' : ' plays'), rec(x.t) + (x.t.money ? ' · <span class="' + cls(x.t.net) + '">' + signed(Math.round(x.t.net * 100) / 100) + '</span>' : ''))).join('') + '</div>';
-      const hc = ME.golfHcp, rt = ME.ratings || {};
-      h += '<div class="pvh">Handicap and ratings</div><button class="pvc" data-a="hcp"><div class="pvr"><h3>Oddable Handicap Index</h3><b>' + (hc && hc.index != null ? esc(hc.index.toFixed ? hc.index.toFixed(1) : hc.index) : 'Not yet') + '</b></div><p>From real app rounds. Calculated with the World Handicap System method. Tap for the rounds.</p></button>';
-      Object.keys(rt).forEach((sp) => { h += '<div class="pvc"><div class="pvr"><h3>Oddable rating · ' + esc(lab(SPORT, sp)) + '</h3><b>' + esc(rt[sp].rating != null ? Math.round(rt[sp].rating) : '—') + '</b></div><p>Unofficial. Built from your match results in the app (' + esc(rt[sp].n != null ? rt[sp].n : '') + ' matches).</p></div>'; });
-      if (ME.errors && ME.errors.length) h += '<div class="pvnote">Could not read: ' + esc(ME.errors.join(', ')) + '. Those plays are missing from this list right now.</div>';
-      return h;
-    },
-    list(sc) {
-      const L = filt(sc), t = sum(L), name = [sc.sport && lab(SPORT, sc.sport), sc.kind && lab(KIND, sc.kind), sc.res === 'W' ? 'Wins' : sc.res === 'open' ? 'Open' : ''].filter(Boolean).join(' · ') || 'All plays';
-      sc.rows = L; let h = top(esc(name));
-      h += '<div class="pvc"><div class="pvr"><span>' + t.n + (t.n === 1 ? ' play' : ' plays') + ' · ' + rec(t) + '</span>' + (t.money ? '<b class="' + cls(t.net) + '">' + signed(Math.round(t.net * 100) / 100) + '</b>' : '') + '</div>' + (t.money ? '<p>Paid in ' + money(Math.round(t.in * 100) / 100) + ' · came back ' + money(Math.round(t.out * 100) / 100) + '</p>' : '') + '</div>';
-      return h + (L.length ? L.map(playRow).join('') : '<div class="pvc">Nothing here yet.</div>');
-    },
-    play(sc) {
-      const r = sc.r, a = paidIn(r), b = cameBack(r), n = net(r), row = (k, v) => (v === '' || v == null ? '' : '<div class="pvr" style="padding:6px 0;border-bottom:1px solid var(--line,#2b3f66)"><span class="pvm">' + k + '</span><b>' + v + '</b></div>');
-      let h = top(esc(r.title || 'Play')) + '<div class="pvc">' + row('What', esc(lab(KIND, r.kind)) + ' · ' + esc(lab(SPORT, r.sport))) + row('When', esc(r.date)) + row('Where it came from', esc(lab(SRC, r.src)) + (r.verified ? ' (graded by Oddable)' : ' (self-reported)'))
-        + row('Result', r.result === 'W' ? '<span class="pvw">Won</span>' : r.result === 'L' ? '<span class="pvl">Lost</span>' : r.result === 'P' ? 'Push' : r.result === 'T' ? 'Tie' : r.place || r.score != null ? '' : 'Open') + row('Place', r.place ? ord(r.place.n) + ' of ' + r.place.of : '') + row('Score', r.score != null ? esc(r.score) + (r.toPar != null ? ' (' + (r.toPar > 0 ? '+' : '') + r.toPar + ')' : '') : '') + row('Against', esc(r.opponent || ''))
-        + row('Entry / paid in', a != null ? money(a) : '') + row('Winnings / came back', b != null ? money(b) : '') + row('Net', n != null ? '<span class="' + cls(n) + '">' + signed(n) + '</span>' : '') + '</div>';
-      return h + '<div class="pvnote">Money is information only. Oddable never collects, holds or pays.</div>';
-    },
-    hcp() {
-      let h = top('🏌️ My handicap');
-      if (!ME) { loadMe(); return h + '<div class="pvc">' + (MEERR ? esc(MEERR) : 'Loading…') + '</div>'; }
-      const hc = ME.golfHcp || {}, ix = hc.index != null ? (+hc.index).toFixed(1) : null;
-      h += '<div class="pvnote">' + WIP + ' Test screen on the real handicap math.</div><div class="pvc"><div class="pvr"><h3>Oddable Handicap Index</h3><b style="font-size:26px">' + (ix != null ? ix : 'Not yet') + '</b></div><p>Calculated with the World Handicap System method. Built from every 18-hole round you play or log in the app. Not a USGA or GHIN Handicap Index.</p>' + (ix == null ? '<p>Post rounds with a course rating and slope to get one (' + esc(hc.n || 0) + ' so far).</p>' : '') + '</div>';
-      const d = hc.diffs || [];
-      if (d.length) { h += '<div class="pvh">Last ' + d.length + ' rounds' + (d.some((x) => x.used) ? ' (✓ = counts toward the index)' : '') + '</div>' + d.map((x) => '<div class="pvc"><div class="pvr"><h3>' + (x.used ? '✓ ' : '') + esc(x.title || 'Round') + '</h3><b>' + esc(x.total != null ? x.total : '') + '</b></div><p>' + esc(x.date || '') + (x.diff != null ? ' · differential ' + (+x.diff).toFixed(1) : '') + (x.cr ? ' · rating ' + esc(x.cr) + ' / slope ' + esc(x.slope) : '') + '</p></div>').join(''); }
-      if (ix != null) h += '<div class="pvh">Course handicap calculator</div><div class="pvc"><label>Slope<input id="pvsl" type="number" inputmode="numeric" value="128"></label><label>Course rating<input id="pvcr" type="number" inputmode="decimal" value="71.2"></label><label>Par<input id="pvpar" type="number" inputmode="numeric" value="72"></label><button class="pvbtn" data-a="chcalc" data-ix="' + ix + '">Work it out</button><p id="pvch" style="margin-top:8px"></p></div>';
-      if (hc.missing) h += '<div class="pvnote">' + esc(hc.missing) + ' round(s) have no course rating or slope, so they cannot count.</div>';
+      h += '<div class="pvh">Built and in this copy</div>' + ['Server picks, 1-hour freeze, parlays, actual prices, Move the line (v252/v253)', 'Groups: contests, main and side pots, server grading, invites, 8-person limit, Enterprise contact', 'Calcutta: setup, live auction, enter results, payouts, buy-back half option', 'Golf: pro pools, golf days in every format, heads-up, courses', 'Local events: pickleball and more, round robin, brackets, ladder, pick\'em, sport catalog', 'My stats: personal dashboard with drill-downs, My handicap (WHS method), Oddable rating, Log my play, guests'].map((x) => '<div class="pvc"><p>✅ ' + esc(x) + '</p></div>').join('');
+      h += '<div class="pvh">Preview: in progress</div>' + ['Suggest partners (Balanced / Rotate / Hot pairs): test version here', 'Tournament handicaps set by an Enterprise director: test version here', 'Group bets lock the moment they are added (G16): being built', 'Voice score logging: server part is built, the phone screen is not, and this copy has no AI key', 'Golf handicaps flowing into strokes, flights and pairings automatically (H1)'].map((x) => '<div class="pvc"><p>🚧 ' + esc(x) + '</p></div>').join('');
       return h;
     },
     pair(sc) {
@@ -205,19 +142,17 @@
     if (a === 'go-golf') return window.oddGolf && window.oddGolf();
     if (a === 'go-catalog') return window.oddCatalog && window.oddCatalog({ from: 'Play' });
     if (a === 'go-events') return window.oddEvents && window.oddEvents();
-    if (['me', 'hcp', 'pair', 'thcp', 'voice', 'status'].includes(a)) return push({ t: a });
-    if (a === 'reload') { MEERR = ''; return loadMe(true); }
-    if (a === 'drill') return push({ t: 'list', per: sc.per, sport: t.getAttribute('data-sport') || '', kind: t.getAttribute('data-kind') || '', res: t.getAttribute('data-res') || '' });
-    if (a === 'play') return push({ t: 'play', r: sc.rows[+t.getAttribute('data-i')] });
+    if (a === 'me') return window.oddStats && window.oddStats();
+    if (a === 'hcp') return window.oddStats && window.oddStats({ t: 'hcp' });
+    if (a === 'log') return window.oddStats && window.oddStats({ t: 'log' });
+    if (['pair', 'thcp', 'voice', 'status'].includes(a)) return push({ t: a });
     if (a === 'psport') { sc.sport = t.getAttribute('data-v'); return paint(); }
     if (a === 'pmode') { sc.mode = t.getAttribute('data-v'); return paint(); }
-    if (a === 'chcalc') { const ix = +t.getAttribute('data-ix'), sl = +document.getElementById('pvsl').value, cr = +document.getElementById('pvcr').value, par = +document.getElementById('pvpar').value; const ch = Math.round(ix * (sl / 113) + (cr - par)); document.getElementById('pvch').textContent = Number.isFinite(ch) ? 'Course handicap: ' + ch + ' strokes (index × slope ÷ 113 + rating − par).' : 'Fill in slope, rating and par.'; return; }
     if (a === 'thedit') return push({ t: 'thedit', p: sc.d.players[+t.getAttribute('data-i')] });
     if (a === 'thsave' || a === 'thclear') { const v = a === 'thclear' ? null : document.getElementById('pvtv').value; post('/preview/hcp', { op: 'set', pid: sc.p.pid, value: v, why: document.getElementById('pvtw').value }).then(() => { stack.pop(); const p = stack[stack.length - 1]; p.d = null; paint(); }).catch((e) => { document.getElementById('pvte').textContent = e.message; }); return; }
   }
-  function change(ev) { if (ev.target.id === 'pvper') { stack[stack.length - 1].per = ev.target.value; paint(); } }
+  function change() {}
   window.oddHub = () => open({ t: 'hub' });
-  window.oddMe = () => open({ t: 'me' });
   window.oddPreview = { open: (t) => open({ t }), picker, become };
 
   // ---------- start ----------

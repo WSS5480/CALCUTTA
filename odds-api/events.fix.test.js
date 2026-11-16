@@ -137,3 +137,16 @@ T.crossPoolPlayoff = async () => {
   ev = ok(await call('ann', 'get', { id })).event; const po = ev.matches.filter((m) => m.st === 'po' && m.r === 1);
   assert.strictEqual(po.length, 2); po.forEach((m) => assert.ok(pool0.includes(m.an) !== pool0.includes(m.bn), 'same-pool first round: ' + m.an + ' v ' + m.bn));
 };
+// 8 (LOW) others' pick'em tiebreak guesses stay hidden until the final locks
+T.hideTiebreaks = async () => {
+  let ev = ok(await call('ann', 'create', base({ fmt: 'se', pickem: true, playIn: false, entrants: ['P1', 'P2', 'P3', 'P4'].map((n) => ({ name: n })) }))).event; const id = ev.id;
+  ok(await call('sp1', 'join', { code: ev.code, as: 'spectator', myName: 'Spy' })); ok(await call('sp2', 'join', { code: ev.code, as: 'spectator', myName: 'Sue' })); ok(await call('ann', 'draw', { id }));
+  ev = ok(await call('sp1', 'get', { id })).event; const r1 = ev.matches.filter((m) => m.st === 'w' && m.r === 1);
+  ok(await call('sp1', 'pick', { id, m: r1[0].id, side: 'a', tb: 37 }));
+  let sue = ok(await call('sp2', 'get', { id })).event; const row = sue.pickem.table.find((r) => r.name === 'Spy');
+  assert.ok(!row || row.tb == null, 'Spy tiebreak visible to Sue: ' + JSON.stringify(sue.pickem.table));
+  const mine = ok(await call('sp1', 'get', { id })).event; assert.strictEqual(mine.pickem.tb, 37, 'own guess visible');
+  for (const m of r1) ok(await call('ann', 'score', { id, m: m.id, games: [[11, 5]] }));
+  ev = ok(await call('ann', 'get', { id })).event; const fin = ev.matches.find((m) => m.r === 2); ok(await call('ann', 'live', { id, m: fin.id }));
+  sue = ok(await call('sp2', 'get', { id })).event; assert.strictEqual(sue.pickem.table.find((r) => r.name === 'Spy').tb, 37, 'shown once the final locked');
+};

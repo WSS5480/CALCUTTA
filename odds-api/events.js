@@ -382,7 +382,8 @@ function pickTable(evt) {
 function pickemView(evt, me, now) {
   const P = evt.picks || {}, mine = me && P[me.pid] ? P[me.pid] : { m: {} }, t = pickTable(evt), cnt = {};
   evt.matches.forEach((m) => { if (!pickLocked(evt, m, now)) return; let a = 0, b = 0; Object.values(P).forEach((p) => { const k = p.m && p.m[m.id]; if (k && k.s === 'a') a++; else if (k && k.s === 'b') b++; }); cnt[m.id] = { a, b }; }); // others' picks only as counts, and only once the match is locked
-  return { mine: mine.m || {}, tb: mine.tb == null ? null : mine.tb, table: t.rows, finalTotal: t.finalTotal, counts: cnt, open: evt.matches.filter((m) => m.state === 'ready' && !pickLocked(evt, m, now) && m.a && m.b && m.a !== 'BYE' && m.b !== 'BYE').map((m) => m.id) };
+  const fm = finalMatch(evt), tbOpen = !!evt.fin || !!(fm && pickLocked(evt, fm, now)); // review fix 8: others' tiebreak guesses only once the final has locked
+  return { mine: mine.m || {}, tb: mine.tb == null ? null : mine.tb, table: t.rows.map((r) => (tbOpen || (me && r.pid === me.pid) ? r : Object.assign({}, r, { tb: null }))), finalTotal: t.finalTotal, counts: cnt, open: evt.matches.filter((m) => m.state === 'ready' && !pickLocked(evt, m, now) && m.a && m.b && m.a !== 'BYE' && m.b !== 'BYE').map((m) => m.id) };
 }
 
 // ---------- routes ----------

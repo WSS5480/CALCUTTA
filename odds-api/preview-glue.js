@@ -5,13 +5,15 @@
 //   golf limits (maxPeople, isEnterprise)             -> limits.js (shared 8-person cap, Enterprise flag, extra seats)
 //   events: finds limits.js, stats.js (ratingFor, eventSetup...) and pairing.js by itself (its D.limits / D.rt / D.pairing)
 //   pairing: ONE file, odds-api/pairing.js from the Groups branch (golf and events both call suggestPartners from it)
-// Still a stand-in: calcutta limits (keyed on its own member key, so the shared cap cannot be asked per account yet; still 8 people).
+//   calcutta: finds limits.js by itself (c.ak = limits.keyOf(account)); golf registers its Calcutta sources in server.js; events' source is registered here ('events')
 function wire(C) {
   const M = C.mods, LIM = M.limits, ST = M.stats, G = M.groups; C.wired = [];
   const t = (name, fn) => { try { if (fn()) C.wired.push(name); } catch (e) { console.error('preview glue [' + name + ']:', e.message); } };
   t('groups.registerGame calc', () => G && G.registerGame && M.calcutta && (G.registerGame('calc', { potSummary: M.calcutta.potSummary, attachToGroup: M.calcutta.attachToGroup }), true));
   t('groups.registerGame golf', () => G && G.registerGame && M.golf && (G.registerGame('golf', { potSummary: M.golf.potSummary, attachToGroup: M.golf.attach }), true));
   t('groups.registerGame event', () => G && G.registerGame && M.events && (G.registerGame('event', { potSummary: M.events.potSummary }), true));
+  t('calcutta source: events', () => M.calcutta && M.events && M.events.ADAPTER && typeof M.events.ADAPTER.registerCalcutta === 'function' && (M.events.ADAPTER.registerCalcutta(M.calcutta), true));
+  t('calcutta source: golf', () => M.calcutta && M.golf && typeof M.golf.registerCalcutta === 'function' && M.golf.registerCalcutta(M.calcutta));
   t('stats <- groups.statsFor', () => ST && G && typeof G.statsFor === 'function' && (ST.register('groups', (k, o) => G.statsFor(k, o)), true));
   t('golf handicaps <- stats', () => { if (!M.golf || !ST || !['handicapFor', 'eventSetup', 'eventOverride', 'eventLog'].every((f) => typeof ST[f] === 'function')) return false; const D = M.golf._deps;
     D.handicapFor = (k, o) => ST.handicapFor(k, o); D.eventSetup = (d, id, o) => ST.eventSetup(d, id, o); D.eventOverride = (d, id, k, o) => ST.eventOverride(d, id, k, o); D.eventLog = (d, id) => ST.eventLog(d, id); return true; });

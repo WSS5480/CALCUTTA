@@ -14,12 +14,6 @@ async function run() {
   const B = 'https://api.opengolfapi.org';
   let r = await ask(B + '/openapi.json'); say('openapi.json -> ' + r.s + (r.err ? ' ' + r.err : '') + (r.j && r.j.paths ? ' paths: ' + Object.keys(r.j.paths).join(' ') : ' ' + String(r.txt || '').slice(0, 200)));
   if (r.j && r.j.servers) say('servers: ' + JSON.stringify(r.j.servers).slice(0, 300));
-  if (r.j && r.j.paths) for (const k of ['/api/v1/courses/search', '/api/v1/courses/state/{code}', '/api/v1/courses/{id}', '/api/v1/courses/{id}/tee', '/api/v1/courses/bulk']) say('spec ' + k + ': ' + JSON.stringify(r.j.paths[k]).slice(0, 1500));
-  for (const p of ['/api/v1/courses/search?q=mcallen&limit=50', '/api/v1/courses/search?city=McAllen&state=TX&limit=50', '/api/v1/courses/search?q=golf&state=TX&limit=50&offset=50', '/api/v1/courses/search?q=palm&limit=100', '/api/v1/courses/state/TX?limit=1000', '/api/v1/courses/state/TX?limit=100&offset=100', '/api/v1/courses/state/TX?limit=100&page=2', '/api/v1/courses/search?lat=26.2034&lng=-98.2300&radius_mi=40&limit=50']) {
-    const x = await ask(B + p), c = x.j && x.j.courses; say('more ' + p + ' -> ' + x.s + ' ' + (x.j ? shape(x.j) + ' limit=' + x.j.limit + ' max=' + x.j.max_limit + ' total=' + x.j.total + ' offset=' + x.j.offset + ' next=' + JSON.stringify(x.j.next || x.j.next_cursor || x.j.page || null) : String(x.txt || x.err || '').slice(0, 200)) + (Array.isArray(c) ? ' names: ' + c.slice(0, 8).map((y) => (y.course_name || y.name) + ' (' + y.city + ')').join('; ') + ' ... last: ' + (c.length ? (c[c.length - 1].course_name || c[c.length - 1].name) : '') : ''));
-  }
-  { const x = await ask(B + '/api/v1/courses/1e21fcc6-dfea-4187-8cff-a6c2aa2b625f'); say('full detail /api/v1/courses/{id} -> ' + x.s + ' ' + (x.j ? shape(x.j) + ' ' + JSON.stringify(x.j).slice(0, 1500) : String(x.txt || x.err || '').slice(0, 200))); if (x.j) ['tees', 'holes', 'scorecard', 'holes_data'].forEach((k) => { if (x.j[k]) say('full detail .' + k + ': ' + JSON.stringify(x.j[k]).slice(0, 700)); });
-    const y = await ask(B + '/api/v1/courses/1e21fcc6-dfea-4187-8cff-a6c2aa2b625f/tee'); say('/api/v1/courses/{id}/tee -> ' + y.s + ' ' + String(y.txt || y.err || '').slice(0, 500)); }
   let id = null, base = null;
   for (const p of ['/v1/courses/search?q=mcallen&limit=5', '/api/v1/courses/search?q=mcallen&limit=5', '/v1/courses/search?q=McAllen&state=TX&limit=5', '/v1/courses?q=mcallen&limit=5', '/v1/courses/state/TX', '/api/v1/courses/state/TX', '/v1/courses/search?lat=26.2034&lng=-98.2300&radius_mi=25&limit=5']) {
     r = await ask(B + p); const f = first(r.j); say(p + ' -> ' + r.s + (r.err ? ' ' + r.err : '') + ' ' + (r.j ? shape(r.j) : String(r.txt || '').slice(0, 160)) + (f ? ' first: ' + JSON.stringify(f).slice(0, 500) : ''));
@@ -28,6 +22,16 @@ async function run() {
   if (id != null) for (const p of ['/courses/' + id, '/courses/' + id + '/holes', '/courses/' + id + '/tees', '/courses/' + id + '/scorecard']) { r = await ask(B + base + p); say(base + p + ' -> ' + r.s + ' ' + (r.j ? shape(r.j) + ' ' + JSON.stringify(r.j).slice(0, 1300) : String(r.txt || r.err || '').slice(0, 160))); }
   else say('no course id found: detail not checked');
   try { const CO = require('./golf-courses'); CO._reset(); const L = await CO.search('mcallen', '', ''); say('golf-courses.search("mcallen") -> ' + L.length + ' ' + JSON.stringify(L.slice(0, 2))); if (L[0]) { const d = await CO.detail(L[0].extId); say('golf-courses.detail -> tees ' + d.tees.length + ' ' + JSON.stringify(d).slice(0, 900)); } } catch (e) { say('golf-courses.search threw: ' + e.message); }
+  // Real course data for the bundled sample list (fixtures/courses-fallback.json): one line per tee, read back from the log by the builder.
+  try { const CO = require('./golf-courses'), seen = new Set(), want = [];
+    const add = (rows, area) => rows.forEach((c) => { if (!seen.has(c.extId)) { seen.add(c.extId); want.push([c, area]); } });
+    add((await CO.searchPage('', '', '26.2034,-98.2300', 0)).results, 'Rio Grande Valley'); add((await CO.searchPage('', '', '26.2034,-98.2300', 25)).results, 'Rio Grande Valley'); add((await CO.searchPage('', '', '26.1906,-97.6961', 0)).results, 'Rio Grande Valley'); add((await CO.searchPage('', '', '25.9017,-97.4975', 0)).results, 'Rio Grande Valley');
+    for (const nm of ['Pebble Beach Golf Links', 'Bethpage', 'Torrey Pines', 'TPC Sawgrass', 'Pinehurst', 'Memorial Park Golf Course', 'Brackenridge', 'TPC Scottsdale', 'Bandon Dunes', 'Harbour Town']) { try { add((await CO.searchPage(nm, '', '', 0)).results.slice(0, 2), ''); } catch (e) {} }
+    say('data: ' + want.length + ' courses found'); let n = 0;
+    for (const [c, area] of want.slice(0, 60)) { let d; try { d = await CO.detail(c.extId); } catch (e) { continue; } const tees = d.tees.filter((t) => t.holes.length === 18 && t.rating && t.slope).slice(0, 5); if (!tees.length) { say('data-skip: ' + c.name + ' (' + c.city + ') tees ' + d.tees.length + ' holes ' + (d.tees[0] ? d.tees[0].holes.length : 0)); continue; }
+      n++; tees.forEach((t) => console.log('coursedata: ' + [n, d.name, d.city, d.state, area, t.name, t.gender || '', t.rating, t.slope, t.par, t.yards || '', t.holes.map((h) => [h.par || '', h.hcp || '', h.yards || ''].join('.')).join(',')].join('|'))); }
+    say('data: ' + n + ' courses written');
+  } catch (e) { say('data failed: ' + e.message); }
   say('end'); return OUT.slice();
 }
 module.exports = { run, last: () => OUT.slice() };

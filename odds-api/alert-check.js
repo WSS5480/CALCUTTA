@@ -17,20 +17,23 @@
 //   late      a Lock made final late (tick or line more than GRACE after its mark) without the late flag
 //   out       the Lock's game is in lockOut; a game left lockOut
 //   wait      lockWait points at a game that is not the live Lock's
+//   gone-early the Lock left a game that is merely missing from the schedule: not flagged postponed/cancelled (state 'canceled' in `games`) and not yet missing on
+//             3 reads in a row spanning 10 minutes (9th argument of compute = read times per week; left out = every tick is a read)
+//   gone-live a live Lock left on a game that IS off the schedule (flagged, or missing 3 reads / 10 minutes): it must move on, or go final flagged off
 // Notes (INFO) are defined behaviour worth seeing: the Lock moving on because its game left the schedule, a move at the mark inside the grace on a clean tick.
 const MARK = 3600e3, GRACE = 5 * 6e4;
 const snap = (o) => (o === undefined || o === null ? null : JSON.parse(JSON.stringify(o)));
 const show = (L) => (L ? `${L.abbr} ${L.line > 0 ? '+' : ''}${L.line} @${L.o === null || L.o === undefined ? 'none' : L.o} g${String(L.id).slice(-3)} ${L.final ? 'FINAL' : 'live'}${L.part ? ' part' : ''}${L.nl ? ' nl' : ''}${L.late ? ' late' : ''}${L.pre === false ? ' after-kick' : ''} c=${L.conf}` : 'NONE');
 const half = (x) => typeof x === 'number' && Number.isFinite(x) && Math.abs(x) <= 40 && Number.isInteger(x * 2);
 function install(A) {
-  const orig = A.compute, V = [], INFO = [], stats = { ticks: 0, clean: 0, dirty: 0, moves: 0, carried: 0, gone: 0, finals: 0 }, seen = new WeakMap(); let off = false;
-  A.compute = function (weeks, games, cur, nv, bx, now, ll, prevTick) {
+  const orig = A.compute, V = [], INFO = [], stats = { ticks: 0, clean: 0, dirty: 0, moves: 0, carried: 0, gone: 0, finals: 0, limbo: 0, offFinal: 0 }, seen = new WeakMap(), miss = {}; let off = false;
+  A.compute = function (weeks, games, cur, nv, bx, now, ll, prevTick, reads) {
     if (off) return orig.apply(this, arguments);
     let s = seen.get(weeks); const fresh = !s; if (!s) { s = { last: null, w: {}, g: {} }; seen.set(weeks, s); }
     const last = prevTick !== undefined ? prevTick : s.last, gapOk = typeof last === 'number' && now - last <= GRACE;
     const before = {}; Object.keys(weeks).forEach((w) => { const r = weeks[w]; if (r && r.v === 2) before[w] = snap({ lock: r.lock || null, wait: r.lockWait || null, gl: r.gl || {}, out: r.lockOut || [] }); });
     const ret = orig.apply(this, arguments); stats.ticks++; s.last = now;
-    const byId = {}; games.forEach((g) => (byId[String(g.id)] = g));
+    const byId = {}, offIds = new Set(); games.forEach((g) => { if (g.state === 'canceled') offIds.add(String(g.id)); else byId[String(g.id)] = g; });
     Object.keys(weeks).forEach((w) => {
       const r = weeks[w]; if (!r || r.v !== 2) return; const st = (s.w[w] = s.w[w] || {}), bf = before[w] || { lock: null, wait: null, gl: {}, out: [] }, B = bf.lock, Lk = snap(r.lock || null), gl = r.gl || {};
       const tag = `tick#${stats.ticks} wk${w} ${new Date(now).toISOString().slice(5, 19)}`, add = (c, m) => V.push(`[${c}] ${tag}: ${m} | before ${show(B)} | after ${show(Lk)}`), info = (c, m) => INFO.push(`[${c}] ${tag}: ${m} | before ${show(B)} | after ${show(Lk)}`);
@@ -41,9 +44,16 @@ function install(A) {
       if ((st.had || B) && !Lk) add('none', 'the week lost its Lock'); if (Lk) st.had = 1;
       if (B && B.final) { const keys = [...new Set(Object.keys(B).concat(Object.keys(Lk || {})))], diff = keys.filter((k) => JSON.stringify(B[k]) !== JSON.stringify(Lk && Lk[k])); if (diff.length) add('final', 'a final Lock changed in ' + diff.join(',')); }
       const gA = Lk ? byId[String(Lk.id)] || null : null;
+      if (!(B && !B.final && Lk)) delete miss[w];
       if (B && !B.final && Lk) {
         const gB = byId[String(B.id)] || null, moved = String(B.id) !== String(Lk.id), flip = !moved && B.abbr !== Lk.abbr, ch = moved || flip, what = moved ? 'MOVED to another game' : 'FLIPPED team';
         if (ch) stats.moves++;
+        // is a missing game really off the schedule? (counted here, on the checker's own counter)
+        let isOff = false; if (!gB) { const id = String(B.id), rd = reads && typeof reads[w] === 'number' ? reads[w] : now; let m = miss[w] && miss[w].id === id ? miss[w] : { id, n: 0, t0: rd, r: null }; if (m.r !== rd) m = { id, n: m.n + 1, t0: m.t0, r: rd }; miss[w] = m; isOff = offIds.has(id) || (m.n >= 3 && rd - m.t0 >= 10 * 6e4); } else delete miss[w];
+        if (!gB && ch && !isOff) add('gone-early', `Lock ${what} though its game is only missing from this read (not flagged postponed, ${miss[w].n} read(s) without it)`);
+        if (!gB && isOff && !ch && !Lk.final) add('gone-live', 'a live Lock is left on a game that is off the schedule');
+        if (!gB && isOff && !ch && Lk.final) { stats.offFinal++; if (!Lk.off) add('gone-live', 'Lock made final on a game off the schedule without the off flag'); info('off-final', 'Lock final on its game off the schedule: no game left in contention'); }
+        if (!gB && !ch && !isOff) stats.limbo++;
         if (ch && !gB) { stats.gone++; info('gone', `Lock moved on: its game is off the schedule (defined exception)${clean ? '' : ', tick not clean (' + why + ')'}`); }
         if (ch && gB) {
           if (!clean) add('rule', `Lock ${what} on a tick that was not clean (${why})`);
@@ -73,6 +83,6 @@ function install(A) {
     });
     return ret;
   };
-  return { V, INFO, stats, show, pause: (f) => { off = true; try { return f(); } finally { off = false; } }, restore: () => { A.compute = orig; }, report: (name) => `[lock-check ${name}] ${stats.ticks} ticks (${stats.clean} clean / ${stats.dirty} not clean with a live Lock; ${stats.moves} Lock changes, ${stats.carried} carried, ${stats.gone} moved on from a game off the schedule, ${stats.finals} finals); violations: ${V.length}; notes: ${INFO.length}` };
+  return { V, INFO, stats, show, pause: (f) => { off = true; try { return f(); } finally { off = false; } }, restore: () => { A.compute = orig; }, report: (name) => `[lock-check ${name}] ${stats.ticks} ticks (${stats.clean} clean / ${stats.dirty} not clean with a live Lock; ${stats.moves} Lock changes, ${stats.carried} carried, ${stats.gone} moved on from a game off the schedule, ${stats.limbo} carried while its game was missing from a read, ${stats.offFinal} final on a game off the schedule, ${stats.finals} finals); violations: ${V.length}; notes: ${INFO.length}` };
 }
 module.exports = { install, show, MARK, GRACE };

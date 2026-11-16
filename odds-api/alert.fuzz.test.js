@@ -2,8 +2,8 @@
 // Seeded fuzz of the weekly Lock: N random weeks driven tick by tick through alert.compute(), every tick checked BEFORE and AFTER by alert-check.js.
 // Each week is a synthetic 2026 week 2 (12 games: Thursday, Sunday 1pm x6, Sunday 4pm x3, Sunday night, Monday night) on top of a finished week 1. Random events:
 //   line moves (also through zero and to pick'em), lines pulled and put back, price changes, outages (7 minutes to 25 hours), restarts (the stored weeks reloaded
-//   from JSON, previous tick unknown), the book cache coming and going (source flips with the same or another number), games postponed (off the schedule, some come
-//   back later in the week), kickoffs moved (earlier, later, a day later), earlier results arriving late (inputs incomplete), closing lines posted after games.
+//   from JSON, previous tick unknown), the book cache coming and going (source flips with the same or another number), games postponed (half flagged by ESPN, half
+//   just missing from the feed; some come back later in the week), single games missing from one answer (feed glitch), kickoffs moved (earlier, later, a day later), earlier results arriving late (inputs incomplete), closing lines posted after games.
 // Odd weeks use the real model (pics/trophy.js); even weeks a seeded stub that changes side and confidence with every half point, to force Lock moves and flips.
 // Pass = 0 violations (see alert-check.js for the list), every week ends with a Lock, and a Lock whose game was played is final by the end of the week.
 const A = require('./alert'), D = A._deps, TR = require('../pics/trophy.js'), CHK = require('./alert-check').install(A);
@@ -16,7 +16,7 @@ const K1 = Date.parse('2026-09-18T00:15:00Z'), KS = Date.parse('2026-09-20T17:00
 const W1 = [['PHI', 'DAL', 24, 20, -2.5], ['GB', 'CHI', 10, 27, -3], ['KC', 'DEN', 20, 17, -1], ['BUF', 'MIA', 14, 31, -6.5], ['WAS', 'NYG', 16, 13, 2.5], ['LAR', 'SEA', 28, 21, 3], ['NE', 'DET', 30, 10, 7], ['LV', 'SF', 23, 17, 6.5]]; // away, home, home score, away score, closing line (home favoured +)
 const W2 = [['DAL', 'NYG', K1, 3], ['CHI', 'DET', KS, 6.5], ['MIA', 'NE', KS, 1.5], ['SF', 'GB', KS, 4], ['ATL', 'NO', KS, -2.5], ['CLE', 'PIT', KS, 7], ['HOU', 'IND', KS, -1], ['DEN', 'LV', K4, -2.5], ['SEA', 'LAR', K4, 3.5], ['KC', 'BUF', K4, 1], ['PHI', 'WAS', KN, -6], ['TB', 'CAR', KM, -3]];
 const nvKey = (wk, a, h) => wk + '-' + (a === 'LAR' ? 'LA' : a) + '-' + (h === 'LAR' ? 'LA' : h);
-const tot = { weeks: 0, ticks: 0, outages: 0, restarts: 0, flips: 0, moves: 0, pulled: 0, postponed: 0, returned: 0, kickoffs: 0, incomplete: 0, noLock: 0, liveAtEnd: 0, liveAtEndGone: 0 }, bad = [];
+const tot = { weeks: 0, ticks: 0, outages: 0, restarts: 0, flips: 0, moves: 0, pulled: 0, postponed: 0, returned: 0, kickoffs: 0, incomplete: 0, blips: 0, noLock: 0, liveAtEnd: 0, liveAtEndGone: 0 }, bad = [];
 function week(it) {
   const R = rng(SEED * 7919 + it), pick = (a) => a[Math.floor(R() * a.length)], stub = it % 2 === 0; let epoch = 0;
   if (stub) { TR.pickOf = (g) => { if (!g.line) return null; const h = hash(g.id + '|' + g.line + '|' + epoch + '|' + it), home = (h & 1) === 1; return { id: g.id, week: g.week, abbr: home ? g.home.abbr : g.away.abbr, other: home ? g.away.abbr : g.home.abbr, line: home ? -g.line : g.line, conf: 0.5 + ((h >>> 1) % 1000) / 10000, dog: (home ? -g.line : g.line) > 0 }; }; TR.dogCover = (g) => ({ p: 0.44 + (hash('d' + g.id + g.line + it) % 200) / 1000 }); }
@@ -29,7 +29,7 @@ function week(it) {
   G.push(...W);
   // scheduled events of this week
   const span = () => K1 - 30 * H + R() * (KM + 3 * H - (K1 - 30 * H)), ev = [];
-  if (R() < 0.3) { const g = pick(W), at = span(); ev.push({ at, f: () => { if (g.state !== 'pre') return; g.gone = true; tot.postponed++; } }); if (R() < 0.5) ev.push({ at: at + (1 + R() * 40) * H, f: () => { if (!g.gone) return; g.gone = false; g.start = Math.max(g.start, KM) + pick([20, 24, 44]) * H; tot.returned++; } }); }
+  if (R() < 0.3) { const g = pick(W), at = span(); const flag = R() < 0.5; ev.push({ at, f: () => { if (g.state !== 'pre') return; g.gone = true; g.flag = flag; tot.postponed++; } }); /* flag: ESPN says postponed (state 'canceled'); otherwise the game is just missing from the feed */ if (R() < 0.5) ev.push({ at: at + (1 + R() * 40) * H, f: () => { if (!g.gone) return; g.gone = false; g.start = Math.max(g.start, KM) + pick([20, 24, 44]) * H; tot.returned++; } }); }
   if (R() < 0.3) { const g = pick(W), at = span(), by = pick([-2, -1, 1, 3, 24]) * H; ev.push({ at, f: () => { if (g.state !== 'pre' || g.gone) return; g.start += by; tot.kickoffs++; } }); }
   ev.sort((a, b) => a.at - b.at);
   let booksOn = R() < 0.5, booksAt = 0; D.peek = () => (booksOn ? { at: booksAt, games: W.filter((g) => !g.gone && g.espn !== null).map((g) => ({ home: g.home.abbr, away: g.away.abbr, start: new Date(g.start).toISOString(), line: g.espn + g.bd, books: g.bp ? [{ l: g.espn + g.bd, p: g.bp[0], pa: g.bp[1] }] : [] })) } : null);
@@ -54,7 +54,8 @@ function week(it) {
     booksAt = t - pick([1, 5, 30, 170, 200]) * MIN; // sometimes older than the 3 hours the server accepts
     // the tick
     const restart = lastT !== null && R() < 0.03; if (restart) { weeks = JSON.parse(JSON.stringify(weeks)); ll = JSON.parse(JSON.stringify(ll)); tot.restarts++; }
-    const games = G.filter((g) => !g.gone).map((g) => ({ id: g.id, week: g.week, start: g.start, state: g.state, detail: g.detail, neutral: false, home: Object.assign({}, g.home), away: Object.assign({}, g.away), espn: g.espn, espnP: g.espnP && g.espn !== null ? g.espnP.slice() : null }));
+    const blip = R() < 0.01 ? pick(W) : null; if (blip) tot.blips++; // one game missing from this one answer (feed glitch): never moves the Lock
+    const games = G.filter((g) => (!g.gone || g.flag) && g !== blip).map((g) => ({ id: g.id, week: g.week, start: g.start, state: g.gone ? 'canceled' : g.state, detail: g.detail, neutral: false, home: Object.assign({}, g.home), away: Object.assign({}, g.away), espn: g.espn, espnP: g.espnP && g.espn !== null ? g.espnP.slice() : null }));
     const b = weeks[2] && weeks[2].lock ? Object.assign({}, weeks[2].lock) : null;
     D.now = () => t; A.compute(weeks, games, 2, nv, { map: {}, full: R() < 0.9 }, t, ll, restart ? null : lastT); tot.ticks++;
     const L = weeks[2] && weeks[2].lock; if (L) hadLock = true;
@@ -75,7 +76,7 @@ function week(it) {
 const t0 = Date.now();
 if (ONE !== null) week(ONE); else for (let it = 1; it <= N; it++) week(it);
 TR.pickOf = keep.pickOf; TR.dogCover = keep.dogCover;
-console.log(`alert.fuzz.test.js: seed ${SEED}, ${tot.weeks} weeks, ${tot.ticks} ticks in ${((Date.now() - t0) / 1000).toFixed(0)}s; outages ${tot.outages}, restarts ${tot.restarts}, book cache on/off ${tot.flips}, line moves ${tot.moves}, lines pulled/put back ${tot.pulled}, postponed ${tot.postponed} (came back ${tot.returned}), kickoffs moved ${tot.kickoffs}, weeks with late results ${tot.incomplete}; Lock still live at week end on a game off the schedule ${tot.liveAtEndGone}`);
+console.log(`alert.fuzz.test.js: seed ${SEED}, ${tot.weeks} weeks, ${tot.ticks} ticks in ${((Date.now() - t0) / 1000).toFixed(0)}s; outages ${tot.outages}, restarts ${tot.restarts}, book cache on/off ${tot.flips}, line moves ${tot.moves}, lines pulled/put back ${tot.pulled}, postponed ${tot.postponed} (came back ${tot.returned}), one-read feed gaps ${tot.blips}, kickoffs moved ${tot.kickoffs}, weeks with late results ${tot.incomplete}; Lock still live at week end on a game off the schedule ${tot.liveAtEndGone}`);
 console.log(CHK.report('fuzz'));
 if (process.env.NOTES) CHK.INFO.slice(0, 40).forEach((x) => console.log('  note ' + x));
 if (bad.length) { const cls = {}; bad.forEach((x) => { const m = /\[([A-Za-z0-9-]+)\]/.exec(x); cls[m ? m[1] : 'week-end'] = (cls[m ? m[1] : 'week-end'] || 0) + 1; }); console.log('  by kind: ' + JSON.stringify(cls)); console.log(bad.slice(0, process.env.ALL ? 1e9 : 30).map((x) => '  VIOLATION ' + x).join('\n')); console.log(`alert.fuzz.test.js: FAILED, ${bad.length} violations`); process.exitCode = 1; } else console.log('alert.fuzz.test.js: all passed (0 violations)');

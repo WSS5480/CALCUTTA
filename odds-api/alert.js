@@ -21,7 +21,7 @@
 // freezes then, with the last value it has. Each final part carries t (when it was frozen), pre (true = frozen before that kickoff; false = after it, shown with * in the app)
 // and late (frozen more than 5 minutes after its mark).
 // Stored in oddable_sync row 'lock:alert26' as { weeks: { N: record } } ('lock:' keeps it out of player lists), written with an optimistic check on `updated`.
-// Record v2: { v:2, first, at, gl:{gameId:{l,s,lt,f,t,pre,late}}, lock, top:{id,conf}, lockOut, lockWait, dogs:[], helper }. lock.conf may be null (carried Lock the model no longer takes). A record without v (week 10 of 2026, frozen by a phone under v248) is final as it is.
+// Record v2: { v:2, first, at, gl:{gameId:{l,s,lt,f,t,pre,late, il,ihp,iap,ips}}, lock, top:{id,conf}, lockOut, lockWait, lockGone, dogs:[], helper }. gl.il = the last number read IN TIME when a late one replaced it (Lock ranking only; grading uses l). lock.off = final on a postponed game with no game left to move to. lock.conf may be null (carried Lock the model no longer takes). A record without v (week 10 of 2026, frozen by a phone under v248) is final as it is.
 // Weeks in pics/alert-frozen.json (2026 weeks 1-9, back-filled) are never recomputed; GET returns them too (src 'ship').
 // Routes: GET /alert (public) · POST /alert/fix and POST /alert/run (owner only, acct.ownerOk) · POST /alert (the old phone freeze) is gone: 410.
 const fs = require('fs'), path = require('path');
@@ -78,7 +78,8 @@ async function season(now) {
   const todo = []; for (let w = 1; w <= 18; w++) { const c = WK[w]; if (c && c.done) continue; const soon = c && c.games.some((g) => g.state !== 'post' && g.start - now < 8 * 864e5); if (!c || now - c.at >= (hot && soon ? 55e3 : soon ? 5 * 6e4 : 60 * 6e4)) todo.push(w); }
   let i = 0; const worker = async () => { while (i < todo.length) { const w = todo[i++]; try { const games = parse(await jget(SBU + 'scoreboard?week=' + w + '&seasontype=2'), w); if (!games.length) throw new Error('no games'); WK[w] = { at: now, games, done: games.every((g) => g.state === 'post') /* v253: a week with a postponed/cancelled game is never 'done', so it is re-read hourly and a rescheduled game shows up */ }; } catch (e) { if (!WK[w]) throw new Error('week ' + w + ' unavailable (' + e.message + ')'); } } };
   await Promise.all([worker(), worker(), worker()]);
-  return { games: [].concat(...Object.keys(WK).map((w) => WK[w].games)).filter((g) => g.state !== 'canceled'), cur: HEAD.type === 2 ? HEAD.week : 18 };
+  const all = [].concat(...Object.keys(WK).map((w) => WK[w].games)), read = {}; Object.keys(WK).forEach((w) => (read[w] = WK[w].at));
+  return { games: all.filter((g) => g.state !== 'canceled'), off: all.filter((g) => g.state === 'canceled'), read, cur: HEAD.type === 2 ? HEAD.week : 18 }; // off: games ESPN marks postponed/cancelled; read: when each week's schedule was last read (both for compute(), M1)
 }
 // ---------- nflverse closing lines for finished games (home-favored points, keyed week-away-home) ----------
 let NV = null;
@@ -115,8 +116,11 @@ const priceOf = (e, side) => (e && Parlay.okPrice(side === 'home' ? e.hp : e.ap)
 // ---------- the computation. Mutates `weeks` (the stored records) and returns the weeks that changed. Pure apart from D.peek / D.log. ----------
 // prevTick = when the previous successful tick ran (run() passes it; null = not known, e.g. the first tick after a restart). Callers that keep ONE `weeks` object
 // across ticks (tests, simulations) may leave it out: the time of the last compute() on that object is used.
-const SEEN = new WeakMap();
-function compute(weeks, games, cur, nv, bx, now, ll, prevTick) {
+// `games` may hold games with state 'canceled' (ESPN says postponed or cancelled): they are not computed, but a live Lock on one moves on at once (M1). reads =
+// { week: when that week's schedule was last read } (run() passes it; left out = every call is a new read).
+const SEEN = new WeakMap(), GONE_N = 3, GONE_MS = 10 * 6e4; // a Lock's game that is merely missing from the feed is 'off the schedule' after GONE_N reads in a row spanning GONE_MS
+function compute(weeks, games, cur, nv, bx, now, ll, prevTick, reads) {
+  const offIds = new Set(games.filter((g) => g.state === 'canceled').map((g) => String(g.id))); if (offIds.size) games = games.filter((g) => g.state !== 'canceled');
   const last = prevTick !== undefined ? prevTick : SEEN.get(weeks), dirty = !(num(last) && now - last <= GRACE), taint = {}; SEEN.set(weeks, now); // dirty: an outage or a restart since the last tick (THE RULE (a), at the Lock)
   const byW = {}; games.forEach((g) => (byW[g.week] = byW[g.week] || []).push(g));
   const wks = Object.keys(byW).map(Number).sort((a, b) => a - b), open = wks.filter((w) => !D.ship[w] && w > (D.shipMax || 0) && !(weeks[w] && weeks[w].v !== 2 && w <= 10) && Math.min(...byW[w].map((g) => g.start)) - now < AHEAD), before = {}, changed = [];
@@ -132,8 +136,11 @@ function compute(weeks, games, cur, nv, bx, now, ll, prevTick) {
       let e = rec.gl[g.id]; if (e && e.f) return;
       const L = started(g) ? null : liveLine(g, now);
       if (L && (!e || e.l !== L.l || e.s !== L.s || e.hp !== L.hp || e.ap !== L.ap)) { // lt = when this NUMBER was first read for the game: a change of price or of source with the same number keeps it (a restart that loses the book cache is not a late line)
-        const same = !!e && e.l === L.l; if (!same && (now > g.start - MARK + GRACE || (e && e.s !== L.s))) taint[w] = 1; // a number first read late, or one that changed together with its source: not in-time information for the Lock (see THE RULE)
-        e = rec.gl[g.id] = Object.assign({ l: L.l, s: L.s, lt: same ? e.lt : now }, L.ps ? { hp: L.hp, ap: L.ap, ps: L.ps } : {});
+        const same = !!e && e.l === L.l, lateNow = now > g.start - MARK + GRACE; if (!same && (lateNow || (e && e.s !== L.s))) taint[w] = 1; // a number first read late, or one that changed together with its source: not in-time information for the Lock (see THE RULE)
+        // v253 H1: when a late number replaces one that was read in time, the last IN-TIME number (and its prices) is kept as il / ihp, iap, ips: the Lock ranking
+        // goes on using it for this game. A new number read in time drops it (kickoff moved later); the same number with another price or source keeps it.
+        const inT = !e ? null : same || lateNow ? (e.il !== undefined ? { il: e.il, ihp: e.ihp, iap: e.iap, ips: e.ips } : !same && e.lt <= g.start - MARK + GRACE ? { il: e.l, ihp: e.hp, iap: e.ap, ips: e.ps } : null) : null;
+        e = rec.gl[g.id] = Object.assign({ l: L.l, s: L.s, lt: same ? e.lt : now }, L.ps ? { hp: L.hp, ap: L.ap, ps: L.ps } : {}); if (inT) Object.keys(inT).forEach((k) => { if (inT[k] !== undefined) e[k] = inT[k]; });
       }
       if (now < g.start - MARK) return;
       if (!e && started(g)) { const c = closeOf(g); if (c !== null) { taint[w] = 1; const cp = nv.pr && nv.pr[kOf(g)]; e = rec.gl[g.id] = Object.assign({ l: c, s: 'close', lt: now }, cp && nv[kOf(g)] === c ? { hp: cp[0], ap: cp[1], ps: 'close' } : {}); } } // nothing was read before kickoff: the closing line (and its closing price), flagged as after the fact
@@ -152,8 +159,9 @@ function compute(weeks, games, cur, nv, bx, now, ll, prevTick) {
     const stamp = (o, kick, pre) => { o.final = true; o.t = now; o.pre = pre; if (now > kick - MARK + GRACE) o.late = 1; return o; };
     // 🔒 Lock (owner D9, Nov 15 2026: "Locks 1 hour before the actual game ... the pick can change; if you take early you risk").
     // THE RANKING: every tick the week is ranked (Trophy.pickOf, most confident first) from IN-TIME lines only: a game before its mark at the line the server holds
-    // now; a game at or past its mark at the line frozen there, and only if that line was first read by the mark (+ GRACE). A line that turns up later (late ESPN
-    // line, nflverse close) is used to GRADE that game (the frozen line its road dog and a Lock on it share), never to rank. (A week the server first sees after its
+    // now; a game at or past its mark at the line frozen there if that line was first read by the mark (+ GRACE), otherwise at the last number that WAS read in
+    // time (gl.il, rev253h H1: a late line never takes a game out of the ranking; only a game with no in-time number at all is left out). A line that turns up
+    // later (late ESPN line, nflverse close) is used to GRADE that game (the frozen line its road dog and a Lock on it share), never to rank. (A week the server first sees after its
     // games, with no Lock yet, is still ranked after the fact and flagged *.)
     // THE #1 SLOT is a stored game (rec.top = { id, conf }), not a position: the model's most confident pick is never the Lock, the Lock is the most confident game
     // after it that is still in contention. If the stored #1 cannot be ranked on a tick (late line, pick'em, off the schedule) it keeps the slot until a rankable game
@@ -169,11 +177,13 @@ function compute(weeks, games, cur, nv, bx, now, ll, prevTick) {
     // At or past its mark it freezes there: the game's frozen line as that team's spread, that side's price (what its road dog freezes at), final when the earlier
     // results are complete or at kickoff (held until then, N5); "line at the mark unavailable" (nl: last line and side it held) only with no usable line at all.
     // The confidence of a carried Lock is the model's at that line if the model still takes that team, otherwise none (null: the app shows no %).
-    // Defined exceptions: the Lock's game is off the schedule this tick (postponed, cancelled, moved out of the week): the Lock moves on by the ranking.
+    // Defined exception: the Lock's game is OFF THE SCHEDULE: the Lock moves on by the ranking (never onto a game more than GRACE past its mark, D5). Off the
+    // schedule = ESPN flags it postponed/cancelled, or it is missing on GONE_N reads of the schedule in a row spanning GONE_MS (rev253h M1); a game missing from
+    // fewer reads is a feed gap and the Lock is carried as it is. If no game is left in contention the Lock goes final where it stands, flagged off (L4).
     if (!(rec.lock && rec.lock.final)) {
       const prevL = rec.lock || null; // the live Lock as of the last tick
       const lateLine = (g) => { const e = rec.gl[g.id]; return !!prevL && now >= g.start - MARK && (!e || e.s === 'close' || !(e.lt <= g.start - MARK + GRACE)); };
-      const atMark = (g) => { const e = rec.gl[g.id], x = byId[g.id]; if (lateLine(g)) return null; return e && e.f && half(e.l) && e.l !== x.line ? Object.assign({}, x, { line: e.l }) : x; };
+      const atMark = (g) => { const e = rec.gl[g.id], x = byId[g.id]; if (lateLine(g)) return e && e.s !== 'close' && half(e.il) ? Object.assign({}, x, { line: e.il }) : null; /* H1: ranked at its last in-time number; never had one = not ranked */ return e && e.f && half(e.l) && e.l !== x.line ? Object.assign({}, x, { line: e.l }) : x; };
       const out = new Set(rec.lockOut || []), picks = wg.map(atMark).filter((g) => g && g.line !== null && g.line !== undefined).map((g) => Trophy.pickOf(g, rows, SEASON)).filter(Boolean).sort((a, b) => b.conf - a.conf);
       let top = picks[0] ? { id: String(picks[0].id), conf: r4(picks[0].conf) } : null;
       if (rec.top && !picks.some((x) => String(x.id) === String(rec.top.id)) && (!top || rec.top.conf >= top.conf)) top = rec.top; // the stored #1 is not rankable this tick: it keeps the slot
@@ -184,10 +194,15 @@ function compute(weeks, games, cur, nv, bx, now, ll, prevTick) {
       const goOut = (g) => { out.add(g.id); D.log(`week ${w} ${g.away.abbr}@${g.home.abbr} reached its mark while not the Lock: out of contention`); };
       const show = (L) => `${L.abbr} ${L.line > 0 ? '+' : ''}${L.line}${L.o ? ' ' + L.o : ' no price'}${num(L.conf) ? ' ' + Math.round(L.conf * 100) + '%' : ''}${L.pre ? '' : ' AFTER KICKOFF'}${L.late ? ' late' : ''}${L.nl ? ' (line at the mark unavailable)' : ''}${L.part ? ' (inputs incomplete)' : ''}`;
       const own = prevL ? wg.find((g) => g.id === String(prevL.id)) || null : null;
+      // M1: the Lock's game is not in this answer. Off the schedule only when ESPN says postponed/cancelled, or after GONE_N reads in a row without it spanning
+      // GONE_MS; until then the Lock is carried (limbo). rec.lockGone = { id, n, t0, r }: reads counted, first and last read time.
+      let limbo = false, gone = false;
+      if (prevL && !own) { const id = String(prevL.id), r = reads && num(reads[w]) ? reads[w] : now; let q = rec.lockGone && rec.lockGone.id === id ? rec.lockGone : { id, n: 0, t0: r, r: null }; if (q.r !== r) q = { id, n: q.n + 1, t0: q.t0, r }; gone = offIds.has(id) || (q.n >= GONE_N && r - q.t0 >= GONE_MS); limbo = !gone; if (gone) { delete rec.lockGone; D.log(`week ${w} the Lock's game ${prevL.abbr} v ${prevL.other} is off the schedule (${offIds.has(id) ? 'postponed/cancelled' : 'missing on ' + q.n + ' reads'}): the Lock moves on`); } else rec.lockGone = q; } else delete rec.lockGone;
       if (rec.lockWait && !(own && own.id === String(rec.lockWait))) delete rec.lockWait; // the held game left the schedule (or is no longer the Lock's game): nothing is held
       const pin = !!own && (dirty || !!taint[w] || rec.lockWait === own.id || now > own.start - MARK + GRACE);
       let L = null, wait = false;
-      if (pin) { // CARRIED: no ranking decides anything about the Lock this tick
+      if (limbo) { wg.forEach((g) => { if (now >= g.start - MARK && !out.has(g.id)) goOut(g); }); L = prevL; } // carried as it is: nothing is known about its game on this read
+      else if (pin) { // CARRIED: no ranking decides anything about the Lock this tick
         wg.forEach((g) => { if (g.id !== own.id && now >= g.start - MARK && !out.has(g.id)) goOut(g); });
         const oe = rec.gl[own.id], ok = !!oe && half(oe.l) && oe.l !== 0, home = prevL.abbr === own.home.abbr, x = Object.assign({}, prevL); delete x.part; delete x.nl;
         if (ok) { const line = home ? -oe.l : oe.l, m = Trophy.pickOf(Object.assign({}, byId[own.id], { line: oe.l }), rows, SEASON); Object.assign(x, { line, dog: line > 0, conf: m && m.abbr === prevL.abbr ? r4(m.conf) : null }, priceOf(oe, home ? 'home' : 'away')); }
@@ -207,7 +222,8 @@ function compute(weeks, games, cur, nv, bx, now, ll, prevTick) {
         }
         if (!L) { // not final this tick: the candidate; with none in contention, only if there never was a live Lock, the top-ranked game that has not kicked off
           const c = cand() || (!prevL ? picks.find((x) => byId[x.id] && byId[x.id].start > now) : null);
-          L = c ? mk(c) : prevL; if (L && (!full || wait)) L.part = 1;
+          if (!c && gone) { L = Object.assign({}, prevL, { final: true, t: now, pre: true, off: 1 }); rec.t = now; rec.pre = true; D.log(`week ${w} LOCK final on a game off the schedule (no game left in contention): ${show(L)}`); } // L4: never a live Lock left on a postponed game. No game is left to move to (D5: a game past its mark is never taken up), so it is final where it stands, flagged off (no result unless the game is played)
+          else { L = c ? mk(c) : prevL; if (L && (!full || wait)) L.part = 1; }
         }
       }
       rec.lockOut = [...out]; rec.lock = L;
@@ -274,7 +290,7 @@ async function run() {
   const now = D.now(), sea = await season(now); SEA = sea; if (!sea) return 'outside the ' + SEASON + ' regular season';
   const nv = await closing(now), bx = await boxes(sea.games);
   for (let tries = 0; tries < 3; tries++) {
-    const row = await getRow(tries > 0), weeks = clone((row.data && row.data.weeks) || {}), ll = clone((row.data && row.data.ll) || {}), changed = module.exports.compute(weeks, sea.games, sea.cur, nv, bx, now, ll, LAST);
+    const row = await getRow(tries > 0), weeks = clone((row.data && row.data.weeks) || {}), ll = clone((row.data && row.data.ll) || {}), changed = module.exports.compute(weeks, sea.games.concat(sea.off || []), sea.cur, nv, bx, now, ll, LAST, sea.read);
     if (!changed.length && !changed.ll) { LAST = now; return 'no change'; }
     const ids = new Set(sea.games.map((g) => g.id)); Object.keys(ll).forEach((id) => { if (!ids.has(id)) delete ll[id]; }); // only this season's games
     const upd = Math.max(now, Number(row.updated || 0) + 1);

@@ -27,7 +27,7 @@ let SCHED = [
   G('206', 2, 'SEA', 'LAR', new Date(KM).toISOString(), 'pre', null), // Monday: division, no line posted yet
 ];
 for (let w = 3; w <= 18; w++) SCHED.push(G('9' + w, w, 'KC', 'BUF', new Date(K1 + (w - 2) * 7 * 864e5).toISOString()));
-const ev = (g) => ({ id: g.id, date: g.date, status: { type: { state: g.st, shortDetail: g.det || (g.st === 'post' ? 'Final' : ''), name: g.st === 'post' ? 'STATUS_FINAL' : 'STATUS_SCHEDULED' } }, competitions: [{ competitors: [{ homeAway: 'home', team: { abbreviation: g.home }, score: String(g.hs) }, { homeAway: 'away', team: { abbreviation: g.away }, score: String(g.as) }], odds: g.odds ? [Object.assign({ details: g.odds }, g.op ? { homeTeamOdds: { spreadOdds: g.op[0] }, awayTeamOdds: { spreadOdds: g.op[1] } } : {})] : [] }] });
+const ev = (g) => ({ id: g.id, date: g.date, status: { type: { state: g.st, shortDetail: g.det || (g.st === 'post' ? 'Final' : ''), name: g.pp ? 'STATUS_POSTPONED' : g.st === 'post' ? 'STATUS_FINAL' : 'STATUS_SCHEDULED' } }, competitions: [{ competitors: [{ homeAway: 'home', team: { abbreviation: g.home }, score: String(g.hs) }, { homeAway: 'away', team: { abbreviation: g.away }, score: String(g.as) }], odds: g.odds ? [Object.assign({ details: g.odds }, g.op ? { homeTeamOdds: { spreadOdds: g.op[0] }, awayTeamOdds: { spreadOdds: g.op[1] } } : {})] : [] }] });
 let CSV = ['season,game_type,week,away_team,home_team,home_score,spread_line', '2026,REG,1,PHI,DAL,24,-2.5', '2026,REG,1,GB,CHI,10,-3', '2026,REG,1,KC,DEN,20,-1', '2026,REG,1,BUF,MIA,14,-6.5', '2026,REG,1,WAS,NYG,16,2.5', '2026,REG,1,LA,SEA,28,3', '2026,REG,1,NE,DET,30,7', '2026,REG,1,LV,SF,23,6.5'];
 D.fetch = async (u) => {
   urls.push(u);
@@ -307,7 +307,7 @@ srv.listen(0, async () => {
         // the #1 slot is a stored game, not a position: the #1 leaving the schedule does not promote the Lock's game into the skipped slot
         'the #1 leaves the schedule: the Lock does not hop': async () => { fresh16(); TR.pickOf = keep21; CONF = Object.assign({}, C22); NOW = K1 - 3 * 3600e3 - 5 * MIN; await A.tick(); NOW += 5 * MIN; await A.tick(); const b = stored(2).lock; assert.strictEqual(b.id, '403'); drop22('402'); NOW += 5 * MIN; await A.tick(); let r = stored(2); assert.deepStrictEqual(idt(r.lock), idt(b), 'clean tick, #1 postponed: the Lock stays'); assert.strictEqual(r.top.id, '402'); CONF[404] = 0.95; NOW += MIN; await A.tick(); r = stored(2); assert.strictEqual(r.top.id, '404', 'a rankable game that out-ranks the stored #1 takes the slot'); assert.strictEqual(r.lock.id, '403'); },
         // D5 on the exception path: the Lock's game is off the schedule at a late wake -> the Lock moves on, but never onto a game already past its mark
-        "the Lock's game is gone at a late wake: not onto a game past its mark": async () => { await live22(C22, '403'); drop22('403'); NOW = KS - 30 * MIN; await A.tick(); const r = stored(2); assert.strictEqual(r.lock.id, '405', 'moved on to the game still ahead of its mark'); assert.ok(!r.lock.final); assert.ok(r.lockOut.includes('404') && r.lockOut.includes('402')); },
+        "the Lock's game is postponed at a late wake: not onto a game past its mark": async () => { await live22(C22, '403'); h22('403').pp = 1; NOW = KS - 30 * MIN; await A.tick(); const r = stored(2); assert.strictEqual(r.lock.id, '405', 'moved on to the game still ahead of its mark'); assert.ok(!r.lock.final); assert.ok(r.lockOut.includes('404') && r.lockOut.includes('402')); },
         // (1) a carried Lock the model no longer takes at the frozen line shows no % (was: the old number)
         'stale confidence: none when the model no longer takes that team': async () => {
           fresh16(); const h = h22('403'); h.odds = 'DET -0.5'; h.op = [-110, -110]; TR.pickOf = (g) => (g.id === '403' ? fav(g) : keep21(g)); CONF = { 401: 0.9, 402: 0.7, 404: 0.6, 405: 0.5 };
@@ -327,12 +327,46 @@ srv.listen(0, async () => {
         'held game leaves the schedule: lockWait cleared': async () => {
           fresh16(); g108.st = 'in'; TR.pickOf = keep21; CONF = Object.assign({}, C22);
           try { NOW = K1 - 59 * MIN; await A.tick(); NOW = KS - 64 * MIN; await A.tick(); NOW = KS - 59 * MIN; await A.tick(); let r = stored(2); assert.ok(r.lock.id === '403' && r.lockWait === '403' && !r.lock.final, 'held at its mark');
-            const g403 = h22('403'); drop22('403'); NOW = KS - 54 * MIN; await A.tick(); r = stored(2); assert.strictEqual(r.lock.id, '405', 'postponed: the Lock moves on (defined exception)'); assert.ok(!r.lockWait, 'nothing is held any more');
-            CONF[403] = 0.45; g403.date = new Date(KM + 864e5).toISOString(); SCHED.push(g403); NOW = KS + 2 * 3600e3; await A.tick(); NOW += 5 * MIN; await A.tick(); NOW += MIN; await A.tick(); r = stored(2); assert.strictEqual(r.lock.id, '405', 'the game comes back ranked below the Lock: the Lock does not snap back'); assert.ok(!r.lockWait); } finally { g108.st = 'post'; }
+            const g403 = h22('403'); g403.pp = 1; NOW = KS - 54 * MIN; await A.tick(); r = stored(2); assert.strictEqual(r.lock.id, '405', 'postponed: the Lock moves on (defined exception)'); assert.ok(!r.lockWait, 'nothing is held any more');
+            CONF[403] = 0.45; g403.date = new Date(KM + 864e5).toISOString(); delete g403.pp; NOW = KS + 2 * 3600e3; await A.tick(); NOW += 5 * MIN; await A.tick(); NOW += MIN; await A.tick(); r = stored(2); assert.strictEqual(r.lock.id, '405', 'the game comes back ranked below the Lock: the Lock does not snap back'); assert.ok(!r.lockWait); } finally { g108.st = 'post'; }
         },
       };
+      // --- 23 (v253, review rev253h). Each case fails on c72cd6f and passes now. ---
+      const K6 = KN + 3 * 3600e3, add406 = () => SCHED.push(Object.assign(G('406', 2, 'TB', 'CAR', new Date(K6).toISOString(), 'pre', 'CAR -3'), { op: [-110, -110] }));
+      Object.assign(T22, {
+        // H1 / x1: server away 9:00 -> 12:30; a 1pm game (403) gets a late line. Ten minutes later, on clean ticks, the model re-orders the two later games. The
+        // late-line game keeps its place in the ranking at its last in-time number, so it is the #1 and the Lock stays. Was: 403 dropped from the ranking, Lock hopped.
+        'H1 a late line on another game never removes it from the ranking': async () => {
+          fresh16(); add406(); const byLine = { 6.5: 0.7, 8: 0.2 }; TR.pickOf = (g) => (g.id === '403' ? Object.assign(keep21(g), { conf: byLine[g.line] }) : keep21(g)); CONF = { 405: 0.9, 406: 0.8, 402: 0.5, 404: 0.45, 401: 0.4 };
+          NOW = K1 - 59 * MIN; await A.tick(); NOW = KS - 4 * 3600e3; await A.tick(); const b = stored(2).lock; assert.ok(b.id === '406' && !b.final, 'setup: Lock on 406, #1 405, third 403'); assert.strictEqual(stored(2).top.id, '405');
+          set('403', 'DET -8'); NOW = KS - 30 * MIN; await A.tick(); let r = stored(2); assert.deepStrictEqual(idt(r.lock), idt(b), 'wake tick: carried'); assert.ok(r.gl['403'].f && r.gl['403'].l === 8 && r.gl['403'].late === 1, '403 frozen at the late line');
+          assert.strictEqual(r.gl['403'].il, 6.5, 'its last in-time number is kept'); assert.strictEqual(r.gl['403'].ihp, -112, 'with its price'); assert.strictEqual(r.gl['403'].iap, -108);
+          NOW += 5 * MIN; await A.tick(); CONF[405] = 0.5; CONF[406] = 0.6; NOW += 5 * MIN; await A.tick(); r = stored(2);
+          assert.strictEqual(r.top.id, '403', 'clean tick: 403, ranked at its in-time 6.5 (70%), is the #1 (at the late 8 it would be 20%)'); assert.deepStrictEqual(idt(r.lock), idt(b), 'the Lock stays on 406 (was: moved to 405 on a ranking without 403)');
+          assert.ok(dog(r, '403').final && dog(r, '403').line === 8 && dog(r, '403').late === 1, 'grading and display of the frozen pick still use the frozen line'); assert.ok(r.lockOut.includes('403'));
+          NOW = K6 - 59 * MIN; await A.tick(); r = stored(2); assert.ok(r.lock.final && r.lock.id === '406' && !r.lock.late, 'final on 406 at its own mark');
+        },
+        // M1 / X2: the Lock's game is missing from ONE answer on a clean tick. Was: the Lock jumped to another game and back.
+        'M1 game missing from one answer: the Lock does not move': async () => {
+          const b = await live22(C22, '403'), g403 = h22('403'); NOW += 5 * MIN; await A.tick(); drop22('403'); NOW += 5 * MIN; await A.tick(); let r = stored(2); assert.ok(!r.gl['403'] || r.lockGone, 'the answer without 403 was read'); assert.deepStrictEqual(idt(r.lock), idt(b), 'missing once: carried'); assert.strictEqual(r.lockGone.n, 1);
+          SCHED.push(g403); NOW += 5 * MIN; await A.tick(); r = stored(2); assert.deepStrictEqual(idt(r.lock), idt(b), 'back: still the Lock'); assert.ok(!r.lockGone && !r.lock.final);
+          // missing on 3 reads in a row over 10 minutes = off the schedule: the Lock moves on
+          drop22('403'); NOW += 5 * MIN; await A.tick(); NOW += MIN; await A.tick(); NOW += MIN; await A.tick(); r = stored(2); assert.strictEqual(r.lockGone.n, 1, 'ticks between two reads of the schedule do not count'); NOW += 3 * MIN; await A.tick(); r = stored(2); assert.deepStrictEqual(idt(r.lock), idt(b), '2 reads: carried');
+          NOW += 5 * MIN; await A.tick(); r = stored(2); assert.strictEqual(r.lock.id, '404', '3 reads, 10 minutes: the Lock moves on by the ranking'); assert.ok(!r.lockGone);
+        },
+        // M1 / X2b: the same glitch on the tick the server wakes 30 minutes past the 1pm marks. Was: the Lock moved to another game for the rest of the week.
+        'M1 game missing from the wake answer past its mark: carried, then final on its own game': async () => {
+          const b = await live22(C22, '403'), g403 = h22('403'); drop22('403'); NOW = KS - 30 * MIN; await A.tick(); let r = stored(2); assert.deepStrictEqual(idt(r.lock), idt(b), 'wake, game missing: carried'); assert.ok(!r.lock.final);
+          SCHED.push(g403); NOW += MIN; await A.tick(); frozenOn403(stored(2), b, 'X2b');
+        },
+        // L4: the Lock's game is postponed and no game is left in contention. Was: a live Lock on the postponed game to the end of the week, no final Lock.
+        'L4 Lock postponed with no game left in contention: final, flagged off': async () => {
+          const b = await live22(C22L, '405'); NOW = KS - 30 * MIN; await A.tick(); let r = stored(2); assert.ok(r.lock.id === '405' && !r.lock.final && r.lockOut.length === 4); h22('405').pp = 1; NOW += MIN; await A.tick(); r = stored(2);
+          assert.deepStrictEqual(idt(r.lock), idt(b)); assert.ok(r.lock.final && r.lock.off === 1 && r.lock.line === b.line, 'final where it stands, flagged off'); const fl = cs(r.lock); delete h22('405').pp; NOW += 5 * MIN; await A.tick(); assert.strictEqual(cs(stored(2).lock), fl, 'a final Lock never changes');
+        },
+      });
       const bad22 = []; for (const k of Object.keys(T22)) { try { await T22[k](); if (process.env.ALERT_T22) console.log('  22 pass: ' + k); } catch (e) { bad22.push(k + ' -> ' + String(e.message).split('\n')[0]); if (process.env.ALERT_T22) console.log('  22 FAIL: ' + k + ' -> ' + String(e.message).split('\n')[0]); } }
-      if (process.env.ALERT_T22) console.log(`  section 22: ${Object.keys(T22).length - bad22.length} of ${Object.keys(T22).length} cases pass`); else assert.deepStrictEqual(bad22, [], 'section 22 (THE RULE)');
+      if (process.env.ALERT_T22) console.log(`  section 22: ${Object.keys(T22).length - bad22.length} of ${Object.keys(T22).length} cases pass`); else assert.deepStrictEqual(bad22, [], 'sections 22 (THE RULE) and 23 (rev253h)');
       TR.pickOf = keep21;
     } finally { TR.pickOf = keepT.pickOf; TR.dogCover = keepT.dogCover; H.win = keepW; }
     // --- 17 (v252 review fixes) ---

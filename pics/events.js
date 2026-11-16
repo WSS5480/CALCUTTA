@@ -25,7 +25,7 @@
     de: 'You are out after two losses. A first loss drops you to the losers bracket. Its winner meets the winners-bracket champion in the final; if the losers-bracket side wins that, a second final is played (bracket reset) because both now have one loss.',
     ladder: 'Everyone starts on a ranked ladder. Challenge anyone up to N spots above you; a challenge must be played within the set days. Win and you take the higher spot (swap places, or move in and push the rest down one). A challenge not played in time is a forfeit win for the challenger, or is cancelled, as the commissioner set.',
     h2h: 'Pair against pair or player against player, best of 1, 3 or 5 games. Challenge someone, they accept, you play, the scorer enters it and the other side confirms. Records and point differential build up over the event.',
-    pickem: "Spectators (and players) pick the winner of every match before it starts. Each match locks for picking the moment it starts. Most correct picks wins; the tiebreak is the closest guess of the final's total points.",
+    pickem: "Spectators (and players) pick the winner of every match before its round starts. A round locks for picking the moment its first match starts or gets a score. Most correct picks wins; the tiebreak is the closest guess of the final's total points.",
     solo: 'A drill or skills game with a number: serves in, free throws made, a putting contest, a bowling series. Each player enters their own score (the commissioner can enter it for anyone). Highest wins, or lowest if the commissioner said so. Works with one player for practice.',
     scoring: 'Scores are typed in by the match’s designated scorer, and the other side confirms them. A disputed score goes to the commissioner, who decides. Every entry, confirmation, dispute and correction is in the event history.',
     invite: 'Every game has its own invite link. Anyone who opens it signs up for Oddable if they are new, then lands on this game to join.',
@@ -226,7 +226,7 @@
     h += '<h3 class="eh">Leaderboard</h3><div class="ethead e5"><span>#</span><span>Name</span><span class="er">Right</span><span class="er">Pts</span></div>';
     p.table.forEach((r) => { h += '<div class="etrow e5"><span>' + r.place + '</span><span><b>' + esc(r.name) + '</b>' + (r.tb != null && p.finalTotal != null ? '<small>tiebreak ' + r.tb + '</small>' : '') + '</span><span class="er">' + r.right + '/' + r.n + '</span><span class="er"><b>' + r.pts + '</b></span></div>'; });
     if (!p.table.length) h += '<div class="ecard emut">No picks yet.</div>';
-    const locked = e.matches.filter((m) => p.counts[m.id] && m.an && m.bn); if (locked.length) { h += '<h3 class="eh">How everyone picked (after each match started)</h3>'; locked.forEach((m) => { const c = p.counts[m.id]; h += '<div class="etrow e1"><span><b>' + esc(m.an) + ' v ' + esc(m.bn) + '</b><small>' + esc(label(m)) + ' · picked ' + esc(m.an) + ': ' + c.a + ' · picked ' + esc(m.bn) + ': ' + c.b + '</small></span></div>'; }); }
+    const locked = e.matches.filter((m) => p.counts[m.id] && m.an && m.bn); if (locked.length) { h += '<h3 class="eh">How everyone picked (after each round locked)</h3>'; locked.forEach((m) => { const c = p.counts[m.id]; h += '<div class="etrow e1"><span><b>' + esc(m.an) + ' v ' + esc(m.bn) + '</b><small>' + esc(label(m)) + ' · picked ' + esc(m.an) + ': ' + c.a + ' · picked ' + esc(m.bn) + ': ' + c.b + '</small></span></div>'; }); }
     return h;
   }
   function infoV(e) {

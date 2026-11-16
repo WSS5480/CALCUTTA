@@ -218,14 +218,14 @@ srv.listen(0, async () => {
     j = ok(await call('fan2', 'get', { id: pe })); assert.ok(!j.event.pickem.counts[s1.id], 'others’ picks not visible before the match locks'); assert.strictEqual(j.event.pickem.mine[s1.id].s, 'b');
     ok(await call('ann', 'live', { id: pe, m: s1.id }));
     no(await call('fan3', 'pick', { id: pe, m: s1.id, side: 'b' }), 409, 'pick locked once the match started');
-    ok(await call('fan3', 'pick', { id: pe, m: s2.id, side: 'b' }), 'other match still open');
+    no(await call('fan3', 'pick', { id: pe, m: s2.id, side: 'b' }), 409, 'the whole round locks when its first match starts (review fix 6)');
     j = ok(await call('fan2', 'get', { id: pe })); assert.deepStrictEqual(j.event.pickem.counts[s1.id], { a: 2, b: 1 }, 'counts only, after lock');
     ev = ok(await call('ann', 'score', { id: pe, m: s1.id, games: win('a') })).event; ev = ok(await call('ann', 'score', { id: pe, m: s2.id, games: win('a') })).event;
     ok(await call('fan1', 'pick', { id: pe, m: fin.id, side: 'a' })); ok(await call('fan2', 'pick', { id: pe, m: fin.id, side: 'a' })); ok(await call('fan3', 'pick', { id: pe, m: fin.id, side: 'b' }));
     ev = ok(await call('ann', 'score', { id: pe, m: fin.id, games: [[11, 9]] })).event; // final total 20
     const tbl2 = ev.pickem.table; assert.deepStrictEqual(tbl2.map((x) => [x.name, x.pts]), [['fan1', 3], ['fan2', 2], ['fan3', 1]]);
     assert.strictEqual(ev.pickem.finalTotal, 20); no(await call('fan1', 'pick', { id: pe, tb: 21 }), 409, 'tiebreak locked once the final started');
-    t("bracket pick'em: picks only for set matches, lock per match at its start (server), others' picks hidden then counts only, most correct wins");
+    t("bracket pick'em: picks only for set matches, lock per round when its first match starts (server), others' picks hidden then counts only, most correct wins");
     // tiebreak: equal points -> closest final total
     NOW = Z('2026-11-17T18:00:00Z');
     ev = ok(await call('ann', 'create', base({ title: 'Pickem2', fmt: 'se', pickem: true, seeding: 'manual', entrants: [{ name: 'R1' }, { name: 'R2' }], playIn: false }))).event; const p2 = ev.id, p2c = ev.code;

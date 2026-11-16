@@ -117,3 +117,13 @@ T.realScores = async () => {
   assert.throws(() => E.checkGames(ch, [[23, 21]]), 'loser reached 21: the game was over earlier'); assert.throws(() => E.checkGames(ch, [[20, 15]]), 'winner under 21');
   const pb = E.cleanRules(base({}), NOW).rules; assert.ok(E.checkGames(pb, [[12, 10]])); assert.throws(() => E.checkGames(pb, [[13, 10]])); // pickleball unchanged
 };
+// 6 (MED) pick'em: a round's picks lock when its first match starts or gets a score (no "scheduled start" needed)
+T.pickemRoundLock = async () => {
+  let ev = ok(await call('ann', 'create', base({ fmt: 'se', pickem: true, playIn: false, entrants: ['P1', 'P2', 'P3', 'P4'].map((n) => ({ name: n })) }))).event; const id = ev.id;
+  ok(await call('sp', 'join', { code: ev.code, as: 'spectator', myName: 'Spy' })); ok(await call('ann', 'draw', { id }));
+  ev = ok(await call('sp', 'get', { id })).event; const r1 = ev.matches.filter((m) => m.st === 'w' && m.r === 1);
+  ok(await call('sp', 'pick', { id, m: r1[0].id, side: 'a' }));
+  ok(await call('ann', 'live', { id, m: r1[1].id })); // the other semifinal starts
+  no(await call('sp', 'pick', { id, m: r1[0].id, side: 'b' }), 409, 'round 1 locked when its first match started');
+  ev = ok(await call('sp', 'get', { id })).event; assert.ok(!ev.pickem.open.includes(r1[0].id), 'not offered for picking'); assert.ok(ev.pickem.counts[r1[0].id], 'counts shown once locked');
+};

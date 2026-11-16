@@ -300,6 +300,9 @@ const isComm = (evt, mk) => evt.comm === mk;
 const sideOf = (evt, mk, m) => { const me = memberOf(evt, mk); if (!me) return null; const A = evt.entrants.find((e) => e.eid === m.a), B = evt.entrants.find((e) => e.eid === m.b); if (A && pidsOf(A).includes(me.pid)) return 'a'; if (B && pidsOf(B).includes(me.pid)) return 'b'; return null; };
 const linked = (evt, eid) => { const e = evt.entrants.find((x) => x.eid === eid); return !!(e && pidsOf(e).length); };
 const locked = (m, now) => !!m.live || PLAYED.has(m.state) || DONE.has(m.state) || (m.start && now >= m.start);
+// Review fix 6: pick'em locks a whole ROUND when its first match starts (Start tap) or gets a score. Byes and cancelled matches do not count.
+const roundKey = (m) => m.id[0] + '|' + m.st + '|' + m.r;
+const pickLocked = (evt, m, now) => locked(m, now) || evt.matches.some((x) => x !== m && roundKey(x) === roundKey(m) && (x.live || PLAYED.has(x.state) || x.state === 'confirmed'));
 function pub(evt, now) {
   return { id: evt.id, title: evt.title, sport: evt.sport, fmt: evt.fmt, fmtName: FMTN[evt.fmt], start: evt.start, endDay: evt.endDay, rules: evt.rules, money: evt.money, join: evt.join, takeText: takeText(evt.money), pot: potSummary(evt),
     entries: evt.entrants.length, people: people(evt), commName: (evt.members.find((m) => m.mk === evt.comm) || {}).name || '', started: now >= evt.start, drawn: !!evt.drawn, locked: now >= evt.start || !!evt.drawn, fin: evt.fin || 0, inGroup: !!evt.group, entText: limits.ENTERPRISE_TEXT };
@@ -366,8 +369,8 @@ function pickTable(evt) {
 }
 function pickemView(evt, me, now) {
   const P = evt.picks || {}, mine = me && P[me.pid] ? P[me.pid] : { m: {} }, t = pickTable(evt), cnt = {};
-  evt.matches.forEach((m) => { if (!locked(m, now)) return; let a = 0, b = 0; Object.values(P).forEach((p) => { const k = p.m && p.m[m.id]; if (k && k.s === 'a') a++; else if (k && k.s === 'b') b++; }); cnt[m.id] = { a, b }; }); // others' picks only as counts, and only once the match is locked
-  return { mine: mine.m || {}, tb: mine.tb == null ? null : mine.tb, table: t.rows, finalTotal: t.finalTotal, counts: cnt, open: evt.matches.filter((m) => m.state === 'ready' && !locked(m, now) && m.a && m.b && m.a !== 'BYE' && m.b !== 'BYE').map((m) => m.id) };
+  evt.matches.forEach((m) => { if (!pickLocked(evt, m, now)) return; let a = 0, b = 0; Object.values(P).forEach((p) => { const k = p.m && p.m[m.id]; if (k && k.s === 'a') a++; else if (k && k.s === 'b') b++; }); cnt[m.id] = { a, b }; }); // others' picks only as counts, and only once the match is locked
+  return { mine: mine.m || {}, tb: mine.tb == null ? null : mine.tb, table: t.rows, finalTotal: t.finalTotal, counts: cnt, open: evt.matches.filter((m) => m.state === 'ready' && !pickLocked(evt, m, now) && m.a && m.b && m.a !== 'BYE' && m.b !== 'BYE').map((m) => m.id) };
 }
 
 // ---------- routes ----------
@@ -509,8 +512,8 @@ async function handle(req, res) {
     if (op === 'live') { const evt = await mutate(id, (evt, now) => { notFin(evt); const m = findM(evt); if (m.live || m.state !== 'ready') return { nochange: true, v: evt }; if (!isComm(evt, u.mk) && !sideOf(evt, u.mk, m)) throw bad(403, 'Only the players or the commissioner start a match'); m.live = now; m.v++; audit(evt, now, myName(evt), 'start', m.id, 'Match started (picks locked)'); return evt; }); return ok(evt); }
     if (op === 'pick') {
       rate('score', u.mk, ip); const evt = await mutate(id, (evt, now) => { if (!evt.rules.pickem) throw bad(409, 'This event has no pick\'em'); const pm = memberOf(evt, u.mk), P = evt.picks[pm.pid] = evt.picks[pm.pid] || { m: {} };
-        if (b.tb !== undefined) { const fm = finalMatch(evt); if (fm && locked(fm, now)) throw bad(409, 'The final has started. The tiebreak is locked.'); const t = Number(b.tb); if (!(Number.isInteger(t) && t >= 0 && t <= 999)) throw bad(400, 'Tiebreak: total points in the final, 0 to 999'); P.tb = t; }
-        if (b.m) { const m = findM(evt); if (locked(m, now)) throw bad(409, 'Picks for this match locked when it started'); if (!(m.state === 'ready' && m.a && m.b)) throw bad(409, 'This match is not set yet'); if (!['a', 'b'].includes(b.side)) throw bad(400, 'Pick a side'); P.m[m.id] = { s: b.side, t: now }; }
+        if (b.tb !== undefined) { const fm = finalMatch(evt); if (fm && pickLocked(evt, fm, now)) throw bad(409, 'The final has started. The tiebreak is locked.'); const t = Number(b.tb); if (!(Number.isInteger(t) && t >= 0 && t <= 999)) throw bad(400, 'Tiebreak: total points in the final, 0 to 999'); P.tb = t; }
+        if (b.m) { const m = findM(evt); if (pickLocked(evt, m, now)) throw bad(409, 'Picks for this round locked when its first match started'); if (!(m.state === 'ready' && m.a && m.b)) throw bad(409, 'This match is not set yet'); if (!['a', 'b'].includes(b.side)) throw bad(400, 'Pick a side'); P.m[m.id] = { s: b.side, t: now }; }
         P.last = now; return evt; });
       return ok(evt);
     }

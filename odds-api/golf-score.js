@@ -111,7 +111,9 @@ function match(a, b, from, len) {
   const left = len - played, closed = Math.abs(up) > left, done = closed || left === 0;
   const res = done ? (up > 0 ? 'W' : up < 0 ? 'L' : 'T') : null;
   const text = closed && left > 0 ? Math.abs(up) + '&' + left : done ? (up === 0 ? 'Halved' : Math.abs(up) + ' up') : up === 0 ? 'All square' : Math.abs(up) + (up > 0 ? ' up' : ' down');
-  return { up, played, left, dormie: !done && left > 0 && Math.abs(up) === left, closed: closed && left > 0, done, res, text, holes };
+  // short: the scoreboard form golfers use: "AS", "2 UP" / "2 DN" (from side a), "3&2", "1 UP" at the end, "HALVED"
+  const short = closed && left > 0 ? Math.abs(up) + '&' + left : up === 0 ? (done ? 'HALVED' : 'AS') : Math.abs(up) + (up > 0 ? ' UP' : ' DN');
+  return { up, played, left, dormie: !done && left > 0 && Math.abs(up) === left, closed: closed && left > 0, done, res, text, short, holes };
 }
 // Nassau between sides a and b on 18 holes: front 9, back 9, total 18; presses = [{nine:'front'|'back', from:hole number}] each a new bet from that hole to the end of its nine.
 // autoPress: when a side goes N down within a nine, a press starts automatically on the next hole (one per deficit trigger, counted from the newest bet of that nine).

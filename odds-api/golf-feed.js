@@ -1,6 +1,13 @@
 // Oddable Golf: ESPN public golf feed (no key, no paid API). Cached server-side.
-// Field paths below come from ESPN's public JSON as read by several open-source parsers (see HANDOFF "Golf (engine v1)").
-// NOT VERIFIED against a live response from this sandbox (it cannot reach ESPN): the parser is defensive and every field is optional.
+// SOURCES (Nov 16 2026; the sandbox cannot reach ESPN, so no live response was captured):
+//   - Scoreboard https://site.api.espn.com/apis/site/v2/sports/golf/<pga|lpga|eur>/scoreboard: listed as answering HTTP 200 by sportsapis.dev/espn-api,
+//     and read by the open-source parser sports-skills 0.40.5 (PyPI, golf/_connector.py): events[].competitions[0].competitors[] with
+//     id, order (leaderboard order), athlete.displayName, score (to-par string), linescores[] per round {period 1-4, value strokes, displayValue to par, "-" = unplayed,
+//     nested linescores[] per hole {period 1-18, value, scoreType.displayValue}}; leagues[0].calendar[] {id, label, startDate, endDate}. That parser notes ESPN's golf
+//     scoreboard IGNORES an event parameter, so a past/future event is read with dates=YYYYMMDD (its start day) and filtered by id. It sends no tee times or cut/WD status.
+//   - Leaderboard https://site.web.api.espn.com/apis/site/v2/sports/golf/leaderboard?league=<tour>&event=<id>: richer (status.position, status.thru, status.teeTime,
+//     status.type CUT/WD, earnings) per other open-source parsers, but NOT VERIFIED. Tried first; on any failure the scoreboard is used.
+// The parser is defensive and every field is optional. Without tee times, picks lock at the event's start time (event.date).
 'use strict';
 const D = { fetch: (...a) => fetch(...a), now: () => Date.now() };
 const TOURS = { pga: 'PGA TOUR', lpga: 'LPGA', eur: 'DP World Tour', liv: 'LIV Golf' };
@@ -49,21 +56,41 @@ function parseBoard(j, tour) {
   const golfers = []; let firstTee = null;
   (comp.competitors || []).forEach((c) => {
     const a = c.athlete || {}, s = c.status || {}, ls = Array.isArray(c.linescores) ? c.linescores : [];
-    const rounds = ls.map((r) => ({ n: num(r.period) || null, strokes: num(r.value), toPar: num(r.displayValue), holes: Array.isArray(r.linescores) ? r.linescores.length : null })).filter((r) => r.n);
+    const rounds = ls.map((r) => { const un = String(r.displayValue == null ? '' : r.displayValue).trim() === '-'; const hl = Array.isArray(r.linescores) ? r.linescores.filter((h) => !h || h.period == null || (num(h.period) >= 1 && num(h.period) <= 18)).length : null; return { n: num(r.period) || null, strokes: un ? null : num(r.value), toPar: un ? null : num(r.displayValue), holes: un ? 0 : hl }; }).filter((r) => r.n && r.n <= 5);
     const stat = (c.statistics || []).find((x) => x && /scoreToPar/i.test(x.name || ''));
     const toPar = num(c.score && typeof c.score === 'object' ? (c.score.displayValue != null ? c.score.displayValue : c.score.value) : c.score) ?? (stat ? num(stat.displayValue) : null);
-    const thruRaw = s.thru != null ? (typeof s.thru === 'object' ? s.thru.value : s.thru) : null, thru = num(thruRaw);
+    const lp = rounds.filter((r) => r.strokes != null || r.holes > 0).pop() || null;
+    const thruRaw = s.thru != null ? (typeof s.thru === 'object' ? s.thru.value : s.thru) : lp && lp.holes ? lp.holes : null, thru = num(thruRaw);
     const tee = Date.parse(s.teeTime) || null; if (tee && (!firstTee || tee < firstTee)) firstTee = tee;
     const started = rounds.some((r) => r.strokes > 0 || r.holes > 0) || (thru != null && thru > 0);
     const earn = num(c.earnings != null ? c.earnings : c.amount);
-    golfers.push({ id: txt(c.id || a.id, 20), name: txt(a.displayName || a.fullName || a.shortName, 50), short: txt(a.shortName, 30), pos: txt((s.position && s.position.displayName) || '', 6), toPar: started ? toPar : null, today: rounds.length ? rounds[rounds.length - 1].toPar : null, thru: thru != null ? (thru >= 18 ? 'F' : String(thru)) : txt(s.displayThru || '', 4), rounds: rounds.map((r) => r.strokes), st: stOf(c), tee, started, earn, sort: num(c.sortOrder) ?? num(c.order) ?? 999 });
+    golfers.push({ id: txt(c.id || a.id, 20), name: txt(a.displayName || a.fullName || a.shortName, 50), short: txt(a.shortName, 30), pos: txt((s.position && s.position.displayName) || '', 6), toPar: started ? toPar : null, today: lp ? lp.toPar : null, thru: thru != null ? (thru >= 18 ? 'F' : String(thru)) : txt(s.displayThru || '', 4), rounds: rounds.map((r) => r.strokes), rounds2: rounds, st: stOf(c), tee, started, earn, sort: num(c.sortOrder) ?? num(c.order) ?? 999, hasSt: !!(c.status && (c.status.type || c.status.position || c.status.displayValue)) });
   });
   golfers.sort((x, y) => x.sort - y.sort || x.name.localeCompare(y.name));
+  // Scoreboard shape (no per-golfer status): infer. Missed cut = no score in a round that most of the field has played (rounds 3-4);
+  // withdrew = a round with hole detail stopped short of 18 while the field has gone on to a later round (the parser in sports-skills reads WDs the same way).
+  if (golfers.length && !golfers.some((g) => g.hasSt)) {
+    const played = (n) => golfers.filter((g) => g.rounds2.some((r) => r.n === n && r.strokes != null)).length, maxR = [4, 3, 2, 1].find((n) => played(n) >= golfers.length * 0.3) || 0;
+    golfers.forEach((g) => { const last = g.rounds2.filter((r) => r.strokes != null || r.holes > 0).pop();
+      if (last && last.holes != null && last.holes > 0 && last.holes < 18 && maxR > last.n) g.st = 'wd';
+      else if (maxR >= 3 && g.started && !g.rounds2.some((r) => r.n >= 3 && (r.strokes != null || r.holes > 0)) && g.rounds2.some((r) => r.n === 2 && r.strokes != null)) g.st = 'cut'; });
+  }
+  golfers.forEach((g) => { delete g.hasSt; delete g.rounds2; });
+  if (golfers.length && !golfers.some((g) => g.pos)) { const act = golfers.filter((g) => g.st === 'active' && g.toPar != null); act.forEach((g) => { const k = act.filter((x) => x.toPar < g.toPar).length + 1, tie = act.filter((x) => x.toPar === g.toPar).length > 1; g.pos = (tie ? 'T' : '') + k; }); golfers.forEach((g) => { if (g.st !== 'active') g.pos = g.st.toUpperCase(); }); }
   const done = String(est.state || '') === 'post' || /FINAL|COMPLETE/i.test(String(est.name || ''));
   const fin = golfers.filter((g) => g.st === 'active' && g.started);
   return { event: { id: txt(ev.id, 20), tour, name: txt(ev.name || ev.shortName, 80), start: Date.parse(ev.date) || null, end: Date.parse(ev.endDate) || null, state: txt(est.state, 8) || 'pre', round: num(comp.status && comp.status.period) || null, done, purse: num(ev.purse || (ev.displayPurse || '').replace(/[$,]/g, '')) },
     golfers, firstTee, earnings: done && fin.length > 0 && fin.every((g) => g.earn != null) };
 }
 async function events(tour) { if (!TOURS[tour]) throw new Error('tour'); return parseEvents(await getJSON(SB(tour)), tour); }
-async function board(tour, eventId) { if (!TOURS[tour]) throw new Error('tour'); const b = parseBoard(await getJSON(LB(tour, eventId)), tour); if (eventId && b.event.id && b.event.id !== String(eventId)) throw new Error('event mismatch'); return b; }
-module.exports = { TOURS, events, board, parseBoard, parseEvents, stOf, SB, LB, _deps: D, _reset: () => C.clear() };
+const ymd = (ms) => new Date(ms).toISOString().slice(0, 10).replace(/-/g, '');
+// Leaderboard first (richer, NOT VERIFIED); on failure or an empty field, the scoreboard (verified shape): this week's, or dates=<start day> for another event.
+async function board(tour, eventId) {
+  if (!TOURS[tour]) throw new Error('tour'); let first = null;
+  try { const b = parseBoard(await getJSON(LB(tour, eventId)), tour); if (b.golfers.length && (!eventId || !b.event.id || b.event.id === String(eventId))) return b; first = new Error(b.golfers.length ? 'event mismatch' : 'empty leaderboard'); } catch (e) { first = e; }
+  let j = await getJSON(SB(tour)); const has = (x) => x && Array.isArray(x.events) && x.events.some((e) => !eventId || String(e.id) === String(eventId));
+  if (eventId && !has(j)) { const ev = parseEvents(j, tour).find((e) => e.id === String(eventId)); if (!ev || !ev.start) throw first || new Error('event not found'); j = await getJSON(SB(tour) + '?dates=' + ymd(ev.start)); if (!has(j)) throw new Error('event not on the scoreboard'); }
+  const one = Object.assign({}, j, { events: (j.events || []).filter((e) => !eventId || String(e.id) === String(eventId)).slice(0, 1) });
+  const b = parseBoard(one, tour); b.src = 'scoreboard'; return b;
+}
+module.exports = { TOURS, events, board, parseBoard, parseEvents, stOf, SB, LB, ymd, _deps: D, _reset: () => C.clear() };

@@ -1,0 +1,544 @@
+// Oddable Golf (engine v1). Full-screen overlay #ogolf (pattern of dash.js / groups.js), opened from the "Golf" menu item or a ?join=golf.<code> link.
+// Every score, standing and rule comes from the server (odds-api/golf.js); this file only shows them and sends entries.
+// Money is information only: Oddable never collects, holds or pays money.
+(function () {
+  const API = (window.ODD_GOLF_API || window.ODD_GROUPS_API || 'https://calcutta-odds.onrender.com') + '/golf/';
+  const ls = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return null; } };
+  const esc = (x) => String(x == null ? '' : x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const att = (x) => esc(String(x == null ? '' : x).replace(/[^\w.:-]/g, ''));
+  const usd = (n) => { const v = Math.round((Number(n) || 0) * 100) / 100; return '$' + (Number.isInteger(v) ? v.toLocaleString() : v.toFixed(2)); };
+  const tp = (v) => (v == null ? '–' : v === 0 ? 'E' : v > 0 ? '+' + v : String(v));
+  const tcls = (v) => (v == null || v === 0 ? '' : v < 0 ? 'opos' : 'oneg');
+  const ord = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th');
+  const fmtTime = (ms) => (ms ? new Date(ms).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '');
+  const CAPLINE = 'Up to 8 golfers. Need more than 8? Oddable for courses, clubs and leagues: $500/month + $20 per player per game. Contact us.';
+  const MONEY = 'Money is settled outside the app. Oddable never collects, holds or pays money.';
+  const FMT = {
+    scramble4: ['4-person scramble', 'team', 'Everyone tees off, the team picks the best shot, everyone plays from there, and the team writes down one score per hole.'],
+    scramble2: ['2-person scramble', 'team', 'Both players hit every shot, the team picks the better one and both play from there; one team score per hole.'],
+    texas: ['Texas scramble', 'team', "A scramble where each player's tee shot must be used at least the set number of times; the app counts drives used and warns when someone is running short."],
+    florida: ['Florida (step-aside)', 'team', 'A scramble where the player whose shot was used sits out the very next shot, so no one\'s shot is used twice in a row.'],
+    shamble: ['Shamble', 'team', 'Everyone tees off, the team picks the best drive, then each player plays their own ball in; the best set number of scores on each hole count.'],
+    bestball: ['Best ball', 'team', 'Everyone plays their own ball the whole hole and the team takes the best one (or best two) scores on each hole.'],
+    altshot: ['Alternate shot', 'team', 'Two players hit one ball, taking turns on every shot (one tees off on odd holes, the other on even holes).'],
+    chapman: ['Chapman', 'team', 'Both partners tee off, swap balls for the second shot, pick one ball after that, and alternate shots into the hole.'],
+    stroke: ['Stroke play', 'ind', 'Every stroke counts; lowest total for the round wins.'],
+    stableford: ['Stableford', 'ind', 'Points per hole against par: double bogey or worse 0, bogey 1, par 2, birdie 3, eagle 4, albatross 5; most points wins.'],
+    nassau: ['Nassau', 'ind', 'Three bets in one match: the front nine, the back nine and the full 18, each won by winning more holes; a press starts a new bet for the rest of that nine.'],
+    skins: ['Skins only', 'ind', 'Each hole is worth a skin; the lowest score alone wins it, and if anyone ties the skin carries over to the next hole.'],
+  };
+  const TEAMBALL = { scramble4: 1, scramble2: 1, texas: 1, florida: 1, altshot: 1, chapman: 1 };
+  const ALLOW = { scramble4: [25, 20, 15, 10], scramble2: [35, 15], texas: [25, 20, 15, 10], florida: [25, 20, 15, 10], altshot: [50, 50], chapman: [60, 40] };
+  const SIZE = { scramble4: 4, scramble2: 2, texas: 4, florida: 4, shamble: 4, bestball: 4, altshot: 2, chapman: 2, stroke: 4, stableford: 4, nassau: 2, skins: 4 };
+  const STATES = [['','Any state'],['AL','AL'],['AK','AK'],['AZ','AZ'],['AR','AR'],['CA','CA'],['CO','CO'],['CT','CT'],['DE','DE'],['DC','DC'],['FL','FL'],['GA','GA'],['HI','HI'],['ID','ID'],['IL','IL'],['IN','IN'],['IA','IA'],['KS','KS'],['KY','KY'],['LA','LA'],['ME','ME'],['MD','MD'],['MA','MA'],['MI','MI'],['MN','MN'],['MS','MS'],['MO','MO'],['MT','MT'],['NE','NE'],['NV','NV'],['NH','NH'],['NJ','NJ'],['NM','NM'],['NY','NY'],['NC','NC'],['ND','ND'],['OH','OH'],['OK','OK'],['OR','OR'],['PA','PA'],['RI','RI'],['SC','SC'],['SD','SD'],['TN','TN'],['TX','TX'],['UT','UT'],['VT','VT'],['VA','VA'],['WA','WA'],['WV','WV'],['WI','WI'],['WY','WY']];
+  const MC = { w1: 'Worst made-cut score +1', p10: 'Own score +10', out: 'Out of your four' }, TB = { score: 'Guess the winning score', best: 'Best single golfer' };
+  let stack = [{ t: 'home' }], busy = false, err = '', DR = null, timer = null;
+
+  // ---------- server + offline queue ----------
+  async function post(op, b) {
+    const r = await fetch(API + op, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': ls('odd-tok') || '' }, body: JSON.stringify(Object.assign({ myName: ls('odd-name') || '' }, b || {})) });
+    const j = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(j.error || 'Server said ' + r.status), { status: r.status, j }); return j;
+  }
+  const offline = (e) => e && /Failed to fetch|NetworkError|Load failed|network/i.test(e.message || '');
+  const errText = (e) => (offline(e) ? 'Could not reach the server. It may be waking up: try again in a few seconds.' : e && e.status === 401 ? 'Sign in to use Golf.' : (e && e.message) || 'Something went wrong');
+  async function act(op, b, then) { if (busy) return; busy = true; err = ''; paintBusy(true); try { const j = await post(op, b); busy = false; await then(j); } catch (e) { busy = false; err = errText(e); paint(); } paintBusy(false); }
+  // Score entries are queued on the phone and retried until the server answers (each carries an eid, so a retry is harmless).
+  const Q = () => { try { return JSON.parse(ls('golf-q') || '[]'); } catch (e) { return []; } };
+  const Qset = (q) => ls('golf-q', q.length ? JSON.stringify(q.slice(-200)) : null);
+  let flushing = false;
+  async function flush() {
+    if (flushing) return; flushing = true; let q = Q(), changed = false;
+    while (q.length) { const it = q[0]; try { const j = await post('score', it); q.shift(); changed = true; const s = stack.find((x) => x.id === it.id && x.g); if (s) s.g = j.game; } catch (e) { if (offline(e)) break; q.shift(); changed = true; err = 'Hole ' + it.hole + ' was not saved: ' + errText(e); } Qset(q); }
+    flushing = false; if (changed) paint();
+  }
+  window.addEventListener('online', flush); setInterval(() => { if (Q().length) flush(); }, 10000);
+  function queueScore(b) { const it = Object.assign({ eid: Date.now().toString(36) + Math.random().toString(36).slice(2, 8) }, b); const q = Q(); q.push(it); Qset(q); return flush(); }
+
+  // ---------- small parts ----------
+  const top = (back, right) => '<div class="otop">' + (back ? '<button class="oback" data-a="back">‹ ' + esc(back) + '</button>' : '<span></span>') + (right || '<button class="ox" data-a="close" aria-label="Close Golf">Close</button>') + '</div>';
+  const seg = (opts, cur, a) => '<div class="oseg">' + opts.map(([v, l]) => '<button class="' + (String(v) === String(cur) ? 'on' : '') + '" ' + a + '="' + att(v) + '">' + esc(l) + '</button>').join('') + '</div>';
+  const sel = (id, opts, cur) => '<select id="' + id + '" class="osel">' + opts.map(([v, l]) => '<option value="' + esc(v) + '"' + (String(v) === String(cur) ? ' selected' : '') + '>' + esc(l) + '</option>').join('') + '</select>';
+  const sw = (on, a) => '<button class="osw' + (on ? ' on' : '') + '" role="switch" aria-checked="' + (on ? 'true' : 'false') + '" ' + a + '><i></i></button>';
+  const info = (k) => '<button class="oi" data-a="info" data-k="' + att(k) + '" aria-label="What is this?">ⓘ</button>';
+  const cur = () => stack[stack.length - 1];
+  const G = () => { for (let i = stack.length - 1; i >= 0; i--) if (stack[i].g) return stack[i].g; return null; };
+  const nm = (g, pid) => { const m = (g.members || []).find((x) => x.pid === pid); return m ? m.name : 'Player'; };
+  const tname = (g, tid) => { const t = ((g.day && g.day.teams) || []).find((x) => x.tid === tid); return t ? t.name : tid; };
+  const side = (g, kind, id) => (kind === 'player' ? nm(g, id) : tname(g, id));
+
+  // ---------- home ----------
+  function home() {
+    const s = cur(); let h = '<h1>Golf</h1><p class="osub">Pools on the pro tours, or your own golf day with every format and heads-up matches.</p>';
+    h += '<div class="o2"><button class="opri" data-a="newpro">Pro tournament</button><button class="opri" data-a="newday">Our golf day</button></div>';
+    h += '<div class="o2"><button class="osec" data-a="solo">Solo round</button><button class="osec" data-a="join">Join with a code</button></div>';
+    h += '<div class="onote">' + CAPLINE + '</div><h3 class="oh">My golf</h3>';
+    if (!s.list) h += '<div class="ocard omut">Loading…</div>'; else if (!s.list.length) h += '<div class="ocard omut">Nothing yet. Start one, or ask a friend for their invite link.</div>';
+    (s.list || []).forEach((x) => { const sub = x.kind === 'pro' ? (x.pro.game === 'six' ? 'Pick six' : 'One and done') + (x.pro.eventName ? ' · ' + x.pro.eventName : '') : (x.day.solo ? 'Solo round' : (FMT[x.day.fmt] || [''])[0]) + ' · ' + x.day.course.name + ' · ' + (x.day.status === 'live' ? 'live' : x.day.status === 'final' ? 'final' : 'setting up');
+      h += '<button class="ocard obtn" data-a="open" data-id="' + att(x.id) + '"><div class="orow"><b class="oname">' + esc(x.title) + '</b>' + (x.role === 'org' ? '<span class="obadge">Organizer</span>' : '') + '</div><div class="ometa">' + esc(sub) + ' · ' + x.count + ' golfer' + (x.count === 1 ? '' : 's') + ' ›</div></button>'; });
+    return h;
+  }
+  function joinV() {
+    const s = cur(), gr = s.pre; let h = '<h1>Join a golf game</h1><label class="olab">Invite code<input id="ocode" class="oin ocodein" autocomplete="off" autocapitalize="characters" maxlength="20" placeholder="ABCDE23456" value="' + esc(s.code || '') + '"></label><button class="opri ofull" data-a="look">Look it up</button>';
+    if (gr) {
+      h += '<div class="ocard"><b class="oname">' + esc(gr.title) + '</b><div class="ometa">' + (gr.kind === 'pro' ? 'Pro tournament · ' + esc(gr.pro.game === 'six' ? 'Pick six' : 'One and done') + (gr.pro.eventName ? ' · ' + esc(gr.pro.eventName) : '') : 'Golf day · ' + esc((FMT[gr.day.fmt] || [''])[0]) + ' · ' + esc(gr.day.course.name + ' · ' + gr.day.course.tees + ' tees')) + '</div>' + rulesList(gr) + '</div>';
+      if (gr.role !== 'none') h += '<button class="osec ofull" data-a="open" data-id="' + att(gr.id) + '">You are in. Open it ›</button>';
+      else { h += '<label class="olab">Your handicap (optional)<input id="ojh" class="oin" type="number" inputmode="decimal" step="0.1" min="-10" max="54" placeholder="e.g. 14"></label><div class="onote">Unofficial. The organizer can change it.</div>';
+        h += '<button class="opri ofull" data-a="dojoin">Join ' + esc(gr.title) + '</button>';
+        if (gr.kind === 'day' && gr.day.open && gr.day.open.length) h += '<h3 class="oh">Or claim an open team spot</h3>' + gr.day.open.map((t) => '<button class="osec ofull" data-a="dojoin" data-tid="' + att(t.tid) + '">Join ' + esc(t.name) + ' · ' + t.free + ' spot' + (t.free === 1 ? '' : 's') + ' open</button>').join(''); }
+      h += '<div class="onote">' + CAPLINE + '</div>';
+    }
+    return h;
+  }
+  function rulesList(g) {
+    const rows = [], p = g.pot || { entry: 0, take: { kind: 'none' } };
+    if (g.kind === 'pro') { rows.push(['Tour', (g.pro.tour || '').toUpperCase()]); if (g.pro.game === 'six') { rows.push(['Game', 'Pick six: one golfer from each of six tiers, best four scores count, lowest total wins']); rows.push(['Missed cut', MC[g.pro.mc]]); rows.push(['Tiebreaker', TB[g.pro.tb]]); rows.push(['Picks lock', fmtTime(g.pro.lockAt) + ' (first tee time)']); } else rows.push(['Game', 'One and done: one golfer per tournament all season, never the same one twice']); }
+    else { const d = g.day; rows.push(['Course', d.course.name + ' · ' + d.course.tees + ' tees · par ' + d.course.par.reduce((a, x) => a + x, 0)]); rows.push(['Format', (FMT[d.fmt] || [''])[0] + (d.count ? ' (best ' + d.count + ')' : '')]); rows.push(['Scoring', d.net === 'gross' ? 'Gross' : d.net === 'both' ? 'Gross and net' : 'Net with handicaps']); if (d.heads && d.heads.on) rows.push(['Heads-up', (d.heads.type === 'nassau' ? 'Nassau' : 'Match play') + ', ' + d.heads.kind + ' vs ' + d.heads.kind + (d.heads.amt ? ', ' + usd(d.heads.amt) + ' a match' : '')]);
+      const ex = []; if (d.extras.skins.on) ex.push('skins' + (d.extras.skins.amt ? ' ' + usd(d.extras.skins.amt) : '')); if (d.extras.ctp.length) ex.push('closest to the pin #' + d.extras.ctp.join(', #')); if (d.extras.ld.length) ex.push('longest drive #' + d.extras.ld.join(', #')); if (ex.length) rows.push(['Extras', ex.join(' · ')]); }
+    rows.push(['Entry', p.entry ? usd(p.entry) + ' · ' + (p.pot === 'side' ? 'side pot' : 'main pot') : 'No entry']); rows.push(["Organizer's take", p.take.kind === 'pct' ? p.take.v + '% of the pot' : p.take.kind === 'flat' ? usd(p.take.v) : 'None']);
+    rows.push(['Golfers', g.count + ' of ' + (g.max > 8 ? g.max : 8)]);
+    return '<div class="orules">' + rows.map(([k, v]) => '<div><small>' + esc(k) + '</small><span>' + esc(v) + '</span></div>').join('') + '</div><div class="onote">' + MONEY + '</div>';
+  }
+
+  // ---------- pro setup ----------
+  function proSetup() {
+    const d = DR; let h = '<div class="orow"><h1>Golf</h1><span class="omut">Add a golf contest</span></div>';
+    h += seg([['pro', 'Pro tournament'], ['day', 'Our golf day']], 'pro', 'data-kind') + '<div class="onote">Pro tournament: scores come in live from the tour leaderboard. Our golf day: your own outing, your teams, scores typed in by the scorers.</div>';
+    h += '<label class="olab">Name<input id="otitle" class="oin" maxlength="40" placeholder="Sunday Crew pool" value="' + esc(d.title) + '"></label>';
+    h += '<label class="olab">Tour' + sel('otour', [['pga', 'PGA TOUR'], ['lpga', 'LPGA'], ['eur', 'DP World Tour'], ['liv', 'LIV Golf']], d.tour) + '</label>';
+    h += '<div class="olab">Game ' + info(d.game === 'oad' ? 'oad' : 'six') + '</div>';
+    [['six', 'Pick six (tiers)', 'One golfer from each of six tiers. Best four scores count. Lowest total wins.'], ['calc', 'Golfer Calcutta', 'Auction every golfer. Set up in the Calcutta screen of your group; this game only supplies the golfers.'], ['oad', 'One and done', 'Pick one golfer per event all season, never the same one twice. Most prize money (or finish points) wins.'], ['bets', 'Bets vs the group', 'Your real golf bets on the group leaderboard. Set up in Groups; golf bets are settled by hand (honor system).']].forEach(([k, t, x]) => { const off = k === 'calc' || k === 'bets'; h += '<button class="oopt' + (d.game === k ? ' on' : '') + (off ? ' soon' : '') + '" ' + (off ? 'disabled aria-disabled="true"' : 'data-game="' + k + '"') + '><span class="orow"><b>' + t + '</b><small>' + (off ? 'In Groups' : d.game === k ? 'Selected' : '') + '</small></span><span class="omut">' + x + '</span></button>'; });
+    if (d.game === 'six') {
+      const evs = d.events || []; h += '<label class="olab">Tournament' + (evs.length ? sel('oev', evs.map((e) => [e.id, e.name + (e.start ? ' · ' + new Date(e.start).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '')]), d.eventId) : '<div class="ocard omut">' + (d.evErr ? esc(d.evErr) : 'Loading the schedule…') + '</div>') + '</label>';
+      h += '<div class="o2"><label class="olab">Missed cut' + sel('omc', Object.entries(MC), d.mc) + '</label><label class="olab">Tiebreaker' + sel('otb', Object.entries(TB), d.tb) + '</label></div>';
+      h += '<label class="olab">Tier order (optional): paste a ranking, one golfer per line<textarea id="orank" class="oin ota" rows="3" placeholder="Best golfer first">' + esc(d.rank) + '</textarea></label><div class="onote">Tiers use this list first, then the leaderboard\'s own order. No betting odds are used (they would cost API credits).</div>';
+    }
+    h += potForm(d) + '<div class="owarn"><b>Picks lock at the first tee time</b>' + (d.game === 'six' ? "Thursday's first group off. A golfer who withdraws before teeing off can be swapped once." : 'Each tournament locks at its own first tee time. Never the same golfer twice.') + '</div>';
+    return h + '<div class="onote">' + CAPLINE + '</div><button class="opri ofull" data-a="createpro">Add golf contest</button>';
+  }
+  const potForm = (d) => '<div class="o2"><label class="olab">Entry ($)<input id="oentry" class="oin" type="number" inputmode="numeric" min="0" max="10000" step="1" value="' + esc(d.entry || '') + '" placeholder="0"></label><label class="olab">Pot' + sel('opot', [['main', 'Main pot'], ['side', 'Side pot']], d.pot) + '</label></div><label class="olab">Organizer\'s take' + sel('otake', [['none', 'None'], ['5', '5% of the pot'], ['10', '10% of the pot'], ['20', '20% of the pot']], d.take) + '</label><div class="onote">' + MONEY + '</div>';
+  function readDraft() {
+    const v = (id) => { const e = document.getElementById(id); return e ? e.value : null; }, d = DR; if (!d) return;
+    [['otitle', 'title'], ['otour', 'tour'], ['oev', 'eventId'], ['omc', 'mc'], ['otb', 'tb'], ['orank', 'rank'], ['oentry', 'entry'], ['opot', 'pot'], ['otake', 'take'], ['ofmt', 'fmt'], ['onet', 'net'], ['opct', 'pct'], ['ocount', 'count'], ['odrives', 'drives'], ['oteams', 'teams'], ['opair', 'pair'], ['ohkind', 'hkind'], ['ohtype', 'htype'], ['ohamt', 'hamt'], ['oskamt', 'skamt'], ['octp', 'ctp'], ['old', 'ld'], ['omyh', 'myHcp'], ['odate', 'date']].forEach(([id, k]) => { const x = v(id); if (x !== null) d[k] = x; });
+    [0, 1, 2, 3].forEach((i) => { const x = v('oal' + i); if (x !== null) d.allow[i] = x; });
+  }
+  const potPayload = (d) => ({ entry: Number(d.entry) || 0, pot: d.pot, take: d.take === 'none' ? { kind: 'none' } : { kind: 'pct', v: Number(d.take) } });
+
+  // ---------- golf day setup ----------
+  function daySetup() {
+    const d = DR, c = d.course; let h = '<div class="orow"><h1>' + (d.solo ? 'Solo round' : 'Golf day format') + '</h1><span class="omut">' + (d.solo ? 'just you' : 'Our golf day · organizer') + '</span></div>';
+    h += '<div class="olab">Course and tees</div><button class="ocard obtn" data-a="course">' + (c ? '<b>' + esc(c.name) + '</b> · ' + esc(c.tees) + ' tees · par ' + c.par.reduce((a, x) => a + x, 0) + (c.rating ? ' · ' + c.rating + ' / ' + c.slope : '') + ' ›' : '<b>Pick a course</b><div class="omut">Search, pick a saved one, or type it in ›</div>') + '</button>';
+    h += '<label class="olab">Name<input id="otitle" class="oin" maxlength="40" placeholder="' + (d.solo ? 'Saturday round' : 'Crew Golf Day') + '" value="' + esc(d.title) + '"></label><label class="olab">Date<input id="odate" class="oin" type="date" value="' + esc(d.date) + '"></label>';
+    h += '<label class="olab">Your handicap' + (d.hsrc === 'oddable' ? ' (your Oddable handicap, unofficial)' : '') + '<input id="omyh" class="oin" type="number" inputmode="decimal" step="0.1" min="-10" max="54" value="' + esc(d.myHcp) + '" placeholder="e.g. 14"></label>';
+    if (d.solo) return h + '<div class="onote">Stroke play, hole by hole. Your round counts toward your stats and unofficial Oddable handicap (not an official USGA/GHIN index).</div><button class="opri ofull" data-a="createday">Start my round</button>';
+    const fb = (k) => '<span class="ofmtw"><button class="ofmt' + (d.fmt === k ? ' on' : '') + '" data-fmt="' + k + '">' + esc(FMT[k][0]) + '</button>' + info('fmt:' + k) + '</span>';
+    h += '<div class="ocard"><h2>Team formats</h2><div class="o2g">' + ['scramble4', 'scramble2', 'texas', 'florida', 'shamble', 'bestball', 'altshot', 'chapman'].map(fb).join('') + '</div><div class="onote">' + esc(FMT[d.fmt][2]) + '</div>';
+    if (TEAMBALL[d.fmt]) h += '<div class="olab">Team handicap allowance (%), lowest handicap first ' + info('allow') + '</div><div class="o4">' + ALLOW[d.fmt].map((_, i) => '<input id="oal' + i + '" class="oin" type="number" inputmode="numeric" min="0" max="100" value="' + esc(d.allow[i] == null ? ALLOW[d.fmt][i] : d.allow[i]) + '" aria-label="Allowance ' + (i + 1) + '">').join('') + '</div>';
+    if (d.fmt === 'texas') h += '<label class="olab">Drives each player must use<input id="odrives" class="oin" type="number" inputmode="numeric" min="1" max="9" value="' + esc(d.drives) + '"></label>';
+    if (d.fmt === 'shamble' || d.fmt === 'bestball') h += '<label class="olab">Scores that count per hole' + sel('ocount', [[1, 'Best 1'], [2, 'Best 2']], d.count) + '</label>';
+    h += '</div><div class="ocard"><h2>Individual formats</h2><div class="o2g">' + ['stroke', 'stableford', 'nassau', 'skins'].map(fb).join('') + '</div>';
+    if (!TEAMBALL[d.fmt]) h += '<label class="olab">Handicap used (% of each player\'s)<input id="opct" class="oin" type="number" inputmode="numeric" min="0" max="100" value="' + esc(d.pct) + '"></label>';
+    h += '</div>';
+    h += '<div class="ocard' + (d.hu ? ' oon' : '') + '"><div class="oline"><span><b>Heads-up matches ' + info('heads') + '</b><small>Match play, team vs team or player vs player, on top of the main format</small></span>' + sw(d.hu, 'data-tog="hu"') + '</div>';
+    if (d.hu) h += '<div class="o2"><label class="olab">Pairings' + sel('opair', [['bracket', 'Bracket'], ['foursome', 'Same foursome'], ['pick', 'I pick'], ['random', 'Random draw']], d.pair) + '</label><label class="olab">Per match ($, info)<input id="ohamt" class="oin" type="number" inputmode="numeric" min="0" value="' + esc(d.hamt) + '"></label></div><div class="o2"><label class="olab">Who plays' + sel('ohkind', [['team', 'Team vs team'], ['player', 'Player vs player']], d.hkind) + '</label><label class="olab">Match type' + sel('ohtype', [['match', 'Match play'], ['nassau', 'Nassau']], d.htype) + '</label></div>';
+    h += '</div><div class="ocard"><h2>Scoring and extras</h2><div class="ohelp">Gross or net ' + info('net') + '</div>' + sel('onet', [['net', 'Net (handicaps)'], ['gross', 'Gross'], ['both', 'Both']], d.net);
+    h += '<div class="oline"><span><b>Skins ' + info('skins') + '</b><small>Carry-overs; ' + (d.sknet ? 'net' : 'gross') + '</small></span>' + sw(d.skins, 'data-tog="skins"') + '</div>';
+    if (d.skins) h += '<div class="o2"><button class="osec" data-tog="sknet">' + (d.sknet ? 'Net skins' : 'Gross skins') + '</button><label class="olab">Per skin ($, info)<input id="oskamt" class="oin" type="number" inputmode="numeric" min="0" value="' + esc(d.skamt) + '"></label></div>';
+    h += '<div class="ohelp">Closest to the pin and longest drive ' + info('ctp') + '</div><div class="o2"><label class="olab">Closest to the pin (holes)<input id="octp" class="oin" inputmode="numeric" placeholder="3, 12" value="' + esc(d.ctp) + '"></label><label class="olab">Longest drive (holes)<input id="old" class="oin" inputmode="numeric" placeholder="9" value="' + esc(d.ld) + '"></label></div>';
+    h += '<label class="olab">Number of teams<input id="oteams" class="oin" type="number" inputmode="numeric" min="0" max="100" value="' + esc(d.teams) + '"></label>' + potForm(d) + '</div>';
+    h += '<div class="onote">Team Calcutta: the teams are offered to your group\'s Calcutta. ' + CAPLINE + '</div>';
+    return h + '<button class="opri ofull" data-a="createday">Next: teams and handicaps</button>';
+  }
+  const holes = (s) => String(s || '').split(/[^0-9]+/).map(Number).filter((x) => x >= 1 && x <= 18);
+  function dayPayload() {
+    const d = DR, fmt = d.solo ? 'stroke' : d.fmt;
+    return { kind: 'day', solo: !!d.solo, title: d.title.trim() || (d.solo ? 'Solo round' : 'Golf day'), course: d.course, courseId: d.courseId || undefined, pot: potPayload(d),
+      day: { fmt, net: d.net, allow: TEAMBALL[fmt] ? ALLOW[fmt].map((x, i) => Number(d.allow[i] == null ? x : d.allow[i])) : [], pct: Number(d.pct), count: Number(d.count), drives: Number(d.drives), teams: Number(d.teams) || 0, teamSize: SIZE[fmt], date: d.date, myHcp: d.myHcp === '' ? null : Number(d.myHcp),
+        extras: { skins: { on: d.skins, net: d.sknet, amt: Number(d.skamt) || 0 }, ctp: holes(d.ctp), ld: holes(d.ld) }, hu: { on: d.hu, pair: d.pair, kind: d.hkind, type: d.htype, amt: Number(d.hamt) || 0 } } };
+  }
+
+  // ---------- course picker ----------
+  function courseV() {
+    const s = cur(); let h = '<h1>Pick a course</h1><label class="olab">Search by name or city<input id="oq" class="oin" value="' + esc(s.q || '') + '" placeholder="Palm Valley" autocomplete="off"></label><label class="olab">State' + sel('ost', STATES, s.st || '') + '</label><div class="onote">Pick a state alone to list its courses.</div><button class="opri ofull" data-a="csearch">Search</button>';
+    const savedRow = (c) => '<button class="ocard obtn" data-a="csaved" data-id="' + att(c.id) + '"><b>' + esc(c.name) + '</b> · ' + esc(c.tees) + ' tees<div class="omut">Par ' + c.par.reduce((a, x) => a + x, 0) + (c.rating ? ' · rating ' + c.rating + ' · slope ' + c.slope : '') + (c.city ? ' · ' + esc(c.city) : '') + ' ›</div></button>';
+    if (s.res && s.res.owned && s.res.owned.length) h += '<h3 class="oh">Your course</h3>' + s.res.owned.map(savedRow).join('');
+    if (s.res) {
+      if (s.res.courses.length) h += '<h3 class="oh">Saved courses</h3>' + s.res.courses.map(savedRow).join('');
+      if (s.res.api.ok) h += '<h3 class="oh">Course directory</h3>' + (s.res.api.results.length ? s.res.api.results.map((c) => '<button class="ocard obtn" data-a="cdir" data-x="' + att(c.extId) + '"><b>' + esc(c.name) + '</b><div class="omut">' + esc([c.city, c.state].filter(Boolean).join(', ')) + (c.par ? ' · par ' + c.par : '') + ' ›</div></button>').join('') : '<div class="ocard omut">No match in the directory.</div>') + '<div class="oattr">' + esc(s.res.api.attribution || '') + '</div>';
+      else if (s.res.api.error) h += '<div class="ocard omut">' + esc(s.res.api.error) + '</div>';
+    }
+    return h + '<button class="osec ofull" data-a="cmanual">Type a course in</button>';
+  }
+  function courseDetailV() {
+    const s = cur(), c = s.c; if (!c) return '<div class="ocard">Loading the course…</div>';
+    let h = '<h1>' + esc(c.name) + '</h1><div class="ometa">' + esc([c.city, c.state].filter(Boolean).join(', ')) + '</div>';
+    if (!c.tees.length) h += '<div class="ocard omut">No tees listed for this course. Type it in instead.</div>';
+    c.tees.forEach((t, i) => { const open = s.ti === i;
+      h += '<div class="ocard"><button class="otee" data-a="tee" data-i="' + i + '"><span><b>' + esc(t.name) + '</b>' + (t.gender ? ' <span class="omut">· ' + esc(t.gender) + '</span>' : '') + '</span><span class="ogrid4 ohd"><span>Yards</span><span>Par</span><span>Rating</span><span>Slope</span></span><span class="ogrid4"><span>' + (t.yards || '–') + '</span><span>' + (t.par || '–') + '</span><span>' + (t.rating || '–') + '</span><span>' + (t.slope || '–') + '</span></span><span class="olink">' + (open ? 'Hide holes' : 'Show holes') + ' ›</span></button>';
+      if (open) { h += '<div class="ogrid4 ohd"><span>Hole</span><span>Par</span><span>Yards</span><span>Index</span></div>' + t.holes.map((x) => '<div class="ogrid4 ohole"><span>' + x.n + '</span><span>' + (x.par || '–') + '</span><span>' + (x.yards || '–') + '</span><span>' + (x.hcp || '–') + '</span></div>').join('');
+        const okH = t.holes.length === 18 || t.holes.length === 9; h += okH ? '<button class="opri ofull" data-a="usetee" data-i="' + i + '">Play the ' + esc(t.name) + ' tees</button>' : '<div class="onote">This tee is missing holes. Use it as a start and fill in the rest.</div><button class="osec ofull" data-a="edittee" data-i="' + i + '">Fill in the rest</button>'; }
+      h += '</div>'; });
+    return h + '<div class="oattr">' + esc(c.attribution || '') + '</div>';
+  }
+  function manualV() {
+    const s = cur(), m = s.m; let h = '<h1>Type a course in</h1><label class="olab">Course name<input id="mname" class="oin" maxlength="50" value="' + esc(m.name) + '"></label><div class="o2"><label class="olab">Tees<input id="mtees" class="oin" maxlength="20" placeholder="White" value="' + esc(m.tees) + '"></label><label class="olab">Holes' + sel('mholes', [[18, '18'], [9, '9']], m.holes) + '</label></div>';
+    h += '<div class="o2"><label class="olab">Course Rating<input id="mrating" class="oin" type="number" inputmode="decimal" step="0.1" value="' + esc(m.rating) + '" placeholder="70.4"></label><label class="olab">Slope Rating<input id="mslope" class="oin" type="number" inputmode="numeric" min="55" max="155" value="' + esc(m.slope) + '" placeholder="125"></label></div><div class="onote">Rating and slope are on the scorecard; they are needed for your unofficial Oddable handicap.</div>';
+    h += '<div class="ogrid4 ohd"><span>Hole</span><span>Par</span><span>Index</span><span>Yards</span></div>';
+    for (let i = 0; i < m.holes; i++) h += '<div class="ogrid4 ohole"><span>' + (i + 1) + '</span>' + sel('mp' + i, [[3, 3], [4, 4], [5, 5], [6, 6]], m.par[i] || 4) + sel('mh' + i, Array.from({ length: m.holes }, (_, k) => [k + 1, k + 1]), m.hcp[i] || i + 1) + '<input id="my' + i + '" class="oin" type="number" inputmode="numeric" min="50" max="800" value="' + esc(m.yards[i] || '') + '" aria-label="Yards hole ' + (i + 1) + '"></div>';
+    return h + '<div class="onote">Each hole needs a different handicap index (1 = hardest).</div><button class="opri ofull" data-a="msave">Save and use this course</button>';
+  }
+  function readManual() { const m = cur().m; if (!m) return; const v = (id) => { const e = document.getElementById(id); return e ? e.value : null; }; ['name', 'tees', 'rating', 'slope'].forEach((k) => { const x = v('m' + k); if (x !== null) m[k] = x; }); const hn = v('mholes'); if (hn) m.holes = +hn; for (let i = 0; i < 18; i++) { const p = v('mp' + i), x = v('mh' + i), y = v('my' + i); if (p !== null) m.par[i] = +p; if (x !== null) m.hcp[i] = +x; if (y !== null) m.yards[i] = y; } }
+
+  // ---------- pro board (Pool / My golfers / Tour board) ----------
+  function proV() {
+    const s = cur(), g = s.g; if (!g || !g.pro) return '<div class="ocard">Loading…</div>'; const tab = s.tab || 'pool';
+    let h = '<h1>' + esc(g.title) + '</h1><div class="ometa">' + esc(g.pro.eventName || (g.pro.game === 'oad' ? 'One and done · ' + (g.oad && g.oad.season) : '')) + (g.feed && g.feed.ok && g.feed.event.round ? ' · Round ' + g.feed.event.round + (g.feed.event.done ? ' · final' : ' in progress') : '') + ' · ' + g.count + ' entr' + (g.count === 1 ? 'y' : 'ies') + '</div>';
+    h += '<div class="ohelp">How it works ' + info(g.pro.game === 'oad' ? 'oad' : 'six') + '</div>';
+    if (g.pro.game === 'oad') return h + oadV(g, s);
+    h += seg([['pool', 'Pool'], ['mine', 'My golfers'], ['tour', 'Tour board']], tab, 'data-tab');
+    if (!g.feed.ok) h += '<div class="owarn"><b>Leaderboard not reachable</b>Scores will show when the tour feed answers.</div>';
+    if (tab === 'pool') {
+      if (!g.pro.locked) h += '<div class="owarn"><b>Picks lock ' + esc(fmtTime(g.pro.lockAt)) + '</b>Other entries stay hidden until then. ' + (g.waiting.length ? g.waiting.length + ' still to pick.' : '') + '</div>';
+      h += '<div class="othead"><span>#</span><span>Entry · golfers alive</span><span class="or">Today</span><span class="or">Total</span></div>';
+      g.entries.forEach((e) => { const mine = e.pid === g.me; h += '<button class="otrow' + (mine ? ' me' : '') + '" data-a="entry" data-pid="' + att(e.pid) + '"><span class="opl' + (e.place === 1 ? ' ogold' : '') + '">' + (e.place || '–') + '</span><span class="opn"><b>' + esc(e.name) + (mine ? ' · you' : '') + '</b><small class="' + (e.alive >= 6 ? 'opos' : e.alive >= 4 ? 'ogold' : 'oneg') + '">' + (e.alive != null && g.pro.locked ? e.alive + ' of 6 made cut' : 'picked') + '</small></span><span class="or ' + tcls(e.today) + '">' + tp(e.today) + '</span><span class="or ob">' + (e.total == null ? '–' : tp(e.total)) + '</span></button>'; });
+      if (!g.entries.length) h += '<div class="ocard omut">No picks yet.</div>';
+      if (g.mine && g.mine.picks) h += '<h3 class="oh">Your golfers · best four count</h3>' + golferList(g, g.entries.find((e) => e.pid === g.me) || {}, g.mine.picks);
+      h += '<div class="onote">Scores refresh from the tour leaderboard every few minutes. Tap an entry to see all six of their golfers.</div>';
+    } else if (tab === 'mine') h += pickV(g, s);
+    else { h += '<div class="othead o3c"><span>Pos</span><span>Golfer</span><span class="or">Total</span></div>' + g.golfers.slice(0, s.more ? 400 : 60).map((x) => '<div class="otrow o3c"><span class="opl">' + esc(x.pos || (x.st === 'active' ? '–' : x.st.toUpperCase())) + '</span><span class="opn"><b>' + esc(x.name) + '</b><small>' + (x.st !== 'active' ? (x.st === 'cut' ? 'Missed cut' : x.st === 'wd' ? 'Withdrew' : 'DQ') : x.thru ? 'thru ' + esc(x.thru) + ' · today ' + tp(x.today) : x.tee ? 'tees off ' + esc(fmtTime(x.tee)) : '') + '</small></span><span class="or ob ' + tcls(x.toPar) + '">' + tp(x.toPar) + '</span></div>').join('');
+      if (!s.more && g.golfers.length > 60) h += '<button class="osec ofull" data-a="more">Show all ' + g.golfers.length + ' golfers</button>'; }
+    return h + inviteBtn(g);
+  }
+  function golferList(g, e, picks) {
+    const by = {}; g.golfers.forEach((x) => (by[x.id] = x)); const per = {}; (e.per || []).forEach((x) => (per[x.id] = x));
+    return '<div class="ocard olist">' + picks.map((id, i) => { const x = by[id] || { name: 'Golfer', st: 'active' }, p = per[id] || {}, counts = (e.counting || []).includes(id);
+      const sub = x.st !== 'active' ? (x.st === 'cut' ? 'Missed cut' : x.st === 'wd' ? (x.started ? 'Withdrew' : 'Withdrew before teeing off') : 'Disqualified') + (p.v != null ? ' · counts as ' + tp(p.v) : ' · not counting') : esc(x.pos || '') + (x.thru ? ' · thru ' + esc(x.thru) : x.tee ? ' · tees off ' + fmtTime(x.tee) : '');
+      return '<div class="omrow' + (counts ? '' : ' odim') + '"><span><b>' + esc(x.name) + '</b> · Tier ' + (i + 1) + '<small class="' + (x.st !== 'active' ? 'oneg' : '') + '">' + sub + '</small></span><span class="or ' + tcls(x.today) + '">' + tp(x.st === 'active' ? x.today : null) + '</span><span class="or ob">' + tp(p.v != null ? p.v : x.toPar) + '</span></div>'; }).join('') + '</div>';
+  }
+  function pickV(g, s) {
+    const mine = g.mine, by = {}; g.golfers.forEach((x) => (by[x.id] = x));
+    if (g.pro.locked) { if (!mine) return '<div class="ocard omut">Picks are locked. You did not pick for this one.</div>';
+      let h = golferList(g, g.entries.find((e) => e.pid === g.me) || {}, mine.picks); const wd = mine.picks.map((id, i) => [id, i]).filter(([id]) => by[id] && by[id].st === 'wd' && !by[id].started);
+      if (wd.length && !mine.swap) wd.forEach(([id, i]) => { const opts = g.tiers[i].filter((x) => by[x] && by[x].st === 'active' && !by[x].started && !mine.picks.includes(x)); h += '<div class="owarn"><b>' + esc(by[id].name) + ' withdrew before teeing off</b>You get one free swap from tier ' + (i + 1) + '.' + sel('oswap' + i, opts.map((x) => [x, by[x].name]), '') + '<button class="opri ofull" data-a="swap" data-from="' + att(id) + '" data-i="' + i + '">Swap</button></div>'; });
+      if (mine.swap) h += '<div class="onote">Swap used: ' + esc((by[mine.swap.from] || {}).name || '') + ' → ' + esc((by[mine.swap.to] || {}).name || '') + '.</div>';
+      return h; }
+    if (!g.tiers) return '<div class="ocard omut">The field is not posted yet. Picks open when the tour posts it.</div>';
+    const cur0 = s.picks || (mine && mine.picks) || []; let h = '<div class="onote">One golfer from each tier. Picks lock ' + esc(fmtTime(g.pro.lockAt)) + '.</div>';
+    g.tiers.forEach((tier, i) => { h += '<label class="olab">Tier ' + (i + 1) + sel('opk' + i, [['', 'Pick a golfer']].concat(tier.map((id) => [id, (by[id] || {}).name || id])), cur0[i] || '') + '</label>'; });
+    if (g.pro.tb === 'score') h += '<label class="olab">Tiebreaker: winning score to par<input id="oguess" class="oin" type="number" inputmode="numeric" min="-40" max="40" placeholder="-15" value="' + esc(s.guess != null ? s.guess : mine && mine.guess != null ? mine.guess : '') + '"></label>';
+    return h + '<button class="opri ofull" data-a="savepicks">' + (mine ? 'Update my picks' : 'Save my picks') + '</button>';
+  }
+  function oadV(g, s) {
+    let h = '<div class="othead o3c"><span>#</span><span>Player</span><span class="or">' + 'Total' + '</span></div>' + g.table.map((r) => '<div class="otrow o3c' + (r.pid === g.me ? ' me' : '') + '"><span class="opl">' + r.place + '</span><span class="opn"><b>' + esc(r.name) + '</b></span><span class="or ob">' + r.total.toLocaleString() + '</span></div>').join('');
+    h += '<h3 class="oh">Pick for a tournament</h3>' + (s.events ? '<label class="olab">Tournament' + sel('ooev', s.events.map((e) => [e.id, e.name]), s.oev || (s.events[0] || {}).id) + '</label>' : '<div class="ocard omut">Loading the schedule…</div>');
+    if (s.field) { const used = new Set(g.oad.used); h += '<label class="olab">Golfer' + sel('oog', s.field.filter((x) => x.st === 'active').map((x) => [x.id, x.name + (used.has(x.id) ? ' (used)' : '')]), '') + '</label><button class="opri ofull" data-a="oadpick">Save pick</button>'; }
+    h += '<div class="onote">You used: ' + (g.oad.used.length ? g.oad.used.length + ' golfer' + (g.oad.used.length === 1 ? '' : 's') : 'nobody yet') + '. Never the same golfer twice. Scored by prize money when the feed has it, else by finish points (1st 100, 2nd 60, 3rd 45 …).</div>';
+    g.oad.events.forEach((E) => { h += '<div class="ocard"><b>' + esc(E.name) + '</b><div class="omut">' + (E.res ? 'Final · ' + (E.by === 'money' ? 'prize money' : 'finish points') : E.locked ? 'Locked' : 'Locks ' + esc(fmtTime(E.lockAt))) + '</div>' + E.picks.map((p) => '<div class="oline"><span>' + esc(nm(g, p.pid)) + '<small>' + esc(p.name) + '</small></span><b>' + (p.pts == null ? '' : p.pts.toLocaleString()) + '</b></div>').join('') + '</div>'; });
+    return h + inviteBtn(g);
+  }
+
+  // ---------- golf day board ----------
+  function dayV() {
+    const s = cur(), g = s.g; if (!g) return '<div class="ocard">Loading…</div>'; const d = g.day, b = g.board, tab = s.tab || 'lb', org = g.role === 'org';
+    const maxThru = Math.max(0, ...b.rows.map((r) => r.thru));
+    let h = '<div class="orow"><h1>' + esc(g.title) + '</h1><span class="olive' + (d.status === 'live' ? '' : ' off') + '">' + (d.status === 'live' ? 'Live · hole ' + Math.min(b.holes, maxThru + 1) : d.status === 'final' ? 'Final' : 'Setting up') + '</span></div>';
+    h += '<div class="ometa">' + esc(d.course.name + ' · ' + (d.solo ? 'solo round' : (FMT[d.fmt] || [''])[0] + ' · ' + ((n) => n + ' team' + (n === 1 ? '' : 's'))(d.teams.filter((t) => t.players.length).length)) + ' · ' + (d.net === 'gross' ? 'gross' : 'net with handicaps')) + '</div>';
+    if (d.status === 'setup') return h + setupTeamsV(g, s);
+    const tabs = [['lb', 'Leaderboard'], ['card', 'Scorecard']]; if (!d.solo) tabs.push(['mt', 'Matches'], ['side', 'Side games']); h += seg(tabs, tab, 'data-tab');
+    const q = Q().filter((x) => x.id === g.id); if (q.length) h += '<div class="owarn"><b>' + q.length + ' score' + (q.length === 1 ? '' : 's') + ' waiting to send</b>Saved on this phone; they send by themselves when the signal comes back.</div>';
+    const disp = b.rows.filter((r) => r.disputed.length); if (disp.length) h += '<div class="owarn"><b>Disputed holes</b>' + disp.map((r) => esc(r.name) + ': #' + r.disputed.join(', #')).join(' · ') + (org ? ' · tap a team to settle.' : ' · the organizer settles them.') + '</div>';
+    if (tab === 'lb') {
+      const st = d.fmt === 'stableford'; h += '<div class="othead"><span>#</span><span>' + (d.solo ? 'Golfer' : 'Team') + '</span><span class="or">Thru</span><span class="or">' + (st ? 'Points' : d.net === 'gross' ? 'Gross' : 'Net') + '</span></div>';
+      b.rows.forEach((r) => { const mine = r.tid === d.myTeam, v = st ? (b.by === 'net' ? r.pts : r.ptsG) : b.by === 'net' ? r.toParN : r.toParG;
+        h += '<button class="otrow' + (mine ? ' me' : '') + '" data-a="team" data-tid="' + att(r.tid) + '"><span class="opl' + (r.place === 1 ? ' ogold' : '') + '">' + (r.place || '–') + '</span><span class="opn"><b>' + esc(r.name) + (mine ? (d.solo ? ' · you' : ' · your team') : '') + '</b><small>' + esc(d.teams.find((t) => t.tid === r.tid).players.map((p) => p.name).join(', ')) + (d.net === 'both' ? ' · gross ' + tp(r.toParG) : '') + (r.drives && r.drives.warn.length ? ' · <span class="ogold">' + esc(r.drives.impossible ? 'drive rule cannot be met' : 'drives short: ' + r.drives.warn.map((p) => nm(g, p)).join(', ')) + '</span>' : '') + '</small></span><span class="or">' + (r.thru >= b.holes ? 'F' : r.thru) + '</span><span class="or ob ' + (st ? '' : tcls(v)) + '">' + (st ? v : tp(v)) + '</span></button>'; });
+      h += scoreBox(g);
+    } else if (tab === 'card') h += cardV(g, s);
+    else if (tab === 'mt') h += matchesV(g);
+    else h += sideV(g);
+    if (org && d.status === 'live') h += '<button class="osec ofull" data-a="final">Finish the round</button>'; if (org && d.status === 'final') h += '<button class="osec ofull" data-a="reopen">Reopen scoring</button>';
+    h += '<button class="olink" data-a="auditv">Score history (audit) ›</button>';
+    return h + (d.solo ? '' : inviteBtn(g)) + '<div class="onote">Calcutta, skins and prizes are in the group\'s pots. ' + MONEY + '</div>';
+  }
+  function scoreBox(g) {
+    const d = g.day; if (d.status !== 'live') return ''; const mine = d.iScore.concat(g.role === 'org' ? d.teams.filter((t) => t.players.length && !d.iScore.includes(t.tid)).map((t) => t.tid) : []);
+    if (!mine.length) return '<div class="onote">Only each team\'s scorer enters scores. Another team\'s scorer confirms them.</div>';
+    const vb = window.VoiceLog && window.VoiceLog.open ? '<button class="osec ofull obig" data-a="voice">🎤 Log my score</button>' : '';
+    if (d.solo) { const sc = d.scores[mine[0]] || {}, next = Math.min(d.course.par.length, Object.keys(sc).length + 1); return '<div class="ocard"><h2>My round</h2><button class="opri ofull obig" data-a="enter" data-tid="' + att(mine[0]) + '" data-h="' + next + '">Enter hole ' + next + ' ›</button>' + vb + '<div class="onote">Say it the way you would tell a friend: "hole 4, a five with two putts" or a whole nine at once.</div></div>'; }
+    let h = '<div class="ocard"><h2>Enter a score</h2>' + mine.slice(0, 8).map((tid) => { const sc = d.scores[tid] || {}, next = Math.min(d.course.par.length, Object.keys(sc).length + 1); return '<button class="opri ofull obig" data-a="enter" data-tid="' + att(tid) + '" data-h="' + next + '">' + esc(tname(g, tid)) + ' · hole ' + next + ' ›</button>'; }).join('');
+    const others = d.teams.filter((t) => t.players.length && !d.iScore.includes(t.tid)); if ((d.iScore.length || g.role === 'org') && others.length && !d.solo) h += '<div class="olab">Confirm another team\'s card</div>' + others.map((t) => '<button class="osec ofull" data-a="confirmv" data-tid="' + att(t.tid) + '">Check ' + esc(t.name) + ' ›</button>').join('');
+    return h + '<div class="onote">Only your team\'s scorer can enter. The other team\'s scorer confirms at the turn.</div></div>';
+  }
+  // Scorecard: one wrapped card per hole (no sideways table)
+  function cardV(g, s) {
+    const d = g.day, tid = s.ctid || d.myTeam || (d.teams.find((t) => t.players.length) || {}).tid; if (!tid) return '<div class="ocard omut">No teams yet.</div>'; const t = d.teams.find((x) => x.tid === tid), sc = d.scores[tid] || {}, team = TEAMBALL[d.fmt];
+    let h = sel('octid', d.teams.filter((x) => x.players.length).map((x) => [x.tid, x.name]), tid) + '<div class="ocardg">';
+    d.course.par.forEach((par, i) => { const e = sc[i + 1], v = e ? (team ? e.g : t.players.map((p) => e.p && e.p[p.pid]).join(' · ')) : '–';
+      h += '<button class="ohc' + (e ? ' ' + (e.st === 'confirmed' ? 'ocf' : e.st === 'disputed' ? 'odp' : '') : '') + '" data-a="hole" data-tid="' + att(tid) + '" data-h="' + (i + 1) + '"><small>#' + (i + 1) + ' · par ' + par + ' · idx ' + d.course.hcp[i] + (d.course.yards && d.course.yards[i] ? ' · ' + d.course.yards[i] + 'y' : '') + '</small><b>' + esc(v) + '</b><i>' + (e ? (e.st === 'confirmed' ? '✓ confirmed' : e.st === 'disputed' ? '⚠ disputed' : 'entered') : '') + '</i></button>'; });
+    return h + '</div>' + (team ? '' : '<div class="onote">Scores are each player\'s strokes, in team order: ' + esc(t.players.map((p) => p.name).join(' · ')) + '.</div>');
+  }
+  function entryV() {
+    const s = cur(), g = G(), d = g.day, t = d.teams.find((x) => x.tid === s.tid), hole = s.h, i = hole - 1, team = TEAMBALL[d.fmt], cur0 = (d.scores[s.tid] || {})[hole];
+    if (!s.v) { s.v = {}; if (cur0) { if (team) s.v.g = cur0.g; else t.players.forEach((p) => (s.v[p.pid] = cur0.p[p.pid])); s.drive = cur0.drive; s.putts = cur0.putts; } else { if (team) s.v.g = d.course.par[i]; else t.players.forEach((p) => (s.v[p.pid] = d.course.par[i])); } }
+    let h = '<div class="ohole0"><button class="ostep" data-a="hprev" aria-label="Previous hole"' + (hole <= 1 ? ' disabled' : '') + '>‹</button><span><b>Hole ' + hole + '</b><small>Par ' + d.course.par[i] + ' · index ' + d.course.hcp[i] + (d.course.yards && d.course.yards[i] ? ' · ' + d.course.yards[i] + ' yds' : '') + '</small></span><button class="ostep" data-a="hnext" aria-label="Next hole"' + (hole >= d.course.par.length ? ' disabled' : '') + '>›</button></div>';
+    h += '<div class="ometa">' + esc(t.name) + (cur0 ? ' · entered by ' + esc(cur0.by) + (cur0.st === 'confirmed' ? ' · confirmed' : cur0.st === 'disputed' ? ' · disputed: ' + esc(cur0.note || '') : '') : '') + '</div>';
+    const row = (k, label) => '<div class="ostk"><span>' + esc(label) + '</span><button class="ostep" data-a="dec" data-k="' + att(k) + '" aria-label="One less">−</button><b>' + (s.v[k] || '–') + '</b><button class="ostep" data-a="inc" data-k="' + att(k) + '" aria-label="One more">+</button></div>';
+    h += '<div class="ocard">' + (team ? row('g', 'Team strokes') : t.players.map((p) => row(p.pid, p.name)).join('')) + '</div>';
+    if (d.fmt === 'texas') { const r = g.board.rows.find((x) => x.tid === t.tid), dr = r && r.drives; h += '<div class="olab">Whose drive was used?</div><div class="o2">' + t.players.map((p) => '<button class="' + (s.drive === p.pid ? 'opri' : 'osec') + '" data-a="drive" data-pid="' + att(p.pid) + '">' + esc(p.name) + (dr ? ' · ' + dr.count[p.pid] + ' used' + (dr.need[p.pid] ? ', needs ' + dr.need[p.pid] : '') : '') + '</button>').join('') + '</div>' + (dr && dr.warn.length ? '<div class="owarn"><b>' + (dr.impossible ? 'Drive rule can no longer be met' : 'Running short on drives') + '</b>' + esc(dr.warn.map((p) => nm(g, p) + ' needs ' + dr.need[p]).join(', ')) + ' with ' + dr.left + ' holes left.</div>' : ''); }
+    if (d.fmt === 'florida') h += '<div class="onote">Florida rule: the player whose shot was used sits out the next shot.</div>';
+    h += '<div class="ostk"><span>Putts (optional' + (team ? ', team' : '') + ')</span><button class="ostep" data-a="pdec" aria-label="One less putt">−</button><b>' + (s.putts == null ? '–' : s.putts) + '</b><button class="ostep" data-a="pinc" aria-label="One more putt">+</button></div>';
+    h += '<button class="opri ofull obig" data-a="savehole">Save hole ' + hole + '</button>';
+    if (window.VoiceLog && window.VoiceLog.open) h += '<button class="osec ofull obig" data-a="voice">🎤 Log my score</button>';
+    return h;
+  }
+  function confirmV() {
+    const s = cur(), g = G(), d = g.day, t = d.teams.find((x) => x.tid === s.tid), sc = d.scores[s.tid] || {}, team = TEAMBALL[d.fmt];
+    let h = '<h1>Check ' + esc(t.name) + '</h1><div class="onote">Compare with your own card. Confirm the holes that match; flag a hole that looks wrong and the organizer settles it.</div><div class="ocardg">';
+    d.course.par.forEach((par, i) => { const e = sc[i + 1]; h += '<div class="ohc' + (e ? (e.st === 'confirmed' ? ' ocf' : e.st === 'disputed' ? ' odp' : '') : '') + '"><small>#' + (i + 1) + ' · par ' + par + '</small><b>' + (e ? esc(team ? e.g : t.players.map((p) => e.p[p.pid]).join(' · ')) : '–') + '</b>' + (e && e.st !== 'confirmed' ? '<button class="otiny" data-a="dispute" data-h="' + (i + 1) + '">Flag</button>' : '<i>' + (e && e.st === 'confirmed' ? '✓' : '') + '</i>') + '</div>'; });
+    h += '</div><div class="o2"><button class="opri" data-a="confirm" data-f="1" data-t="9">Confirm 1-9</button><button class="opri" data-a="confirm" data-f="10" data-t="18">Confirm 10-18</button></div>';
+    if (g.role === 'org') { const dis = Object.keys(sc).filter((k) => sc[k].st === 'disputed'); dis.forEach((k) => { h += '<button class="osec ofull" data-a="hole" data-tid="' + att(t.tid) + '" data-h="' + k + '" data-settle="1">Settle hole ' + k + (sc[k].note ? ': ' + esc(sc[k].note) : '') + ' ›</button>'; }); }
+    return h;
+  }
+  function matchesV(g) {
+    const b = g.board, d = g.day; const hh = '<div class="ohelp">Match play terms ' + info('heads') + '</div>'; if (!b.matches.length) return hh + '<div class="ocard omut">No heads-up matches.' + (g.role === 'org' ? ' Add them in setup.' : '') + '</div>';
+    return hh + b.matches.map((m) => { const st = m.m || (m.nassau && m.nassau.total), lead = st.up > 0 ? side(g, m.kind, m.a) : st.up < 0 ? side(g, m.kind, m.b) : '';
+      const txt = st.done ? (st.res === 'T' ? 'Halved' : (st.res === 'W' ? side(g, m.kind, m.a) : side(g, m.kind, m.b)) + ' won ' + st.text) : st.up === 0 ? 'All square' + (st.played ? ', ' + st.left + ' to play' : '') : lead + ' ' + Math.abs(st.up) + ' up, ' + st.left + ' to play' + (st.dormie ? ' · dormie' : '');
+      return '<button class="ocard obtn" data-a="match" data-mid="' + att(m.mid) + '"><div class="orow"><b class="oname">' + esc(side(g, m.kind, m.a)) + ' vs ' + esc(side(g, m.kind, m.b)) + '</b><span class="obadge">' + esc(st.done ? (st.closed ? st.short : st.res === 'T' ? 'Halved' : 'Final') : st.up === 0 ? 'AS' : Math.abs(st.up) + ' UP' + (st.dormie ? ' · dormie' : '')) + '</span></div><div class="' + (st.done ? 'ogold' : 'omut') + '">' + esc((m.type === 'nassau' ? 'Nassau total: ' : '') + txt) + '</div>' + (m.amt ? '<div class="omut">' + usd(m.amt) + ' a match (info)</div>' : '') + '</button>'; }).join('');
+  }
+  function matchV() {
+    const s = cur(), g = G(), m = g.board.matches.find((x) => x.mid === s.mid); if (!m) return '<div class="ocard omut">Match not found.</div>';
+    const A = side(g, m.kind, m.a), B = side(g, m.kind, m.b), bet = (lab, st) => '<div class="ocard"><div class="orow"><b>' + esc(lab) + '</b><span class="' + (st.done ? 'ogold' : 'omut') + '">' + esc(st.done ? (st.res === 'T' ? 'Halved' : (st.res === 'W' ? A : B) + ' won ' + st.text) : st.up === 0 ? 'All square' : (st.up > 0 ? A : B) + ' ' + Math.abs(st.up) + ' up') + '</span></div><div class="omut">' + st.played + ' played, ' + st.left + ' to play' + (st.dormie ? ' · dormie' : '') + (st.closed ? ' · closed out' : '') + '</div><div class="ostrip">' + st.holes.map((w, i) => '<span class="' + (w > 0 ? 'opos' : w < 0 ? 'oneg' : '') + '">' + (w > 0 ? 'A' : w < 0 ? 'B' : '–') + '</span>').join('') + '</div></div>';
+    let h = '<h1>' + esc(A) + ' vs ' + esc(B) + '</h1><div class="ometa">A = ' + esc(A) + ' · B = ' + esc(B) + (m.net ? ' · net, strokes off the low side' : ' · gross') + (m.amt ? ' · ' + usd(m.amt) + ' (info)' : '') + '</div>';
+    if (m.nassau) { h += bet('Front nine', m.nassau.front) + bet('Back nine', m.nassau.back) + bet('Total 18', m.nassau.total) + m.nassau.presses.map((p) => bet('Press from hole ' + p.from, p.m)).join('');
+      h += '<label class="olab">Press from hole' + sel('opress', Array.from({ length: 18 }, (_, i) => [i + 1, i + 1]), Math.min(18, (m.nassau.total.played || 0) + 1)) + '</label><button class="osec ofull" data-a="press">Add a press</button>'; }
+    else h += bet('Match', m.m);
+    return h;
+  }
+  function sideV(g) {
+    const b = g.board, d = g.day; let h = '<div class="ohelp">Skins ' + info('skins') + ' · Closest to the pin / longest drive ' + info('ctp') + '</div><div class="ocard olist">';
+    if (b.skins) { const won = Object.entries(b.skins.won); h += '<button class="omrow obtnr" data-a="skins"><span>Skins' + '<small>' + (d.extras.skins.amt ? usd(d.extras.skins.amt) + ' a skin · ' : '') + won.reduce((a, [, n]) => a + n, 0) + ' won, ' + b.skins.carry + ' carried over' + (b.skins.net ? ' · net' : ' · gross') + '</small></span><b class="ogold">' + (b.skins.carry ? b.skins.carry + ' riding ›' : '›') + '</b></button>'; }
+    b.extras.ctp.forEach((x) => { h += '<button class="omrow obtnr" data-a="extra" data-k="ctp" data-h="' + x.hole + '"><span>Closest to the pin · #' + x.hole + '<small>' + (x.win ? esc(nm(g, x.win.who) || tname(g, x.win.who)) + (x.win.note ? ' · ' + esc(x.win.note) : '') : 'Not played yet') + '</small></span><b>' + (d.extras.ctpAmt ? usd(d.extras.ctpAmt) : '') + ' ›</b></button>'; });
+    b.extras.ld.forEach((x) => { h += '<button class="omrow obtnr" data-a="extra" data-k="ld" data-h="' + x.hole + '"><span>Longest drive · #' + x.hole + '<small>' + (x.win ? esc(nm(g, x.win.who)) + (x.win.note ? ' · ' + esc(x.win.note) : '') : 'Not played yet') + '</small></span><b>' + (d.extras.ldAmt ? usd(d.extras.ldAmt) : '') + ' ›</b></button>'; });
+    if (!b.skins && !b.extras.ctp.length && !b.extras.ld.length) h += '<div class="omut">No side games set up.</div>';
+    return h + '</div><div class="onote">Team Calcutta: the teams are offered to your group\'s Calcutta as lots.</div>';
+  }
+  function skinsV() { const g = G(), b = g.board; return '<h1>Skins</h1><div class="ometa">' + (b.skins.net ? 'Net' : 'Gross') + ' · ties carry to the next hole</div><div class="ocardg">' + b.skins.holes.map((x) => '<div class="ohc' + (x.win ? ' ocf' : '') + '"><small>#' + x.hole + '</small><b>' + esc(x.win ? (nm(g, x.win) !== 'Player' ? nm(g, x.win) : tname(g, x.win)) : 'Carry') + '</b><i>' + (x.win ? x.skins + ' skin' + (x.skins === 1 ? '' : 's') : x.carried + ' riding') + '</i></div>').join('') + '</div>'; }
+  function extraV() {
+    const s = cur(), g = G(), d = g.day, w = ((d.win || {})[s.k] || {})[s.h]; const can = g.role === 'org' || d.iScore.length;
+    let h = '<h1>' + (s.k === 'ctp' ? 'Closest to the pin' : 'Longest drive') + ' · #' + s.h + '</h1><div class="ometa">' + (w ? 'Winner: ' + esc(nm(g, w.who)) + (w.note ? ' · ' + esc(w.note) : '') + ' (entered by ' + esc(w.by) + ')' : 'No winner entered yet') + '</div>';
+    if (!can) return h + '<div class="onote">A scorer or the organizer enters the winner.</div>';
+    return h + '<label class="olab">Winner' + sel('oxw', [['', 'Nobody / clear']].concat(g.members.map((m) => [m.pid, m.name])), w ? w.who : '') + '</label><label class="olab">Note (distance)<input id="oxn" class="oin" maxlength="40" placeholder="4 ft 2 in" value="' + esc(w ? w.note : '') + '"></label><button class="opri ofull" data-a="saveextra">Save</button>';
+  }
+  function auditV() { const g = G(); return '<h1>Score history</h1><div class="onote">Every entry, change, confirmation, dispute and settlement, newest first.</div>' + (g.day.audit.length ? g.day.audit.map((a) => '<div class="ocard"><b>' + esc(a.what) + (a.hole ? ' · hole ' + a.hole + (a.to && typeof a.to === 'number' ? '-' + a.to : '') : '') + (a.tid ? ' · ' + esc(tname(g, a.tid)) : '') + '</b><div class="omut">' + esc(a.by) + ' · ' + esc(fmtTime(a.at)) + (a.note ? ' · ' + esc(a.note) : '') + (a.from ? ' · was ' + esc(a.from.g != null ? a.from.g : Object.values(a.from.p || {}).join('/')) : '') + '</div></div>').join('') : '<div class="ocard omut">Nothing yet.</div>'); }
+
+  // ---------- organizer: teams and handicaps ----------
+  function setupTeamsV(g, s) {
+    const d = g.day, org = g.role === 'org'; let h = '<h2 class="oh2">Teams and handicaps</h2>';
+    if (!org) { h += '<div class="onote">The organizer is setting up teams.</div>' + d.teams.map((t) => '<div class="ocard"><b>' + esc(t.name) + '</b><div class="omut">' + (t.players.map((p) => esc(p.name)).join(', ') || 'Open') + ' · ' + (t.slots - t.players.length) + ' open</div>' + (t.players.length < t.slots && !t.players.some((p) => p.pid === g.me) ? '<button class="osec ofull" data-a="claim" data-tid="' + att(t.tid) + '">Join this team</button>' : '') + '</div>').join('');
+      return h + '<label class="olab">My handicap (unofficial)<input id="omh" class="oin" type="number" inputmode="decimal" step="0.1" value="' + esc(d.hcp[g.me]) + '"></label><button class="osec ofull" data-a="myhcp">Save my handicap</button>' + inviteBtn(g); }
+    const un = d.unassigned; if (un.length) h += '<div class="owarn"><b>' + un.length + ' not on a team</b>' + esc(un.map((x) => x.name).join(', ')) + '</div>';
+    d.teams.forEach((t) => { h += '<div class="ocard"><div class="orow"><b class="oname">' + esc(t.name) + '</b><span class="omut">' + t.players.length + ' of ' + t.slots + '</span></div>';
+      t.players.forEach((p) => { h += '<div class="omrow"><span>' + esc(p.name) + (t.scorer === p.pid ? ' <i class="ogold">· scorer</i>' : '') + '<small>' + (d.hsrc && d.hsrc[p.pid] === 'oddable' ? 'Oddable handicap (unofficial)' : 'Handicap') + '</small></span><input class="oin ohin" type="number" inputmode="decimal" step="0.1" data-hcp="' + att(p.pid) + '" value="' + esc(p.hcp == null ? '' : p.hcp) + '" aria-label="Handicap for ' + esc(p.name) + '">' + (t.scorer !== p.pid ? '<button class="otiny" data-a="scorer" data-tid="' + att(t.tid) + '" data-pid="' + att(p.pid) + '">Scorer</button>' : '') + '<button class="otiny" data-a="unassign" data-pid="' + att(p.pid) + '">Remove</button></div>'; });
+      if (t.players.length < t.slots && un.length) h += '<label class="olab">Add a player' + sel('oas_' + t.tid, [['', 'Pick a player']].concat(un.map((x) => [x.pid, x.name])), '') + '</label><button class="osec ofull" data-a="assign" data-tid="' + att(t.tid) + '">Add to ' + esc(t.name) + '</button>';
+      h += '</div>'; });
+    h += '<div class="o2"><button class="osec" data-a="addteam">Add a team</button><button class="osec" data-a="guest">Add a guest</button></div><div class="onote">Guests are golfers without Oddable. They can claim their rounds later.</div>';
+    if (d.heads && d.heads.on) { h += '<div class="ocard"><h2>Heads-up matches</h2>' + (d.matches.length ? d.matches.map((m) => '<div class="omrow"><span>' + esc(side(g, m.kind, m.a)) + ' vs ' + esc(side(g, m.kind, m.b)) + '</span><button class="otiny" data-a="unmatch" data-mid="' + att(m.mid) + '">Remove</button></div>').join('') : '<div class="omut">None yet.</div>');
+      const ids = d.heads.kind === 'player' ? g.members.map((m) => [m.pid, m.name]) : d.teams.filter((t) => t.players.length).map((t) => [t.tid, t.name]);
+      h += '<div class="o2">' + sel('oma', ids, '') + sel('omb', ids, (ids[1] || [])[0]) + '</div><div class="o2"><button class="osec" data-a="addmatch">Add match</button><button class="osec" data-a="draw">' + ({ bracket: 'Make bracket', foursome: 'Pair foursomes', random: 'Random draw', pick: 'Pair in order' })[d.heads.pair] + '</button></div></div>'; }
+    h += '<button class="opri ofull obig" data-a="start">Start the round</button><div class="onote">Teams, handicaps and setup lock when the round starts. ' + CAPLINE + '</div>';
+    return h + inviteBtn(g);
+  }
+  // ---------- invite ----------
+  const link = (g) => 'https://steves-pics.onrender.com/?join=golf.' + encodeURIComponent(g.code || '');
+  function inviteBtn(g) { if (!g.code) return ''; return '<button class="osec ofull" data-a="invite">Invite people</button>' + (cur().inv ? '<div class="ocard"><div class="ocode"><span><small>Invite link</small><b>' + esc(link(g)) + '</b></span></div><div class="o2"><button class="osec" data-a="copylink">Copy link</button><a class="opri" href="sms:?&body=' + encodeURIComponent('Join "' + g.title + '" on Oddable: ' + link(g)) + '">Text it</a></div></div>' : ''); }
+  function invite(g) {
+    const text = 'Join "' + g.title + '" on Oddable', url = link(g);
+    if (window.OddJoin && window.OddJoin.share) return window.OddJoin.share({ type: 'golf', code: g.code, title: g.title, text });
+    if (navigator.share) return navigator.share({ title: g.title, text, url }).catch(() => { cur().inv = 1; paint(); });
+    cur().inv = 1; paint();
+  }
+
+  // ---------- info sheets ----------
+  const INFO = {
+    heads: 'Match play: each hole is won, lost or halved; the match is about holes, not total strokes. "2 UP" = ahead by two holes, "AS" = all square, "dormie" = ahead by as many holes as are left, "3&2" = won 3 up with 2 to play (closed out). Net matches: the higher handicap gets the difference in strokes (strokes off the low side), on the holes with the lowest handicap index.',
+    skins: 'Each hole is worth one skin. The lowest score alone wins it; if two or more tie for low, nobody wins and the skin carries over, so the next hole is worth two, and so on. Net skins take each player\'s handicap strokes off first.',
+    net: 'Net = gross strokes minus handicap strokes. A player gets one stroke on each hole whose handicap index (1 = hardest) is at or below their course handicap; over 18 a second stroke starts again from index 1. The organizer sets the percent of each handicap used (and the team allowance in team formats).',
+    six: 'Six tiers of golfers. Pick one from each. After the tournament the best four of your six scores (to par) are added up; lowest total wins. A golfer who misses the cut counts as the organizer chose (worst made-cut score +1, own score +10, or out of your four). If one of yours withdraws before teeing off you get one free swap from the same tier. Picks lock at the first tee time.',
+    oad: 'One golfer per tournament for the whole season, and never the same golfer twice. Your golfer earns their prize money (or finish points when the feed has no money); most at the end of the season wins. Each tournament locks at its own first tee time.',
+    ctp: 'Closest to the pin: on the par 3s you choose, whoever finishes nearest the hole with the tee shot wins. Longest drive: on the holes you choose, the longest drive that ends in the fairway wins. A scorer or the organizer enters the winner.',
+    allow: 'Team handicap = the percents you set here, applied to the players\' handicaps from lowest to highest, added up. Common choices are shown as defaults; your group decides. Strokes then go on the holes with the lowest handicap index first.' };
+  const ITITLE = { heads: 'Heads-up match play', skins: 'Skins', net: 'Gross and net', six: 'Pick six', oad: 'One and done', ctp: 'Closest to the pin and longest drive', allow: 'Team handicap allowance' };
+  function infoV() { const s = cur(), k = s.k; const f = /^fmt:/.test(k) ? FMT[k.slice(4)] : null; return '<h1>' + esc(f ? f[0] : ITITLE[k] || 'Help') + '</h1><div class="ocard">' + esc(f ? f[2] : INFO[k] || '') + '</div>'; }
+
+  // ---------- paint ----------
+  const el = () => document.getElementById('ogolf');
+  function paintBusy(on) { const e = el(); if (e) e.classList.toggle('obusy', !!on); }
+  function paint() {
+    const e = el(); if (!e) return; const s = cur(), back = stack.length > 1 ? (stack[stack.length - 2].t === 'home' ? 'Golf' : 'Back') : '';
+    const V = { home, join: joinV, prosetup: proSetup, daysetup: daySetup, course: courseV, cdetail: courseDetailV, manual: manualV, pro: proV, day: dayV, entry: entryV, confirm: confirmV, match: matchV, skins: skinsV, extra: extraV, audit: auditV, info: infoV }[s.t];
+    e.querySelector('.oin0').innerHTML = top(back) + (err ? '<div class="oerr" role="alert">' + esc(err) + '</div>' : '') + (V ? V() : '');
+  }
+  function push(o) { readDraft(); err = ''; stack.push(o); paint(); const e = el(); if (e) e.scrollTop = 0; }
+  async function loadHome() { const s = stack[0]; try { s.list = (await post('mine', {})).games; err = ''; } catch (e) { err = errText(e); s.list = s.list || []; } paint(); }
+  async function loadGame(s) { try { const j = await post('get', { id: s.id }); s.g = j.game; if (s.g && (s.t === 'pro' || s.t === 'day')) s.t = s.g.kind === 'day' ? 'day' : 'pro'; err = ''; } catch (e) { if (!offline(e)) err = errText(e); } paint(); }
+  function openGame(id) { const s = { t: 'pro', id }; push(s); loadGame(s).then(() => { if (s.g && s.g.kind === 'day') { s.t = 'day'; paint(); } if (s.g && s.g.kind === 'pro' && s.g.pro.game === 'oad') loadOadEvents(s); }); }
+  async function loadOadEvents(s) { try { s.events = (await post('events', { tour: s.g.pro.tour })).events.filter((e) => e.state !== 'post'); paint(); if (s.events[0]) loadOadField(s, s.events[0].id); } catch (e) { err = errText(e); paint(); } }
+  async function loadOadField(s, ev) { s.oev = ev; s.field = null; try { s.field = (await post('board', { tour: s.g.pro.tour, event: ev })).golfers; } catch (e) { err = errText(e); } paint(); }
+  // Poll while a board is open and the page is visible (leaderboard updates by polling)
+  function tick() { const s = cur(); if (!el() || document.hidden || busy) return; if ((s.t === 'day' || s.t === 'pro') && s.id && !(s.t === 'pro' && s.tab === 'mine')) loadGame(s); }
+  function draftPro() { return { title: '', tour: 'pga', game: 'six', eventId: '', mc: 'w1', tb: 'score', rank: '', entry: '', pot: 'main', take: 'none', events: null }; }
+  function draftDay(solo) { return { solo: !!solo, title: '', course: null, date: new Date().toLocaleDateString('en-CA'), fmt: 'scramble4', net: 'net', allow: [], pct: 100, count: 2, drives: 4, teams: 2, hu: false, pair: 'pick', hkind: 'team', htype: 'match', hamt: '', skins: false, sknet: true, skamt: '', ctp: '', ld: '', entry: '', pot: 'main', take: 'none', myHcp: '', hsrc: '' }; }
+  async function loadEvents() { const d = DR; d.events = null; d.evErr = ''; paint(); try { const j = await post('events', { tour: d.tour }); d.events = j.events.filter((e) => e.state !== 'post'); if (!d.eventId || !d.events.some((e) => e.id === d.eventId)) d.eventId = (d.events[0] || {}).id || ''; } catch (e) { d.evErr = errText(e); d.events = []; } paint(); }
+  const courseFromTee = (c, t) => ({ name: c.name, tees: t.name, holes: t.holes.length === 9 ? 9 : 18, par: t.holes.map((x) => x.par), hcp: t.holes.map((x) => x.hcp), yards: t.holes.map((x) => x.yards), rating: t.rating, slope: t.slope, city: c.city, src: 'opengolfapi', extId: c.extId, teeKey: t.key });
+  function useCourse(c, id) { stack = stack.filter((x) => !['course', 'cdetail', 'manual'].includes(x.t)); DR.course = c; DR.courseId = id || null; paint(); }
+
+  function click(ev) {
+    const t = ev.target.closest('button,a,[data-a]'); if (!t || t.disabled) return; const a = t.getAttribute('data-a'), s = cur(), g = G();
+    if (a === 'close') { readDraft(); try { sessionStorage.removeItem('ogolf-open'); } catch (x) {} clearInterval(timer); el().remove(); return; }
+    if (a === 'back') { readDraft(); err = ''; if (stack.length > 1) stack.pop(); const c = cur(); if (c.t === 'home') loadHome(); else if (c.id && (c.t === 'day' || c.t === 'pro')) loadGame(c); paint(); return; }
+    if (t.hasAttribute('data-kind')) { readDraft(); const k = t.getAttribute('data-kind'); if (k === 'day') { DR = draftDay(false); stack[stack.length - 1] = { t: 'daysetup' }; paint(); } return; }
+    if (t.hasAttribute('data-game')) { readDraft(); DR.game = t.getAttribute('data-game'); paint(); return; }
+    if (t.hasAttribute('data-fmt')) { readDraft(); DR.fmt = t.getAttribute('data-fmt'); DR.allow = []; paint(); return; }
+    if (t.hasAttribute('data-tog')) { readDraft(); const k = t.getAttribute('data-tog'); DR[k] = !DR[k]; paint(); return; }
+    if (t.hasAttribute('data-tab')) { s.tab = t.getAttribute('data-tab'); paint(); return; }
+    if (a === 'info') { push({ t: 'info', k: t.getAttribute('data-k') }); return; }
+    if (a === 'newpro') { DR = draftPro(); push({ t: 'prosetup' }); loadEvents(); return; }
+    if (a === 'newday' || a === 'solo') { DR = draftDay(a === 'solo'); push({ t: 'daysetup' }); return; }
+    if (a === 'join') { push({ t: 'join' }); return; }
+    if (a === 'open') { openGame(t.getAttribute('data-id')); return; }
+    if (a === 'look') { s.code = (document.getElementById('ocode') || {}).value || ''; act('look', { code: s.code }, async (j) => { s.pre = j.game; paint(); }); return; }
+    if (a === 'dojoin') { const h = (document.getElementById('ojh') || {}).value; act('join', { code: s.code, tid: t.getAttribute('data-tid') || undefined, hcp: h === '' || h == null ? undefined : Number(h) }, async (j) => { stack = [stack[0]]; loadHome(); const o = { t: j.game.kind === 'day' ? 'day' : 'pro', id: j.game.id, g: j.game }; push(o); }); return; }
+    if (a === 'createpro') { readDraft(); const d = DR; act('create', { kind: 'pro', title: d.title.trim(), pro: { tour: d.tour, game: d.game, eventId: d.eventId, mc: d.mc, tb: d.tb, rank: d.rank }, pot: potPayload(d) }, async (j) => { DR = null; stack = [stack[0]]; loadHome(); const o = { t: 'pro', id: j.game.id, g: j.game, tab: 'mine' }; push(o); if (j.game.pro.game === 'oad') loadOadEvents(o); }); return; }
+    if (a === 'createday') { readDraft(); if (!DR.course) { err = 'Pick a course first.'; paint(); return; } act('create', dayPayload(), async (j) => { DR = null; stack = [stack[0]]; loadHome(); push({ t: 'day', id: j.game.id, g: j.game, tab: j.game.day.solo ? 'card' : 'lb' }); }); return; }
+    if (a === 'course') { readDraft(); push({ t: 'course', q: '' }); act('courses', {}, async (j) => { cur().res = j; paint(); }); return; }
+    if (a === 'csearch') { s.q = (document.getElementById('oq') || {}).value || ''; s.st = (document.getElementById('ost') || {}).value || ''; act('courses', { q: s.q, state: s.st }, async (j) => { s.res = j; paint(); }); return; }
+    if (a === 'csaved') { const c = s.res.courses.concat(s.res.owned || []).find((x) => x.id === t.getAttribute('data-id')); if (c) { useCourse({ name: c.name, tees: c.tees, holes: c.holes, par: c.par, hcp: c.hcp, yards: c.yards || undefined, rating: c.rating, slope: c.slope, city: c.city }, c.id); } return; }
+    if (a === 'cdir') { const o = { t: 'cdetail' }; push(o); act('coursedetail', { extId: t.getAttribute('data-x') }, async (j) => { o.c = j.course; o.ti = j.course.tees.length === 1 ? 0 : null; paint(); }); return; }
+    if (a === 'tee') { const i = +t.getAttribute('data-i'); s.ti = s.ti === i ? null : i; paint(); return; }
+    if (a === 'usetee') { const c = s.c, tee = c.tees[+t.getAttribute('data-i')]; useCourse(courseFromTee(c, tee)); return; }
+    if (a === 'edittee') { const c = s.c, tee = c.tees[+t.getAttribute('data-i')], n = 18; push({ t: 'manual', m: { name: c.name, tees: tee.name, holes: n, rating: tee.rating || '', slope: tee.slope || '', par: Array.from({ length: n }, (_, i) => (tee.holes.find((x) => x.n === i + 1) || {}).par || 4), hcp: Array.from({ length: n }, (_, i) => (tee.holes.find((x) => x.n === i + 1) || {}).hcp || i + 1), yards: Array.from({ length: n }, (_, i) => (tee.holes.find((x) => x.n === i + 1) || {}).yards || '') } }); return; }
+    if (a === 'cmanual') { push({ t: 'manual', m: { name: '', tees: '', holes: 18, rating: '', slope: '', par: Array(18).fill(4), hcp: Array.from({ length: 18 }, (_, i) => i + 1), yards: Array(18).fill('') } }); return; }
+    if (a === 'msave') { readManual(); const m = s.m, n = m.holes; const c = { name: m.name.trim(), tees: m.tees.trim(), holes: n, par: m.par.slice(0, n), hcp: m.hcp.slice(0, n), yards: m.yards.slice(0, n).map((y) => (y === '' ? null : Number(y))), rating: m.rating === '' ? null : Number(m.rating), slope: m.slope === '' ? null : Number(m.slope) };
+      act('course', { course: c }, async () => { useCourse(c); }); return; }
+    if (a === 'entry') { const e = g.entries.find((x) => x.pid === t.getAttribute('data-pid')); if (!e || !e.picks) { err = 'Their golfers show once picks lock.'; paint(); return; } push({ t: 'info', k: '', html: 1, g, e }); cur().t = 'entryd'; paint(); return; }
+    if (a === 'more') { s.more = 1; paint(); return; }
+    if (a === 'savepicks') { const picks = g.tiers.map((_, i) => (document.getElementById('opk' + i) || {}).value || ''); s.picks = picks; const gv = (document.getElementById('oguess') || {}).value; s.guess = gv; if (picks.some((x) => !x)) { err = 'Pick a golfer in every tier.'; paint(); return; } act('pick', { id: g.id, picks, guess: gv === '' ? null : Number(gv) }, async (j) => { s.g = j.game; s.picks = null; s.tab = 'pool'; paint(); }); return; }
+    if (a === 'swap') { const i = t.getAttribute('data-i'); act('swap', { id: g.id, from: t.getAttribute('data-from'), to: (document.getElementById('oswap' + i) || {}).value }, async (j) => { s.g = j.game; paint(); }); return; }
+    if (a === 'oadpick') { act('pick', { id: g.id, event: s.oev, golfer: (document.getElementById('oog') || {}).value }, async (j) => { s.g = j.game; paint(); }); return; }
+    if (a === 'team') { if (g.role === 'org' && g.board.rows.find((r) => r.tid === t.getAttribute('data-tid') && r.disputed.length)) { push({ t: 'confirm', tid: t.getAttribute('data-tid') }); return; } s.tab = 'card'; s.ctid = t.getAttribute('data-tid'); paint(); return; }
+    if (a === 'enter' || a === 'hole') { const tid = t.getAttribute('data-tid'), h = +t.getAttribute('data-h'); const can = g.role === 'org' || g.day.iScore.includes(tid); if (!can || g.day.status !== 'live') return; push({ t: 'entry', tid, h, id: g.id, settle: !!t.getAttribute('data-settle') }); return; }
+    if (a === 'hprev' || a === 'hnext') { s.h += a === 'hnext' ? 1 : -1; s.v = null; s.drive = null; s.putts = null; paint(); return; }
+    if (a === 'inc' || a === 'dec') { const k = t.getAttribute('data-k'); s.v[k] = Math.max(1, Math.min(15, (s.v[k] || 0) + (a === 'inc' ? 1 : -1))); paint(); return; }
+    if (a === 'pinc' || a === 'pdec') { s.putts = Math.max(0, Math.min(10, (s.putts == null ? (a === 'pinc' ? -1 : 1) : s.putts) + (a === 'pinc' ? 1 : -1))); paint(); return; }
+    if (a === 'drive') { s.drive = t.getAttribute('data-pid'); paint(); return; }
+    if (a === 'savehole') { saveHole(s); return; }
+    if (a === 'voice') { const d = g.day, tm = d.teams.find((x) => x.tid === s.tid); openVoice(g, s.tid || (d.teams.find((x) => x.players.some((p) => p.pid === g.me)) || d.teams[0]).tid, s.h || null, s.t !== 'entry'); return; }
+    if (a === 'confirmv') { push({ t: 'confirm', tid: t.getAttribute('data-tid') }); return; }
+    if (a === 'confirm') { act('confirm', { id: g.id, tid: s.tid, from: +t.getAttribute('data-f'), to: +t.getAttribute('data-t') }, async (j) => { setG(j.game); paint(); }); return; }
+    if (a === 'dispute') { const note = prompt('What looks wrong on hole ' + t.getAttribute('data-h') + '?') || ''; act('dispute', { id: g.id, tid: s.tid, hole: +t.getAttribute('data-h'), note }, async (j) => { setG(j.game); paint(); }); return; }
+    if (a === 'match') { push({ t: 'match', mid: t.getAttribute('data-mid') }); return; }
+    if (a === 'press') { act('match', { id: g.id, op: 'press', mid: s.mid, from: +(document.getElementById('opress') || {}).value }, async (j) => { setG(j.game); paint(); }); return; }
+    if (a === 'skins') { push({ t: 'skins' }); return; }
+    if (a === 'extra') { push({ t: 'extra', k: t.getAttribute('data-k'), h: +t.getAttribute('data-h') }); return; }
+    if (a === 'saveextra') { act('extra', { id: g.id, kind: s.k, hole: s.h, who: (document.getElementById('oxw') || {}).value, note: (document.getElementById('oxn') || {}).value }, async (j) => { setG(j.game); stack.pop(); paint(); }); return; }
+    if (a === 'auditv') { push({ t: 'audit' }); return; }
+    if (a === 'final' || a === 'reopen') { if (a === 'final' && !confirm('Finish the round? Scores lock.')) return; act(a, { id: g.id }, async (j) => { setG(j.game); paint(); }); return; }
+    if (a === 'start') { saveHcps(g, () => act('start', { id: g.id }, async (j) => { setG(j.game); paint(); })); return; }
+    if (a === 'claim') { act('join', { code: g.code, tid: t.getAttribute('data-tid') }, async (j) => { setG(j.game); paint(); }); return; }
+    if (a === 'myhcp') { act('team', { id: g.id, op: 'hcp', pid: g.me, hcp: Number((document.getElementById('omh') || {}).value) }, async (j) => { setG(j.game); paint(); }); return; }
+    if (a === 'assign') { const tid = t.getAttribute('data-tid'), pid = (document.getElementById('oas_' + tid) || {}).value; if (!pid) return; act('team', { id: g.id, op: 'assign', pid, tid }, async (j) => { setG(j.game); paint(); }); return; }
+    if (a === 'unassign') { act('team', { id: g.id, op: 'assign', pid: t.getAttribute('data-pid') }, async (j) => { setG(j.game); paint(); }); return; }
+    if (a === 'scorer') { act('team', { id: g.id, op: 'scorer', tid: t.getAttribute('data-tid'), pid: t.getAttribute('data-pid') }, async (j) => { setG(j.game); paint(); }); return; }
+    if (a === 'addteam') { act('team', { id: g.id, op: 'add' }, async (j) => { setG(j.game); paint(); }); return; }
+    if (a === 'guest') { const name = prompt('Guest name'); if (!name) return; act('team', { id: g.id, op: 'guest', name }, async (j) => { setG(j.game); err = ''; paint(); if (j.guest) alert('Guest added. Claim code for ' + name + ' (shown once): ' + j.guest.gid + '-' + j.guest.token); }); return; }
+    if (a === 'addmatch') { act('match', { id: g.id, op: 'add', a: (document.getElementById('oma') || {}).value, b: (document.getElementById('omb') || {}).value }, async (j) => { setG(j.game); paint(); }); return; }
+    if (a === 'unmatch') { act('match', { id: g.id, op: 'remove', mid: t.getAttribute('data-mid') }, async (j) => { setG(j.game); paint(); }); return; }
+    if (a === 'draw') { act('match', { id: g.id, op: 'draw' }, async (j) => { setG(j.game); paint(); }); return; }
+    if (a === 'invite') { invite(g); return; }
+    if (a === 'copylink') { try { navigator.clipboard.writeText(link(g)); t.textContent = 'Copied'; } catch (x) { t.textContent = link(g); } return; }
+  }
+  // 🎤 Log my score: the shared voice module (speech -> Claude -> confirmation card) saves through OddGolf.saveHole / saveRound = the normal scorer route.
+  function openVoice(g, tid, hole, round) { const d = g.day, tm = d.teams.find((x) => x.tid === tid) || d.teams[0], sc = d.scores[tm.tid] || {}, next = hole || Math.min(d.course.par.length, Object.keys(sc).length + 1);
+    window.VoiceLog.open({ target: round || d.solo ? 'golf-round' : 'golf-hole', roundId: g.id, teamId: tm.tid, tid: tm.tid, holes: d.course.par.map((par, i) => ({ n: i + 1, par, index: d.course.hcp[i], entered: !!sc[i + 1] })), hole: next, current: next, teamBall: !!TEAMBALL[d.fmt], format: d.fmt, team: tm.name, names: tm.players.map((p) => p.name), players: tm.players.map((p) => ({ pid: p.pid, name: p.name })) }); }
+  function setG(game) { stack.forEach((x) => { if (x.g && x.g.id === game.id) x.g = game; }); }
+  function saveHcps(g, then) { const ins = [...document.querySelectorAll('#ogolf [data-hcp]')].filter((i) => i.value !== '' && Number(i.value) !== g.day.hcp[i.getAttribute('data-hcp')]); (async () => { for (const i of ins) { try { const j = await post('team', { id: g.id, op: 'hcp', pid: i.getAttribute('data-hcp'), hcp: Number(i.value) }); setG(j.game); } catch (e) { err = errText(e); paint(); return; } } then(); })(); }
+  // Save one hole through the normal scorer route (queued on the phone if offline). Also used by the voice target.
+  function holeBody(g, tid, hole, v, drive, putts) { const d = g.day, t = d.teams.find((x) => x.tid === tid), cur0 = (d.scores[tid] || {})[hole]; const b = { id: g.id, tid, hole, rev: cur0 ? cur0.rev : undefined }; if (TEAMBALL[d.fmt]) b.g = v.g; else { b.p = {}; t.players.forEach((p) => (b.p[p.pid] = v[p.pid])); } if (drive) b.drive = drive; if (putts != null) b.putts = putts; return b; }
+  function saveHole(s) {
+    const g = G(), b = holeBody(g, s.tid, s.h, s.v, s.drive, s.putts);
+    if (g.day.fmt === 'texas' && !b.drive) { err = 'Whose drive was used?'; paint(); return; }
+    if (s.settle) { act('resolve', b, async (j) => { setG(j.game); stack.pop(); paint(); }); return; }
+    const sc = g.day.scores[s.tid] = g.day.scores[s.tid] || {}; sc[s.h] = Object.assign({}, sc[s.h] || {}, { g: b.g, p: b.p, st: 'entered', by: 'you (sending)', rev: sc[s.h] ? sc[s.h].rev : 0 }); // optimistic
+    queueScore(b).then(() => { const q = Q(); if (!q.some((x) => x.id === g.id && x.hole === s.h)) { /* sent */ } paint(); });
+    if (s.h < g.day.course.par.length) { s.h++; s.v = null; s.drive = null; s.putts = null; } else stack.pop(); err = ''; paint();
+  }
+  // Public hooks: the shared voice module (VoiceLog) and the join router (OddJoin) call these.
+  window.OddGolf = {
+    open: () => window.oddGolf(),
+    // saveHole({roundId, tid, hole, strokes (team) | p:{pid:strokes}, drive, putts}) goes through the same scorer route: scorer-only, confirmation rules apply.
+    saveHole: async (o) => { const j = await post('get', { id: o.roundId }); const g = j.game, tid = o.tid || o.teamId || g.day.myTeam; const v = TEAMBALL[g.day.fmt] ? { g: o.strokes } : Object.assign({}, o.p || { [g.me]: o.strokes }); return queueScore(holeBody(g, tid, o.hole, v, o.drive, o.putts)); },
+    saveRound: async (o) => { for (const h of o.holes || []) await window.OddGolf.saveHole(Object.assign({ roundId: o.roundId, tid: o.tid }, h)); },
+  };
+  if (window.VoiceLog && window.VoiceLog.registerTarget) { try { ['golf-hole', 'golf-round'].forEach((n) => window.VoiceLog.registerTarget(n, { schema: { hole: 'number', strokes: 'number', putts: 'number?', p: 'object?' }, describe: 'Golf score for one hole (or a whole round as holes[])', save: (o) => (o.holes ? window.OddGolf.saveRound(o) : window.OddGolf.saveHole(o)) })); } catch (e) {} }
+
+  function change(ev) {
+    const id = ev.target && ev.target.id; if (!id) return; const s = cur();
+    if (id === 'otour') { readDraft(); loadEvents(); return; }
+    if (id === 'octid') { s.ctid = ev.target.value; paint(); return; }
+    if (id === 'ooev') { loadOadField(s, ev.target.value); return; }
+    if (id === 'mholes') { readManual(); paint(); return; }
+    if (['ofmt', 'onet', 'ohkind', 'ohtype', 'opair'].includes(id)) { readDraft(); paint(); }
+  }
+  function css() {
+    if (document.getElementById('ogocss')) return; const st = document.createElement('style'); st.id = 'ogocss';
+    st.textContent = '#ogolf{--bg:#0F0B1A;--p:#1A1430;--p2:#140f24;--l:#2E2550;--i:#F3F0FA;--m:#B9B2CF;--g:#15803D;--g2:#22C55E;--gl:#86EFAC;--gt:#10231A;--r:#FDA4AF;--y:#FCD34D;--v:#C4B5FD;position:fixed;inset:0;z-index:96;background:var(--bg);color:var(--i);overflow:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}'
+      + '#ogolf *{box-sizing:border-box}#ogolf .oin0{max-width:560px;margin:0 auto;padding:0 16px calc(48px + env(safe-area-inset-bottom))}#ogolf.obusy .opri{opacity:.6}#ogolf h1{font-size:30px;line-height:1.15;margin:8px 0 6px;overflow-wrap:anywhere}#ogolf h2{font-size:18px;margin:0 0 10px}#ogolf .oh2{margin:16px 0 4px}#ogolf .osub{color:var(--m);margin:0 0 14px}'
+      + '#ogolf .otop{position:sticky;top:0;z-index:2;background:var(--bg);display:flex;justify-content:space-between;align-items:center;padding:max(8px,env(safe-area-inset-top)) 0 6px}'
+      + '#ogolf button,#ogolf a.opri{font:inherit;color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}'
+      + '#ogolf .oback,#ogolf .ox,#ogolf .olink{background:none;border:0;color:var(--v);font-weight:600;min-height:44px;padding:0 4px;text-align:left}#ogolf .ox{color:var(--m)}#ogolf .olink{display:block;width:100%}'
+      + '#ogolf .opri,#ogolf .osec{min-height:48px;border-radius:14px;font-weight:700;font-size:16px;padding:10px 12px;text-decoration:none;display:flex;align-items:center;justify-content:center;text-align:center}#ogolf .opri{background:var(--g);border:1px solid var(--g);color:#fff}#ogolf .osec{background:var(--p2);border:1px solid var(--l)}#ogolf .ofull{width:100%;margin:12px 0}#ogolf .obig{min-height:64px;font-size:19px}'
+      + '#ogolf .o2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0}#ogolf .o2>*{min-width:0}#ogolf .o2g{display:grid;grid-template-columns:1fr 1fr;gap:10px}#ogolf .o4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}'
+      + '#ogolf .oh{font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--m);margin:22px 0 10px}#ogolf .ocard{background:var(--p);border:1px solid var(--l);border-radius:18px;padding:14px 16px;margin:10px 0;display:block;width:100%;text-align:left}#ogolf .ocard.oon{border:2px solid var(--g2);background:var(--gt)}#ogolf .obtn{color:inherit}'
+      + '#ogolf .orow{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}#ogolf .oname{font-size:19px;font-weight:700;overflow-wrap:anywhere;min-width:0}#ogolf .obadge{background:#3b2a78;color:#ddd3ff;border-radius:999px;padding:4px 12px;font-size:13px;font-weight:700}'
+      + '#ogolf .olive{background:#14532d;color:var(--gl);border-radius:999px;padding:5px 12px;font-weight:700;font-size:14px;white-space:nowrap}#ogolf .olive.off{background:#2a2340;color:var(--m)}'
+      + '#ogolf .ometa{color:var(--m);margin:2px 0 8px}#ogolf .omut{color:var(--m)}#ogolf .onote{color:var(--m);font-size:13.5px;margin:8px 0}#ogolf .opos{color:var(--gl)}#ogolf .oneg{color:var(--r)}#ogolf .ogold{color:var(--y)}#ogolf .ob{font-weight:800}#ogolf .oattr{color:var(--m);font-size:12px;margin:6px 0}'
+      + '#ogolf .olab{display:block;color:var(--m);font-size:14px;font-weight:600;margin:12px 0 6px}#ogolf .olab .oin,#ogolf .olab .osel{margin-top:6px}'
+      + '#ogolf .oin,#ogolf .osel{width:100%;min-height:48px;background:var(--p2);border:1px solid var(--l);border-radius:14px;color:var(--i);font:600 16px system-ui;padding:10px 12px;color-scheme:dark;min-width:0}#ogolf .ota{min-height:80px}#ogolf .ocodein{text-transform:uppercase;letter-spacing:.12em;font-size:19px}'
+      + '#ogolf .oseg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:8px;margin:8px 0 12px}#ogolf .oseg button{min-height:48px;border-radius:14px;border:1px solid var(--l);background:var(--p2);font-weight:700;padding:6px}#ogolf .oseg button.on{background:var(--g);border-color:var(--g);color:#fff}'
+      + '#ogolf .oopt{display:block;width:100%;text-align:left;background:var(--p);border:1px solid var(--l);border-radius:16px;padding:12px 14px;margin:8px 0;min-height:56px}#ogolf .oopt b{font-size:17px}#ogolf .oopt small{color:var(--gl);font-weight:700}#ogolf .oopt.on{border:2px solid var(--g2);background:var(--gt)}#ogolf .oopt.soon{opacity:.6;cursor:not-allowed}#ogolf .oopt.soon small{color:var(--y)}'
+      + '#ogolf .ofmtw{display:flex;gap:4px;min-width:0}#ogolf .ofmt{flex:1;min-width:0;min-height:52px;border-radius:14px;border:1px solid var(--l);background:var(--p2);font-weight:700;padding:6px 8px;font-size:15px}#ogolf .ofmt.on{background:var(--g);border-color:var(--g);color:#fff}#ogolf .oi{flex:0 0 44px;width:44px;min-height:44px;border:0;background:none;color:var(--v);font-size:18px}'
+      + '#ogolf .oline{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:52px;padding:4px 0}#ogolf .oline small{display:block;color:var(--m);font-size:13px}'
+      + '#ogolf .osw{flex:0 0 auto;width:64px;height:44px;border:0;background:none;position:relative;padding:0}#ogolf .osw::before{content:"";position:absolute;left:1px;right:1px;top:4px;bottom:4px;border-radius:999px;border:1px solid var(--l);background:var(--p2)}#ogolf .osw i{position:absolute;top:9px;left:6px;width:26px;height:26px;border-radius:50%;background:#bdb5d6;transition:left .15s}#ogolf .osw.on::before{background:var(--g2);border-color:var(--g2)}#ogolf .osw.on i{left:32px;background:#fff}'
+      + '#ogolf .owarn{background:#2a2108;border:1px solid #8a6a12;border-radius:16px;padding:14px 16px;margin:12px 0;color:#efe6cf}#ogolf .owarn b{display:block;color:var(--y);font-size:17px;margin-bottom:4px}#ogolf .owarn .osel{margin-top:8px}'
+      + '#ogolf .oerr{background:#3a1520;border:1px solid #6b2a35;color:#ffd0d0;border-radius:12px;padding:10px 12px;margin:8px 0}'
+      + '#ogolf .othead,#ogolf .otrow{display:grid;grid-template-columns:28px minmax(0,1fr) 54px 60px;gap:8px;align-items:center}#ogolf .othead.o3c,#ogolf .otrow.o3c{grid-template-columns:44px minmax(0,1fr) 60px}#ogolf .othead{color:var(--m);font-size:13px;font-weight:600;padding:12px 14px 4px}#ogolf .or{text-align:right;justify-self:end}'
+      + '#ogolf .otrow{width:100%;text-align:left;background:var(--p);border:1px solid var(--l);border-radius:16px;padding:12px 14px;margin:8px 0;min-height:60px;color:inherit}#ogolf .otrow.me{border:2px solid var(--g2);background:var(--gt)}#ogolf .opl{font-size:18px;font-weight:700}#ogolf .opn{min-width:0}#ogolf .opn b{display:block;font-size:16px;overflow-wrap:anywhere}#ogolf .opn small{display:block;color:var(--m);font-size:12.5px}#ogolf .opn small.opos{color:var(--gl)}#ogolf .opn small.ogold{color:var(--y)}#ogolf .opn small.oneg{color:var(--r)}'
+      + '#ogolf .olist{padding:4px 16px}#ogolf .omrow{display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:56px;border-bottom:1px solid var(--l);padding:6px 0;flex-wrap:wrap}#ogolf .omrow:last-child{border-bottom:0}#ogolf .omrow>span:first-child{flex:1;min-width:0;overflow-wrap:anywhere}#ogolf .omrow small{display:block;color:var(--m);font-size:12.5px}#ogolf .omrow i{font-style:normal}#ogolf .omrow .or{min-width:44px}#ogolf .odim{opacity:.6}#ogolf .obtnr{width:100%;background:none;border:0;border-bottom:1px solid var(--l);text-align:left}'
+      + '#ogolf .ohin{width:84px;flex:0 0 84px}#ogolf .otiny{background:none;border:1px solid var(--l);border-radius:10px;color:var(--m);min-height:44px;min-width:60px;padding:0 8px}'
+      + '#ogolf .orules>div{display:flex;flex-direction:column;padding:8px 0;border-bottom:1px solid var(--l)}#ogolf .orules>div:last-child{border-bottom:0}#ogolf .orules small{color:var(--m);font-size:12.5px}#ogolf .orules span{overflow-wrap:anywhere}'
+      + '#ogolf .ogrid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;align-items:center;text-align:right}#ogolf .ogrid4>:first-child{text-align:left}#ogolf .ohd{color:var(--m);font-size:13px;font-weight:600;padding:6px 0 2px}#ogolf .ohole{min-height:48px;border-bottom:1px solid var(--l)}#ogolf .ohole .osel,#ogolf .ohole .oin{min-height:44px;padding:6px}'
+      + '#ogolf .otee{display:block;width:100%;background:none;border:0;text-align:left;padding:0}#ogolf .otee .olink{margin-top:6px;min-height:36px}'
+      + '#ogolf .ocode{display:flex;gap:8px;background:var(--p2);border-radius:14px;padding:10px 12px;flex-wrap:wrap}#ogolf .ocode small{display:block;color:var(--m)}#ogolf .ocode b{font-size:14px;overflow-wrap:anywhere}'
+      + '#ogolf .ocardg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:10px 0}#ogolf .ohc{background:var(--p);border:1px solid var(--l);border-radius:14px;padding:8px;min-height:72px;text-align:left;display:flex;flex-direction:column;gap:2px;min-width:0;color:inherit}#ogolf .ohc small{color:var(--m);font-size:11.5px}#ogolf .ohc b{font-size:19px;overflow-wrap:anywhere}#ogolf .ohc i{font-style:normal;font-size:11.5px;color:var(--m)}#ogolf .ohc.ocf{border-color:#2e7a52}#ogolf .ohc.odp{border-color:#8a6a12;background:#2a2108}#ogolf .ohc .otiny{min-height:44px;margin-top:4px}'
+      + '#ogolf .ohole0{display:grid;grid-template-columns:64px 1fr 64px;align-items:center;gap:8px;margin:8px 0;text-align:center}#ogolf .ohole0 b{display:block;font-size:26px}#ogolf .ohole0 small{color:var(--m)}'
+      + '#ogolf .ostep{min-width:64px;min-height:64px;border-radius:16px;border:1px solid var(--l);background:var(--p2);font-size:30px;font-weight:700}#ogolf .ostep:disabled{opacity:.35}'
+      + '#ogolf .ostk{display:grid;grid-template-columns:minmax(0,1fr) 64px 56px 64px;gap:8px;align-items:center;min-height:76px;border-bottom:1px solid var(--l)}#ogolf .ostk:last-child{border-bottom:0}#ogolf .ostk>span{overflow-wrap:anywhere;font-weight:600}#ogolf .ostk b{font-size:30px;text-align:center}'
+      + '#ogolf .ostrip{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}#ogolf .ostrip span{min-width:26px;text-align:center;border:1px solid var(--l);border-radius:8px;font-size:12px;padding:2px 0}'
+      + '#ogolf .ohelp{display:flex;align-items:center;gap:6px;flex-wrap:wrap;color:var(--m);font-size:13.5px;margin:6px 0}'
+      + '@media (max-width:360px){#ogolf .ocardg{grid-template-columns:repeat(2,minmax(0,1fr))}#ogolf .ostk{grid-template-columns:minmax(0,1fr) 56px 44px 56px}}';
+    document.head.appendChild(st);
+  }
+  // entry detail (someone's six golfers) reuses golferList
+  const _V = { entryd: () => { const s = cur(); return '<h1>' + esc(s.e.name) + '</h1><div class="ometa">' + (s.e.place ? ord(s.e.place) + ' · ' : '') + 'Total ' + tp(s.e.total) + ' · best four count</div>' + golferList(s.g, s.e, s.e.picks); } };
+  const _paint = paint; paint = function () { const s = cur(); if (_V[s.t]) { const e = el(); if (!e) return; e.querySelector('.oin0').innerHTML = top('Back') + (err ? '<div class="oerr" role="alert">' + esc(err) + '</div>' : '') + _V[s.t](); return; } _paint(); };
+  window.oddGolf = function (start) {
+    css(); let e = el(); if (e) e.remove(); e = document.createElement('div'); e.id = 'ogolf'; e.setAttribute('role', 'dialog'); e.setAttribute('aria-label', 'Golf');
+    e.innerHTML = '<div class="oin0"></div>'; document.body.appendChild(e); try { sessionStorage.setItem('ogolf-open', '1'); } catch (x) {}
+    stack = [{ t: 'home' }]; err = ''; e.addEventListener('click', click); e.addEventListener('change', change); paint(); loadHome();
+    if (start && start.code) { const o = { t: 'join', code: start.code }; push(o); act('look', { code: start.code }, async (j) => { o.pre = j.game; paint(); }); }
+    clearInterval(timer); timer = setInterval(tick, 20000); flush();
+  };
+  // ?join=golf.<code>: hand to the shared router if present, else open the join preview here (after sign-in).
+  const joinHandler = (code) => { const c = String(code || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 20); if (!c) return; const go = () => { if (ls('odd-tok')) window.oddGolf({ code: c }); else setTimeout(go, 1500); }; go(); };
+  if (window.OddJoin && window.OddJoin.register) window.OddJoin.register('golf', joinHandler);
+  else { try { const m = /[?&]join=golf\.([A-Za-z0-9]+)/.exec(location.search); if (m) setTimeout(() => joinHandler(m[1]), 800); } catch (e) {} }
+  try { if (sessionStorage.getItem('ogolf-open') === '1' && !/[?&]join=golf\./.test(location.search)) setTimeout(() => { if (!el() && ls('odd-tok')) window.oddGolf(); }, 1500); } catch (e) {}
+})();

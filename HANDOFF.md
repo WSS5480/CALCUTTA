@@ -719,3 +719,35 @@ Head-to-head with playoffs (Matchup screen), Bankroll challenge, Survivor, weekl
 - In-memory rate limits reset on restart (same as the rest of the server). One `lock:groups` row for all groups: fine for hundreds of groups; move to one row per group if it grows.
 - "Open" bet counts of other members are visible (count only, not the pick).
 - Upgrade The Odds API plan (about $30/month) once Oddable sells (unchanged; Groups spends no credits).
+
+## Golf (engine v1) — Nov 16 2026 (golf coder, branch `golf-v1`, NOT pushed, no version bump)
+Owner decisions: OWNER-DECISIONS.md "Golf", "Invites", "Limits and pricing", "Stats" (Nov 15-16 2026). Mockups approved: GolfSetup, GolfBoard, GolfDaySetup, GolfDay.
+Money is information only everywhere (entry, take, skins, per-match, prizes): Oddable never collects, holds or pays.
+
+### Files
+- `odds-api/golf.js` (routes, storage, boards, adapter, stats), `odds-api/golf-score.js` (pure scoring), `odds-api/golf-feed.js` (ESPN), `odds-api/golf-courses.js` (OpenGolfAPI), fixtures in `odds-api/fixtures/` (all HAND-BUILT, marked so), tests `node odds-api/golf.test.js` (51 checks). Wired in server.js with one line (prefix `/golf/`).
+- `pics/golf.js` overlay `#ogolf`; hooks in `pics/index.html`: nav item ⛳ Golf, `navGo('golf')` -> `window.oddGolf()`, script tag `golf.js?v=252` next to groups.js; every reload/pull-to-refresh guard is now `#odash,#ogrp,#ogolf` (index.html x3, sync.js x1). RULE: any new auto-reload or window gesture must check `#odash,#ogrp,#ogolf`.
+
+### Routes (POST JSON, `x-token`; no new request header, CORS unchanged)
+Public: `/golf/preview` (title + kind only, by code; 10 wrong codes block 15 min). Signed in: `mine`, `create` (kind pro|day, `solo`, `course` or `courseId`), `look`, `join` (`tid` claims an open team slot), `get`, `leave`, `paid`, `attach`, `events`, `board`, `courses` (saved + `owned` + OpenGolfAPI `api` list; `q`, `state`, `near`), `coursedetail` (`extId`), `course` (save typed course). Pro: `tiers`, `pick` (six or one-and-done), `swap` (WD before teeing off, once, same tier). Day: `setup`, `team` (add/rename/remove/assign/scorer/hcp/guest), `match` (add/remove/draw/press), `start`, `final`, `reopen`, `score` (scorer or organizer; `eid` retry-safe, `rev` stale-write guard), `confirm` / `dispute` (another team's scorer or organizer), `resolve` (organizer), `extra` (CTP/LD winner). Owner only (acct.ownerOk): `ent` {account, op: enterprise|link|unlink|get, on, courseId}.
+
+### Storage (Supabase oddable_sync, `lock:` prefix keeps rows out of player lists)
+`lock:golf:<id>` one game per row (dbPatchIf retry), `lock:golf:idx` codes + mine (guests as `g:<gid>`), `lock:golf:courses` saved courses (one record per course+tees: rating, slope 55-155, par, hole index, yards; only SELECTED API courses are stored), `lock:ent` {keys, courses} enterprise flags (stand-in) and owner-set course links.
+
+### Engine (hand-worked tests)
+Strokes by hole index (plus handicaps give back on easiest), commissioner-set allowances (team %, player %), every format: 4/2-person scramble, Texas (drive picked per hole, counts/needs/warns/impossible), Florida (shot list: same player twice in a row refused), shamble and best ball (best 1 or 2, net), alternate shot, Chapman, stroke, Stableford, Nassau (front/back/total, manual + auto presses), skins gross/net with carry-over; heads-up match play (UP/DN/AS, dormie, closed out "3&2", `short` field), strokes off the low side; pick six best four with missed-cut options and winning-score / best-golfer tiebreak; lock at first tee (fail closed if the feed is down); one-and-done reuse refused; scorer enters + other team confirms + disputes + organizer settles + audit; 12+ interleaved writes none lost.
+
+### Adapter / contracts
+`attach`, `potSummary`, `golfers(eventId,tour)` (Calcutta lots), `teams(id)` (team Calcutta lots), `isGolfBet`, `limits.maxPeople(accountKey, groupOrGameId)` STAND-IN (8 unless `lock:ent.keys[acc]`, then 400) — swap for the Groups export at merge. `coursesOwnedBy(accountKey)`. `statsFor(userKey,{from,to})` records (`src:'golf'`, kinds golf-round / golf-pool / match; guests as `guest:<gid>`), `extra.courseId` on every round record, hole-by-hole, putts, rating/slope; events store `courseId`. `oddHcp(accountKey)` hook (null until the stats coder plugs it in) pre-fills handicaps.
+Voice: `window.VoiceLog.open({target:'golf-hole'|'golf-round', roundId, tid, holes:[{n,par,index,entered}], hole, current, names, players, teamBall, format})`; button hidden without VoiceLog. Saves go through `window.OddGolf.saveHole/saveRound` -> normal `/golf/score` (scorer rules apply); targets registered with `VoiceLog.registerTarget` when present.
+Invites: `?join=golf.<code>`, registered with `window.OddJoin.register('golf')` when join.js is loaded, else golf.js reads the URL itself; Invite = OddJoin.share, else navigator.share, else Copy / Text it.
+
+### Feeds (verified only from published sources; sandbox cannot reach ESPN or OpenGolfAPI)
+- ESPN: scoreboard `site.api.espn.com/apis/site/v2/sports/golf/<tour>/scoreboard` shape verified from sportsapis.dev (HTTP 200) and the open-source parser sports-skills 0.40.5 (PyPI): competitors `order`, `score` string, round linescores with "-" = unplayed, nested hole linescores; event param ignored, so another event is read with `dates=YYYYMMDD`. No tee times / cut status there: picks then lock at event start; cut and WD are inferred. The richer `site.web.api.espn.com/.../golf/leaderboard?league=&event=` is tried first and is NOT VERIFIED.
+- OpenGolfAPI: paths `/v1/courses/search`, `/v1/courses/state/<XX>`, `/v1/courses/<id>`, `/v1/courses/<id>/holes` from the owner's screenshot + @opengolfapi/client 0.1.0 (list fields course_name, par_total, holes_count typed there); `/api/v1/...` (mcp-server 3.6.1) tried on 404. Detail tee/hole field names NOT VERIFIED (read defensively). Attribution "Course data: OpenGolfAPI contributors (ODbL)". Optional env var `OPENGOLFAPI_KEY` (Bearer). Cache 24 h, 5-min back-off; down = saved courses + manual entry.
+
+### Tests and screens
+`node odds-api/golf.test.js` 51 checks (no network). Playwright 430x900 (harness /tmp/golfplay, not committed): 31 screens read — home, pro setup, day setup, course search, course detail + hole rows, manual course, ⓘ format help, pick six before/after lock, entry detail, tour board, one and done, day leaderboard, scorecard, team hole entry (🎤), after save, confirm/flag, matches, Nassau detail with press, side games, skins, CTP, audit, invite, organizer teams, player hole entry, solo round (🎤), join preview. Every screen: no sideways scroll, tap targets >= 44 px, banner covered, 0 page errors.
+
+### NOT verified / open
+Live ESPN and OpenGolfAPI responses; Supabase rows; real tokens/ownerOk; CORS from a phone (no new header); join.js / VoiceLog modules (not in this branch); enterprise consent view of handicaps (owner decision) not built — only the course links; Golfer Calcutta and Bets vs the group shown as "In Groups"; names are cleaned of quotes (Ivy's -> Ivys).

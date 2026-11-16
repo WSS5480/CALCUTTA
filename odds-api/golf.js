@@ -5,15 +5,17 @@
 //   'lock:golf:<id>'      one contest (settings, members, picks or the golf day's teams/scores/audit), every change with dbPatchIf on `updated`
 //   'lock:golf:idx'       { codes: {code: id}, mine: {memberKey: [ids]} }
 //   'lock:golf:courses'   { courses: {id: course} } saved courses typed in by users (no paid course database)
-//   'lock:ent'            { keys: {accountKey: true} } enterprise accounts (STAND-IN for Groups' limits.maxPeople; see HANDOFF)
+//   'lock:ent'            { keys: {accountKey: true}, courses: {accountKey: [courseId]} } enterprise accounts (STAND-IN for Groups' limits.maxPeople; see HANDOFF)
+//                         and the saved courses each enterprise account (a golf course / club) is linked to by the owner (POST /golf/ent, owner token only)
 // Members are shown by their Oddable name/handle only; member keys, account ids and phones are never sent to anyone.
 'use strict';
 const crypto = require('crypto');
 const S = require('./golf-score'), F = require('./golf-feed'), CO = require('./golf-courses');
 // oddHcp(accountKey): the player's unofficial Oddable handicap from the stats module (plugged in by the stats coder), used only to PREFILL; null = unknown.
-const D = { S: require('./sync'), acct: () => require('./acct'), now: () => Date.now(), ip: (req) => require('./ip').clientIp(req), feed: F, courses: CO, oddHcp: async () => null };
+const D = { S: require('./sync'), acct: () => require('./acct'), now: () => Date.now(), ip: (req) => require('./ip').clientIp(req), feed: F, courses: CO, oddHcp: async () => null, ownerOk: (req) => require('./acct').ownerOk(req) };
 const ROW = (id) => 'lock:golf:' + id, IDX = 'lock:golf:idx', CRS = 'lock:golf:courses', ENT = 'lock:ent';
 const DAY = 864e5;
+const PRICE = 'Need more than 8? Oddable for courses, clubs and leagues: $500/month + $20 per player per game. Contact us.'; // shared text (OWNER-DECISIONS, Limits and pricing)
 const send = (res, code, o) => { res.statusCode = code; res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json'); res.setHeader('Cache-Control', 'no-store'); res.end(JSON.stringify(o)); };
 const bad = (status, error, extra) => Object.assign(new Error(error), { status, extra });
 const body = (req) => new Promise((ok, no) => { let n = 0; const c = []; req.on('data', (d) => { n += d.length; if (n <= 40000) c.push(d); }); req.on('end', () => { if (n > 40000) return no(bad(413, 'Too big')); try { ok(JSON.parse(Buffer.concat(c).toString() || '{}')); } catch (e) { no(bad(400, 'Bad request')); } }); req.on('error', no); });
@@ -32,8 +34,17 @@ const num = (v, lo, hi) => { const n = Number(v); return Number.isFinite(n) && n
 // STAND-IN with the same name/signature as Groups' limits.maxPeople(accountKey). The manager swaps this for the Groups export at merge.
 const ENTC = { at: 0, keys: {} };
 const limits = {
-  maxPeople: async (accountKey) => { if (D.now() - ENTC.at > 60e3) { try { const r = await D.S.dbGet(ENT); ENTC.keys = (r && r.data && r.data.keys) || {}; } catch (e) {} ENTC.at = D.now(); } return ENTC.keys[accountKey] ? 400 : 8; },
+  maxPeople: async (accountKey, groupOrGameId) => { // eslint-disable-line no-unused-vars
+    if (D.now() - ENTC.at > 60e3) { try { const r = await D.S.dbGet(ENT); ENTC.keys = (r && r.data && r.data.keys) || {}; } catch (e) {} ENTC.at = D.now(); } return ENTC.keys[accountKey] ? 400 : 8; },
 };
+
+// Enterprise course links (owner sets them): which saved courses an enterprise account (a course or club) runs. Events played there record courseId.
+async function entRow() { const r = await D.S.dbGet(ENT); return (r && r.data) || {}; }
+async function coursesOwnedBy(accountKey) {
+  const e = await entRow(), ids = ((e.courses || {})[String(accountKey)] || []).slice(0, 50); if (!ids.length) return [];
+  const r = await D.S.dbGet(CRS), all = (r && r.data && r.data.courses) || {};
+  return ids.filter((id) => all[id]).map((id) => ({ id, name: all[id].name, tees: all[id].tees, holes: all[id].holes, rating: all[id].rating ?? null, slope: all[id].slope ?? null, city: all[id].city || '' }));
+}
 
 // ---------- rate limits ----------
 const RL = new Map();
@@ -161,7 +172,7 @@ function matchState(c, m) {
 
 // ---------- views ----------
 function nameMap(c) { const m = {}; c.members.forEach((x) => (m[x.pid] = x.name)); return m; }
-function pub(c) { return { id: c.id, kind: c.kind, title: c.title, pot: c.pot, orgName: (c.members.find((m) => m.mk === c.org) || {}).name || '', count: c.members.length, max: c.max, groupId: c.groupId || null, created: c.created,
+function pub(c) { return { id: c.id, kind: c.kind, title: c.title, pot: c.pot, orgName: (c.members.find((m) => m.mk === c.org) || {}).name || '', count: c.members.length, max: c.max, groupId: c.groupId || null, courseId: c.courseId || null, created: c.created,
   pro: c.pro ? { tour: c.pro.tour, eventId: c.pro.eventId, eventName: c.pro.eventName, game: c.pro.game, mc: c.pro.mc, tb: c.pro.tb, lockAt: c.pro.lockAt } : null,
   day: c.day ? { course: c.day.course, fmt: c.day.fmt, net: c.day.net, allow: c.day.allow, pct: c.day.pct, count: c.day.count, drives: c.day.drives, date: c.day.date, extras: c.day.extras, heads: c.day.heads, teamSize: c.day.teamSize, status: c.day.status, open: c.day.teams.filter((t) => t.players.length < t.slots).map((t) => ({ tid: t.tid, name: t.name, free: t.slots - t.players.length })) } : null }; }
 async function full(c, u) {
@@ -210,7 +221,7 @@ async function create(u, b, ip) {
   rate('create', u.mk, ip); const now = D.now(), kind = b.kind === 'day' ? 'day' : b.kind === 'pro' ? 'pro' : null; if (!kind) throw bad(400, 'Pick Pro tournament or Our golf day');
   const title = clean(b.title, 40); if (title.length < 2) throw bad(400, 'Give it a name (2+ characters)');
   let id; do { id = rnd(10); } while (await D.S.dbGet(ROW(id)));
-  const c = { id, kind, title, org: u.mk, orgE: u.e, created: now, pot: cleanPot(b.pot), groupId: b.groupId ? clean(b.groupId, 20) : null, members: [], max: await limits.maxPeople(u.e) };
+  const c = { id, kind, title, org: u.mk, orgE: u.e, created: now, pot: cleanPot(b.pot), groupId: b.groupId ? clean(b.groupId, 20) : null, members: [], max: await limits.maxPeople(u.e, id) };
   c.members.push({ pid: newPid(c), mk: u.mk, name: nameFor(u, b.myName), joined: now, paid: false });
   if (kind === 'pro') {
     const P = b.pro || {}, tour = F.TOURS[P.tour] ? P.tour : null; if (!tour) throw bad(400, 'Pick a tour');
@@ -233,6 +244,7 @@ async function create(u, b, ip) {
     if (!course.id) { const saved = await saveCourse(course, course.src === 'opengolfapi' ? 'ogapi' : u.mk, true); if (saved && saved.id) course.id = saved.id; }
     if (course.id) await mutateRow(CRS, () => ({ courses: {} }), (d) => { const x = d.courses && d.courses[course.id]; if (!x) return { nochange: true }; x.used = (x.used || 0) + 1; return {}; });
   }
+  if (c.day && c.day.course.id) c.courseId = c.day.course.id;
   c.code = await newCodeFor(id, u.mk); c.u = now;
   await D.S.dbPut({ id: ROW(id), salt: 'x', pinhash: 'x', data: c, updated: now }, true);
   return c;
@@ -273,6 +285,16 @@ async function handle(req, res) {
       if (fails('i|' + ip) >= 10) throw bad(429, 'Too many wrong codes. Wait 15 minutes.'); if (limit('pv|' + ip, 60, 600e3)) throw bad(429, 'Too many tries. Wait a few minutes.');
       const c = await byCode(b.code, 'i|' + ip); send(res, 200, { title: c.title, kind: c.kind }); return true;
     }
+    if (op === 'ent') { // OWNER ONLY (owner-PIN token, or owner phone + x-dash): enterprise flag and course links for an account. No player sees this.
+      if (!D.ownerOk(req)) throw bad(401, 'Owner only'); const acc = String(b.account || '').trim().slice(0, 120); if (!acc) throw bad(400, 'Which account?'); const a = String(b.op || 'get');
+      if (a === 'link' || a === 'unlink') { const r = await D.S.dbGet(CRS); if (a === 'link' && !(r && r.data && r.data.courses && r.data.courses[String(b.courseId)])) throw bad(404, 'Course not found'); }
+      if (a !== 'get') await mutateRow(ENT, () => ({ keys: {}, courses: {} }), (d) => { d.keys = d.keys || {}; d.courses = d.courses || {}; const cid = String(b.courseId || '');
+        if (a === 'enterprise') { if (b.on) d.keys[acc] = true; else delete d.keys[acc]; }
+        else if (a === 'link') { const l = d.courses[acc] || []; if (!l.includes(cid)) d.courses[acc] = l.concat(cid).slice(-50); }
+        else if (a === 'unlink') { d.courses[acc] = (d.courses[acc] || []).filter((x) => x !== cid); if (!d.courses[acc].length) delete d.courses[acc]; }
+        else throw bad(400, 'Unknown change'); return {}; });
+      ENTC.at = 0; const e = await entRow(); send(res, 200, { enterprise: !!(e.keys || {})[acc], courses: await coursesOwnedBy(acc) }); return true;
+    }
     const u = await me(req);
     if (op === 'events') { rate('read', u.mk, ip); const t = F.TOURS[b.tour] ? b.tour : 'pga'; let ev = []; try { ev = await D.feed.events(t); } catch (e) { throw bad(503, 'Could not read the ' + F.TOURS[t] + ' schedule. Try again in a minute.'); } send(res, 200, { tour: t, tours: F.TOURS, events: ev.filter((e) => !e.end || e.end > now - 3 * DAY).slice(0, 40) }); return true; }
     if (op === 'board') { rate('read', u.mk, ip); const t = F.TOURS[b.tour] ? b.tour : 'pga'; let bd; try { bd = await D.feed.board(t, b.event ? clean(b.event, 20) : ''); } catch (e) { throw bad(503, 'Could not read the leaderboard. Try again in a minute.'); } send(res, 200, bd); return true; }
@@ -280,7 +302,8 @@ async function handle(req, res) {
       rate('read', u.mk, ip); const r = await D.S.dbGet(CRS), all = Object.entries((r && r.data && r.data.courses) || {}), q = clean(b.q, 40).toLowerCase();
       const saved = all.filter(([, c]) => !q || (c.name + ' ' + (c.city || '')).toLowerCase().includes(q)).slice(0, 50).map(([id, c]) => ({ id, name: c.name, tees: c.tees, holes: c.holes, par: c.par, hcp: c.hcp, yards: c.yards || null, rating: c.rating ?? null, slope: c.slope ?? null, city: c.city || '', src: c.src || 'user', mine: c.by === u.mk, used: c.used || 0 }));
       let api = { ok: false, results: [] }; if (q.length >= 3 || b.state || b.near) { try { api = { ok: true, results: await D.courses.search(q, clean(b.state, 4), clean(b.near, 40)), attribution: CO.ATTR }; } catch (e) { api = { ok: false, results: [], error: 'Course search is not available right now. Pick a saved course or type one in.' }; } }
-      send(res, 200, { courses: saved, api }); return true; }
+      let owned = []; try { owned = await coursesOwnedBy(u.e); } catch (e) {} // a golf course / club account sees its own course(s) first
+      send(res, 200, { courses: saved, owned, api }); return true; }
     if (op === 'coursedetail') { rate('read', u.mk, ip); let c; try { c = await D.courses.detail(String(b.extId || '')); } catch (e) { throw bad(503, 'Could not load that course. Type it in instead.'); } send(res, 200, { course: c }); return true; }
     if (op === 'course') { rate('write', u.mk, ip); const c = cleanCourse(b.course); const out = await saveCourse(c, u.mk, false); send(res, 200, out || {}); return true; }
     if (op === 'mine') { rate('read', u.mk, ip); const r = await D.S.dbGet(IDX), ids = ((r && r.data && r.data.mine) || {})[u.mk] || [], out = []; for (const id of ids.slice(-30).reverse()) { try { const c = await getC(id); if (memberOf(c, u.mk)) out.push(Object.assign(pub(c), { role: isOrg(c, u.mk) ? 'org' : 'member' })); } catch (e) {} } send(res, 200, { games: out }); return true; }
@@ -289,9 +312,9 @@ async function handle(req, res) {
       if (fails('a|' + u.mk) >= 10 || fails('i|' + ip) >= 10) throw bad(429, 'Too many wrong codes. Wait 15 minutes.'); rate('code', u.mk, ip);
       let c; try { c = await byCode(b.code, 'a|' + u.mk); } catch (e) { fail('i|' + ip); throw e; }
       if (op === 'look') { send(res, 200, { game: memberOf(c, u.mk) ? await full(c, u) : Object.assign(pub(c), { role: 'none' }) }); return true; }
-      const max = await limits.maxPeople(c.orgE); const tid = b.tid ? String(b.tid) : null;
+      const max = await limits.maxPeople(c.orgE, c.id); const tid = b.tid ? String(b.tid) : null;
       const g = await mutC(c.id, (d) => { let m = memberOf(d, u.mk);
-        if (!m) { if (d.members.length >= Math.max(max, 0)) throw bad(409, 'This game is full (up to ' + max + ' golfers). Running an outing or a course? Contact Oddable.'); if (d.kind === 'day' && d.day.status === 'final') throw bad(409, 'This golf day is over'); m = { pid: newPid(d), mk: u.mk, name: nameFor(u, b.myName), joined: now, paid: false }; d.members.push(m); if (d.kind === 'day') d.day.hcp[m.pid] = num(b.hcp, -10, 54) ?? 0; }
+        if (!m) { if (d.members.length >= Math.max(max, 0)) throw bad(409, 'This game is full (up to ' + max + ' golfers). ' + PRICE); if (d.kind === 'day' && d.day.status === 'final') throw bad(409, 'This golf day is over'); m = { pid: newPid(d), mk: u.mk, name: nameFor(u, b.myName), joined: now, paid: false }; d.members.push(m); if (d.kind === 'day') d.day.hcp[m.pid] = num(b.hcp, -10, 54) ?? 0; }
         else if (!tid) return { nochange: true, v: d };
         if (tid && d.kind === 'day') { const t = d.day.teams.find((x) => x.tid === tid); if (!t) throw bad(404, 'No such team'); if (!t.players.includes(m.pid)) { if (t.players.length >= t.slots) throw bad(409, 'That team is full'); if (d.day.status !== 'setup') throw bad(409, 'Teams are set: the round has started'); d.day.teams.forEach((x) => (x.players = x.players.filter((p) => p !== m.pid))); t.players.push(m.pid); if (!t.scorer) t.scorer = m.pid; } }
         d.u = now; return d; });
@@ -348,14 +371,14 @@ async function handle(req, res) {
       send(res, 200, { game: await full(g, u) }); return true;
     }
     if (op === 'team') { // organizer: add / rename / remove a team, set slots, assign a player, set the scorer, set a handicap
-      rate('write', u.mk, ip); const a = String(b.op || ''); let guest = null; const maxP = a === 'guest' ? await limits.maxPeople(c.orgE) : 0;
+      rate('write', u.mk, ip); const a = String(b.op || ''); let guest = null; const maxP = a === 'guest' ? await limits.maxPeople(c.orgE, c.id) : 0;
       if (a === 'guest') guest = { gid: rnd(10), token: crypto.randomBytes(16).toString('hex') }; // claim token shown once to the organizer; only its hash is stored
       const g = await mutC(c.id, (d) => { const D2 = d.day; const T = (id) => { const t = D2.teams.find((x) => x.tid === String(id)); if (!t) throw bad(404, 'No such team'); return t; };
         if (a === 'hcp') { const p = String(b.pid); if (!d.members.some((m) => m.pid === p)) throw bad(404, 'Not a member'); if (!isOrg(d, u.mk) && p !== mem.pid) throw bad(403, 'Only the organizer sets other players\' handicaps'); if (D2.status !== 'setup') throw bad(409, 'Handicaps lock when the round starts'); const h = num(b.hcp, -10, 54); if (h == null) throw bad(400, 'Handicap -10 to 54'); D2.hcp[p] = Math.round(h * 10) / 10; d.u = now; return d; }
         if (a === 'scorer') { const t = T(b.tid); if (!isOrg(d, u.mk)) throw bad(403, 'Only the organizer picks scorers'); if (!t.players.includes(String(b.pid))) throw bad(400, 'The scorer must be on the team'); t.scorer = String(b.pid); d.u = now; return d; }
         if (!isOrg(d, u.mk)) throw bad(403, 'Only the organizer changes teams'); if (D2.status !== 'setup') throw bad(409, 'Teams are set: the round has started');
         if (a === 'guest') { // a player typed in by name, without an Oddable account (claimable later through the stats module's claim flow)
-          if (d.members.length >= maxP) throw bad(409, 'Up to ' + maxP + ' golfers. Running an outing or a course? Contact Oddable.'); const nm = clean(b.name, 24); if (nm.length < 2) throw bad(400, 'Guest name (2+ characters)');
+          if (d.members.length >= maxP) throw bad(409, 'Up to ' + maxP + ' golfers. ' + PRICE); const nm = clean(b.name, 24); if (nm.length < 2) throw bad(400, 'Guest name (2+ characters)');
           const m = { pid: newPid(d), mk: null, guest: true, gid: guest.gid, tok: crypto.createHash('sha256').update(guest.token).digest('hex'), name: nm, joined: now, paid: false }; d.members.push(m); D2.hcp[m.pid] = num(b.hcp, -10, 54) ?? 0;
           if (b.tid) { const t = T(b.tid); if (t.players.length >= t.slots) throw bad(409, 'That team is full'); t.players.push(m.pid); if (!t.scorer) t.scorer = d.members.find((x) => x.mk === d.org).pid; }
           guest.pid = m.pid; d.u = now; return d; }
@@ -460,13 +483,13 @@ async function statsFor(userKey, opt) {
         if (team) { score = row.gross; toPar = row.toParG; thru = row.thru; } else { let s = 0, pp = 0; d.course.par.forEach((par, i) => { const e = h[i + 1], g = e && e.p && Number(e.p[m.pid]); if (g >= 1) { s += g; pp += par; thru++; } }); score = thru ? s : null; toPar = thru ? s - pp : null; }
         Object.values(h).forEach((e) => { if (e.putts != null) putts = (putts || 0) + e.putts; });
         const allConf = Object.keys(h).length > 0 && Object.values(h).every((e) => e.st === 'confirmed');
-        if (thru) out.push({ src: 'golf', id: 'golf:' + c.id + ':round:' + m.pid, date, sport: 'golf', kind: 'golf-round', groupId: c.groupId || undefined, contestId: c.id, title: c.title + ' · ' + d.course.name, result: d.status === 'final' && row.place === 1 ? 'W' : null, place: row.place ? { n: row.place, of: bd.rows.length } : undefined, stake: c.pot.entry || undefined, score, toPar, verified: allConf, extra: { course: d.course.name, tees: d.course.tees, rating: d.course.rating ?? null, slope: d.course.slope ?? null, holes: thru, of: n, putts, format: d.fmt, solo: !!d.solo, team: team ? t.name : undefined, teamScore: row.gross, teamBall: team, holeScores: hs, pars: d.course.par, hcpIdx: d.course.hcp, who: team ? t.players.map((p) => nm[p]) : undefined, playingHcp: S.playHcp(d.hcp[m.pid] || 0, d.pct), guestId: m.guest ? m.gid : undefined, final: d.status === 'final' } });
-        if (bd.skins) { const won = bd.skins.won[team ? t.tid : m.pid] || 0; if (won) out.push({ src: 'golf', id: 'golf:' + c.id + ':skins:' + m.pid, date, sport: 'golf', kind: 'golf-round', contestId: c.id, groupId: c.groupId || undefined, title: c.title + ' · skins', result: null, won: d.extras.skins.amt ? won * d.extras.skins.amt : undefined, units: won, verified: allConf, extra: { side: 'skins', skins: won, course: d.course.name } }); }
-        ['ctp', 'ld'].forEach((k) => Object.keys(d.win[k] || {}).forEach((hole) => { const w = d.win[k][hole]; if (w.who === m.pid || w.who === t.tid) out.push({ src: 'golf', id: 'golf:' + c.id + ':' + k + hole + ':' + m.pid, date, sport: 'golf', kind: 'golf-round', contestId: c.id, groupId: c.groupId || undefined, title: c.title + ' · ' + (k === 'ctp' ? 'closest to the pin' : 'longest drive') + ' #' + hole, result: 'W', won: (k === 'ctp' ? d.extras.ctpAmt : d.extras.ldAmt) || undefined, verified: false, extra: { side: k, hole: Number(hole), note: w.note, course: d.course.name } }); }));
+        if (thru) out.push({ src: 'golf', id: 'golf:' + c.id + ':round:' + m.pid, date, sport: 'golf', kind: 'golf-round', groupId: c.groupId || undefined, contestId: c.id, title: c.title + ' · ' + d.course.name, result: d.status === 'final' && row.place === 1 ? 'W' : null, place: row.place ? { n: row.place, of: bd.rows.length } : undefined, stake: c.pot.entry || undefined, score, toPar, verified: allConf, extra: { courseId: d.course.id || null, course: d.course.name, tees: d.course.tees, rating: d.course.rating ?? null, slope: d.course.slope ?? null, holes: thru, of: n, putts, format: d.fmt, solo: !!d.solo, team: team ? t.name : undefined, teamScore: row.gross, teamBall: team, holeScores: hs, pars: d.course.par, hcpIdx: d.course.hcp, who: team ? t.players.map((p) => nm[p]) : undefined, playingHcp: S.playHcp(d.hcp[m.pid] || 0, d.pct), guestId: m.guest ? m.gid : undefined, final: d.status === 'final' } });
+        if (bd.skins) { const won = bd.skins.won[team ? t.tid : m.pid] || 0; if (won) out.push({ src: 'golf', id: 'golf:' + c.id + ':skins:' + m.pid, date, sport: 'golf', kind: 'golf-round', contestId: c.id, groupId: c.groupId || undefined, title: c.title + ' · skins', result: null, won: d.extras.skins.amt ? won * d.extras.skins.amt : undefined, units: won, verified: allConf, extra: { side: 'skins', skins: won, course: d.course.name, courseId: d.course.id || null } }); }
+        ['ctp', 'ld'].forEach((k) => Object.keys(d.win[k] || {}).forEach((hole) => { const w = d.win[k][hole]; if (w.who === m.pid || w.who === t.tid) out.push({ src: 'golf', id: 'golf:' + c.id + ':' + k + hole + ':' + m.pid, date, sport: 'golf', kind: 'golf-round', contestId: c.id, groupId: c.groupId || undefined, title: c.title + ' · ' + (k === 'ctp' ? 'closest to the pin' : 'longest drive') + ' #' + hole, result: 'W', won: (k === 'ctp' ? d.extras.ctpAmt : d.extras.ldAmt) || undefined, verified: false, extra: { side: k, hole: Number(hole), note: w.note, course: d.course.name, courseId: d.course.id || null } }); }));
       }
       bd.matches.forEach((x) => { const mine = x.kind === 'player' ? [x.a, x.b].indexOf(m.pid) : t ? [x.a, x.b].indexOf(t.tid) : -1; if (mine < 0) return; const ms = x.m || (x.nassau && x.nassau.total); if (!ms || !ms.done) return;
         const res = ms.res === 'T' ? 'T' : (ms.res === 'W') === (mine === 0) ? 'W' : 'L', opp = mine === 0 ? x.b : x.a, oppName = x.kind === 'player' ? nm[opp] : (d.teams.find((y) => y.tid === opp) || {}).name;
-        out.push({ src: 'golf', id: 'golf:' + c.id + ':match:' + x.mid + ':' + m.pid, date, sport: 'golf', kind: 'match', contestId: c.id, groupId: c.groupId || undefined, title: c.title + ' · ' + (x.type === 'nassau' ? 'Nassau' : 'match') + ' vs ' + oppName, result: res, stake: x.amt || undefined, pl: x.amt ? (res === 'W' ? x.amt : res === 'L' ? -x.amt : 0) : undefined, opponent: oppName, verified: false, extra: { text: ms.text, type: x.type } }); });
+        out.push({ src: 'golf', id: 'golf:' + c.id + ':match:' + x.mid + ':' + m.pid, date, sport: 'golf', kind: 'match', contestId: c.id, groupId: c.groupId || undefined, title: c.title + ' · ' + (x.type === 'nassau' ? 'Nassau' : 'match') + ' vs ' + oppName, result: res, stake: x.amt || undefined, pl: x.amt ? (res === 'W' ? x.amt : res === 'L' ? -x.amt : 0) : undefined, opponent: oppName, verified: false, extra: { text: ms.text, short: ms.short, type: x.type, courseId: d.course.id || null } }); });
     } else if (c.pro.game === 'six') {
       let b = null; try { b = await D.feed.board(c.pro.tour, c.pro.eventId); } catch (e) {} if (!b || !b.event.done) continue; const date = chiDay(b.event.end || b.event.start || D.now()); if (date < from || date > to) continue;
       const ents = Object.keys(c.pro.entries).filter((p) => c.pro.entries[p].picks && c.pro.entries[p].picks.length === 6).map((p) => Object.assign({ pid: p, name: nm[p] }, c.pro.entries[p])), lead = b.golfers.filter((g) => g.st === 'active' && g.toPar != null).sort((x, y) => x.toPar - y.toPar)[0];
@@ -480,4 +503,4 @@ async function statsFor(userKey, opt) {
   return out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 }
 
-module.exports = { handle, attach, potSummary, golfers, teams, statsFor, isGolfBet, limits, dayBoard, matchState, _deps: D, _mk: mkOf, _reset: () => { RL.clear(); ENTC.at = 0; ENTC.keys = {}; } };
+module.exports = { handle, attach, potSummary, golfers, teams, statsFor, isGolfBet, limits, coursesOwnedBy, dayBoard, matchState, _deps: D, _mk: mkOf, _reset: () => { RL.clear(); ENTC.at = 0; ENTC.keys = {}; } };

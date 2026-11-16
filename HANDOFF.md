@@ -508,3 +508,26 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
   4. Parlay math was chat-only analysis; nothing about parlays is in the app. If built, payouts must come from real prices, with the rule stated on screen (owner's rule: Lock + one dog, Helper only when there is a single pick).
   5. DD_START = 11 but the owner's "today" was week 10; decide whether week 10 counts as live.
   6. odds-api: /cfbd/* routes use CFBD_API_KEY; acct.js name checks need the redeploy noted earlier.
+
+## Reviewer's review of the Nov 15 2026 evening session (written by the retired coder, now first reviewer)
+Owner asked for this to be recorded. Problems in that session's work, most serious first.
+
+Numbers that did not match
+1. Three sources quoted without labels: the live app (owner's browser), the Python backtest (/tmp/nv/work_dogs, nflverse closing lines) and the local Playwright test (2026 games.csv). Result: division road dogs quoted as 18-11 and 17-11; week 8 as 0-5 and 0-6; Helper as 6-3 and 8-2; Lock as 8-2 and 6-3. RULE GOING FORWARD: every number given to the owner names its source and period.
+2. Picks differ by device (per-phone localStorage freezing). Root cause of most mismatches. Being fixed by the new coder (task 3).
+3. Periods shifted between 2004-2025, 2014-2025 and 2014-2026 without saying so (+26.2u vs +17.5u for the same picks). RULE: history is stated over the past 12 full seasons (2014-2025) unless the owner asks otherwise.
+4. Wrong claim, later corrected: "history shows the locks earn most of the units". Over 2014-2025 the road dogs earned +19.4u and the two model picks about -1.8u combined.
+5. A 16-7 record was printed next to +8.54 units, which belongs to 16-6 (the Helper loss was counted in one and not the other).
+
+Instructions not followed
+6. Owner's parlay rule was "Lock + the dog; Helper only in weeks with a single pick". First run parlayed every pick (3-4 legs). Corrected run: 4-5, +5.58u (owner's browser, weeks 1-9, -110 legs, Helper price estimated).
+7. Did not roll to reviewer at the first sign of degradation; the owner had to call it.
+8. Called the owner's current week "week 11"; it is week 10 in the app.
+
+Shipped without enough checking
+9. Eight Alert versions in one evening (v240-v247), each tested on local data only; none checked on a phone or against the My Bets banner rule.
+10. The 53% road dog filter (v246) is live but weakly supported: excluding the Lock's games, picked 141-120 (54.0%) vs not picked 198-173 (53.4%), 2014-2025. It trims volume; it does not pick better dogs. At a 50% cutoff the result reversed.
+11. Spectrum link (watch.spectrum.net) shipped unverified (now unused; coder task 5).
+12. /cfbd/* routes on the odds server are unauthenticated and spend the owner's CFBD_API_KEY quota (coder task 4).
+
+What held up (for reference): division road dogs ATS 370-316 (53.9%, +20.4u) 2014-2025 and 685-599 (53.3%) 2004-2025, about a 1-in-10 chance of luck after testing ~12 slices; Lock 110-99; Double lock 108-101 (retired); no conference / do-or-die / lost-last-week signal; college factor model 171-182; weeks 15+ road dogs 51.1% (revisit a cutoff before week 15).

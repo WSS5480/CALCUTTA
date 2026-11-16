@@ -24,6 +24,7 @@ Start here if you are a new AI session picking up this repo. Update this file in
 - Local check: serve `pics/` with `python3 -m http.server`, set `localStorage['pics-lg']='cfb'`, open `index.html?mirror=1`. ESPN must be mocked if outbound access is blocked.
 
 ## Change log
+- Local events + sport catalog v1 (2026-11-16, branch `local-v1`, no version bump: the manager bumps at merge) — pickleball and other games people run themselves (round robin + playoff, single/double elimination with bracket reset, ladder, heads-up best of 1/3/5, solo/skills, bracket pick'em for spectators), scorer enters / opponent confirms / commissioner decides disputes, plus the "Start a game" sport catalog. Full notes in "Local events + sport catalog (v1)" at the end.
 - Groups stage 1 (2026-11-15, branch `groups-v1`, no version bump: the manager bumps at merge) — players compete in groups with their real synced bets (Standings / Best five), commissioner rules lock at start, join by code or request, money shown as information only. Full notes in the "Groups (stage 1)" section at the end.
 - v252 (2026-11-15, branch `v252-server-picks`) — The SERVER computes and freezes the weekly Alert picks (Lock, division road dogs with model %, Helper); phones only display them. Picks follow the line until 30 minutes before kickoff, then are final. Phone freezing (POST /alert) removed; owner-only line correction route added; trophy-season.json / alert-frozen.json refreshed. Full notes in the v252 section at the end.
 - v194 (2026-11-14) — Kalshi CASH OUT (real sale) with confirm screen. Button 'Cash out…' appears on open Kalshi bets only where a sale can work (market active, a bid >= 1c, at least 1 whole contract). Tap -> modal with live price (re-quoted every 4 s), contracts, proceeds, cost, result; 'Confirm sale' re-quotes first and refuses if the price fell below what was shown. Order = limit, immediate_or_cancel, reduce_only SELL of floor(contracts) at the bid, sent signed from the phone through the new stateless POST /kalshi/order in kalshi-sync/server.js (validates: sell only, integer count, price 0.01-0.99 dollars string, IOC, reduce_only, client_order_id; forwards a cleaned body; refuses everything else). Needs a Kalshi key with TRADING permission (read-only key -> Kalshi 401/403 -> message + `kco-ro` flag). Whole contracts only (Kalshi count is an integer), so fractional leftovers stay open. Sales are logged locally in `kco-log`. Sync now reads SELL fills: when a position is fully sold the bet gets `cash` (proceeds after fee) and `soldN`; betGradeLive/betPL use it (won/lost/push by cash vs stake, P&L = cash - stake). Cash-out value on open Kalshi bets refreshes every 10 s while My Bets is open (cache 8 s). NOT tested against real Kalshi orders (no trade was placed by Claude): first real sale must be tried by Steve on a small position. Server needs a calcutta-odds redeploy for /kalshi/order. Open: combo (MVE) markets may reject normal sell orders; partial sells show only a note; My Apps dashboard grading of cashed bets may differ from the app.
@@ -77,6 +78,13 @@ Start here if you are a new AI session picking up this repo. Update this file in
 - 2026-11-15 10:49 PM CT (owner, Groups) — G10: "The commissioner can choose his take from the challenge": None / whole percent 0-50 / flat dollars (never negative, never more than the pot), validated on the server, locked at start, shown to everyone BEFORE joining or requesting; prize pool = entries marked paid minus the take; the split applies to the prize pool; leftover cents go to 1st so the split sums exactly — information only (G7).
 - 2026-11-15 (coder, Groups, NEEDS OWNER OK) — G11: a counted bet is frozen in the group's ledger the first time the server sees it settled; deleting or editing it on the phone afterwards does not change the group (same idea as "deleted bets still count") — otherwise a member could delete losing bets. Also: a hand-logged bet created after its game's kickoff (bet id time) never counts, and a member who joins late counts bets from the moment they joined.
 - 2026-11-15 (coder, v252) — the server never spends an Odds API credit for the picks: it reads only the many-book lines games.js already cached (owner's rule: stay under the free 500 credits/month).
+
+- 2026-11-16 (coder, local events) — Event invite codes are 8 random characters (40 bits), looked up only through the server with rate limits and a 15-minute block after 10 wrong codes; a signed-out link shows only the title and kind (public `/events/peek`) — OWNER-DECISIONS "Invites"; nothing else about a game is public.
+- 2026-11-16 (coder, local events) — Rules AND entries lock at the start or when the commissioner makes the draw early, whichever comes first, for everyone including the commissioner — OWNER-DECISIONS "All rules lock at start".
+- 2026-11-16 (coder, local events) — The 8-person cap counts every account in the game (organizer, players, spectators) plus typed-in guests nobody has claimed; doubles = 2 people per pair — OWNER-DECISIONS "Limits": 8 PEOPLE per game, commissioner included.
+- 2026-11-16 (coder, local events) — A commissioner who plays enters their own match like any player (the opponent confirms); their entry is final only when the other side is a typed-in guest with no account or the match is disputed — keeps "scorer enters, opponent confirms" honest even for the organizer.
+- 2026-11-16 (coder, local events) — Ladder results cannot be changed after they move the ladder; bracket results can be corrected by the commissioner only until a later match that depends on them is played — prevents re-flowing a bracket under people who already played.
+- 2026-11-16 (coder, catalog) — "Available now" only for games that open a working flow in this build (local events and the football Groups picks contest); Calcutta and golf are "Coming soon" (other branches), the rest "Planned"; a feed is "Live results" only where its ESPN endpoint was confirmed (sources in the section below) — owner: only what truly works is "available now".
 
 ## Open items
 - Upgrade The Odds API plan once Oddable sells.
@@ -719,3 +727,82 @@ Head-to-head with playoffs (Matchup screen), Bankroll challenge, Survivor, weekl
 - In-memory rate limits reset on restart (same as the rest of the server). One `lock:groups` row for all groups: fine for hundreds of groups; move to one row per group if it grows.
 - "Open" bet counts of other members are visible (count only, not the pick).
 - Upgrade The Odds API plan (about $30/month) once Oddable sells (unchanged; Groups spends no credits).
+
+## Local events + sport catalog (v1)
+Branch `local-v1` (base 8cb7074, Groups stage 1). No version bump (the manager bumps at merge). Never pushed or deployed by the coder.
+
+### What it is
+Games people run themselves with no live feed: pickleball first, also tennis club nights, basketball (1-on-1, 3-on-3, skills), golf skills contests, cornhole, darts, bowling, pool. Opened from Groups → "Start a game" (sport catalog) or "My events", or from an invite link `?join=e.<code>`.
+
+### Files
+- `odds-api/events.js` — the engine and routes (`/events/*`, POST only, signed in except `peek`). Wired in `odds-api/server.js` (one line, after `/groups`).
+- `odds-api/events.test.js` — `node odds-api/events.test.js` (25 checks, in-memory database with interleaving writes, fake sign-in and clock). `STATS_JS=<path to stats.js> node odds-api/events.test.js` also runs every stats record through the stats branch's real `validate()` (done: passes).
+- `pics/events.js` — overlay `#oevt` (z-index 97; computed above whatever overlay opened it). `pics/catalog.js` + `pics/games-catalog.json` — overlay `#ocat` (z-index 96). Both above the My Bets banner (z 40).
+- Tiny hooks: `pics/groups.js` (two buttons on the Groups home + `window.oddGroupsCreate`), `pics/index.html` (loads `events.js?v=252` and `catalog.js?v=252`; auto-update / pull-to-refresh / sync reload skip while `#oevt` or `#ocat` is open), `pics/sync.js` (same reload guard).
+
+### Storage (Supabase oddable_sync, `lock:` prefix keeps rows out of player lists)
+- `lock:evt:<id>` — one row per event (id = 10 random chars). Every write is conditional on `updated` (`dbPatchIf`): read → change → write only if nobody wrote in between, else redo (6 tries, then 409 "Busy"). Tested: simultaneous score entries never lose one.
+- `lock:evtidx` — `{ ev: { <id>: { c: code, t: title, mk: [member keys], s, e, f, g } } }` for "My events", code lookup and stats.
+- Member key = sha256('oddable-event|' + account id), never sent to phones; members are shown by name only. Account ids, member keys and guest claim tokens are never in any response (tested), except the commissioner sees each guest's claim code.
+
+### Routes (POST `/events/<op>`, JSON, header `x-token`; CORS headers unchanged: content-type, x-token)
+`peek` (public: title + kind by code) · `mine` · `create` · `preview` · `join` (player into an open seat or a new entry, or spectator) · `claim` (guest claim code) · `get` (with `since` = cheap poll) · `edit` · `entrant` (add/edit/remove/up/down, commissioner, before the lock) · `draw` · `leave` · `delete` · `paid` · `finish` (ladder / heads-up / solo) · `solo` · `score` · `confirm` · `dispute` · `live` (start a match: locks its pick'em) · `pick` · `challenge` · `accept` · `decline`.
+
+### Formats and rules (server-enforced)
+- Pickleball: singles / doubles / mixed (also teams for other sports); games to 11, 15 or 21, win by 2 (past the target a game ends exactly 2 ahead); best of 1/3/5; rally or side-out is a label only; seeding by typed rating (e.g. DUPR, display only), by the unofficial Oddable rating (stand-in hook `D.oddRating`, falls back to the typed number), random, or as entered. Other sports: points to win 0 (= highest score wins, e.g. bowling) to 999, win by 1 or 2.
+- Round robin: circle method, odd counts get one bye per round (each entry exactly once), matches spread over courts in waves, 1-8 pools (snake seeding). Pool tiebreaks: wins > head-to-head among the tied (mini-table) > point differential > points scored > seed. Optional single-elimination playoff of the top 2/4/8/16 (pool winners first), created when the last pool match is confirmed.
+- Single elimination: standard seed order, top seeds get byes. Double elimination: losers bracket with drop-ins flipped on alternate rounds; grand final; bracket reset only if the losers-bracket champion wins the first final (property-tested 2-16 entries: always finishes, every non-champion has exactly 2 losses).
+- Ladder: challenge up to N spots above (1-10), one open challenge per entry, play within 1-30 days, else forfeit win for the challenger or cancelled (commissioner's choice); winner swaps places or takes the spot and pushes the rest down.
+- Heads-up: challenge → the challenged side accepts / declines → best of 1/3/5. Side matches (heads-up next to any event) are optional and do not change standings.
+- Solo / skills (also one-player practice): one number per entry, highest or lowest wins (golf putting = strokes, lowest).
+- Bracket pick'em (spectators and players, round robin / single / double elim): each match locks for picking at its start (`live` tap, first score entry, or a scheduled start); others' picks are hidden, then shown as counts only after the lock; 1 point per right pick (or later rounds worth more); tiebreak = closest guess of the final's total points, then who finished picking first.
+- Scores: the designated scorer (first-listed side / either side / commissioner only) enters game scores, the other side confirms or disputes (with a note); disputes and scores against guests with no account go to the commissioner, who enters the right score (final). Every entry, confirm, dispute, correction, forfeit, draw and join is in the audit trail (last 400; screen shows 60). Op ids make offline resends safe; `v` per match rejects a stale screen (409).
+- Rules and entries lock at the start or at an early draw (the draw is made automatically at the start). Money: entry, main/side pot, split, commissioner's take (none / 0-50 % / flat) are information only.
+- People cap: stand-in `limits.maxPeople(accountKey, gameId)` (8 unless the account is enterprise; enterprise = env `ENTERPRISE_MAX_PEOPLE`, default 500, same as the Groups branch) and the shared text `limits.ENTERPRISE_TEXT`. Full games answer 403 with that text.
+- Every match stores who played on each side at the time (`m.pp`, both doubles partners) and every game score; guests have their own ids (`extra.guestId`) and can claim their history later with a claim code.
+
+### Adapter for Groups / Calcutta (server-side only, `require('./events').ADAPTER`)
+- `attachToGroup(evtId, {gid, cid, pot})` (alias `attach`) — after groups.js has checked the group commissioner; sets main/side pot and tags stats records with groupId/contestId.
+- `summary(evtId)` → `{id, title, fmt, status: upcoming|live|final, start, leader, places[]}`; `potSummary(evtId)` → `{pot, entry, players, paid, total, take, pool, places[{place,pct,amt}]}`.
+- Calcutta `lots` source: `lots(evtId)` → one lot per entry `{id, name, rating, seed, size}`; `lotResults(evtId)` → `{lotId: {place, wins, losses, alive, final}}`.
+
+### Stats (`statsFor(userKey, {from, to})`, contract in stats.js)
+One `match` record per confirmed match played (result W/L, opponent, `extra.games`, `extra.scoreText`, partner, pointDiff, both sides' players, guestId, forfeit), one `event` record per finished event (place; solo `score` numeric + `extra.unit`), one `contest` record per finished pick'em (place, right/of/pts). `sport` = pickleball / tennis / golf, everything else `other` with `extra.game` (cornhole, darts, basketball…). `verified` = confirmed by an account on the other side. NOTE for the stats coder: event/contest place records have `result: null`; stats.js `tot()` counts those as "open" unless `extra.solo` — treat kind `event`/`contest` with a `place` as finished.
+
+### Invite and voice hooks
+- Invite people: `window.OddJoin.share({type:'e', code, title, text})` when the Groups router (pics/join.js) is present, else the phone share sheet, else a copy / text box. The router is registered with `OddJoin.register('e', code => OddEvents.join(code))`; without it events.js reads `?join=e.<code>` itself (signed-in phones). Signed out, the link shows only the title and kind with "Sign up, then open the link again".
+- Voice: "🎤 Log my score" shows on match entry and solo entry only when `window.VoiceLog` exists; it calls `VoiceLog.open({target:'match', eventId, matchId, format:{to, winBy, bestOf, sport}, names:[a, b], players:{a, b}, onSave})`; `onSave({games})` and the registered target's `save` both go through the normal `score` route (scorer → opponent confirms). Solo: `target:'solo'`.
+- Offline: score entries made offline are queued on the phone (`oevt-q`), shown as "waiting to send", resent with the same op id when back online. The event screen polls every 10 s (cheap `since` check).
+
+### Sport catalog ("Start a game")
+`pics/games-catalog.json` (static): every sport → games → one-line + full ⓘ how-it-works + status + results. Status table:
+| Sport | Available now | Coming soon | Planned | Results |
+|---|---|---|---|---|
+| Football | Picks contest vs the group (Groups) | Calcutta | Pick'em/confidence, survivor, CFP bracket, squares, props | Live |
+| Basketball (incl. March Madness) | Round robin, heads-up, solo (own events) | March Madness Calcutta | Group picks, bracket, survivor, pick'em, squares | Live (pro); scorer (own) |
+| Baseball / Hockey | — | — | Group picks, pick'em, survivor, props / playoff bracket | Live |
+| Soccer | — | World Cup Calcutta | Group picks, pick'em, survivor, World Cup bracket | Live (EPL, MLS, World Cup); Champions League to be confirmed |
+| Golf | Solo / skills (putting, lowest wins) | Pick-six tiers, major Calcutta, golf day formats, team Calcutta | One-and-done, props | To be confirmed (pro); scorer (own) |
+| Pickleball / Tennis / Bar & backyard | Round robin, bracket, ladder, heads-up, bracket pick'em, solo | Team Calcutta | Pro tour pick'em (pickleball), Grand Slam pick'em (tennis) | Scorer enters (own); to be confirmed (pro tennis) |
+| Racing / Fighting | — | — | Pick the winner, one-and-done, props / fight card pick'em, confidence, props | To be confirmed |
+| Horse racing | — | Derby Calcutta | Race-day pick'em, props | Scorer enters (no feed found) |
+
+ESPN feed check (2026-11-16; the sandbox cannot reach ESPN, so by public sources; re-check from the Chrome tab before switching any feed on):
+- Confirmed `site.api.espn.com/apis/site/v2/sports/<path>/scoreboard`: football/nfl (used by the app), football/college-football, basketball/nba, basketball/wnba, basketball/mens-college-basketball, baseball/mlb, hockey/nhl, soccer/eng.1, soccer/usa.1 — gist akeaswaran (https://gist.github.com/akeaswaran/b48b02f1c94f873c6655e7129910fc3b) and nntrn (https://gist.github.com/nntrn/ee26cb2a0716de0947a0a4e9a157bc1c); soccer/fifa.world — wc-data crate (https://docs.rs/wc-data/0.2.1/src/wc_data/backends/espn.rs.html).
+- To be confirmed: soccer/uefa.champions (slug only seen in a third-party scraper's input, https://apify.com/scrapers_lat/espn-soccer-scraper/examples/espn-champions-league-scoreboard.md), golf (PGA), tennis (ATP/WTA), racing (F1, NASCAR), MMA/UFC — ESPN carries them as tournament events (https://www.mintlify.com/Pharaoh-Labs/teamarr/reference/provider-espn) but no exact scoreboard path was confirmed. Boxing and horse racing: no ESPN feed found → scorer enters.
+
+### UI checks (Playwright, Chromium 430x900, harness /tmp/evtpw: real pics/groups.js + events.js + catalog.js against the real events.js behind in-memory fakes; also the real index.html loads both scripts with no page errors)
+Automatic on every screen: no sideways scroll, every button/input ≥ 44 px, the overlay covers the My Bets banner, table headers line up with their columns. 36 screenshots read: Groups home with the two new buttons; catalog (pickleball, football, soccer, golf, basketball, bar & backyard) and ⓘ detail for an available and a planned game; create form (round robin, ladder); My events; round robin matches with byes and courts, standings with tiebreaks, info (rules, entries with seeds and claim codes, money, people, history), invite fallback box; match entry with 🎤 (voice contract checked); opponent's to-do, confirm, dispute; commissioner's disputes filter and resolve; offline queue and resend; double-elimination bracket with reset; spectator pick'em; ladder with challenge; heads-up challenge and best-of-3 entry; golf putting (lowest wins); invite preview signed in and signed out.
+
+### NOT verified
+- Anything live: Supabase reads/writes of `lock:evt:*` / `lock:evtidx`, real tokens, CORS from steves-pics to calcutta-odds (headers used are only content-type + x-token, already allowed), real phones (iOS share sheet, offline events).
+- ESPN feeds above (sandbox has no ESPN access). VoiceLog itself (stats branch): only the call contract was checked with a stub. Real `limits.js` / `OddJoin` / Oddable rating: stand-ins.
+- `lock:evtidx` is one row for all events (fine for thousands; split if it grows). In-memory rate limits reset on restart.
+
+### Merge notes
+- Replace the stand-ins in events.js: `limits` → `require('./limits')` and in `capFor` call `limits.maxPeople(limits.keyOf(accountId), gameId)`; `D.enterprise` then unused; call `limits.recordUse(...)` for enterprise billing when an event finishes (not done). `D.oddRating` → the stats branch's Elo for pickleball.
+- Register the stats provider: `stats.register('events', require('./events').statsFor)`.
+- Groups `contests[]`: type `local-event` via `ADAPTER.attachToGroup`; the catalog's "Picks contest vs the group" opens `window.oddGroupsCreate()`.
+- index.html: bump `events.js?v=` / `catalog.js?v=` / `games-catalog.json?v=` with the version.
+- Env: `ENTERPRISE_MAX_PEOPLE` (optional, default 500; shared with limits.js). No other new env vars.
+

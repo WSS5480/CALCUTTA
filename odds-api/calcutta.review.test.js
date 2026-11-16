@@ -123,5 +123,10 @@ srv.listen(0, async () => {
   await chk('10 no Oddable name -> "Player XXXX", never the typed name', async () => { fresh(); r = await call('ann', 'create', base()); const c = r.j.calc;
     r = await fetch('http://127.0.0.1:' + P + '/calcutta/join', { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': 't-jon' }, body: JSON.stringify({ code: c.code, myName: 'AnnBets' }) }).then((x) => x.json());
     const names = r.calc.members.map((m) => m.name); assert.strictEqual(names.filter((n) => n === 'AnnBets').length, 1, JSON.stringify(names)); assert.ok(names.some((n) => /^Player [A-Z0-9]{4}$/.test(n)), JSON.stringify(names)); });
+  await chk('11 a place-paid event (golf day) is not over, and no lot is out, before its places are in', async () => { fresh();
+    r = await call('ann', 'create', { name: 'Places', ev: 'custom', lots: [{ teams: [{ name: 'A' }] }, { teams: [{ name: 'B' }] }], rows: [{ k: 'place', r: 1, n: 1, pct: 70 }, { k: 'place', r: 2, n: 1, pct: 30 }], minBid: 5, inc: 5, timer: 10, take: { kind: 'none' }, order: 'listed', mode: 'manual' }); ok(r); const g = r.j.calc;
+    ok(await call('ann', 'enter', { id: g.id, lot: 'L1', name: 'Al', amt: 10 })); ok(await call('ann', 'enter', { id: g.id, lot: 'L2', name: 'Bo', amt: 10 }));
+    r = await call('ann', 'board', { id: g.id }); assert.strictEqual(r.j.board.over, false); assert.ok(r.j.board.lots.every((l) => l.alive));
+    ok(await call('ann', 'result', { id: g.id, team: 'x1', place: 1 })); ok(await call('ann', 'result', { id: g.id, team: 'x2', place: 2 })); r = await call('ann', 'board', { id: g.id }); assert.strictEqual(r.j.board.over, true); });
   console.log(res.join('\n')); console.log(fails.length ? '\nFAILED ' + fails.length + ' of ' + res.length : '\nPASS ' + res.length + ' review checks'); process.exit(fails.length ? 1 : 0);
 });

@@ -489,3 +489,9 @@ STILL OPEN: paywall on /odds /lines /oddsline /backtest /kalshi (needs gate.js t
 - 12-season (2014-2025) history recomputed: Lock 110-99 (52.6%, +1.0u), road dog 339-293 (53.6%, +15.2u), combined 449-392 (53.4%, +16.2u, ~70 picks/season). ALH/ALY updated (year, Lock W L, road dog W L). Double lock was 108-101 (-2.8u).
 - Test on the app's 2026 wk1-10: Lock 6-3, road dogs 17-10, 23-13 (64%, +7.9u).
 - Checked whether the factor model improves the road dog pick: no. Model agrees with the dog 53.1% vs disagrees 55.6% (2014-25), top-1/week 54.5%; plain "all division road dogs" is as good as any filter. So the dog factor is not combined with the model.
+
+## v246 — Road dog picks need model 53%+ (user: "add it to the list")
+- A division road dog is an Alert pick only when the frozen model gives the dog 53%+ to cover (DD_MIN, ddP: frozen per phone in `ddp26-<id>` while pre-game; back-filled games are recomputed). Under 53% = "Not picked": gray chip on the card, listed in the Alert, tracked in Results (boxes "Picked (model 53%+)" / "Not picked", each drills to games with model %).
+- Alert = 🔒 Lock + picked road dogs. 12-season history (ALH/ALY, 2014-2025, excluding Lock games): picked 141-120 (54.0%, +8.2u), NOT picked 198-173 (53.4%, +7.0u), Lock 110-99; Alert total 251-219 (+9.2u, ~39 picks/season). Honest finding: the two groups are nearly equal, so the filter trims volume, it does not find better dogs.
+- Test (2026 wk1-10 in app = Python): picked 8-4, not picked 9-7, Alert 14-6. Week 8 with filter: 0-2 picked (KC Lock, ATL), 0-4 not picked.
+- Double lock stays retired.

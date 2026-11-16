@@ -4,7 +4,12 @@ const crypto = require('crypto');
 const FAILS = new Map();
 const MAX_BODY = 1.5e6;
 const origin = (u) => { try { return new URL(/^https?:/i.test(u.trim()) ? u.trim() : 'https://' + u.trim()).origin; } catch (e) { return ''; } };
-const cfg = () => ({ url: origin(process.env.SUPABASE_URL || ''), key: (process.env.SUPABASE_KEY || '').trim() });
+// TEST PREVIEW / no database: when PREVIEW=1 (always, even if Supabase vars are set by mistake) or SUPABASE_URL is unset, every row lives in this process's memory.
+// Nothing is read from or written to the live oddable_sync table. The data is gone when the process restarts (preview.js seeds demo data again on boot).
+const MEM_ON = () => process.env.PREVIEW === '1' || !process.env.SUPABASE_URL;
+const MEM = new Map(), cp = (x) => JSON.parse(JSON.stringify(x));
+const cfg = () => (MEM_ON() ? { url: 'memory:', key: 'memory' } : { url: origin(process.env.SUPABASE_URL || ''), key: (process.env.SUPABASE_KEY || '').trim() });
+const noNet = () => { if (MEM_ON()) throw new Error('memory store: no database call allowed'); }; // belt and braces: a missed code path fails instead of reaching a database
 const hdr = (k) => ({ apikey: k, ...(k.startsWith('eyJ') ? { Authorization: 'Bearer ' + k } : {}), 'Content-Type': 'application/json' });
 const idOf = (phone) => crypto.createHash('sha256').update('oddable|' + phone).digest('hex');
 const normPhone = (p) => { const d = String(p || '').replace(/\D/g, ''); return d.length === 11 && d[0] === '1' ? d.slice(1) : d; };
@@ -12,18 +17,21 @@ const hashPin = (pin, salt) => crypto.scryptSync(String(pin), salt, 32).toString
 const same = (a, b) => { const x = Buffer.from(a), y = Buffer.from(b); return x.length === y.length && crypto.timingSafeEqual(x, y); };
 
 async function dbGet(id) {
+  if (MEM_ON()) { const r = MEM.get(String(id)); return r ? cp(r) : null; }
   const { url, key } = cfg();
   const r = await fetch(`${url}/rest/v1/oddable_sync?id=eq.${id}&select=*`, { headers: hdr(key), signal: AbortSignal.timeout(15000) });
   if (!r.ok) throw new Error('db read ' + r.status + ' ' + (await r.text()).slice(0, 200));
   const j = await r.json(); return j[0] || null;
 }
 async function dbPut(row, ignoreDup) {
+  if (MEM_ON()) { const id = String(row.id); if (MEM.has(id) && ignoreDup) return; MEM.set(id, Object.assign(MEM.has(id) ? MEM.get(id) : {}, cp(row))); return; }
   const { url, key } = cfg();
   const r = await fetch(`${url}/rest/v1/oddable_sync`, { method: 'POST', headers: { ...hdr(key), Prefer: (ignoreDup ? 'resolution=ignore-duplicates' : 'resolution=merge-duplicates') + ',return=minimal' }, body: JSON.stringify(row) });
   if (!r.ok) throw new Error('db write ' + r.status + ' ' + (await r.text()).slice(0, 200));
 }
 
 async function dbPatchIf(id, was, data, upd) {
+  if (MEM_ON()) { const r = MEM.get(String(id)); if (!r || Number(r.updated || 0) !== Number(was || 0)) return false; r.data = cp(data); r.updated = upd; return true; }
   const { url, key } = cfg();
   const r = await fetch(`${url}/rest/v1/oddable_sync?id=eq.${id}&updated=eq.${Number(was || 0)}`, { method: 'PATCH', headers: { ...hdr(key), Prefer: 'return=representation' }, body: JSON.stringify({ data, updated: upd }), signal: AbortSignal.timeout(15000) });
   if (!r.ok) throw new Error('db write ' + r.status + ' ' + (await r.text()).slice(0, 200));
@@ -113,9 +121,10 @@ async function handle(req, res) {
 }
 async function adminUsers(emailOf) {
   const { url, key } = cfg();
-  const r = await fetch(`${url}/rest/v1/oddable_sync?select=id,updated,data&id=not.like.lock:*&limit=2000`, { headers: hdr(key) });
-  if (!r.ok) throw new Error('db read ' + r.status);
-  const rows = (await r.json()).filter((x) => !String(x.id).startsWith('lock:')); // shared lock rows are not players
+  let all;
+  if (MEM_ON()) all = [...MEM.values()].map((x) => cp({ id: x.id, updated: x.updated, data: x.data }));
+  else { const r = await fetch(`${url}/rest/v1/oddable_sync?select=id,updated,data&id=not.like.lock:*&limit=2000`, { headers: hdr(key) }); if (!r.ok) throw new Error('db read ' + r.status); all = await r.json(); }
+  const rows = all.filter((x) => !String(x.id).startsWith('lock:')); // shared lock rows are not players
   return rows.map((x) => {
     const d = x.data || {}, bets = arr(d.bets), log = d.log || {}, days = {}, N = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
     let w = 0, l = 0, p = 0, risk = 0, pl = 0;
@@ -165,6 +174,7 @@ async function verifyLogin(phone, pin, ip, create) {
 }
 // Groups (groups.js): every player row id (no data), to find a signed-in phone account's own synced bets row. Shared 'lock:' rows are left out.
 async function dbIds() {
+  if (MEM_ON()) return [...MEM.keys()].filter((id) => !id.startsWith('lock:'));
   const { url, key } = cfg();
   const r = await fetch(`${url}/rest/v1/oddable_sync?select=id&id=not.like.lock:*&limit=5000`, { headers: hdr(key), signal: AbortSignal.timeout(15000) });
   if (!r.ok) throw new Error('db read ' + r.status);
@@ -172,9 +182,10 @@ async function dbIds() {
 }
 // Groups (groups.js): every shared row whose id starts with a prefix (e.g. 'lock:grp:'), with its data. PostgREST 'like' with * as the wildcard.
 async function dbList(prefix, limit) {
+  if (MEM_ON()) return [...MEM.values()].filter((x) => String(x.id).startsWith(prefix)).slice(0, Math.min(Number(limit) || 1000, 5000)).map((x) => cp({ id: x.id, updated: x.updated, data: x.data }));
   const { url, key } = cfg();
   const r = await fetch(`${url}/rest/v1/oddable_sync?select=id,updated,data&id=like.${encodeURIComponent(prefix)}*&limit=${Math.min(Number(limit) || 1000, 5000)}`, { headers: hdr(key), signal: AbortSignal.timeout(15000) });
   if (!r.ok) throw new Error('db read ' + r.status);
   return (await r.json()).filter((x) => String(x.id).startsWith(prefix));
 }
-module.exports = { handle, merge, normPhone, verifyLogin, adminUsers, dbGet, dbPut, dbPatchIf, dbIds, dbList };
+module.exports = { handle, merge, normPhone, verifyLogin, adminUsers, dbGet, dbPut, dbPatchIf, dbIds, dbList, idOf, memory: MEM_ON, _mem: MEM };

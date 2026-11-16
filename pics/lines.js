@@ -1,6 +1,6 @@
 // Real moneylines from the odds server (The Odds API, budgeted). Fills g.mlH / g.mlA and g.mlBook; anything missing stays "estimated".
 (function () {
-  const API = 'https://calcutta-odds.onrender.com/oddsline?lg=';
+  const API = 'https://oddable-preview-api.onrender.com/oddsline?lg=';
   const IDX = {}; let LG = null;
   const nn = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
   const nick = (s) => nn(s).split(' ').pop();

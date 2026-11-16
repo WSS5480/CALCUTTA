@@ -7,7 +7,8 @@ const syncMod = require('./sync');
 const URL_ = () => (process.env.MYAPPS_URL || '').trim().replace(/\/$/, '');
 const SECRET = () => (process.env.MYAPPS_SECRET || '').trim();
 const KEY = () => process.env.GATE_KEY || crypto.createHash('sha256').update('oddable-gate|' + SECRET()).digest('hex');
-const on = () => !!(URL_() && SECRET()) && process.env.GATE_OFF !== '1';
+const PV = () => process.env.PREVIEW === '1'; // TEST PREVIEW: demo accounts only, never talks to My Apps, never charges, see preview.js
+const on = () => PV() || (!!(URL_() && SECRET()) && process.env.GATE_OFF !== '1');
 const TOK_DAYS = 30;
 const b64 = (s) => Buffer.from(s).toString('base64url');
 const sig = (p) => crypto.createHmac('sha256', KEY()).update(p).digest('base64url');
@@ -50,6 +51,7 @@ async function shape(email, fresh) {
 }
 // For other routes (AI): returns true if the request carries a valid token for an allowed account (or the gate is off).
 async function check(req) {
+  if (PV()) return !!verify(req.headers['x-token']);
   if (!on()) return true;
   const e = verify(req.headers['x-token']); if (!e) return false;
   if (e === 'owner') return !!OWNER_PIN();
@@ -58,8 +60,32 @@ async function check(req) {
 async function handle(req, res) {
   if (req.method === 'OPTIONS') return false;
   const path = req.url.split('?')[0];
-  if (path === '/acct/status') { send(res, 200, { gate: on() }); return true; }
+  if (path === '/acct/status') { send(res, 200, { gate: on(), preview: PV() || undefined }); return true; }
   if (req.method !== 'POST') return false;
+  if (PV()) { // TEST PREVIEW: phone + PIN accounts kept in this server's memory; no My Apps, no trial, no payment, no owner PIN
+    let b; try { b = await body(req); } catch (e) { send(res, 400, { error: 'bad request' }); return true; }
+    const PME = (e) => ({ email: 'Test preview account', role: 'user', plan: 'pro', expires_on: null, source: 'preview', allowed: true, pending: false, price: 99, link: null, tag: null, payReady: false });
+    const cn = (n) => String(n || '').replace(/[<>&"'\u0000-\u001f]/g, '').trim().slice(0, 24);
+    try {
+      if (path === '/acct/phone') {
+        if (b.create && cn(b.name).length < 2) { send(res, 400, { error: 'Enter a name or handle to create your account' }); return true; }
+        let v; try { v = await syncMod.verifyLogin(b.phone, b.pin, require('./ip').clientIp(req), !!b.create); } catch (er) { send(res, er.status || 500, { error: er.message }); return true; }
+        if (b.create) { try { await namesSet(String(v.id).slice(0, 8), cn(b.name)); } catch (er) {} }
+        send(res, 200, { token: mint(phoneEmail(v.id)), me: PME() }); return true;
+      }
+      if (/^\/acct\/(owner|login|register|dunlock|dash|name|pay|redeem|push|push-key)$/.test(path)) { send(res, 400, { error: 'Test preview: this is switched off here. Use a cell number + PIN, or the Demo user button.' }); return true; }
+      const e = verify(b.token || req.headers['x-token']); if (!e) { send(res, 401, { error: 'Sign in again' }); return true; }
+      if (path === '/acct/me') { send(res, 200, { me: PME() }); return true; }
+      if (path === '/acct/myname') {
+        const us = await syncMod.dbIds(), id = us.find((x) => phoneEmail(x) === e); if (!id) { send(res, 404, { error: 'Account not found' }); return true; }
+        const k = String(id).slice(0, 8), nm = await namesGet().catch(() => ({})), nn = cn(b.name);
+        if (!b.name) { send(res, 200, { ok: true, name: nm[k] || '' }); return true; }
+        if (nn.length < 2) { send(res, 400, { error: 'Enter a name or handle (2+ characters)' }); return true; }
+        await namesSet(k, nn); send(res, 200, { ok: true, name: nn }); return true;
+      }
+    } catch (er) { send(res, 502, { error: 'Preview account error: ' + er.message }); return true; }
+    return false;
+  }
   if (!on()) { send(res, 200, { gate: false }); return true; }
   const ip = require('./ip').clientIp(req); // third from the end of X-Forwarded-For (see ip.js)
   let b; try { b = await body(req); } catch (e) { send(res, 400, { error: 'bad request' }); return true; }
@@ -169,4 +195,4 @@ const phoneEmail = (id) => crypto.createHmac('sha256', KEY()).update('phoneid|' 
 function ownerOk(req) { const e = verify(req.headers['x-token']); return !!e && dashOk(e, req); }
 // Groups (groups.js): who is signed in (the account id inside a valid token, or null). Never sent to other players.
 function who(req) { if (!on()) return null; const e = verify(req.headers['x-token']); if (!e) return null; if (e === 'owner' && !OWNER_PIN()) return null; return e; }
-module.exports = { handle, check, on, phoneEmail, ownerOk, who, isOwnerPhone, namesGet, ownerName: OWNER_NAME };
+module.exports = { handle, check, on, phoneEmail, ownerOk, who, isOwnerPhone, namesGet, ownerName: OWNER_NAME, _pv: { mint, verify, namesSet } };

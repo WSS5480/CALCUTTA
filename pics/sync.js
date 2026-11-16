@@ -1,7 +1,7 @@
 // Oddable cloud sync: sign in with a cell number + PIN on any device and your bets, watch list, daily logs and locked picks follow you.
 // Kalshi keys never leave the device. Server: calcutta-odds /sync/*.
 (function () {
-  const API = 'https://calcutta-odds.onrender.com/sync';
+  const API = 'https://oddable-preview-api.onrender.com/sync';
   const g = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const s = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
   const escH = (x) => String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -54,7 +54,7 @@
         LASTHASH = after;
         // reload only when bets were added/removed/settled or pins changed; field-level differences (stake, app pick) must never trigger reloads or two devices ping-pong forever
         const sig = (d) => stable({ b: d.bets.map((b) => [String(b.id), b.res == null ? 0 : 1]).sort(), p: [...d.pins].map(String).sort() });
-        if (sig(gatherFrom(local)) !== sig(gather()) && !editing() && !document.querySelector('#odash,#ogrp,#ocalc')) {
+        if (sig(gatherFrom(local)) !== sig(gather()) && !editing() && !document.querySelector('#odash,#ogrp,#ocalc,#ogolf,#oevt,#ocat,#opv')) {
           const t = +g('sync-rl') || 0;
           if (Date.now() - t > 60000) { s('sync-rl', String(Date.now())); location.reload(); return; }
         }

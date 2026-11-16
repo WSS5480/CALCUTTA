@@ -3,7 +3,7 @@
 // Every rule, standing and money figure comes from the server (odds-api/groups.js); this file only shows them. Money is information only:
 // Oddable never collects, holds or pays money. Results are graded by Oddable from final scores; other members' bets arrive only after their games kick off.
 (function () {
-  const API = (window.ODD_GROUPS_API || 'https://calcutta-odds.onrender.com') + '/groups/';
+  const API = (window.ODD_GROUPS_API || 'https://oddable-preview-api.onrender.com') + '/groups/';
   const g = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const esc = (x) => String(x == null ? '' : x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const att = (x) => esc(String(x == null ? '' : x).replace(/[^\w.-]/g, ''));
@@ -58,7 +58,7 @@
   // ---------- home ----------
   function home() {
     if (!H) return '<div class="gcard">Loading your groups…</div>';
-    let s = '<h1>Groups</h1><p class="gsub">Your real bets against your people. Every result is graded by Oddable from final scores.</p><div class="g2"><button class="gpri" data-a="create">Create a group</button><button class="gsec" data-a="join">Join with a code</button></div>';
+    let s = '<h1>Groups</h1><p class="gsub">Your real bets against your people. Every result is graded by Oddable from final scores.</p><div class="g2"><button class="gpri" data-a="create">Create a group</button><button class="gsec" data-a="join">Join with a code</button></div><div class="g2"><button class="gsec" data-a="catalog">Start a game</button><button class="gsec" data-a="events">My events</button></div>'; // local events + sport catalog (events.js, catalog.js)
     s += '<h3 class="gh">My groups</h3>';
     if (!H.groups.length) s += '<div class="gcard gmut">No groups yet. Create one, or open an invite link from a friend.</div>';
     H.groups.forEach((gr) => {
@@ -376,6 +376,8 @@
     if (t.hasAttribute('data-tab')) { const s = cur(); s.tab = t.getAttribute('data-tab'); if (s.tab !== 'prizes') loadStand(s); paint(); return; }
     if (t.hasAttribute('data-pscope')) { const s = cur(); s.scope = t.getAttribute('data-pscope'); s.f = 'all'; loadPlayer(s); return; }
     if (t.hasAttribute('data-f')) { const s = cur(); s.f = t.getAttribute('data-f'); paint(); const e = el(), l = e && e.querySelector('.gbet,.gcard.gmut'); if (l && s.f !== 'all') l.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
+    if (a === 'catalog') { if (window.oddCatalog) window.oddCatalog({ from: 'Groups' }); return; }
+    if (a === 'events') { if (window.oddEvents) window.oddEvents(); return; }
     if (a === 'create') { DR = draftFrom(null, null, 'group'); if (!LIMS) post('limits', {}).then((j) => { LIMS = j; paint(); }).catch(() => {}); push({ t: 'create1' }); return; }
     if (a === 'addc') { DR = draftFrom(null, curGroup(), 'add'); push({ t: 'create1', id: gid() }); return; }
     if (a === 'edit') { const gr = curGroup(), c = gr && cof(gr, cid); if (!c) return; DR = draftFrom(c, gr, 'edit'); push({ t: 'create1', id: gr.id }); return; }
@@ -468,5 +470,6 @@
   // G14: invite links ?join=g.<code> land here (pics/join.js calls this once the person is signed in).
   if (window.OddJoin) window.OddJoin.register('g', (code) => openJoin(code));
   // A reload while Groups is open (new version, sync from another device) puts it back instead of dropping the player on the main screen.
+  window.oddGroupsCreate = function () { window.oddGroups(); DR = draftFrom(null, null, 'group'); push({ t: 'create1' }); }; // the sport catalog's 'Picks contest vs the group'
   try { if (sessionStorage.getItem('ogrp-open') === '1') setTimeout(() => { if (!document.getElementById('ogrp') && window.oddGroups && g('odd-tok') && !(window.OddJoin && window.OddJoin.pending())) window.oddGroups(); }, 1500); } catch (e) {}
 })();

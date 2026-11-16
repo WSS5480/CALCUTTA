@@ -1,11 +1,11 @@
 // Oddable invite links (owner decision G14, Nov 16 2026): one shared join router for every game type.
-// Link: https://steves-pics.onrender.com/?join=<type>.<code>   type: g = group, c = Calcutta, golf = golf contest, e = local event. Nothing else in the URL.
+// Link: https://oddable-preview.onrender.com/?join=<type>.<code>   type: g = group, c = Calcutta, golf = golf contest, e = local event. Nothing else in the URL.
 // Loaded early (before gate.js). Reads ?join=, keeps it in sessionStorage 'odd-join' (survives sign-up and the reload after sign-in), strips it from the address bar.
 // Engines plug in with: window.OddJoin.register(type, handler) — handler(code) opens that game's join preview (it runs only once the person is signed in).
 // API: OddJoin = { register(type, handler), pending() -> {type, code} | null, clear(), share({type, code, title, text}) -> opens the share sheet,
 //                  run() (gate.js calls it after a sign-in), banner(el) (gate.js: "You're invited to join <title>") }.
 (function () {
-  const KEY = 'odd-join', API = (window.ODD_GROUPS_API || 'https://calcutta-odds.onrender.com') + '/groups/invite', SITE = 'https://steves-pics.onrender.com/';
+  const KEY = 'odd-join', API = (window.ODD_GROUPS_API || 'https://oddable-preview-api.onrender.com') + '/groups/invite', SITE = 'https://oddable-preview.onrender.com/';
   const H = {}, ss = (k, v) => { try { if (v === undefined) return sessionStorage.getItem(k); if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch (e) { return null; } };
   const esc = (x) => String(x == null ? '' : x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const parse = (v) => { const m = /^([a-z]{1,8})\.([A-Za-z0-9-]{4,40})$/.exec(String(v || '').trim()); return m ? { type: m[1], code: m[2] } : null; };

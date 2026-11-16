@@ -1,6 +1,10 @@
 // Tiny proxy: holds the Odds API key (env ODDS_API_KEY), returns Super Bowl odds by team abbreviation.
 // Cached in memory so the free plan's monthly credits last (default 6 hours).
 const http = require('http');
+// TEST PREVIEW (PREVIEW=1, branch `preview` only): demo data in memory. Before anything else loads, drop every live secret from this process so a mistaken
+// env var can never reach the live database, My Apps, the owner PIN or spend an Odds API credit. See odds-api/preview.js and HANDOFF "Preview".
+const PREVIEW = process.env.PREVIEW === '1';
+if (PREVIEW) { Object.keys(process.env).forEach((k) => { if (/^odds_?api(_?key)?$/i.test(k) || /^(SUPABASE_|MYAPPS_|OWNER_PIN$|OWNER_PHONE$|ODDS_UPSTREAM$|GATE_OFF$|CFBD)/i.test(k)) delete process.env[k]; }); process.env.GATE_KEY = 'oddable-test-preview-not-a-secret'; }
 
 // Accept the key under any spelling of ODDS_API / ODDS_API_KEY (env names are case-sensitive on Linux)
 const KEYNAME = Object.keys(process.env).find((k) => /^odds_?api(_?key)?$/i.test(k));
@@ -64,7 +68,7 @@ setInterval(plTick, 20 * 60 * 1000); setTimeout(plTick, 90 * 1000);
 // it is awake (GET /alert also runs it), so no phone has to be open. v253: loaded inside try/catch so a problem in it can never take the whole service down.
 let ALERT = null; try { ALERT = require('./alert'); ALERT._deps.lines = () => LINES; setInterval(() => ALERT.tick().catch((e) => console.error('alert tick:', e && e.message)), 60 * 1000); setTimeout(() => ALERT.tick().catch(() => {}), 15 * 1000); } catch (e) { console.error('alert: !!! could not load, picks disabled:', e && e.message); }
 // Groups (groups.js): light tick so the server sees members' new bets before kickoff (every 5 min during game windows, else every 30 min). Needs Supabase.
-if (process.env.SUPABASE_URL) { setInterval(() => { try { require('./groups').tick().catch((e) => console.error('groups tick:', e && e.message)); } catch (e) { console.error('groups tick:', e && e.message); } }, 5 * 60 * 1000); }
+if (process.env.SUPABASE_URL || PREVIEW) { setInterval(() => { try { require('./groups').tick().catch((e) => console.error('groups tick:', e && e.message)); } catch (e) { console.error('groups tick:', e && e.message); } }, 5 * 60 * 1000); }
 // Free Render services sleep when idle; ping our own public URL so the tick keeps running (set KEEP_AWAKE=0 to turn off)
 if (process.env.RENDER_EXTERNAL_URL && process.env.KEEP_AWAKE !== '0') {
   setInterval(() => fetch(process.env.RENDER_EXTERNAL_URL + '/health').catch(() => {}), 10 * 60 * 1000);
@@ -75,6 +79,10 @@ process.on('uncaughtException', (e) => console.error('uncaught:', e && e.message
 http.createServer(async (req, res) => {
   // CORS preflight for every route (the sign-in/sign-up calls send JSON + an x-token header, so the browser asks first; without this answer they fail with "Failed to fetch")
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'content-type,x-token,x-dash', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Max-Age': '86400' }); return res.end(); }
+  if (PREVIEW) {
+    if (req.url.startsWith('/kalshi/order')) { res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json'); res.statusCode = 403; return res.end('{"error":"Test preview: no real orders are sent from here."}'); }
+    if (req.url.startsWith('/preview')) { try { if (await require('./preview').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end(JSON.stringify({ error: 'preview: ' + (e && e.message) })); } }
+  }
   if (req.url.startsWith('/acct')) { try { if (await require('./acct.js').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"acct"}'); } }
   if (req.url.startsWith('/pricelog')) { try { if (await PL.handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"pricelog"}'); } }
   if (req.url.startsWith('/cfbd')) { try { if (await require('./cfbd.js').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"cfbd"}'); } }
@@ -89,6 +97,10 @@ http.createServer(async (req, res) => {
   if (req.url.startsWith('/alert')) { try { if (ALERT && (await ALERT.handle(req, res))) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"alert error"}'); } }
   if (req.url.startsWith('/groups')) { try { if (await require('./groups').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"groups error"}'); } }
   if (req.url.startsWith('/calcutta')) { try { if (await require('./calcutta').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"calcutta error"}'); } }
+  if (req.url.startsWith('/golf/')) { try { if (await require('./golf').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"golf error"}'); } }
+  if (req.url.startsWith('/events')) { try { if (await require('./events').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"events error"}'); } }
+  if (req.url.startsWith('/stats')) { try { if (await require('./stats').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"stats error"}'); } }
+  if (req.url.startsWith('/voice')) { try { if (await require('./voicelog').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"voice error"}'); } }
   if (req.url.startsWith('/locks')) { try { if (await require('./locks').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"lock error"}'); } }
   if (req.url.startsWith('/games')) { res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json'); res.setHeader('Cache-Control', 'public, max-age=120'); try { const g = await require('./games').get('nfl', NAMES); return res.end(JSON.stringify({ updated: g.updated, remaining: g.remaining, games: g.games })); } catch (e) { res.statusCode = 502; return res.end(JSON.stringify({ error: e.message })); } }
   if (req.url.startsWith('/lines')) { res.setHeader('Cache-Control', 'public, max-age=60'); return res.end(JSON.stringify(LINES)); }
@@ -102,4 +114,4 @@ http.createServer(async (req, res) => {
     if (cache) return res.end(JSON.stringify({ updated: cache.updated, book: cache.book, odds: cache.odds, stale: true }));
     res.end(JSON.stringify({ error: e.message }));
   }
-}).listen(process.env.PORT || 10000, () => console.log('odds proxy up'));
+}).listen(process.env.PORT || 10000, () => { console.log('odds proxy up' + (PREVIEW ? ' (TEST PREVIEW: memory store, demo data)' : '')); if (PREVIEW) require('./preview').boot().catch((e) => console.error('preview boot:', e && e.stack)); });

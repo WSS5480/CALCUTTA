@@ -2,7 +2,7 @@
 // Every score, standing and rule comes from the server (odds-api/golf.js); this file only shows them and sends entries.
 // Money is information only: Oddable never collects, holds or pays money.
 (function () {
-  const API = (window.ODD_GOLF_API || window.ODD_GROUPS_API || 'https://calcutta-odds.onrender.com') + '/golf/';
+  const API = (window.ODD_GOLF_API || window.ODD_GROUPS_API || 'https://oddable-preview-api.onrender.com') + '/golf/';
   const ls = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return null; } };
   const esc = (x) => String(x == null ? '' : x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const att = (x) => esc(String(x == null ? '' : x).replace(/[^\w.:-]/g, ''));
@@ -349,7 +349,7 @@
     return h + inviteBtn(g);
   }
   // ---------- invite ----------
-  const link = (g) => 'https://steves-pics.onrender.com/?join=golf.' + encodeURIComponent(g.code || '');
+  const link = (g) => 'https://oddable-preview.onrender.com/?join=golf.' + encodeURIComponent(g.code || '');
   function inviteBtn(g) { if (!g.code) return ''; return '<button class="osec ofull" data-a="invite">Invite people</button>' + (cur().inv ? '<div class="ocard"><div class="ocode"><span><small>Invite link</small><b>' + esc(link(g)) + '</b></span></div><div class="o2"><button class="osec" data-a="copylink">Copy link</button><a class="opri" href="sms:?&body=' + encodeURIComponent('Join "' + g.title + '" on Oddable: ' + link(g)) + '">Text it</a></div></div>' : ''); }
   function invite(g) {
     const text = 'Join "' + g.title + '" on Oddable', url = link(g);

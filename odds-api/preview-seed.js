@@ -17,9 +17,9 @@ const TEAMS = { DAL: T('DAL', 'Dallas Cowboys', 'Cowboys', 'Dallas'), NYG: T('NY
   HOU: T('HOU', 'Houston Texans', 'Texans', 'Houston'), TEN: T('TEN', 'Tennessee Titans', 'Titans', 'Tennessee'), PHI: T('PHI', 'Philadelphia Eagles', 'Eagles', 'Philadelphia'), BAL: T('BAL', 'Baltimore Ravens', 'Ravens', 'Baltimore'), PIT: T('PIT', 'Pittsburgh Steelers', 'Steelers', 'Pittsburgh') };
 let GAMES = [];
 function demoGames(now) {
-  const { last, next } = sundays(now), g = (id, start, a, h, as, hs) => ({ lg: 'nfl', id, start, away: TEAMS[a], home: TEAMS[h], as, hs });
-  GAMES = [g('pv101', last, 'DAL', 'NYG', 20, 24), g('pv102', last, 'HOU', 'TEN', 27, 17), g('pv103', last + 3.4 * HOUR, 'KC', 'BUF', 24, 27), g('pv104', last + 3.4 * HOUR, 'SF', 'LAR', 24, 20), g('pv105', last + 7.3 * HOUR, 'GB', 'CHI', 14, 21),
-    g('pv201', next, 'PHI', 'DAL', 0, 0), g('pv202', next + 3.4 * HOUR, 'BAL', 'PIT', 0, 0), g('pv203', next + 7.3 * HOUR, 'KC', 'HOU', 0, 0)];
+  const { last, next } = sundays(now), g = (id, start, a, h, as, hs, o) => ({ lg: 'nfl', id, start, away: TEAMS[a], home: TEAMS[h], as, hs, o }); // o = the made-up pregame line: [home spread, total, home moneyline, away moneyline]
+  GAMES = [g('pv101', last, 'DAL', 'NYG', 20, 24, [-3, 44.5, -160, 135]), g('pv102', last, 'HOU', 'TEN', 27, 17, [3.5, 42.5, 130, -150]), g('pv103', last + 3.4 * HOUR, 'KC', 'BUF', 24, 27, [-2.5, 49.5, -135, 115]), g('pv104', last + 3.4 * HOUR, 'SF', 'LAR', 24, 20, [2.5, 45.5, 118, -140]), g('pv105', last + 7.3 * HOUR, 'GB', 'CHI', 14, 21, [-3, 41.5, -155, 135]),
+    g('pv201', next, 'PHI', 'DAL', 0, 0, [2.5, 47.5, 125, -140]), g('pv202', next + 3.4 * HOUR, 'BAL', 'PIT', 0, 0, [1.5, 39.5, 105, -125]), g('pv203', next + 7.3 * HOUR, 'KC', 'HOU', 0, 0, [3, 46.5, 140, -160])];
   return { last, next };
 }
 // ESPN-shaped scoreboard events for the demo games on one day
@@ -27,7 +27,7 @@ function demoEvents(lgPath, dates, now) {
   if (lgPath !== 'football/nfl') return [];
   return GAMES.filter((g) => ymd(g.start) === dates).map((g) => { const st = now < g.start ? 'pre' : now < g.start + 3.5 * HOUR ? 'in' : 'post', tm = (t) => ({ abbreviation: t.abbr, displayName: t.name, shortDisplayName: t.short, location: t.loc });
     return { id: g.id, date: new Date(g.start).toISOString(), name: g.away.name + ' at ' + g.home.name, shortName: g.away.abbr + ' @ ' + g.home.abbr, status: { type: { state: st, completed: st === 'post', name: st === 'post' ? 'STATUS_FINAL' : st === 'in' ? 'STATUS_IN_PROGRESS' : 'STATUS_SCHEDULED' } },
-      competitions: [{ competitors: [{ homeAway: 'home', score: st === 'pre' ? '0' : String(g.hs), team: tm(g.home) }, { homeAway: 'away', score: st === 'pre' ? '0' : String(g.as), team: tm(g.away) }] }] }; });
+      competitions: [{ odds: g.o ? [{ details: g.home.abbr + ' ' + (g.o[0] > 0 ? '+' : '') + g.o[0], overUnder: g.o[1], overOdds: -110, underOdds: -110, homeTeamOdds: { moneyLine: g.o[2], spreadOdds: -110 }, awayTeamOdds: { moneyLine: g.o[3], spreadOdds: -110 } }] : undefined, competitors: [{ homeAway: 'home', score: st === 'pre' ? '0' : String(g.hs), team: tm(g.home) }, { homeAway: 'away', score: st === 'pre' ? '0' : String(g.as), team: tm(g.away) }] }] }; });
 }
 // fetch for the bet-grading engines: ESPN's real answer (when reachable) plus the demo games of that day
 function wrapFetch(real, nowFn, live) {

@@ -9,6 +9,8 @@ async function seed(C) {
   ids.group = g.id; ids.groupCode = g.code; const main = g.contests[0].cid;
   const members = ['player', 'p4', 'p5', 'p6', 'p7'];
   for (const r of members) await ok('groups', r, '/groups/join', { code: g.code });
+  // Groups round 3: an invite code makes a join REQUEST; the commissioner approves each one (the same taps a real commissioner makes)
+  { const gq = (await ok('groups', 'commish', '/groups/get', { id: g.id })).group; for (const q of gq.reqs || []) await ok('groups', 'commish', '/groups/decide', { id: g.id, pid: q.pid, ok: true }); }
   g = (await ok('groups', 'commish', '/groups/contest/add', { id: g.id, contest: { pot: 'side', cname: 'Sunday night side pot', sport: 'nfl', fmt: 'standings', start: next - HOUR, runs: 'weekend', kalshi: false, honor: false, types: { sp: true, ml: true, ou: true, prop: false, parlay: false }, legs: 1, metric: 'win', minBets: 0, minPaid: 1, cap: 0, entry: 10, split: '100', take: { kind: 'none', v: 0 } } })).group;
   const side = g.contests.find((c) => c.cid !== main); ids.sideCid = side && side.cid; ids.mainCid = main;
   if (side) for (const r of ['commish', 'player', 'p4', 'p6']) await ok('groups', r, '/groups/sidepot', { id: g.id, cid: side.cid, on: true });
@@ -18,7 +20,7 @@ async function seed(C) {
   const t0 = last - 20 * HOUR, B = (n, gid, side, type, line, stake, odds) => { const G = C.GAMES.find((x) => x.id === gid); return bet(t0, n, gid, G.away.abbr, G.home.abbr, chiDay(G.start), side, type, line, stake, odds); };
   const P = {
     commish: [B(1, 'pv101', 'NYG', 'sp', -3, 50, -110), B(2, 'pv103', 'BUF', 'ml', null, 40, -135), B(3, 'pv105', 'Under', 'ou', 41.5, 25, -108)],
-    player: [B(1, 'pv101', 'DAL', 'sp', 3, 50, -110), B(2, 'pv102', 'HOU', 'ml', null, 60, -150), B(3, 'pv104', 'SF', 'sp', -2.5, 40, -105), B(4, 'pv105', 'CHI', 'ml', null, 30, 120)],
+    player: [B(1, 'pv101', 'DAL', 'sp', 3, 50, -110), B(2, 'pv102', 'HOU', 'ml', null, 60, -150), B(3, 'pv104', 'SF', 'sp', -2.5, 40, -105), B(4, 'pv105', 'CHI', 'ml', null, 30, -155)],
     p4: [B(1, 'pv102', 'TEN', 'sp', 3.5, 30, -110), B(2, 'pv103', 'KC', 'ml', null, 50, 115), B(3, 'pv104', 'Over', 'ou', 45.5, 20, -110)],
     p5: [B(1, 'pv101', 'NYG', 'ml', null, 80, -160), B(2, 'pv103', 'BUF', 'sp', -2.5, 55, -110), B(3, 'pv105', 'CHI', 'sp', -3, 45, -112), B(4, 'pv104', 'SF', 'ml', null, 35, -140)],
     p6: [B(1, 'pv102', 'HOU', 'sp', -3.5, 44, -110), B(2, 'pv105', 'GB', 'ml', null, 25, 135)],
@@ -37,7 +39,7 @@ async function seed(C) {
   for (const r of Object.keys(P)) await row(r, (d) => { (d.bets || []).forEach((b) => { if (P[r].some((x) => x.id === b.id)) fin(b); }); });
   // next Sunday's bets: already on the server, hidden from the others until kickoff
   const t1 = C.REAL - 5 * HOUR, N = (n, gid, side, type, line, stake, odds) => { const G = C.GAMES.find((x) => x.id === gid); return bet(t1, n, gid, G.away.abbr, G.home.abbr, chiDay(G.start), side, type, line, stake, odds); };
-  const Q = { commish: [N(1, 'pv201', 'PHI', 'sp', -2.5, 50, -110), N(2, 'pv203', 'KC', 'ml', null, 40, -125)], player: [N(1, 'pv201', 'DAL', 'ml', null, 30, 125), N(2, 'pv202', 'Under', 'ou', 39.5, 25, -110), N(3, 'pv203', 'HOU', 'sp', 3, 20, -110)], p4: [N(1, 'pv202', 'BAL', 'sp', -1.5, 35, -108)], p5: [N(1, 'pv203', 'KC', 'sp', -3, 60, -110), N(2, 'pv201', 'PHI', 'ml', null, 45, -140)], p6: [N(1, 'pv203', 'HOU', 'ml', null, 15, 140)] };
+  const Q = { commish: [N(1, 'pv201', 'PHI', 'sp', -2.5, 50, -110), N(2, 'pv203', 'KC', 'ml', null, 40, -160)], player: [N(1, 'pv201', 'DAL', 'ml', null, 30, 125), N(2, 'pv202', 'Under', 'ou', 39.5, 25, -110), N(3, 'pv203', 'HOU', 'sp', 3, 20, -110)], p4: [N(1, 'pv202', 'BAL', 'sp', -1.5, 35, -108)], p5: [N(1, 'pv203', 'KC', 'sp', -3, 60, -110), N(2, 'pv201', 'PHI', 'ml', null, 45, -140)], p6: [N(1, 'pv203', 'HOU', 'ml', null, 15, 140)] };
   setNow(C.REAL - 4 * HOUR); reset();
   for (const r of Object.keys(Q)) for (const b of Q[r]) { const x = Object.assign({}, b); delete x.t; await ok('groups', r, '/groups/bet/add', { bet: x }); }
   reset(); await ok('groups', 'commish', '/groups/standings', { id: g.id, cid: main }); if (side) await ok('groups', 'commish', '/groups/standings', { id: g.id, cid: side.cid }).catch(() => {});

@@ -17,10 +17,14 @@ async function seed(C) {
   for (const tid of tids) for (const r of TT[tid]) await ok('golf', 'commish', '/golf/team', { id: g.id, op: 'assign', pid: P(r), tid });
   await ok('golf', 'commish', '/golf/team', { id: g.id, op: 'scorer', tid: tids[0], pid: P('player') }); await ok('golf', 'commish', '/golf/team', { id: g.id, op: 'scorer', tid: tids[1], pid: P('p5') });
   await ok('golf', 'commish', '/golf/match', { id: g.id, op: 'add', a: tids[0], b: tids[1] });
+  // Golf v1.2: in a money game nobody sets their own number. The organizer OKs each player's; a player on the other team OKs the organizer's.
+  C.golfOk = async (id, org, other) => { const gg = (await ok('golf', org, '/golf/get', { id })).game, rq = Object.keys((gg.day && gg.day.hreq) || {}); for (const p of rq) await ok('golf', p === gg.me ? other : org, '/golf/team', { id, op: 'hcpok', pid: p }); };
+  await C.golfOk(g.id, 'commish', 'director');
   setNow(sat + 14 * HOUR); await ok('golf', 'commish', '/golf/start', { id: g.id });
   const cards = {}; Object.keys(over).forEach((r, i) => { cards[r] = card(i + 3, over[r]); });
   for (let h = 1; h <= 18; h++) { setNow(sat + 14 * HOUR + h * 13 * 60e3); reset();
     for (const tid of tids) { const p = {}; TT[tid].forEach((r) => { p[P(r)] = cards[r][h - 1]; }); await ok('golf', tid === tids[0] ? 'player' : 'p5', '/golf/score', { id: g.id, tid, hole: h, p }); } }
+  for (const r of ['p5', 'player']) await ok('golf', r, '/golf/get', { id: g.id }); // a card is confirmed as it was SEEN: each scorer opens it first
   await ok('golf', 'p5', '/golf/confirm', { id: g.id, tid: tids[0], from: 1, to: 18 }); await ok('golf', 'player', '/golf/confirm', { id: g.id, tid: tids[1], from: 1, to: 18 });
   await ok('golf', 'player', '/golf/extra', { id: g.id, kind: 'ctp', hole: 3, who: P('player'), note: '6 ft 3 in' }); await ok('golf', 'p5', '/golf/extraconfirm', { id: g.id, kind: 'ctp', hole: 3 });
   await ok('golf', 'p5', '/golf/extra', { id: g.id, kind: 'ld', hole: 4, who: P('p4'), note: '287 yards' }); await ok('golf', 'player', '/golf/extraconfirm', { id: g.id, kind: 'ld', hole: 4 });

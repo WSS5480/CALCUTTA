@@ -35,7 +35,7 @@ async function seed(C) {
   const guest = g.members.find((m) => m.guest); if (guest) { const r = await X.call('golf', 'director', '/golf/team', { id: g.id, op: 'hcp', pid: guest.pid, hcp: 18.0, reason: 'Guest with no Oddable rounds yet: home club card' }); if (r.s !== 200) ids.tourGuestHcpNote = r.j && r.j.error; }
   const chk = (await ok('golf', 'player', '/golf/get', { id: g.id })).game; ids.tourRay = JSON.stringify((chk.day.teams || []).map((t) => t.players).flat().find((p) => p.pid === pid.player) || null).slice(0, 300);
   // ---- extras so the commissioner-only and director-only screens have something to act on (each is optional: a refusal is noted, not fatal) ----
-  const soft = async (name, fn) => { try { await fn(); } catch (e) { ids['note_' + name] = String(e.message).slice(0, 160); } };
+  const soft = async (name, fn) => { try { await fn(); } catch (e) { ids['note_' + name] = String(e.message).slice(0, 160); console.error('preview seed extra [' + name + ']: ' + String(e.message).slice(0, 300)); } };
   // a golf day in progress: scores to enter, holes to confirm, one hole disputed
   await soft('liveGolf', async () => { const T0 = REAL - 2 * HOUR; setNow(T0 - HOUR);
     let lg = (await ok('golf', 'commish', '/golf/create', { kind: 'day', title: 'Sunday Nine (in progress)', course: COURSE, pot: { entry: 0, take: { kind: 'none', v: 0 } }, myName: byRole('commish').name, day: { fmt: 'bestball', count: 1, pct: 100, teams: 2, teamSize: 2, net: 'net', date: chiDay(REAL), extras: { skins: { on: false }, ctp: [3], ld: [] }, hu: { on: false } } })).game; ids.golfLive = lg.id;
@@ -43,8 +43,10 @@ async function seed(C) {
     lg = (await ok('golf', 'commish', '/golf/get', { id: lg.id })).game; const [ta, tb] = lg.day.teams.map((t) => t.tid);
     for (const [r, t] of [['commish', ta], ['player', ta], ['p4', tb], ['p5', tb]]) await ok('golf', 'commish', '/golf/team', { id: lg.id, op: 'assign', pid: lp[r], tid: t });
     await ok('golf', 'commish', '/golf/team', { id: lg.id, op: 'scorer', tid: ta, pid: lp.player }); await ok('golf', 'commish', '/golf/team', { id: lg.id, op: 'scorer', tid: tb, pid: lp.p4 });
+    if (C.golfOk) await C.golfOk(lg.id, 'commish', 'p4').catch(() => {});
     setNow(T0); await ok('golf', 'commish', '/golf/start', { id: lg.id });
     for (let h = 1; h <= 6; h++) { setNow(T0 + h * 14 * 60e3); reset(); await ok('golf', 'player', '/golf/score', { id: lg.id, tid: ta, hole: h, p: { [lp.commish]: COURSE.par[h - 1] + (h % 3 === 0 ? 1 : 0), [lp.player]: COURSE.par[h - 1] + (h % 2) } }); await ok('golf', 'p4', '/golf/score', { id: lg.id, tid: tb, hole: h, p: { [lp.p4]: COURSE.par[h - 1] + 1, [lp.p5]: COURSE.par[h - 1] - (h === 5 ? 1 : 0) } }); }
+    await ok('golf', 'p4', '/golf/get', { id: lg.id });
     await ok('golf', 'p4', '/golf/confirm', { id: lg.id, tid: ta, from: 1, to: 3 }); await ok('golf', 'player', '/golf/dispute', { id: lg.id, tid: tb, hole: 5, note: 'We saw a par, not a birdie' }); setNow(REAL); reset(); });
   // an open group with a join request waiting for the commissioner
   await soft('openGroup', async () => { setNow(REAL - 3 * HOUR); const og = (await ok('groups', 'commish', '/groups/create', { name: 'RGV Open Picks', take: { kind: 'none', v: 0 }, join: { requests: true, open: true, max: 8, late: 'no' },

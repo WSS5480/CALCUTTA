@@ -150,3 +150,13 @@ T.hideTiebreaks = async () => {
   ev = ok(await call('ann', 'get', { id })).event; const fin = ev.matches.find((m) => m.r === 2); ok(await call('ann', 'live', { id, m: fin.id }));
   sue = ok(await call('sp2', 'get', { id })).event; assert.strictEqual(sue.pickem.table.find((r) => r.name === 'Spy').tb, 37, 'shown once the final locked');
 };
+// 9 (LOW) leaving a claimed guest seat gives it back its name and a NEW claim code (the old one is dead)
+T.leaveRestoresGuest = async () => {
+  let ev = ok(await call('ann', 'create', base({ entrants: [{ name: 'Guest Hal' }, { name: 'Ivy' }] }))).event; const id = ev.id;
+  const old = ev.entrants.find((e) => e.name === 'Guest Hal').players[0].claim;
+  ok(await call('cat', 'claim', { claim: old, myName: 'Cat' })); ok(await call('cat', 'leave', { id }));
+  no(await call('dov', 'claim', { claim: old, myName: 'Dov' }), 404, 'old claim code reused after leave');
+  ev = ok(await call('ann', 'get', { id })).event; const hal = ev.entrants.find((e) => e.name === 'Guest Hal');
+  assert.strictEqual(hal.players[0].name, 'Guest Hal', 'name restored'); assert.ok(hal.players[0].claim && hal.players[0].claim !== old, 'new claim code');
+  ok(await call('dov', 'claim', { claim: hal.players[0].claim, myName: 'Dov' }), 'new code works');
+};

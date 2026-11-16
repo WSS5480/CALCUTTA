@@ -223,10 +223,22 @@ function maybePlayoff(evt, now) { // round robin: when every pool match is confi
   if (evt.fmt !== 'rr' || !evt.rules.playoff || evt.poSeeds || !evt.drawn) return;
   const pool = evt.matches.filter((m) => m.st === 'pool'); if (!pool.length || pool.some((m) => m.state !== 'confirmed')) return;
   const tables = evt.pools.map((p, i) => poolTable(evt, p, i)), per = Math.ceil(evt.rules.playoff / tables.length), seeds = [];
-  for (let r = 0; r < per; r++) tables.map((t) => t[r]).filter(Boolean).sort((a, b) => b.w - a.w || b.diff - a.diff || b.pf - a.pf).forEach((x) => seeds.push(x.eid)); // pool winners first, then 2nd places...
-  evt.poSeeds = seeds.slice(0, evt.rules.playoff); if (evt.poSeeds.length < 2) return;
+  const tiers = []; for (let r = 0; r < per; r++) tiers.push(tables.map((t) => t[r]).filter(Boolean).sort((a, b) => b.w - a.w || b.diff - a.diff || b.pf - a.pf).map((x) => x.eid)); // pool winners first, then 2nd places...
+  tiers.forEach((t) => t.forEach((e) => seeds.push(e)));
+  evt.poSeeds = crossPool(evt, tiers, evt.rules.playoff); if (evt.poSeeds.length < 2) return;
   buildElim(evt.poSeeds.length, 'p', false).M.forEach((m) => evt.matches.push(m)); advance(evt); courtsElim(evt);
   audit(evt, now, 'Oddable', 'playoff', null, 'Pool play done. Playoff: top ' + evt.poSeeds.length);
+}
+// Review fix 7: reorder players within each finishing tier (2nd places, 3rd places...) so round one of the playoff pairs players from different pools
+// whenever possible (2 pools, top 4: A1 v B2, B1 v A2). Tier by tier, the order with the fewest same-pool first-round pairs wins; ties keep the record order.
+function crossPool(evt, tiers, n) {
+  const poolOf = {}; (evt.pools || []).forEach((p, i) => p.forEach((e) => (poolOf[e] = i)));
+  let k = 1; while ((1 << k) < n) k++; const ord = seedOrder(1 << k), pairs = []; for (let i = 0; i < ord.length; i += 2) pairs.push([ord[i] - 1, ord[i + 1] - 1]);
+  const clash = (list) => pairs.filter(([x, y]) => x < list.length && y < list.length && list[x] != null && list[y] != null && poolOf[list[x]] === poolOf[list[y]]).length;
+  const perms = (a) => (a.length <= 1 ? [a] : a.length > 7 ? [a] : a.flatMap((x, i) => perms(a.slice(0, i).concat(a.slice(i + 1))).map((p) => [x].concat(p))));
+  let done = [];
+  tiers.forEach((t, ti) => { if (ti === 0) { done = t.slice(); return; } let best = t, bc = Infinity; for (const p of perms(t)) { const c = clash(done.concat(p).slice(0, n)); if (c < bc) { bc = c; best = p; if (!c) break; } } done = done.concat(best); });
+  return done.slice(0, n);
 }
 function ladderApply(evt, m) { // winner takes the higher spot: swap (the two trade places) or shift (challenger takes the spot, everyone between moves down one)
   if (m.win !== 'a') return; const o = evt.ladder.order, ia = o.indexOf(m.a), ib = o.indexOf(m.b); if (ia < 0 || ib < 0 || ib > ia) return;

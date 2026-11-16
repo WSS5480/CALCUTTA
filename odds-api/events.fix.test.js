@@ -127,3 +127,13 @@ T.pickemRoundLock = async () => {
   no(await call('sp', 'pick', { id, m: r1[0].id, side: 'b' }), 409, 'round 1 locked when its first match started');
   ev = ok(await call('sp', 'get', { id })).event; assert.ok(!ev.pickem.open.includes(r1[0].id), 'not offered for picking'); assert.ok(ev.pickem.counts[r1[0].id], 'counts shown once locked');
 };
+// 7 (LOW-MED) playoff round one never pairs two players from the same pool when it can be avoided (A1 v B2, B1 v A2)
+T.crossPoolPlayoff = async () => {
+  const names = ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8'];
+  let ev = ok(await call('ann', 'create', base({ playIn: true, entryName: 'E8', pools: 2, playoff: 4, entrants: names.slice(0, 7).map((n) => ({ name: n })), self: false, spectators: false }))).event; const id = ev.id;
+  NOW = START + 1000; ev = ok(await call('ann', 'get', { id })).event; const nm = (e) => ev.entrants.find((x) => x.eid === e).name, ix = (e) => names.indexOf(nm(e));
+  const pool0 = ev.pools[0].map(nm); // snake: E1 E4 E5 E8 / E2 E3 E6 E7
+  for (const m of ev.matches) { const aw = ix(m.a) < ix(m.b), w = aw ? m.a : m.b; const inP0 = pool0.includes(nm(w)); const big = (nm(w) === 'E1') || (nm(w) === 'E3' && ![m.a, m.b].map(nm).includes('E2')); const lose = big ? 0 : 9; ok(await call('ann', 'score', { id, m: m.id, games: aw ? [[11, lose]] : [[lose, 11]] })); }
+  ev = ok(await call('ann', 'get', { id })).event; const po = ev.matches.filter((m) => m.st === 'po' && m.r === 1);
+  assert.strictEqual(po.length, 2); po.forEach((m) => assert.ok(pool0.includes(m.an) !== pool0.includes(m.bn), 'same-pool first round: ' + m.an + ' v ' + m.bn));
+};

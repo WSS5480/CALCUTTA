@@ -49,16 +49,16 @@ const EVENTS = {
     fetch: (sy) => [1, 2].map((w) => 'scoreboard?seasontype=3&week=' + w + '&dates=' + sy + '&groups=80&limit=400'),
     roundOf: (g) => (!/playoff|national championship/i.test(g.head || '') ? null : rx([[/national championship/i, 4], [/semifinal/i, 3], [/quarterfinal/i, 2], [/first round/i, 1]])(g)),
     rows: [{ k: 'win', n: 11, bp: 400 }, { k: 'round', r: 4, n: 2, bp: 1300, label: 'Reaches the title game' }, { k: 'champ', n: 1, bp: 3000, label: 'National champion' }] },
-  mm: { label: 'March Madness', sport: 'ncaab', path: 'basketball/mens-college-basketball', tq: '&groups=50', teams: 68, kinds: ['win', 'round', 'champ'], rounds: ['Round of 64', 'Round of 32', 'Sweet 16', 'Elite 8', 'Final Four', 'Title game'], final: 6, days: 70, dq: '&groups=100&limit=400',
-    roundOf: (g) => (!/men's basketball championship/i.test(g.head || '') ? null : rx([[/first four/i, 0], [/national championship/i, 6], [/final four/i, 5], [/elite 8|elite eight/i, 4], [/sweet 16|sweet sixteen/i, 3], [/2nd round|second round/i, 2], [/1st round|first round/i, 1]])(g)),
+  mm: { label: 'March Madness', sport: 'ncaab', path: 'basketball/mens-college-basketball', tq: '&groups=50', teams: 68, kinds: ['win', 'round', 'champ'], rounds: ['Round of 64', 'Round of 32', 'Sweet 16', 'Elite 8', 'Final Four', 'Title game'], final: 6, win: (y) => ({ from: y + '-03-14', to: y + '-04-10' }), dq: '&groups=100&limit=400', prelim: /first four/i, // REVIEW FIX 2: First Four games are not tournament wins; their losers are out
+    roundOf: (g) => (!/men's basketball championship/i.test(g.head || '') ? null : rx([[/first four/i, null], [/national championship/i, 6], [/final four/i, 5], [/elite 8|elite eight/i, 4], [/sweet 16|sweet sixteen/i, 3], [/2nd round|second round/i, 2], [/1st round|first round/i, 1]])(g)),
     rows: [{ k: 'win', n: 63, bp: 100 }, { k: 'round', r: 5, n: 4, bp: 400, label: 'Reaches the Final Four' }, { k: 'champ', n: 1, bp: 2100, label: 'National champion' }] },
-  nba_po: { label: 'NBA playoffs', sport: 'nba', path: 'basketball/nba', teams: 16, series: true, kinds: ['win', 'round', 'champ'], rounds: ['First round', 'Conference semifinals', 'Conference finals', 'NBA Finals'], final: 4, days: 75, dq: '&limit=400',
+  nba_po: { label: 'NBA playoffs', sport: 'nba', path: 'basketball/nba', teams: 16, series: true, kinds: ['win', 'round', 'champ'], rounds: ['First round', 'Conference semifinals', 'Conference finals', 'NBA Finals'], final: 4, win: (y) => ({ from: y + '-04-12', to: y + '-06-25' }), dq: '&limit=400', prelim: /play-in/i,
     roundOf: (g) => (g.st !== 3 || /play-in/i.test(g.head || '') ? null : rx([[/nba finals/i, 4], [/(east|west|conf\w*) finals/i, 3], [/semifinal/i, 2], [/1st round|first round/i, 1]])(g)),
     rows: [{ k: 'win', n: 15, bp: 400, label: 'Each series win' }, { k: 'round', r: 4, n: 2, bp: 1000, label: 'Reaches the Finals' }, { k: 'champ', n: 1, bp: 2000, label: 'Wins the title' }] },
-  nhl_po: { label: 'NHL playoffs', sport: 'nhl', path: 'hockey/nhl', teams: 16, series: true, kinds: ['win', 'round', 'champ'], rounds: ['First round', 'Second round', 'Conference final', 'Stanley Cup Final'], final: 4, days: 75, dq: '&limit=400',
+  nhl_po: { label: 'NHL playoffs', sport: 'nhl', path: 'hockey/nhl', teams: 16, series: true, kinds: ['win', 'round', 'champ'], rounds: ['First round', 'Second round', 'Conference final', 'Stanley Cup Final'], final: 4, win: (y) => ({ from: y + '-04-15', to: y + '-06-25' }), dq: '&limit=400',
     roundOf: (g) => (g.st !== 3 ? null : rx([[/stanley cup final/i, 4], [/conference final|conf\w* final/i, 3], [/2nd round|second round/i, 2], [/1st round|first round/i, 1]])(g)),
     rows: [{ k: 'win', n: 15, bp: 400, label: 'Each series win' }, { k: 'round', r: 4, n: 2, bp: 1000, label: 'Reaches the Cup Final' }, { k: 'champ', n: 1, bp: 2000, label: 'Wins the Stanley Cup' }] },
-  mlb_po: { label: 'MLB playoffs', sport: 'mlb', path: 'baseball/mlb', teams: 12, series: true, kinds: ['win', 'round', 'champ'], rounds: ['Wild Card', 'Division Series', 'League Championship', 'World Series'], final: 4, days: 50, dq: '&limit=400',
+  mlb_po: { label: 'MLB playoffs', sport: 'mlb', path: 'baseball/mlb', teams: 12, series: true, kinds: ['win', 'round', 'champ'], rounds: ['Wild Card', 'Division Series', 'League Championship', 'World Series'], final: 4, win: (y) => ({ from: y + '-09-28', to: y + '-11-08' }), dq: '&limit=400',
     roundOf: (g) => (g.st !== 3 ? null : rx([[/world series/i, 4], [/championship series|alcs|nlcs/i, 3], [/division series|alds|nlds/i, 2], [/wild card/i, 1]])(g)),
     rows: [{ k: 'win', n: 11, bp: 400, label: 'Each series win' }, { k: 'round', r: 4, n: 2, bp: 1300, label: 'Reaches the World Series' }, { k: 'champ', n: 1, bp: 3000, label: 'Wins the World Series' }] },
   nfl_wk: { label: "NFL this weekend's games", sport: 'nfl', path: 'football/nfl', teams: 0, kinds: ['win', 'big'], rounds: [], days: 6, weekend: true, dq: '',
@@ -143,6 +143,7 @@ async function cleanRules(b, now, members) {
   else if (kind === 'flat') { tv = Number(tk.v); if (!(Number.isFinite(tv) && tv >= 0 && tv <= 100000 && Math.abs(Math.round(tv * 100) - tv * 100) < 1e-6)) throw bad(400, "Commissioner's take: a dollar amount, not negative"); }
   else if (kind !== 'none') throw bad(400, "Pick the commissioner's take");
   let win = null; if (ev.weekend) { const td = chiDay(now), wd = new Date(td + 'T12:00:00Z').getUTCDay(), from = [5, 6, 0, 1].includes(wd) ? addDay(td, -((wd - 4 + 7) % 7)) : addDay(td, 4 - wd); win = { from, to: addDay(from, 4) }; } // Thursday to Monday of this (or the coming) weekend
+  else if (ev.win) { const td = chiDay(now), y = +td.slice(0, 4); win = ev.win(y); if (td > win.to) win = ev.win(y + 1); } // REVIEW FIX 9: the event's own dates (also when created mid-event)
   else if (ev.days) win = { from: chiDay(now), to: addDay(chiDay(now), ev.days) };
   return { name, ev: evk, lots, win, rules: { rows, minBid, inc, timer, buyBack: !!b.buyBack, main: b.main !== false, take: { kind, v: kind === 'none' ? 0 : tv }, order, mode } };
 }
@@ -245,7 +246,9 @@ function urlsFor(c) {
 // One team's results: wins (with times), furthest round reached (+time), champion, out (eliminated), big (biggest win margin)
 function teamResults(ev, games, inEvent) {
   const R = {}, T = (id) => (R[id] = R[id] || { wins: 0, winT: [], reached: 0, reachT: {}, champ: false, out: false });
-  const gs = games.filter((g) => g.teams.length === 2 && g.teams.every((t) => inEvent.has(t.id))).map((g) => Object.assign({}, g, { round: ev.roundOf ? ev.roundOf(g) : 0 })).filter((g) => g.round != null);
+  // REVIEW FIX 3: a game counts when ANY lot team plays in it (its opponent may be in no lot); roundOf decides if it is part of the event
+  games.forEach((g) => { if (ev.prelim && g.done && g.teams.length === 2 && ev.prelim.test(g.head || '') && g.teams.some((t) => inEvent.has(t.id))) { const [a, b] = g.teams, w = a.winner ? a : b.winner ? b : a.score > b.score ? a : b; T((w === a ? b : a).id).out = true; } });
+  const gs = games.filter((g) => g.teams.length === 2 && g.teams.some((t) => inEvent.has(t.id))).map((g) => Object.assign({}, g, { round: ev.roundOf ? ev.roundOf(g) : 0 })).filter((g) => g.round != null);
   gs.sort((a, b) => a.t - b.t || a.id.localeCompare(b.id)); const champR = ev.champRound || ev.final, seriesDone = new Set();
   let big = null;
   gs.forEach((g) => {
@@ -257,7 +260,7 @@ function teamResults(ev, games, inEvent) {
     if (!g.done) return; const [a, b] = g.teams; const w = a.winner ? a : b.winner ? b : a.score > b.score ? a : b.score > a.score ? b : null; if (!w) return; const l = w === a ? b : a;
     if (ev.season && g.round !== 0) { if (g.round === champR) { T(w.id).champ = true; } return; } // season: champion only from the title game, wins from the regular season
     T(w.id).wins++; T(w.id).winT.push(g.t); if (g.round > 0) T(l.id).out = true; if (g.round > 0 && g.round === champR) T(w.id).champ = true;
-    const m = Math.abs(w.score - l.score); if (!big || m > big.m) big = { id: w.id, m, t: g.t };
+    const m = Math.abs(w.score - l.score); if (inEvent.has(w.id) && (!big || m > big.m)) big = { id: w.id, m, t: g.t };
   });
   if (big) T(big.id).big = true;
   return R;
@@ -287,6 +290,7 @@ async function results(c, wait) { // feed results cached 5 min per Calcutta; ref
     if (m.wins != null) { const n = m.wins; while (x.winT.length < n) x.winT.push(9e15 + (m.at || 0)); /* hand-added wins are paid after the feed wins (slot order) */ x.winT = x.winT.slice(0, n); x.wins = n; }
     if (m.reached != null) { x.reached = m.reached; for (let r = 1; r <= m.reached; r++) if (x.reachT[r] == null) x.reachT[r] = 9e15 + (m.at || 0); }
     ['champ', 'out', 'big'].forEach((k) => { if (m[k] != null) x[k] = !!m[k]; }); if (m.place != null) x.place = m.place || null; x.manual = true; });
+  ['champ', 'big'].forEach((k) => { const hand = Object.keys(c.manual || {}).filter((id) => c.manual[id][k] === true); if (hand.length) Object.keys(R).forEach((id) => { if (!hand.includes(id)) R[id][k] = false; }); }); // REVIEW FIX 7: a hand-entered champion / biggest win replaces the feed's
   return R;
 }
 

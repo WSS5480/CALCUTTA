@@ -95,6 +95,7 @@
         const q = d.q.toLowerCase(), list = d.teams.filter((t) => !q || t.name.toLowerCase().includes(q) || (t.abbr || '').toLowerCase().includes(q));
         list.slice(0, 120).forEach((t) => { const v = d.pick[t.id] || 'out'; h += '<div class="cteam"><span>' + esc(t.name) + '</span>' + seg([['out', 'Out'], ['lot', 'Own lot']].concat(d.bundle ? [['field', 'Field']] : []), v, 'data-pick-' + att(t.id)) + '</div>'; });
         if (list.length > 120) h += '<div class="cnote">Showing 120. Type to find more.</div>';
+        h += '<div class="cnote">Put every team in the event up for auction (on its own or in the field). A team left Out belongs to nobody; games against it still count for the team that plays it.</div>';
       }
     }
     h += '</div>';

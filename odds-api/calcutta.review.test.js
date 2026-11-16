@@ -84,7 +84,7 @@ srv.listen(0, async () => {
     assert.ok(r.j.calc.a.undo == null || r.j.calc.a.undo.k === 'bid'); });
   // 2 HIGH: March Madness First Four is not a tournament win
   await chk('2 March Madness: First Four games are not wins (63 wins), First Four losers are out', async () => { const R = C.teamResults(C.EVENTS.mm, MM(), new Set(Array.from({ length: 68 }, (_, i) => String(i + 1))));
-    const wins = Object.values(R).reduce((a, x) => a + x.wins, 0); assert.strictEqual(wins, 63); assert.strictEqual(R['61'].wins, 0 + (R['61'].winT.length - R['61'].winT.length)); assert.ok(R['65'].out, 'First Four loser out'); assert.ok(R['1'].champ); assert.strictEqual(R['1'].wins, 6); });
+    const wins = Object.values(R).reduce((a, x) => a + x.wins, 0); assert.strictEqual(wins, 63); assert.ok(!R['61'].winT.includes(1e12 + 1000), 'the First Four win is not paid'); assert.ok(R['65'].out, 'First Four loser out'); assert.ok(R['1'].champ); assert.strictEqual(R['1'].wins, 6); });
   // 3 MED-HIGH: a game counts when ANY lot team plays in it
   await chk('3 a lot team beating a team that is in no lot still counts; biggest margin only among lot teams', async () => {
     const g = (id, a, b, sa, sb, t0) => ({ id, t: t0, done: true, state: 'post', st: 2, week: 11, head: '', teams: [{ id: a, score: sa, winner: sa > sb }, { id: b, score: sb, winner: sb > sa }] });

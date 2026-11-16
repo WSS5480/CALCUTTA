@@ -33,6 +33,7 @@
   const sw = (on, a, dis) => '<button class="csw' + (on ? ' on' : '') + '" role="switch" aria-checked="' + (on ? 'true' : 'false') + '" ' + (dis ? 'disabled' : a) + '><i></i></button>';
   const seg = (opts, curV, a) => '<div class="cseg">' + opts.map(([v, l]) => '<button class="' + (String(v) === String(curV) ? 'on' : '') + '" ' + a + '="' + att(v) + '">' + esc(l) + '</button>').join('') + '</div>';
   const sel = (id, opts, curV, extra) => '<select id="' + id + '" class="csel" ' + (extra || '') + '>' + opts.map(([v, l]) => '<option value="' + esc(v) + '"' + (String(v) === String(curV) ? ' selected' : '') + '>' + esc(l) + '</option>').join('') + '</select>';
+  const notices = (c) => (c && c.notices && c.notices.length ? '<div class="cwarn" role="status"><b>Changed after the auction closed</b>' + c.notices.slice(0, 3).map((n) => esc(n.what.replace(/ \(after the auction closed\)$/, '')) + ' · ' + esc(n.by) + ' · ' + esc(fmtTime(n.at))).join('<br>') + '</div>' : '');
   const badge = (c) => (c.rules && c.rules.main ? '<span class="cbadge">Main pot</span>' : '<span class="cbadge cy">Side pot</span>');
   const statusText = (s) => (s === 'setup' ? 'not started' : s === 'live' ? 'auction running' : 'auction closed');
   const rowText = (r, rounds) => (r.label || KIND[r.k]) + (r.k === 'win' || r.k === 'round' ? ' (' + r.n + ')' : '');
@@ -149,7 +150,7 @@
     const s = cur(), c = s.c; if (!c) return '<div class="ccard">Loading the auction…</div>';
     const comm = c.role === 'comm', a = c.a, lot = a.cur && c.lots.find((l) => l.id === a.cur), nSold = c.sold.length;
     let h = '<div class="crow"><h1>' + (a.status === 'setup' ? 'Auction' : a.status === 'closed' ? 'Auction closed' : 'Live auction') + '</h1>' + (comm ? '<span class="cbadge">Commissioner</span>' : '') + '</div>';
-    h += '<div class="cmeta">' + esc(c.name) + ' · ' + esc(c.evLabel) + '</div>';
+    h += '<div class="cmeta">' + esc(c.name) + ' · ' + esc(c.evLabel) + '</div>' + notices(c);
     h += '<div class="c2">' + tile('Sold', nSold + ' of ' + c.lots.length, '', 'data-a="board" data-tab="teams"') + tile('Pot so far', usd(c.potSoFar), 'cgold', 'data-a="pot"') + '</div>';
     if (a.status === 'setup') {
       h += '<div class="ccard cblock"><div class="cmut">Not started</div><div class="cbig">' + c.lots.length + ' lots</div><div class="cnote">' + (comm ? 'Start when everyone is in. The first lot opens; its timer starts at the first bid.' : 'Waiting for the commissioner to start.') + '</div>' + (comm ? '<button class="cpri cfull" data-a="ctl" data-op="start">Start the auction</button>' : '') + '</div>';
@@ -173,7 +174,7 @@
       }
       if (comm) {
         const nxt = a.order.filter((id) => id !== a.cur && !c.sold.find((x) => x.lot === id)).slice(0, 2).map((id) => (c.lots.find((l) => l.id === id) || {}).name);
-        h += '<div class="ccard"><h2>Commissioner controls</h2><div class="c2"><button class="csec" data-a="ctl" data-op="' + (a.paused ? 'resume' : 'pause') + '">' + (a.paused ? 'Resume' : 'Pause') + '</button><button class="csec" data-a="ctl" data-op="undo">Undo last bid</button>';
+        h += '<div class="ccard"><h2>Commissioner controls</h2><div class="c2"><button class="csec" data-a="ctl" data-op="' + (a.paused ? 'resume' : 'pause') + '">' + (a.paused ? 'Resume' : 'Pause') + '</button><button class="csec" data-a="ctl" data-op="undo"' + (a.undo ? (a.undo.k === 'sale' ? ' data-sale="' + esc(a.undo.name) + '">Undo sale of ' + esc(a.undo.name) : '>Undo last bid') : ' disabled>Undo') + '</button>';
         h += '<button class="cgreen" data-a="ctl" data-op="sold"' + (lot && a.high ? '' : ' disabled') + '>Sold now</button><button class="csec" data-a="ctl" data-op="next"' + (lot && a.high ? ' disabled' : '') + '>Next lot ›</button></div>';
         h += '<div class="cnote">' + (nxt.length ? 'Up next: ' + esc(nxt.join(', then ')) + '.' : 'This is the last lot.') + '</div><div class="c2"><button class="csec" data-a="order">Change the order</button><button class="cdanger" data-a="ctl" data-op="end">End auction</button></div></div>';
       }
@@ -195,7 +196,7 @@
   // ---------- enter results (auction held in person) ----------
   function enterV() {
     const s = cur(), c = s.c; if (!c) return '<div class="ccard">Loading…</div>';
-    let h = '<h1>Enter results</h1><div class="cmeta">' + esc(c.name) + ' · type who bought each lot and for how much</div>';
+    let h = '<h1>Enter results</h1><div class="cmeta">' + esc(c.name) + ' · type who bought each lot and for how much</div>' + notices(c);
     h += '<div class="c2">' + tile('Entered', c.sold.length + ' of ' + c.lots.length, '', 'data-a="board" data-tab="teams"') + tile('Pot', usd(c.potSoFar), 'cgold', 'data-a="pot"') + '</div>';
     const target = s.edit || (c.lots.find((l) => !c.sold.find((q) => q.lot === l.id)) || {}).id; // one form at a time
     c.lots.forEach((l) => {
@@ -220,7 +221,7 @@
     const s = cur(), d = s.d; if (!d) return '<div class="ccard">Loading owners and payouts…</div>';
     const c = d.calc, b = d.board, tab = s.tab || 'owners';
     let h = '<div class="crow"><h1>' + esc(c.name) + '</h1>' + badge(c) + '</div><div class="cmeta">' + esc(c.evLabel) + ' · ' + b.owners.length + ' owners · ' + esc(statusText(c.a.status)) + (b.over ? ' · final' : '') + '</div>';
-    h += '<div class="cseg c3s">' + [['owners', 'Owners'], ['teams', 'Teams'], ['payouts', 'Payouts']].map(([k, l]) => '<button class="' + (tab === k ? 'on' : '') + '" data-tab="' + k + '">' + l + '</button>').join('') + '</div>';
+    h += notices(c) + '<div class="cseg c3s">' + [['owners', 'Owners'], ['teams', 'Teams'], ['payouts', 'Payouts']].map(([k, l]) => '<button class="' + (tab === k ? 'on' : '') + '" data-tab="' + k + '">' + l + '</button>').join('') + '</div>';
     h += '<div class="c2">' + tile('Pot', usd(b.pot), 'cgold', 'data-a="pot"', 'Auction ' + usd(b.pot) + (b.take ? ' · take ' + usd(b.take) : '')) + tile('Paid out so far', usd(b.paidOut), 'cpos', 'data-tab="payouts"', usd(b.inPlay) + ' still in play') + '</div>';
     if (tab === 'owners') {
       h += '<div class="cthead"><span>Owner · teams alive</span><span class="cr">Spent</span><span class="cr">Won</span></div>';
@@ -380,7 +381,7 @@
     // auction
     if (a === 'bid') { bid(+t.getAttribute('data-amt')); return; }
     if (a === 'bidin') { const v = (document.getElementById('camt') || {}).value; bid(Math.round(Number(v))); return; }
-    if (a === 'ctl') { const op = t.getAttribute('data-op'), s = cur(); if (op === 'end' && !confirm('End the auction now? Unsold lots stay unsold.')) return; act('ctl', { id: s.id, op }, async (j) => { setCalc(j.calc); s.c = j.calc; paint(); sched(); }); return; }
+    if (a === 'ctl') { const op = t.getAttribute('data-op'), s = cur(); if (op === 'end' && !confirm('End the auction now? Unsold lots stay unsold.')) return; if (op === 'undo' && t.hasAttribute('data-sale') && !confirm('Undo the sale of ' + t.getAttribute('data-sale') + '? The lot goes back on the block with its bids.')) return; act('ctl', { id: s.id, op }, async (j) => { setCalc(j.calc); s.c = j.calc; paint(); sched(); }); return; }
     if (a === 'order') { push({ t: 'order', id: idOf(), c: calcOf() }); return; }
     if (a === 'mv') { const s = cur(), i = +t.getAttribute('data-i'), dd = +t.getAttribute('data-d'), o = s.o; [o[i], o[i + dd]] = [o[i + dd], o[i]]; paint(); return; }
     if (a === 'saveorder') { const s = cur(); act('ctl', { id: s.id, op: 'reorder', order: s.o }, async (j) => { setCalc(j.calc); stack.pop(); cur().c = j.calc; note = 'Order saved.'; paint(); sched(); }); return; }

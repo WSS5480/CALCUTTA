@@ -268,8 +268,17 @@ async function feedResults(c) {
   if (ev.plug) { const S = SOURCES[ev.plug]; return S && S.results ? (await S.results(c)) || {} : {}; }
   const today = chiDay(D.now()), games = []; const urls = urlsFor(c);
   for (let i = 0; i < urls.length; i += 4) (await Promise.all(urls.slice(i, i + 4).map((u) => getGames(u, today)))).forEach((g) => games.push(...g));
-  const seen = new Set(); return teamResults(ev, games.filter((g) => (seen.has(g.id) ? false : (seen.add(g.id), true))), ids);
+  const seen = new Set(), uniq = games.filter((g) => (seen.has(g.id) ? false : (seen.add(g.id), true)));
+  if (uniq.some((g) => (g.done || g.state === 'in') && g.teams.some((t) => ids.has(t.id)) && (!ev.roundOf || ev.roundOf(g) != null || (ev.prelim && ev.prelim.test(g.head || ''))))) STARTED.add(c.id); // sticky: the event has begun
+  return teamResults(ev, uniq, ids);
 }
+const STARTED = new Set(); // calc ids whose event has a game under way or finished (in memory; recomputed from the feed after a restart)
+const anyResult = (R) => Object.values(R || {}).some((x) => x && (x.wins || x.reached || x.champ || x.out || x.big || x.place));
+// REVIEW FIX 1 (Nov 16 2026): who owns what is final once the event has started (first game under way / finished) or any result exists
+// (hand-entered or from the feed). Enter / remove entry / buy-back / undo a sale are refused from then on.
+async function frozen(c) { if (Object.keys(c.manual || {}).length) return true; if (EVENTS[c.ev].manualOnly) return false; const R = await results(c, false); return STARTED.has(c.id) || anyResult(R); }
+const FROZEN = 'The event has started: who owns what is final now.';
+function notice(c, by, what) { c.notices = c.notices || []; c.notices.push({ at: D.now(), by: cleanName(by, 24), what: cleanName(what + ' (after the auction closed)', 180) }); if (c.notices.length > 50) c.notices = c.notices.slice(-50); }
 async function results(c, wait) { // feed results cached 5 min per Calcutta; refreshed in the background so a page never waits on ESPN
   const h = RES.get(c.id), fresh = h && D.now() - h.at < 5 * 6e4;
   const run = async () => { const x = RES.get(c.id) || {}; if (x.busy) return x.busy; const p = feedResults(c).then((R) => { RES.set(c.id, { at: D.now(), R }); return R; }).catch((e) => { console.error('calcutta feed:', e.message); RES.set(c.id, { at: D.now() - 4 * 6e4, R: (h && h.R) || {} }); return (h && h.R) || {}; }); RES.set(c.id, Object.assign({}, x, { busy: p })); return p; };
@@ -336,6 +345,7 @@ function full(c, mk, now) {
   const hb = a.cur ? high(c, a.cur) : null; o.a.high = hb ? { pid: hb.pid, name: mName(c, hb.pid), amt: hb.amt } : null; o.a.minNext = a.cur ? (hb ? hb.amt + c.rules.inc : c.rules.minBid) : null;
   o.a.bids = a.cur ? (c.bids[a.cur] || []).slice(-6).reverse().map((b) => ({ pid: b.pid, name: mName(c, b.pid), amt: b.amt, at: b.at })) : [];
   o.sold = c.a.order.filter((id) => c.sold[id]).map((id) => { const s = c.sold[id]; return { lot: id, name: lotOf(c, id).name, holder: s.pid ? { pid: s.pid, name: mName(c, s.pid) } : { pid: null, name: s.name }, amt: s.amt, at: s.at, how: s.how, bb: s.bb ? (s.bb.pid ? { pid: s.bb.pid, name: mName(c, s.bb.pid) } : { pid: null, name: s.bb.name }) : null }; }).sort((x, y) => y.at - x.at);
+  o.notices = (c.notices || []).slice(-5).reverse(); o.a.undo = a.cur && (c.bids[a.cur] || []).length ? { k: 'bid' } : a.just && c.sold[a.just] && c.sold[a.just].how === 'auction' ? { k: 'sale', name: lotOf(c, a.just).name } : null;
   o.potSoFar = Object.values(c.sold).reduce((s, x) => s + x.amt, 0); o.now = now; o.rev = c.rev || 0; return o;
 }
 const canSee = (c, mk) => !!memberOf(c, mk);
@@ -408,7 +418,7 @@ async function handle(req, res) {
       send(res, 200, { ok: true, calc: full(c, u.mk, now) }); return true;
     }
     if (op === 'ctl') {
-      rate('ctl', u.mk, ip); const what = String(b.op || ''); let idxSync = false;
+      rate('ctl', u.mk, ip); const what = String(b.op || ''); let idxSync = false; let fz = false; if (what === 'undo') { const r0 = await loadRow(id, true); if (r0 && r0.data.a && r0.data.a.just && !(r0.data.a.cur && (r0.data.bids[r0.data.a.cur] || []).length)) fz = await frozen(r0.data); }
       const c = await mutCalc(id, (c) => {
         if (!isComm(c, u.mk)) throw bad(403, 'Only the commissioner runs the auction'); const by = mName(c, memberOf(c, u.mk).pid), a = c.a;
         if (what === 'start') { if (c.rules.mode !== 'live') throw bad(409, 'This Calcutta is entered by hand'); if (a.status !== 'setup') throw bad(409, 'Already started');
@@ -418,8 +428,8 @@ async function handle(req, res) {
         else if (what === 'resume') { if (a.status !== 'live' || !a.paused) return { nochange: true, v: c }; a.paused = false; a.endsAt = a.left != null ? D.now() + a.left : null; a.nextAt = a.nextLeft != null ? D.now() + a.nextLeft : (!a.cur ? D.now() : null); a.left = null; a.nextLeft = null; audit(c, by, 'Resumed'); }
         else if (what === 'undo') {
           if (a.cur && (c.bids[a.cur] || []).length) { const x = c.bids[a.cur].pop(); a.endsAt = c.bids[a.cur].length && !a.paused ? D.now() + c.rules.timer * 1000 : null; if (a.paused) a.left = c.bids[a.cur].length ? c.rules.timer * 1000 : null; audit(c, by, 'Undid a $' + x.amt + ' bid by ' + mName(c, x.pid) + ' on ' + lotOf(c, a.cur).name); }
-          else if (a.just && c.sold[a.just] && c.sold[a.just].how === 'auction') { const lot = a.just, s = c.sold[lot]; delete c.sold[lot]; (c.bids[lot] || []).pop(); a.cur = lot; a.just = null; a.nextAt = null; a.nextLeft = null; if (a.status === 'closed') { a.status = 'live'; a.closedAt = null; idxSync = true; }
-            a.endsAt = (c.bids[lot] || []).length && !a.paused ? D.now() + c.rules.timer * 1000 : null; if (a.paused) a.left = (c.bids[lot] || []).length ? c.rules.timer * 1000 : null; audit(c, by, 'Undid the sale of ' + lotOf(c, lot).name + ' ($' + s.amt + '); the lot is back on the block'); }
+          else if (a.just && c.sold[a.just] && c.sold[a.just].how === 'auction') { if (fz) throw bad(409, FROZEN, { code: 'frozen' }); const lot = a.just, s = c.sold[lot]; if (a.status === 'closed') notice(c, by, 'Undid the sale of ' + lotOf(c, lot).name + ' ($' + s.amt + ')'); delete c.sold[lot]; a.cur = lot; /* REVIEW FIX 6: the bids stay; the winning bid is the high bid again */ a.just = null; a.nextAt = null; a.nextLeft = null; if (a.status === 'closed') { a.status = 'live'; a.closedAt = null; idxSync = true; }
+            a.endsAt = (c.bids[lot] || []).length && !a.paused ? D.now() + c.rules.timer * 1000 : null; if (a.paused) a.left = (c.bids[lot] || []).length ? c.rules.timer * 1000 : null; audit(c, by, 'Undid the sale of ' + lotOf(c, lot).name + ' ($' + s.amt + '); the lot is back on the block with its bids'); }
           else throw bad(409, 'Nothing to undo');
         }
         else if (what === 'sold') { if (a.status !== 'live' || !a.cur || !high(c, a.cur)) throw bad(409, 'No bid to sell'); sell(c, a.cur, D.now(), by); if (a.status === 'closed') idxSync = true; }
@@ -432,7 +442,7 @@ async function handle(req, res) {
       if (idxSync) await syncIdx(c); send(res, 200, { calc: full(c, u.mk, now) }); return true;
     }
     if (op === 'buyback' || op === 'por') { // OWNER DECISION Nov 16 2026: classic golf Calcutta buy-back (see HANDOFF Decisions)
-      rate('write', u.mk, ip); const lot = String(b.lot || '');
+      rate('write', u.mk, ip); const lot = String(b.lot || ''); let fz = false; if (op === 'buyback') { const r0 = await loadRow(id, true); if (r0) fz = await frozen(r0.data); }
       const c = await mutCalc(id, (c) => {
         const me = memberOf(c, u.mk), by = me.name, comm = isComm(c, u.mk), l = lotOf(c, lot); if (!l) throw bad(404, 'No such lot');
         if (!evLocal(c.ev)) throw bad(409, 'Buy back half is not available for pro teams or golfers');
@@ -441,11 +451,11 @@ async function handle(req, res) {
           const s0 = c.sold[lot]; if (s0 && s0.bb) throw bad(409, 'Remove the buy-back first');
           const mem = c.members.slice(); mem._me = me; let por; if (b.add) { por = (l.por || []).slice(); const e = porEntry(b.add, mem); if (!por.some((x) => x.k === e.k)) por.push(e); if (por.length > 8) throw bad(400, 'Up to 8 players of record per lot'); } else if (b.remove != null) { const i = Number(b.remove); por = (l.por || []).filter((x, j) => j !== i); } else por = cleanPor(b.players, mem);
           l.por = por; audit(c, by, 'Players of record for ' + l.name + ': ' + (por.length ? porOut(c, l, null).map((p) => p.name).join(', ') : 'none')); c.rev++; return c; }
-        if (!c.rules.buyBack) throw bad(409, 'Buy back half is off for this Calcutta');
+        if (!c.rules.buyBack) throw bad(409, 'Buy back half is off for this Calcutta'); if (fz) throw bad(409, FROZEN, { code: 'frozen' }); const wasClosed = c.a.status === 'closed';
         const s = c.sold[lot]; if (!s) throw bad(409, 'That lot is not sold yet');
         if (!(l.por || []).length) throw bad(409, 'Only the lot\'s own player(s) can buy it back, and this lot has none in the group');
         const mine = isPor(l, u.mk);
-        if (b.clear) { if (!s.bb) return { nochange: true, v: c }; if (!comm && !(s.bb.k && s.bb.k === u.mk)) throw bad(403, 'Only the commissioner or the player who bought back can remove it'); audit(c, by, 'Removed the buy-back on ' + l.name); s.bb = null; c.rev++; return c; }
+        if (b.clear) { if (!s.bb) return { nochange: true, v: c }; if (!comm && !(s.bb.k && s.bb.k === u.mk)) throw bad(403, 'Only the commissioner or the player who bought back can remove it'); audit(c, by, 'Removed the buy-back on ' + l.name); if (wasClosed) notice(c, by, 'Removed the buy-back on ' + l.name); s.bb = null; c.rev++; return c; }
         if (s.bb) throw bad(409, 'Half of this lot is already bought back');
         let e; // which player of record buys back
         if (!comm || b.self) { if (!mine) throw bad(403, 'Only the lot\'s own player(s) can buy back half'); e = l.por.find((x) => x.k === u.mk); }
@@ -453,7 +463,7 @@ async function handle(req, res) {
         const m = c.members.find((x) => x.mk === e.k), w = m ? { pid: m.pid, name: '' } : { pid: null, name: e.name || 'Player' };
         if ((w.pid && w.pid === s.pid) || (!w.pid && !s.pid && w.name.toLowerCase() === s.name.toLowerCase())) throw bad(400, 'The buyer cannot buy back from themselves');
         s.bb = { pid: w.pid, name: w.name, k: e.k, at: D.now() }; if (holders(c).size > maxOf(c)) throw bad(409, capMsg(c, 'Too many people'), { code: 'cap' });
-        audit(c, by, (w.pid ? mName(c, w.pid) : w.name) + ' bought back half of ' + l.name + ' for $' + (Math.floor(s.amt * 100 / 2) / 100) + (comm && !mine ? ' (recorded by the commissioner)' : '')); c.rev++; return c;
+        audit(c, by, (w.pid ? mName(c, w.pid) : w.name) + ' bought back half of ' + l.name + ' for $' + (Math.floor(s.amt * 100 / 2) / 100) + (comm && !mine ? ' (recorded by the commissioner)' : '')); if (wasClosed) notice(c, by, (w.pid ? mName(c, w.pid) : w.name) + ' bought back half of ' + l.name); c.rev++; return c;
       }, u.mk);
       send(res, 200, { calc: full(c, u.mk, now) }); return true;
     }
@@ -462,14 +472,15 @@ async function handle(req, res) {
       if (op === 'edit') { const row0 = await loadRow(id, true); if (!row0 || !canSee(row0.data, u.mk)) throw bad(404, 'Calcutta not found'); const mem = row0.data.members.slice(); mem._me = memberOf(row0.data, u.mk); const R = await cleanRules(b, now, mem); const c = await mutCalc(id, (c) => { if (!isComm(c, u.mk)) throw bad(403, 'Only the commissioner can change the rules'); if (c.locked || c.a.status !== 'setup') throw bad(409, 'Rules are locked. The auction has started.'); Object.assign(c, R); c.a.order = c.lots.map((l) => l.id); c.rev++; audit(c, mName(c, memberOf(c, u.mk).pid), 'Edited the rules'); return c; }, u.mk); await syncIdx(c); send(res, 200, { calc: full(c, u.mk, now) }); return true; }
       if (op === 'delete') { await mutCalc(id, (c) => { if (!isComm(c, u.mk)) throw bad(403, 'Only the commissioner can delete it'); if (c.locked) throw bad(409, 'Bids are in. It cannot be deleted.'); c.a.status = 'closed'; c.deleted = true; c.members = c.members.filter((m) => m.mk === c.comm); c.rev++; return c; }, u.mk);
         try { await mutRow(IDX, { calcs: {} }, (d) => { delete d.calcs[id]; return {}; }); } catch (e) {} send(res, 200, { ok: true }); return true; }
+      let fz = false; if (op === 'enter' || op === 'unenter') { const r0 = await loadRow(id, true); if (r0) fz = await frozen(r0.data); }
       const c = await mutCalc(id, (c) => {
-        if (!isComm(c, u.mk)) throw bad(403, 'Only the commissioner can do that'); const by = mName(c, memberOf(c, u.mk).pid), lot = String(b.lot || '');
+        if (!isComm(c, u.mk)) throw bad(403, 'Only the commissioner can do that'); if (fz) throw bad(409, FROZEN, { code: 'frozen' }); const wasClosed = c.a.status === 'closed'; const by = mName(c, memberOf(c, u.mk).pid), lot = String(b.lot || '');
         const who = () => { if (b.pid) { const m = c.members.find((x) => x.pid === String(b.pid)); if (!m) throw bad(404, 'Not a member'); return { pid: m.pid, name: '' }; } const n = cleanName(b.name, 24); if (n.length < 2) throw bad(400, 'Type who bought it (2+ characters) or pick a member'); return { pid: null, name: n }; };
         if (op === 'enter') { if (c.rules.mode !== 'manual') throw bad(409, 'This Calcutta is bid live in the app'); if (!lotOf(c, lot)) throw bad(404, 'No such lot'); const amt = Number(b.amt); if (!(Number.isInteger(amt) && amt >= c.rules.minBid && amt <= 100000)) throw bad(400, 'Amount: whole dollars, at least $' + c.rules.minBid);
           const w = who(); const before = c.sold[lot]; c.sold[lot] = { pid: w.pid, name: w.name, amt, at: D.now(), how: 'entered', bb: before && before.bb && (before.bb.pid ? before.bb.pid !== w.pid : true) ? before.bb : null };
           if (holders(c).size > maxOf(c)) throw bad(409, capMsg(c, 'Too many people'), { code: 'cap' });
-          if (!c.locked) { c.locked = true; } c.a.status = unsold(c).length ? 'live' : 'closed'; audit(c, by, (before ? 'Changed ' : 'Entered ') + lotOf(c, lot).name + ': ' + (w.pid ? mName(c, w.pid) : w.name) + ' $' + amt + (before ? ' (was ' + (before.pid ? mName(c, before.pid) : before.name) + ' $' + before.amt + ')' : '')); }
-        else if (op === 'unenter') { if (c.rules.mode !== 'manual') throw bad(409, 'Use Undo in the live auction'); const s = c.sold[lot]; if (!s) throw bad(404, 'Nothing entered for that lot'); delete c.sold[lot]; c.a.status = Object.keys(c.sold).length ? 'live' : 'setup'; if (!Object.keys(c.sold).length) c.locked = false; audit(c, by, 'Removed the result for ' + lotOf(c, lot).name + ' (' + (s.pid ? mName(c, s.pid) : s.name) + ' $' + s.amt + ')'); }
+          if (!c.locked) { c.locked = true; } c.a.status = unsold(c).length ? 'live' : 'closed'; const txt = (before ? 'Changed ' : 'Entered ') + lotOf(c, lot).name + ': ' + (w.pid ? mName(c, w.pid) : w.name) + ' $' + amt + (before ? ' (was ' + (before.pid ? mName(c, before.pid) : before.name) + ' $' + before.amt + ')' : ''); audit(c, by, txt); if (wasClosed) notice(c, by, txt); }
+        else if (op === 'unenter') { if (c.rules.mode !== 'manual') throw bad(409, 'Use Undo in the live auction'); const s = c.sold[lot]; if (!s) throw bad(404, 'Nothing entered for that lot'); delete c.sold[lot]; c.a.status = 'live'; /* REVIEW FIX 1: never unlocks once anything was entered */ const txt = 'Removed the result for ' + lotOf(c, lot).name + ' (' + (s.pid ? mName(c, s.pid) : s.name) + ' $' + s.amt + ')'; audit(c, by, txt); if (wasClosed) notice(c, by, txt); }
         else if (op === 'result') { // manual result entry (fallback for any event without a feed); every change is in the audit trail
           const tid = String(b.team || ''); let team = null; c.lots.forEach((l) => l.teams.forEach((t) => { if (t.id === tid) team = t; })); if (!team) throw bad(404, 'No such team');
           const ev = EVENTS[c.ev], cur = Object.assign({}, c.manual[tid] || {}), nx = {};

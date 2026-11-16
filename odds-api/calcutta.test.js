@@ -25,7 +25,7 @@ const G = (id, week, t, a, b, sa, sb) => ({ id: String(id), date: new Date(t).to
 const PO = { 1: [G(901, 1, T0, 2, 7, 24, 10), G(902, 1, T0 + H, 3, 6, 21, 17), G(903, 1, T0 + 2 * H, 4, 5, 30, 27), G(904, 1, T0 + 3 * H, 9, 14, 20, 3), G(905, 1, T0 + 4 * H, 10, 13, 16, 13), G(906, 1, T0 + 5 * H, 11, 12, 28, 14)],
   2: [G(911, 2, T0 + 7 * 24 * H, 1, 4, 31, 7), G(912, 2, T0 + 7 * 24 * H + H, 2, 3, 27, 20), G(913, 2, T0 + 7 * 24 * H + 2 * H, 8, 11, 34, 31), G(914, 2, T0 + 7 * 24 * H + 3 * H, 9, 10, 23, 22)],
   3: [G(921, 3, T0 + 14 * 24 * H, 1, 2, 17, 14), G(922, 3, T0 + 14 * 24 * H + 3 * H, 8, 9, 26, 24)], 5: [G(931, 5, T0 + 28 * 24 * H, 1, 8, 25, 22)] };
-let urls = [], feedOn = true;
+let urls = [], feedOn = false; // the score feed stays empty until the event "starts" (feedOn = true; C._reset())
 D.fetch = async (u) => { urls.push(u); if (/\/teams\?/.test(u)) return { ok: true, json: async () => ({ sports: [{ leagues: [{ teams: TEAMS.map((t) => ({ team: t })) }] }] }) };
   const m = /seasontype=3&week=(\d+)/.exec(u); return { ok: true, json: async () => ({ events: feedOn && m && PO[m[1]] ? PO[m[1]] : [] }) }; };
 let NOW = Z('2026-11-17T18:00:00Z'); D.now = () => NOW;
@@ -119,12 +119,12 @@ srv.listen(0, async () => {
     r = await call('bob', 'state', { id: c1.id, rev: r.j.calc.rev }); assert.ok(r.j.same, 'poll with the same rev answers small');
     t('timer expiry sells to the high bidder at the server clock; a bid after the bell gets "Sold"; next lot opens by itself; light polling');
     // --- undo a sale, sold now, next lot, reorder, end ---
-    r = await call('ann', 'ctl', { id: c1.id, op: 'undo' }); ok(r); assert.strictEqual(r.j.calc.a.cur, 'L1', 'undo with no bid on the new lot reopens the last sale'); assert.ok(!r.j.calc.sold.length); const back = r.j.calc.a.high.amt; assert.ok(back < hb.amt, 'the winning bid is the one undone');
+    r = await call('ann', 'ctl', { id: c1.id, op: 'undo' }); ok(r); assert.strictEqual(r.j.calc.a.cur, 'L1', 'undo with no bid on the new lot reopens the last sale'); assert.ok(!r.j.calc.sold.length); const back = r.j.calc.a.high.amt; assert.strictEqual(back, hb.amt, 'undoing a sale keeps its bids: the winning bid stands');
     r = await call('ann', 'ctl', { id: c1.id, op: 'sold' }); ok(r); assert.strictEqual(r.j.calc.sold[0].amt, back); r = await call('ann', 'ctl', { id: c1.id, op: 'next' }); ok(r); assert.strictEqual(r.j.calc.a.cur, 'L2');
     tick(1000); r = await call('bob', 'bid', { id: c1.id, lot: 'L2', amt: 50 }); ok(r); r = await call('ann', 'ctl', { id: c1.id, op: 'next' }); assert.strictEqual(r.s, 409, 'next refused while a bid stands');
     r = await call('ann', 'ctl', { id: c1.id, op: 'sold' }); ok(r); assert.strictEqual(r.j.calc.sold[0].lot, 'L2');
     r = await call('ann', 'ctl', { id: c1.id, op: 'undo' }); ok(r); assert.strictEqual(r.j.calc.a.cur, 'L2', 'undo right after a sale reopens the lot'); assert.ok(!r.j.calc.sold.find((s) => s.lot === 'L2'));
-    assert.strictEqual(r.j.calc.a.high, null, 'the undone sale had one bid: the lot is open with no bid'); r = await call('ann', 'ctl', { id: c1.id, op: 'undo' }); assert.strictEqual(r.s, 409, 'nothing left to undo');
+    assert.strictEqual(r.j.calc.a.high.amt, 50, 'the undone sale keeps its bid'); r = await call('ann', 'ctl', { id: c1.id, op: 'undo' }); ok(r); assert.strictEqual(r.j.calc.a.high, null, 'then Undo last bid removes it'); r = await call('ann', 'ctl', { id: c1.id, op: 'undo' }); assert.strictEqual(r.s, 409, 'nothing left to undo');
     r = await call('ann', 'ctl', { id: c1.id, op: 'next' }); ok(r); assert.strictEqual(r.j.calc.a.cur, 'L3', 'next skips an unbid lot (it comes back later)');
     const order = r.j.calc.a.order.slice().reverse(); r = await call('ann', 'ctl', { id: c1.id, op: 'reorder', order }); ok(r); assert.deepStrictEqual(r.j.calc.a.order, order);
     r = await call('ann', 'ctl', { id: c1.id, op: 'reorder', order: order.slice(1) }); assert.strictEqual(r.s, 400);
@@ -145,6 +145,8 @@ srv.listen(0, async () => {
     r = await call('ann', 'edit', Object.assign(base({ mode: 'manual' }), { id: c2.id })); assert.strictEqual(r.s, 409, 'locked once results are in');
     r = await call('ann', 'buyback', { id: c2.id, lot: 'L1', who: 0 }); assert.strictEqual(r.s, 409, 'pro teams: no buy-back'); assert.ok(/not available for pro/.test(r.j.error));
     r = await call('ann', 'por', { id: c2.id, lot: 'L1', players: [{ pid: B }] }); assert.strictEqual(r.s, 409, 'pro teams: no players of record');
+    ok(await call('ann', 'unenter', { id: c2.id, lot: 'L13' })); ok(await call('ann', 'enter', { id: c2.id, lot: 'L13', name: '<b>Joe</b> at the bar', amt: 120 }));
+    feedOn = true; C._reset(); // the playoffs are played
     r = await call('ann', 'board', { id: c2.id }); ok(r); const bd = r.j.board;
     assert.strictEqual(bd.pot, 1003); assert.strictEqual(bd.take, 70.21); assert.strictEqual(bd.pool, 932.79);
     assert.deepStrictEqual(bd.rows.map((x) => [x.each, x.hits, x.paid]), [[27.99, 13, 363.77], [121.27, 2, 242.54], [326.48, 1, 326.48]]);
@@ -160,14 +162,14 @@ srv.listen(0, async () => {
     assert.ok(bd.lots.every((l) => Array.isArray(l.por) && !l.por.length) && r.j.calc.local === false, 'pro lots: no players of record, buy-back hidden');
     t('enter-results mode (members + a non-member name, change an entry, commissioner only); NFL playoffs payouts = hand calculation to the cent: pot $1,003, 7% take $70.21, pool $932.79, win $27.99/$27.98, conf. champ $121.27, champion $326.48');
     r = await call('ann', 'board', { id: c2.id }); assert.ok(r.j.audit.some((a) => /Changed Team 2|Changed Kansas/.test(a.what) || /was BobBets \$150/.test(a.what)), 'audit shows the change');
-    ok(await call('ann', 'unenter', { id: c2.id, lot: 'L13' })); r = await call('ann', 'board', { id: c2.id }); assert.strictEqual(r.j.board.pot, 883); assert.strictEqual(r.j.board.unclaimed, 0); assert.ok(r.j.audit.some((a) => /Removed the result for The field/.test(a.what)));
-    t('enter-results audit trail (entered / changed / removed)');
+    r = await call('ann', 'unenter', { id: c2.id, lot: 'L13' }); assert.strictEqual(r.s, 409, 'event started: ownership final'); r = await call('ann', 'board', { id: c2.id }); assert.strictEqual(r.j.board.pot, 1003); assert.ok(r.j.audit.some((a) => /Removed the result for The field/.test(a.what)));
+    t('enter-results audit trail (entered / changed / removed); no changes once the event has started');
     // --- take: flat and capped; take as % already above ---
-    const pre = { take: { kind: 'flat', v: 50 } }; r = await call('ann', 'create', base(Object.assign({ name: 'Flat take', mode: 'manual' }, pre))); const c3 = r.j.calc;
+    feedOn = false; C._reset(); const pre = { take: { kind: 'flat', v: 50 } }; r = await call('ann', 'create', base(Object.assign({ name: 'Flat take', mode: 'manual' }, pre))); const c3 = r.j.calc;
     for (let i = 1; i <= 13; i++) ok(await call('ann', 'enter', { id: c3.id, lot: 'L' + i, name: 'Buyer ' + (i % 5), amt: i === 1 ? 201 : i === 13 ? 120 : 62 }));
-    r = await call('ann', 'board', { id: c3.id }); assert.deepStrictEqual([r.j.board.pot, r.j.board.take, r.j.board.pool, r.j.board.paidOut], [1003, 50, 953, 953]);
-    r = await call('ann', 'create', base({ name: 'Big flat', mode: 'manual', take: { kind: 'flat', v: 5000 } })); const c4 = r.j.calc; ok(await call('ann', 'enter', { id: c4.id, lot: 'L1', name: 'Al', amt: 40 }));
-    r = await call('ann', 'board', { id: c4.id }); assert.deepStrictEqual([r.j.board.pot, r.j.board.take, r.j.board.pool], [40, 40, 0], 'flat take never more than the pot');
+    feedOn = true; C._reset(); r = await call('ann', 'board', { id: c3.id }); assert.deepStrictEqual([r.j.board.pot, r.j.board.take, r.j.board.pool, r.j.board.paidOut], [1003, 50, 953, 953]);
+    feedOn = false; C._reset(); r = await call('ann', 'create', base({ name: 'Big flat', mode: 'manual', take: { kind: 'flat', v: 5000 } })); const c4 = r.j.calc; ok(await call('ann', 'enter', { id: c4.id, lot: 'L1', name: 'Al', amt: 40 }));
+    feedOn = true; C._reset(); r = await call('ann', 'board', { id: c4.id }); assert.deepStrictEqual([r.j.board.pot, r.j.board.take, r.j.board.pool], [40, 40, 0], 'flat take never more than the pot');
     t('commissioner take: flat $50 (pool $953, paid out exactly) and flat over the pot capped at the pot');
     // --- rounding: slots always sum exactly to the pool; extra cents to the bigger payouts ---
     let cases = 0; for (let poolC = 0; poolC < 40000; poolC += 137) for (const rows of [[{ n: 13, bp: 300 }, { n: 2, bp: 1300 }, { n: 1, bp: 3500 }], [{ n: 63, bp: 100 }, { n: 4, bp: 400 }, { n: 1, bp: 2100 }], [{ n: 272, bp: 25 }, { n: 1, bp: 3200 }], [{ n: 3, bp: 3333 }, { n: 1, bp: 1 }]]) {
@@ -211,6 +213,7 @@ srv.listen(0, async () => {
     r = await call('ann', 'buyback', { id: c7.id, lot: 'L3', who: 0 }); assert.strictEqual(r.s, 409, 'a lot with no players of record cannot be bought back');
     ok(await call('bob', 'buyback', { id: c7.id, lot: 'L2' }), 'the lot\'s own player buys back half');
     r = await call('bob', 'buyback', { id: c7.id, lot: 'L2' }); assert.strictEqual(r.s, 409, 'only once');
+    r = await call('dan', 'buyback', { id: c7.id, lot: 'L2', clear: true }); assert.strictEqual(r.s, 403); ok(await call('bob', 'buyback', { id: c7.id, lot: 'L2', clear: true }), 'the buyer can undo their own buy-back'); ok(await call('bob', 'buyback', { id: c7.id, lot: 'L2' }));
     ok(await call('ann', 'buyback', { id: c7.id, lot: 'L1', who: 0 }), 'commissioner records it for the player of record (here: herself)');
     tick(1000); ok(await call('ann', 'result', { id: c7.id, team: 'x2', wins: 1 })); tick(1000); ok(await call('ann', 'result', { id: c7.id, team: 'x1', wins: 2, champ: true }));
     r = await call('ann', 'board', { id: c7.id }); const b7 = r.j.board, o7 = {}; b7.owners.forEach((o) => { o7[o.name] = [o.spent, o.won]; });
@@ -218,7 +221,7 @@ srv.listen(0, async () => {
     assert.deepStrictEqual(b7.lots.map((l) => l.earned), [211.29, 52.83, 0], 'Blue first win $52.83 (extra cent), Red 2 wins + champion $211.29');
     assert.deepStrictEqual(o7, { CatBets: [100.5, 105.65], AnnBets: [132, 132.06], BobBets: [31.5, 26.41], Cy: [20, 0] }, 'half cost and half winnings; odd cent to the winning bidder');
     assert.deepStrictEqual(b7.lots[1].bb, { pid: P7.bob, name: 'BobBets' });
-    r = await call('dan', 'buyback', { id: c7.id, lot: 'L2', clear: true }); assert.strictEqual(r.s, 403); ok(await call('bob', 'buyback', { id: c7.id, lot: 'L2', clear: true }), 'the buyer can undo their own buy-back');
+    r = await call('bob', 'buyback', { id: c7.id, lot: 'L2', clear: true }); assert.strictEqual(r.s, 409, 'results are in: the buy-back is final'); assert.strictEqual(r.j.code, 'frozen');
     assert.ok(r = (await call('ann', 'board', { id: c7.id })).j.audit.some((a) => /BobBets bought back half of Blue for \$31.5/.test(a.what)) && r);
     C._reset(); r = await call('ann', 'create', { name: 'No BB', ev: 'custom', lots: [{ teams: [{ name: 'A' }], playersOfRecord: [{ me: true }] }, { teams: [{ name: 'B' }] }], rows: [{ k: 'champ', n: 1, pct: 100 }], minBid: 5, inc: 5, timer: 10, buyBack: false, take: { kind: 'none' }, order: 'listed', mode: 'manual' }); const c8 = r.j.calc;
     ok(await call('ann', 'enter', { id: c8.id, lot: 'L2', name: 'Zed', amt: 10 })); r = await call('ann', 'buyback', { id: c8.id, lot: 'L2', self: true }); assert.strictEqual(r.s, 409, 'switched off per Calcutta');
@@ -226,7 +229,7 @@ srv.listen(0, async () => {
     // --- adapter + stats contract ---
     await assert.rejects(C.setPlayersOfRecord(c2.id, 'L1', [pe(SID.bob)]), /only for local/); const sp = await C.setPlayersOfRecord(c7.id, 'L3', [pe(SID.dan), 'g:guest1', { name: 'Walk In' }]); assert.strictEqual(sp.count, 3);
     const g = await C.attachToGroup(c2.id, 'GRP1', 'K1'); assert.deepStrictEqual(g.group, { groupId: 'GRP1', contestId: 'K1' });
-    const ps = await C.potSummary(c2.id); assert.deepStrictEqual([ps.bids, ps.take, ps.pool, ps.main], [883, 61.81, 821.19, true]); assert.ok(Array.isArray(ps.payouts) && ps.payouts.every((p) => 'won' in p && 'spent' in p && !('key' in p)));
+    const ps = await C.potSummary(c2.id); assert.deepStrictEqual([ps.bids, ps.take, ps.pool, ps.main], [1003, 70.21, 932.79, true]); assert.ok(Array.isArray(ps.payouts) && ps.payouts.every((p) => 'won' in p && 'spent' in p && !('key' in p)));
     r = await call('dan', 'join', { code: c2.code }); assert.strictEqual(r.s, 409, 'attached to a group: join through the group');
     const st = await C.statsFor(pe(SID.ann), { from: '2026-01-01', to: '2026-12-31' }); const rec = st.find((x) => x.id === c2.id);
     assert.ok(rec, 'record for the Calcutta ann holds lots in'); assert.deepStrictEqual(Object.keys(rec).sort(), ['contestId', 'date', 'extra', 'groupId', 'id', 'kind', 'pl', 'place', 'result', 'spent', 'sport', 'src', 'title', 'verified', 'won'].sort());

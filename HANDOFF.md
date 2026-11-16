@@ -782,3 +782,7 @@ Anything live (Supabase rows, real tokens, real ESPN payloads for CFP / March Ma
 - Place-based events (golf day) show "0 wins" and "Out" for every lot once final: cosmetic wording to tidy with the golf build.
 - Unsold lots' earnings are shown as unclaimed; the commissioner decides (no auto re-split).
 - 'Main' Calcuttas report into the group's main pot only once the manager wires `potSummary` into Groups.
+
+### Review fixes (independent review of calcutta-v1 @5deda26: "ship after fixes") — tests in `node odds-api/calcutta.review.test.js` (each failed before its fix)
+- 1 (HIGH) Ownership is final once the event has started (a game with a lot team under way or finished in the feed, sticky) or any result exists (feed or hand-entered): `enter`, `unenter`, `buyback` (set and remove) and undoing a sale answer 409 `code:'frozen'` "The event has started: who owns what is final now." Rules never unlock again once anything was entered (removing every entry keeps `locked`), so edit/delete stay refused after any sale. Changes made after the auction closed (before the event) are allowed but shown to every member as a "Changed after the auction closed" notice (auction, enter and board screens; `calc.notices`, last 5) as well as in the history.
+- 6 (MED) Undoing a sale keeps the bids: the lot goes back on the block with its winning bid standing and a fresh timer. The button reads "Undo sale of <lot>" (asks to confirm) or "Undo last bid" (server hint `calc.a.undo`).

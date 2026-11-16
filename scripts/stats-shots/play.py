@@ -137,7 +137,10 @@ async def run(b, theme, W):
     ok('owner dashboard: a won bet with no price is "not known" and left out of P/L; chips say Week / Month / Year', 'winnings not known (no price), not in P/L' in t and 'Not known' in t and 'Week' in t and 'WTD' not in t and '$115' in t, t[:700])
     await ctx.close()
     # ---- Bob (recorded on the round) opens Ann's confirm link; Eve (not recorded) cannot confirm
-    ctx, pg5 = await ctx_for('t-eve', 'Eve Eagle', '/index.html?join=confirm.' + seed['confirm']); await pg5.wait_for_function("document.querySelector('#ostct') && /cannot confirm/.test(document.querySelector('#ostct').textContent)", timeout=15000); await shot('31a_confirm_sheet_not_a_player', '#ostcons', pg5)
+    ctx, pg5 = await ctx_for('t-eve', 'Eve Eagle', '/index.html?join=confirm.' + seed['confirm']); 
+    try: await pg5.wait_for_function("document.querySelector('#ostct') && /cannot confirm/.test(document.querySelector('#ostct').textContent)", timeout=15000)
+    except Exception: ok('the confirm sheet opened for someone who did not play', False, await pg5.evaluate("(document.querySelector('#ostcons')||document.body).innerText.slice(0,400) + ' || join=' + sessionStorage.getItem('ostat-join') + ' tok=' + localStorage.getItem('odd-tok')"))
+    await shot('31a_confirm_sheet_not_a_player', '#ostcons', pg5)
     ok('someone who did not play sees why they cannot confirm, and no Yes button', 'Only a player recorded on this entry can confirm it' in await pg5.inner_text('#ostcons') and not await pg5.locator('#ostcy').count()); await ctx.close()
     ctx, pg2 = await ctx_for('t-bob', 'BobBirdie', '/index.html?join=confirm.' + seed['confirm']); await pg2.wait_for_selector('#ostcons #ostcy', timeout=15000); await shot('31_confirm_sheet_recorded_player', '#ostcons', pg2); t = await pg2.inner_text('#ostcons')
     ok('the recorded player sees who asks, that they are down as playing, one Yes button (no side to choose), 4.5:1', 'Sir Oddable asks you to confirm' in t and 'has you down as playing in this round' in t and 'This link works once' in t and not await pg2.locator('#ostcp').count() and not report[-1][1]['low'], [t, report[-1][1]['low']])

@@ -14,12 +14,14 @@ let WIRED = null;
 function wire() {
   if (WIRED) return WIRED; const done = [], G = mod('groups'), C = mod('calcutta'), GO = mod('golf'), E = mod('events'), ST = mod('stats'), LIM = mod('limits');
   const t = (name, fn) => { try { if (fn()) done.push(name); } catch (e) { console.error('integrate [' + name + ']:', e.message); } };
-  t('groups game: calc', () => G && G.registerGame && C && (G.registerGame('calc', { potSummary: C.potSummary, attachToGroup: C.attachToGroup }), true));
-  t('groups game: golf', () => G && G.registerGame && GO && (G.registerGame('golf', { potSummary: GO.potSummary }), true)); // golf's attach needs the organizer's account: done in the attach route below
-  t('groups game: event', () => G && G.registerGame && E && (G.registerGame('event', { potSummary: E.potSummary, attachToGroup: E.ADAPTER && E.ADAPTER.attach ? (ref, gid, cid) => E.ADAPTER.attach(ref, { gid, cid, pot: 'side' }) : undefined }), true));
+  const own = G && typeof G.wire === 'function'; /* Groups round 3 wires its own pots, invites and stats (groups.wire, called by server.js): nothing is registered twice */
+  if (own) t('groups wired by groups.js', () => true);
+  t('groups game: calc', () => !own && G && G.registerGame && C && (G.registerGame('calc', { potSummary: C.potSummary, attachToGroup: C.attachToGroup }), true));
+  t('groups game: golf', () => !own && G && G.registerGame && GO && (G.registerGame('golf', { potSummary: GO.potSummary }), true)); // golf's attach needs the organizer's account: done in the attach route below
+  t('groups game: event', () => !own && G && G.registerGame && E && (G.registerGame('event', { potSummary: E.potSummary, attachToGroup: E.ADAPTER && E.ADAPTER.attach ? (ref, gid, cid) => E.ADAPTER.attach(ref, { gid, cid, pot: 'side' }) : undefined }), true));
   t('calcutta source: local events', () => C && E && E.ADAPTER && typeof E.ADAPTER.registerCalcutta === 'function' && (E.ADAPTER.registerCalcutta(C), true));
   t('calcutta source: golf', () => C && GO && typeof GO.registerCalcutta === 'function' && GO.registerCalcutta(C));
-  t('stats groups provider', () => ST && G && typeof G.statsFor === 'function' && (ST.register('groups', (k, o) => G.statsFor(k, o)), true));
+  t('stats groups provider', () => !own && ST && G && typeof G.statsFor === 'function' && (ST.register('groups', (k, o) => G.statsFor(k, o)), true));
   t('golf handicaps from stats', () => { if (!GO || !ST || !['handicapFor', 'eventSetup', 'eventOverride', 'eventLog'].every((f) => typeof ST[f] === 'function')) return false; const D = GO._deps;
     D.handicapFor = (k, o) => ST.handicapFor(k, o); D.eventSetup = (d, id, o) => ST.eventSetup(d, id, o); D.eventOverride = (d, id, k, o) => ST.eventOverride(d, id, k, o); D.eventLog = (d, id) => ST.eventLog(d, id); return true; });
   t('golf limits from limits.js', () => { if (!GO || !LIM || !GO.limits) return false; GO.limits.maxPeople = (e, id) => LIM.maxPeople(LIM.keyOf(e), id); GO.limits.isEnterprise = (e) => LIM.isEnterprise(LIM.keyOf(e)); return true; });

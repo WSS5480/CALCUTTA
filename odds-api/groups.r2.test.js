@@ -36,25 +36,30 @@ D.fetch = async (u) => {
 };
 let NOW = START - 3 * DAY; D.now = () => NOW;
 const GLB = (b, u) => (b && b.src !== 'kalshi' && b.gl === undefined ? Object.assign({ gl: b.sa > 0 ? b.sa : u }, b) : b); // G16: stamped like /groups/bet/add (gl: 0 = phone-only)
-const row = (w, bets, U) => { const u = U == null ? START - 2 * H : U; db[SID[w]] = { id: SID[w], salt: 's', pinhash: 'h', data: { bets: bets.map((b) => GLB(b, u)) }, updated: u }; };
+// Round 3: the ONE way a bet counts is the server add step, which writes the member's BOOK ('lock:gb:<memberKey>'). This helper plays that step for a whole
+// list of bets at time u (it also keeps the synced row, as My Bets would have it). A bet with gl: 0 is a phone-only bet: it is not in the book.
+const MKOF = (e) => require('crypto').createHash('sha256').update('oddable-group|' + e).digest('hex').slice(0, 24);
+const SEEN = []; // the server reads a new bet's pregame reference when it is added: the helper replays that with one forced tick at the add time
+const BOOKPUT = (sid, bets, u) => { SEEN.push(u); const b = {}; bets.forEach((x) => { if (!x || x.id == null) return; const at = Number(x.gl) > 0 ? Number(x.gl) : x.gl === 0 ? 0 : (Number(x.sa) > 0 ? Number(x.sa) : u); if (!(at > 0)) return; const s = Object.assign({}, x); ['gl', 'sa', 't', 'res', 'fin', 'finPL', 'auto', 'cash', 'soldN'].forEach((k) => delete s[k]); b[String(x.id)] = { s, at }; }); db['lock:gb:' + MKOF(pe(sid))] = { id: 'lock:gb:' + MKOF(pe(sid)), salt: 'x', pinhash: 'x', data: { b }, updated: u }; };
+const row = (w, bets, U) => { const u = U == null ? START - 2 * H : U; BOOKPUT(SID[w], bets, u); db[SID[w]] = { id: SID[w], salt: 's', pinhash: 'h', data: { bets: bets.map((b) => GLB(b, u)) }, updated: u }; };
 const srv = http.createServer(async (req, res) => { if (!(await G.handle(req, res))) { res.statusCode = 404; res.end('{}'); } });
-let P; const call = async (who, op, b) => { const r = await fetch('http://127.0.0.1:' + P + '/groups/' + op, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': who ? 't-' + who : '', 'x-ip': '9.9.9.' + WHO.indexOf(who) }, body: JSON.stringify(b || {}) }); return { s: r.status, j: await r.json() }; };
+let P; const call = async (who, op, b) => { if (SEEN.length) { const keep = NOW, us = [...new Set(SEEN.splice(0))].sort((x, y) => x - y); for (const u of us) { if (u < keep) { NOW = u; await G.tick({ force: true }); } } NOW = keep; } const r = await fetch('http://127.0.0.1:' + P + '/groups/' + op, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': who ? 't-' + who : '', 'x-ip': '9.9.9.' + WHO.indexOf(who) }, body: JSON.stringify(b || {}) }); return { s: r.status, j: await r.json() }; };
 const CDEF = { cname: 'Picks', sport: 'nfl', fmt: 'standings', start: START - H, runs: 'w4', kalshi: false, honor: false, types: { sp: true, ml: true, ou: true, prop: true, parlay: true }, legs: 3, metric: 'win', minBets: 0, minPaid: 0, cap: 0, entry: 25, split: '100' };
-const mk = async (who, c, join) => { NOW = START - 3 * DAY; G._reset(); const r = await call(who, 'create', { name: 'G' + Math.random().toString(36).slice(2, 7), take: { kind: 'none', v: 0 }, join: Object.assign({ requests: true, open: false, max: 8, late: 'no' }, join || {}), contest: Object.assign({}, CDEF, c || {}) }); assert.strictEqual(r.s, 200, JSON.stringify(r.j)); return r.j.group; };
+const mk = async (who, c, join) => { NOW = START - 3 * DAY; G._reset(); const r = await call(who, 'create', { name: 'G' + Math.random().toString(36).slice(2, 7), take: { kind: 'none', v: 0 }, join: Object.assign({ requests: true, open: false, auto: true, max: 8, late: 'no' }, join || {}), contest: Object.assign({}, CDEF, c || {}) }); assert.strictEqual(r.s, 200, JSON.stringify(r.j)); return r.j.group; };
 const joinAll = async (g, ws) => { for (const w of ws) { const r = await call(w, 'join', { code: g.code }); assert.strictEqual(r.s, 200, w + ' join ' + JSON.stringify(r.j)); } };
 const mine = async (w, g) => { NOW = START + 2 * DAY; G._reset(); const st = await call(w, 'standings', { id: g.id, cid: g.contests[0].cid }); assert.strictEqual(st.s, 200, JSON.stringify(st.j)); const me = st.j.rows.find((x) => x.name === w.toUpperCase() + 'name'); const p = await call(w, 'player', { id: g.id, cid: g.contests[0].cid, pid: me.pid }); return { row: me, bets: p.j.bets, t: p.j.t }; };
 const bet = (id, gid, side, type, odds, stake, o) => { const g = GAMES.find((x) => x.id === gid); return Object.assign({ id, gid, lg: 'nfl', away: g.away.abbr, home: g.home.abbr, day: GR.chiDay(g.start), side, type, odds, stake, fin: 'won', finPL: 99999 }, o || {}); };
 const TESTS = [];
 const test = (name, fn) => TESTS.push([name, fn]);
 
-test('R1 CRITICAL: moneyline at +99900 is graded at the ESPN reference (+130) + 10 cents tolerance = +140, not +99900', async () => {
+test('R1 CRITICAL: moneyline at +99900 is graded at the ESPN reference (+130; round 3: no tolerance), not +99900', async () => {
   const g = await mk('ann'); await joinAll(g, ['bob']); row('bob', [bet('b1', '502', 'KC', 'ml', 99900, 100)]);
-  const { bets } = await mine('bob', g); const b = bets.find((x) => x.id === 'b1'); assert.ok(b && b.ok, JSON.stringify(b)); assert.strictEqual(b.res, 'won'); assert.strictEqual(b.pl, 140);
+  const { bets } = await mine('bob', g); const b = bets.find((x) => x.id === 'b1'); assert.ok(b && b.ok, JSON.stringify(b)); assert.strictEqual(b.res, 'won'); assert.strictEqual(b.pl, 130);
 });
-test('R1 CRITICAL: no reference price -> clamped to the contest\'s "Longest odds that count" (default +500)', async () => {
+test('R1 CRITICAL: no reference price -> EVEN MONEY at most (round 3); "Longest odds that count" is only a cap on top', async () => {
   const g = await mk('ann'); await joinAll(g, ['bob']); row('bob', [bet('b2', '501', 'NYG', 'ml', 99900, 100)]);
-  const { bets } = await mine('bob', g); const b = bets.find((x) => x.id === 'b2'); assert.ok(b && b.ok, JSON.stringify(b)); assert.strictEqual(b.pl, 500);
-  const g2 = await mk('ann', { maxOdds: 200 }); await joinAll(g2, ['bob']); const b3 = (await mine('bob', g2)).bets.find((x) => x.id === 'b2'); assert.strictEqual(b3.pl, 200, 'commissioner set +200');
+  const { bets } = await mine('bob', g); const b = bets.find((x) => x.id === 'b2'); assert.ok(b && b.ok, JSON.stringify(b)); assert.strictEqual(b.pl, 100);
+  const g2 = await mk('ann', { maxOdds: 200 }); await joinAll(g2, ['bob']); const b3 = (await mine('bob', g2)).bets.find((x) => x.id === 'b2'); assert.strictEqual(b3.pl, 100, 'a higher setting never lifts the even-money rule');
   const bad = await call('ann', 'create', { name: 'Bad odds', take: { kind: 'none', v: 0 }, join: { requests: true, open: false, max: 8, late: 'no' }, contest: Object.assign({}, CDEF, { maxOdds: 99900 }) }); assert.strictEqual(bad.s, 400, 'max setting is +5000');
 });
 test('R1 CRITICAL: a $1,000,000 stake counts as the cap; "no cap" counts as $1,000', async () => {
@@ -72,16 +77,16 @@ test('R1 CRITICAL: both sides of one market from one member: only the first (by 
   const { bets } = await mine('bob', g); const a = bets.find((x) => x.id === 'h1'), b = bets.find((x) => x.id === 'h2');
   assert.ok(a.ok, 'first counts'); assert.ok(!b.ok && /hedge/i.test(b.why), JSON.stringify(b));
 });
-test('R1 CRITICAL: Kalshi bets are graded at the same reference check (mult 100 -> +140), rule renamed "Kalshi-tagged bets only (not verified)" with an info note', async () => {
+test('R1 CRITICAL: Kalshi bets are graded at the same reference check (mult 100 -> +130), rule renamed "Kalshi-tagged bets only (not verified)" with an info note', async () => {
   const g = await mk('ann', { kalshi: true }); await joinAll(g, ['bob']);
   row('bob', [{ id: 'k1', src: 'kalshi', kt: 'KXNFLGAME-26NOV22KCBUF-KC', kind: 'prop', text: 'Kansas City to win', stake: 100, mult: 100, day: '2026-11-22' }]);
-  const { bets } = await mine('bob', g); const b = bets.find((x) => x.id === 'k1'); assert.ok(b && b.ok, JSON.stringify(b)); assert.strictEqual(b.pl, 140);
+  const { bets } = await mine('bob', g); const b = bets.find((x) => x.id === 'k1'); assert.ok(b && b.ok, JSON.stringify(b)); assert.strictEqual(b.pl, 130);
   const cs = fs.readFileSync(path.join(__dirname, '..', 'pics', 'groups.js'), 'utf8'); assert.ok(cs.includes('Kalshi-tagged bets only (not verified)') && !cs.includes("'Kalshi-synced bets only'"), 'client wording');
 });
-test('R1 CRITICAL (parlays): a parlay\'s own multiplier never pays more than its legs\' ceilings multiplied (reference + 10 cents, else "Longest odds that count")', async () => {
+test('R1 CRITICAL (parlays): a parlay\'s own multiplier never pays more than its graded leg prices multiplied (reference, else even money)', async () => {
   const g = await mk('ann'); await joinAll(g, ['bob']);
   row('bob', [{ id: 'pz', kind: 'parlay', stake: 10, mult: 1000, day: '2026-11-22', lg: 'nfl', legs: [{ gid: '501', side: 'NYG', type: 'ml', away: 'DAL', home: 'NYG' }, { gid: '502', side: 'KC', type: 'ml', away: 'KC', home: 'BUF' }] }]);
-  const { bets } = await mine('bob', g); const b = bets.find((x) => x.id === 'pz'); assert.ok(b && b.ok && b.res === 'won', JSON.stringify(b)); assert.strictEqual(b.pl, 134, 'NYG no reference -> +500 (6x); KC reference +130 -> +140 (2.4x); 6 x 2.4 = 14.4x -> +$134 on $10, not +$9,990');
+  const { bets } = await mine('bob', g); const b = bets.find((x) => x.id === 'pz'); assert.ok(b && b.ok && b.res === 'won', JSON.stringify(b)); assert.strictEqual(b.pl, 36, 'NYG no reference -> even money (2x); KC reference +130 (2.3x); 2 x 2.3 = 4.6x -> +$36 on $10, not +$9,990');
 });
 test('R2 HIGH: sync.js stamps each NEW bet id with the server arrival time (phone value ignored, first stamp kept forever)', async () => {
   const a = S.merge({}, { bets: [{ id: 'x1', stake: 5, sa: 1 }] }, 1000); assert.strictEqual(a.bets[0].sa, 1000, 'phone-sent sa ignored');
@@ -89,8 +94,7 @@ test('R2 HIGH: sync.js stamps each NEW bet id with the server arrival time (phon
   assert.strictEqual(by.x1.sa, 1000, 'first stamp kept after an edit'); assert.strictEqual(by.x1.stake, 6); assert.strictEqual(by.x2.sa, 2000, 'new id stamped now');
 });
 test('R2 HIGH: an honest bet stamped before kickoff counts even when the row was last written after kickoff', async () => {
-  const g = await mk('ann'); await joinAll(g, ['bob']); row('bob', [bet('s1', '502', 'KC', 'ml', 130, 50, { sa: START - 3 * H })], START + 4 * H);
-  db[SID.bob].data.bets.push(bet('s2', '501', 'NYG', 'ml', -110, 10, { gl: START + 4 * H, sa: START + 4 * H })); // a later bet (after 501 kicked off) wrote the row
+  const g = await mk('ann'); await joinAll(g, ['bob']); row('bob', [bet('s1', '502', 'KC', 'ml', 130, 50, { sa: START - 3 * H }), bet('s2', '501', 'NYG', 'ml', -110, 10, { gl: START + 4 * H, sa: START + 4 * H })], START + 4 * H); // s2: added after 501 kicked off
   const { bets } = await mine('bob', g); const a = bets.find((x) => x.id === 's1'), b = bets.find((x) => x.id === 's2');
   assert.ok(a.ok, 'stamped before kickoff: counts ' + JSON.stringify(a)); assert.ok(!b.ok && /after the game started/.test(b.why));
 });

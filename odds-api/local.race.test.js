@@ -70,8 +70,9 @@ srv.listen(0, '127.0.0.1', async () => {
     // N2: at create the index entry is written BEFORE the game row: with the index stuck, create writes nothing at all (no game the index cannot list)
     L._reset(); const nRows = rows().length, nEv = EVENTS.length; r = await lc('create', L8({ title: 'No index' }), steve.token); assert.strictEqual(r.s, 409, r.txt); assert.strictEqual(r.j.error, 'Busy, try again');
     assert.strictEqual(rows().length, nRows, 'no game row written'); await sleep(300); assert.strictEqual(EVENTS.length, nEv, 'no pickleball_start for a game that was not made');
+    for (let i = 0; i < 7; i++) assert.strictEqual((await lc('create', L8({ title: 'No index ' + i }), steve.token)).s, 409, 'still busy'); /* 8 failed creates in all: none of them counts toward the 6 an hour */
     // after create, the index gets stuck: every later write still answers 200, the game stays listed and found by code, and is re-indexed later
-    block = false; L._reset(); r = await lc('create', L8({ title: 'Lost index', entrants: [{ name: 'Gus' }] }), steve.token); assert.strictEqual(r.s, 200, r.txt); const lost = r.j.event; assert.ok(idx()[lost.id], 'indexed at create'); block = true;
+    block = false; r = await lc('create', L8({ title: 'Lost index', entrants: [{ name: 'Gus' }] }), steve.token); assert.strictEqual(r.s, 200, 'a create after 8 failed ones is not rate-limited: ' + r.txt); const lost = r.j.event; assert.ok(idx()[lost.id], 'indexed at create'); block = true;
     for (let w = 0; w < 50 && !EVENTS.some((e) => e.type === 'pickleball_start' && e.key === lost.id); w++) await sleep(200); assert.ok(EVENTS.some((e) => e.type === 'pickleball_start' && e.key === lost.id), 'pickleball_start sent');
     r = await lc('join', { g: gid, id: lost.id, as: 'player', entryName: 'Bo' }, bo.token); assert.strictEqual(r.s, 200, 'a join while the index is stuck still answers 200'); assert.deepStrictEqual(L._idxQueue(), [lost.id], 'waiting to be re-indexed');
     r = await lc('join', { g: gid, id: lost.id, as: 'player', entryName: 'Bo' }, bo.token); assert.strictEqual(r.s, 200, 'the same join again (a retry) = 200, no second entry'); assert.strictEqual(r.j.event.entrants.filter((e) => e.name === 'Bo').length, 1);
@@ -82,7 +83,7 @@ srv.listen(0, '127.0.0.1', async () => {
     assert.strictEqual((await lc('claim', { g: gid, claim: gus }, dee.token)).s, 404, 'someone else cannot use a used claim code');
     block = false; await L._idxRepairNow(); assert.ok(idx()[lost.id] && idx()[lost.id].mk.length === 3, 'repaired from the CURRENT game row (3 members) once the index is writable'); assert.deepStrictEqual(L._idxQueue(), []);
     L._deps.S = S0; L._deps.sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
-    t('the index cannot be written: create writes nothing (409, no row, no notice); after a create, join / claim still answer 200, the game is listed and found by code; a retried join or claim is a success; the index is repaired from the current row');
+    t('the index cannot be written: create writes nothing (409, no row, no notice, and the failed tries do not count toward the create limit); after a create, join / claim still answer 200, the game is listed and found by code; a retried join or claim is a success; the index is repaired from the current row');
 
     // ---- 5. N1: while the index stays unwritable, list / code lookup / join never wait for the repair (real back-off, DB latency on) ----
     L._deps.S = Object.assign({}, S0, { dbPatchIf: async (id, ...a) => (id === 'lock:evtidx' ? false : S0.dbPatchIf(id, ...a)) }); LAT = 30; L._reset();
@@ -114,7 +115,7 @@ srv.listen(0, '127.0.0.1', async () => {
     t('N3: engine texts say "game" (errors, "Game created"); typed titles, names and notes with "event" in them are left exactly as typed');
 
     // ---- 4. an unchanged index entry is not rewritten ----
-    const before = DB['lock:evtidx'].updated; r = await lc('join', { g: gid, id: gs[0].id, as: 'spectator' }, bo.token); assert.strictEqual(r.s, 200); assert.strictEqual(DB['lock:evtidx'].updated, before, 'a join that changes nothing does not touch the index row');
+    await L._idxIdle(); await sleep(20); /* T1: a repair still running from check 4 must finish first */ const before = DB['lock:evtidx'].updated; r = await lc('join', { g: gid, id: gs[0].id, as: 'spectator' }, bo.token); assert.strictEqual(r.s, 200); assert.strictEqual(DB['lock:evtidx'].updated, before, 'a join that changes nothing does not touch the index row');
     r = await lc('get', { g: gid, id: gs[0].id }, bo.token); assert.strictEqual(DB['lock:evtidx'].updated, before);
     t('an unchanged index entry is not rewritten (a repeated join, a read)');
   } catch (e) { failed = 1; console.error('  FAIL after ' + n + ' passed:', e && e.stack || e); }

@@ -60,7 +60,7 @@
   }
   const netErr = (e) => e && /Failed to fetch|NetworkError|Load failed/i.test(e.message);
   const errText = (e) => (netErr(e) ? 'Could not reach the server. It may be waking up: try again in a few seconds.' : e && e.status === 401 ? 'Sign in to use Groups.' : (e && e.message) || 'Something went wrong');
-  async function act(op, b, then) { if (busy) return; busy = true; err = ''; paintBusy(true); try { const j = await post(op, b); busy = false; await then(j); } catch (e) { busy = false; lapsedCheck(e); err = errText(e); paint(true); } paintBusy(false); }
+  async function act(op, b, then) { if (busy) return; busy = true; err = ''; const ob = el() && el().querySelector('.eerr'); if (ob) ob.remove(); /* F1: the old message goes, so the same message again counts as new */ paintBusy(true); try { const j = await post(op, b); busy = false; await then(j); } catch (e) { busy = false; lapsedCheck(e); err = errText(e); paint(true); } paintBusy(false); }
   const lapsedCheck = (e) => { if (e && e.expired) { try { localStorage.setItem('odd-exp', '1'); } catch (x) {} } }; // same as pics/groups.js: gate.js shows the lock
   // Offline queue for score entries: kept on the phone, resent with the same op id (the server ignores a repeat), shown as "waiting to send".
   const Q = () => { try { return JSON.parse(ls('oevt-q') || '[]'); } catch (e) { return []; } };
@@ -417,7 +417,10 @@
     const moved = LASTS !== s; if (moved && LASTS && stack.includes(LASTS)) LASTS.sy = x.scrollTop; LASTS = s;
     const V = { home, joincode: joinCodeV, preview: previewV, create: createV, event: eventV, match: matchV, chal: chalV, info: infoSheet, trate: trateV, partners: partnersV, player: playerV, catalog: catalogV, catgame: catGameV }[s.t];
     const lock = expired() ? '<h1>Pickleball</h1><div class="ewarn"><b>Locked</b>' + esc(window.ODD_ENDED || 'Your time has ended. Pay now to unlock your picks, bets and groups.') + '</div><button class="epri efull" data-a="back">Back to Groups</button>' : '';
-    const keep = x.scrollTop; const hd = withHead(top('Back'), lock || (V ? V() : '')); x.querySelector('.ein0').innerHTML = hd; if (err) { const box = document.createElement('div'); box.className = 'eerr'; box.setAttribute('role', 'alert'); box.textContent = err; x.querySelector('.ehead').insertAdjacentElement('afterend', box); } if (moved) x.scrollTop = s.sy || 0; else if (s.keepScroll || kf) x.scrollTop = keep;
+    const hadErr = (x.querySelector('.eerr') || {}).textContent || ''; let box = null;
+    const keep = x.scrollTop; const hd = withHead(top('Back'), lock || (V ? V() : '')); x.querySelector('.ein0').innerHTML = hd; if (err) { box = document.createElement('div'); box.className = 'eerr'; box.setAttribute('role', 'alert'); box.textContent = err; x.querySelector('.ehead').insertAdjacentElement('afterend', box); } if (moved) x.scrollTop = s.sy || 0; else if (s.keepScroll || kf) x.scrollTop = keep;
+    // F1 (review 2, Nov 17 2026): a NEW error (a failed Create, Save, Join... or a form check) is brought into view; a refresh that redraws the same error leaves the scroll alone
+    if (box && err !== hadErr) try { box.scrollIntoView({ block: 'nearest' }); } catch (z) {}
     if (kf) { undirty(x, kf); if (act0) { const f = [...x.querySelectorAll('input,textarea,select')].find((y) => fkey(y) === act0); if (f) try { f.focus({ preventScroll: true }); } catch (z) {} } }
   }
   function push(o) { readDraft(); err = ''; stack.push(o); paint(); }
@@ -435,6 +438,7 @@
 
   function click(ev) {
     const t = ev.target.closest('button,a,[data-a]'); if (!t || t.disabled) return; const a = t.getAttribute('data-a'), id = t.getAttribute('data-id');
+    if (a && a !== 'back' && a !== 'close' && !t.hasAttribute('data-tab')) { const ob = el() && el().querySelector('.eerr'); if (ob) ob.remove(); } // F1: an action's own message is always shown as new (and brought into view)
     if (a === 'close') { readDraft(); shut(); try { if (window.OddGroups) window.OddGroups.close(); } catch (x) {} return; } // Close = leave Groups, like the Groups Close button
     if (a === 'back') { readDraft(); err = ''; if (stack.length <= 1 || expired()) { shut(); return; } stack.pop(); const s = cur(); if (s.t === 'home') loadHome(); else if (s.t === 'event') load(s, true); paint(); return; } // Back on the first screen = the group page
     if (t.hasAttribute('data-tab')) { const s = cur(); s.tab = t.getAttribute('data-tab'); paint(); return; }

@@ -384,6 +384,7 @@ function limit(key, n, ms) { const t = D.now(), a = (RL.get(key) || []).filter((
 // [per account n, ms, per IP n, ms]. Every bucket is keyed by ONE account or ONE IP (the signed-out invite preview used to share a single bucket for
 // everybody, so a league invite to 200 people locked itself out). The IP buckets are flood guards sized for a whole club on one Wi-Fi; guessing codes is
 // stopped separately (10 wrong codes per account / IP = 15 minutes blocked).
+function unrate(kind, who, ip) { for (const k of [kind + '|a|' + who, kind + '|i|' + ip]) { const a = RL.get(k); if (a && a.length) a.pop(); } } // gives back the try rate() just counted
 const LIM = { create: [6, 3600e3, 15, 3600e3], join: [40, 600e3, 600, 600e3], score: [60, 600e3, 1200, 600e3], peek: [0, 0, 300, 600e3] };
 function rate(kind, who, ip) { const L = LIM[kind]; if ((who && L[0] && limit(kind + '|a|' + who, L[0], L[1])) || limit(kind + '|i|' + ip, L[2], L[3])) throw bad(429, 'Too many tries. Wait a few minutes.'); }
 const codeFail = (k) => { const t = D.now(), a = (RL.get(k) || []).filter((x) => t - x < 900e3); a.push(t); RL.set(k, a); };
@@ -579,7 +580,7 @@ async function core(req, res) { // the engine's own routes; on main reached ONLY
       out.sort((a, c) => (a.fin ? 1 : 0) - (c.fin ? 1 : 0) || a.start - c.start); send(res, 200, { events: out, now }); return true;
     }
     if (op === 'create') {
-      rate('create', u.mk, ip); const R = cleanRules(b, now), cap = await capFor(u.e, ''), isEnt = await entFor(u.e);
+      rate('create', u.mk, ip); try { /* review 2: only a create that was written counts toward the 6 an hour (a 409 "Busy", a full game or a bad form gives the try back) */ const R = cleanRules(b, now), cap = await capFor(u.e, ''), isEnt = await entFor(u.e);
       const nm = cleanName(b.myName, 24) || 'Organizer'; let id; do { id = rnd(10); } while (await D.S.dbGet(ROW(id)));
       const evt = Object.assign({ id, code: newCode(), comm: u.mk, ce: u.e, created: now, u: now, members: [], entrants: [], matches: [], picks: {}, audit: [], ops: [] }, R);
       if (req._lg) evt.group = { gid: req._lg.gid, cid: '' }; // main: made inside a group (the gate checked the commissioner); never from the body
@@ -590,7 +591,7 @@ async function core(req, res) { // the engine's own routes; on main reached ONLY
       ENTF.set(id, isEnt); if (isEnt && usesOdd(evt)) { try { await D.rt().eventSetup(u.e, id, { title: evt.title, sport: ratingSport(evt), lockAt: evt.start }); } catch (x) { if (!x.status) console.error('local eventSetup:', x.message); } } // E-H: register the Enterprise tournament with the rating module
       await prepRatings(evt); audit(evt, now, nm, 'create', null, 'Event created'); tick(evt, now);
       await idxPre(evt); /* N2: the index lists the game before its row exists */ try { await D.S.dbPut({ id: ROW(id), salt: 'x', pinhash: 'x', data: evt, updated: now }, true); } catch (x) { await idxSafe(id).catch(() => {}); throw x; } await idxSafe(id); req._lout = evt;
-      send(res, 200, { event: full(evt, u.mk, now, cap) }); return true;
+      send(res, 200, { event: full(evt, u.mk, now, cap) }); return true; } catch (x) { unrate('create', u.mk, ip); throw x; }
     }
     if (op === 'preview' || op === 'join') {
       if (codeBlocked('ec|a|' + u.mk) || codeBlocked('ec|i|' + ip)) throw bad(429, 'Too many wrong codes. Wait 15 minutes.');
@@ -1025,4 +1026,4 @@ async function handle(req, res) {
   return true;
 }
 
-module.exports = { handle, _core: core, GROUP: G, groupRules, groupScrub, PICKLEBALL_FORMATS: FMTS.slice(), statsFor, ratingFor, STAND, LIMSTAND, openTies, pickPoints, _billed: () => BILLQ, snapRatings, moneyFor, pairHistory, ADAPTER, limits, SPORTS, FMTN, cleanRules, checkGames, roundRobin, buildElim, seedOrder, poolTable, places, potSummary, people, _deps: D, _mkOf: mkOf, _reset: () => { RL.clear(); RC.clear(); ENTF.clear(); BILL.clear(); }, _idxQueue: () => [...IDXQ], _idxRepairNow: async () => { if (IDXRUN) await IDXRUN; await idxRepair(); }, _idxRestart: () => { IDXQ.clear(); if (IDXT) clearTimeout(IDXT); IDXT = null; } /* tests: what a server restart forgets */ };
+module.exports = { handle, _core: core, GROUP: G, groupRules, groupScrub, PICKLEBALL_FORMATS: FMTS.slice(), statsFor, ratingFor, STAND, LIMSTAND, openTies, pickPoints, _billed: () => BILLQ, snapRatings, moneyFor, pairHistory, ADAPTER, limits, SPORTS, FMTN, cleanRules, checkGames, roundRobin, buildElim, seedOrder, poolTable, places, potSummary, people, _deps: D, _mkOf: mkOf, _reset: () => { RL.clear(); RC.clear(); ENTF.clear(); BILL.clear(); }, _idxQueue: () => [...IDXQ], _idxRepairNow: async () => { if (IDXRUN) await IDXRUN; await idxRepair(); }, _idxIdle: async () => { for (let i = 0; i < 200 && IDXRUN; i++) await IDXRUN; }, _idxRestart: () => { IDXQ.clear(); if (IDXT) clearTimeout(IDXT); IDXT = null; } /* tests: what a server restart forgets */ };

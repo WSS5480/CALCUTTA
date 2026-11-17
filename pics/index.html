@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<script>/* what's new pop-up: did this open come by a link? Read before gate.js / announce.js / the page clean the address */ try{window.__oddLaunch=/[?&#](pay|join|open|add|ref|slip)=/.test(location.search+location.hash)}catch(e){window.__oddLaunch=false}</script>
+<script>/* what's new pop-up: did this open come by a link that opens its own screen? Read before gate.js / announce.js / the page clean the address. ?pay= ?open= ?add= slip= always open a screen. ?join= opens one only where Groups exists: a launch when this device knows Groups exists (odd-gsw), or, when it has never heard from the server (no odd-gate yet), on the first load of this tab only; a ?join= left in the address while Groups is dark does not block later opens. ?ref= opens nothing. */ (function(){var L=false;try{var q=location.search+location.hash;L=/[?&#](pay|open|add|slip)=/.test(q);if(!L&&/[?&]join=/.test(location.search)){var gs=null,gt=null;try{gs=localStorage.getItem('odd-gsw');gt=localStorage.getItem('odd-gate')}catch(e){}if(gs==='1')L=true;else if(gt===null){var k='odd-new-j'+location.search,first=true;try{first=!sessionStorage.getItem(k);sessionStorage.setItem(k,'1')}catch(e){}L=first}}}catch(e){L=false}window.__oddLaunch=L})()</script>
 <script>try{if(localStorage.getItem('pics-theme')!=='violet')document.documentElement.classList.add('cb')}catch(e){document.documentElement.classList.add('cb')}function themeSet(v){try{localStorage.setItem('pics-theme',v)}catch(e){}location.reload()}document.addEventListener('DOMContentLoaded',()=>{if(document.documentElement.classList.contains('cb')){const m=document.querySelector('meta[name=theme-color]');if(m)m.content='#041e42'}})</script>
 
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -3590,11 +3590,11 @@ if ('serviceWorker' in navigator) {
 // ================= WHAT'S NEW POP-UP (Nov 17 2026, branch whats-new; read "## What's new pop-up" in HANDOFF.md) =================
 // A "Look what's new" card listing the LIVE items this device has not been shown yet (guests included). It shows when at least one such item exists,
 // so switching an item's isLive() on later (Calcuttas, group pickleball, Groups on a new account) announces it by itself: no key to change.
-// Never in ?mirror=1, never on an open that came by a link (window.__oddLaunch, read in <head>), never on sports.html / classic.html, never on top of
+// Never in ?mirror=1, never on an open that came by a link that opens its own screen (window.__oddLaunch, read in <head>), never on sports.html / classic.html, never on top of
 // the sign-in / pay / trial screens, another sheet, an open bet form or a focused field (it waits until they close). No network call, no server change.
 (function () {
   if (window.MIRROR || /[?&]mirror=1/.test(location.search)) return;
-  if (window.__oddLaunch) return; // opened by a link (?pay= ?join= ?open= ?add= ?ref= #slip=): that link's own screen comes first; the card waits for the next plain open
+  if (window.__oddLaunch) return; // opened by a link (?pay= ?open= ?add= slip=, ?join= where Groups exists): that link's own screen comes first; the card waits for the next plain open
   const SEEN = 'odd-new-seen', OLD = 'odd-new-2026-11-17a'; // OLD = the first build's per-release key (it also wrote SEEN); kept only for devices that have it
   const lg = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const ls = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
@@ -3622,7 +3622,7 @@ if ('serviceWorker' in navigator) {
     return lg(OLD) ? ['pga', 'golfgps', 'pickleball'] : []; // a device that closed the first build's card without the list: it was shown the three always-live items
   };
   const live = () => { const s = seen(); return ITEMS.filter((it) => !s.includes(it.id) && isLive(it)); };
-  // Anything else that is up and asks for the person's attention first. Also: a field with the focus, an open bet form, a finger on the screen or a scroll.
+  // Anything else that is up and asks for the person's attention first. Also: a text field with the focus, an open bet form, a finger on the screen or a scroll.
   const el = (id) => document.getElementById(id);
   const vis = (id) => { const x = el(id); return !!x && !x.hidden; };
   const busy = () => {
@@ -3631,7 +3631,7 @@ if ('serviceWorker' in navigator) {
     if (['infosheet', 'teampage', 'mv', 'lvov', 'syncsheet', 'aisheet', 'spop'].some(vis)) return true; // info sheet, team page, game view, live overlay, sync, Ask AI, score pop-up (z 400)
     try { if (grpPend()) return true; } catch (e) {} // a group invite in progress
     try { if (typeof BF !== 'undefined' && BF && BF.step) return true; } catch (e) {} // the Add bet / prop / parlay form is open
-    const a = document.activeElement; if (a && a !== document.body && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || (a && a.isContentEditable)) return true; // never take the focus from a field
+    const a = document.activeElement; if (a && (a.isContentEditable || a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|reset|range|color|file|image|hidden)$/i.test(a.type || '')))) return true; // never take the focus from a field someone is typing in (a focused dropdown or tick box does not hold it)
     try { if (typeof touching === 'function' && touching()) return true; } catch (e) {}
     if (Date.now() - (window.__scrollAt || 0) < 1200) return true;
     return false;

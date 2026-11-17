@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script>/* what's new pop-up: did this open come by a link? Read before gate.js / announce.js / the page clean the address */ try{window.__oddLaunch=/[?&#](pay|join|open|add|ref|slip)=/.test(location.search+location.hash)}catch(e){window.__oddLaunch=false}</script>
 <script>try{if(localStorage.getItem('pics-theme')!=='violet')document.documentElement.classList.add('cb')}catch(e){document.documentElement.classList.add('cb')}function themeSet(v){try{localStorage.setItem('pics-theme',v)}catch(e){}location.reload()}document.addEventListener('DOMContentLoaded',()=>{if(document.documentElement.classList.contains('cb')){const m=document.querySelector('meta[name=theme-color]');if(m)m.content='#041e42'}})</script>
 
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -3313,7 +3314,7 @@ setTimeout(() => { if (lsg('kal-id')) kalshiSync(false); }, 3000); setTimeout(lo
 if ('serviceWorker' in navigator) {
   const had = !!navigator.serviceWorker.controller; let rl = false;
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((r) => { r.update().catch(() => {}); const up = () => { if (!document.hidden) r.update().catch(() => {}); }; document.addEventListener('visibilitychange', up); setInterval(up, 300000); }).catch(() => {});
-  navigator.serviceWorker.addEventListener('controllerchange', () => { if (had && !rl && !document.querySelector('#odash,#ogrp')) { rl = true; location.reload(); } });
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (had && !rl && !document.querySelector('#odash,#ogrp,#oddnew')) { rl = true; location.reload(); } });
 }
 
 // Pull down to refresh: wipes the saved app copy and reloads fresh code and data
@@ -3321,7 +3322,7 @@ if ('serviceWorker' in navigator) {
   const bar = document.createElement('div'); bar.id = 'ptr'; document.body.appendChild(bar);
   let y0 = null, d = 0, busy = false;
   const set = (h, t) => { bar.style.height = h + 'px'; bar.textContent = t || ''; };
-  window.addEventListener('touchstart', (e) => { y0 = window.scrollY <= 0 && !busy && !document.querySelector('#odash,#ogrp') ? e.touches[0].clientY : null; d = 0; }, { passive: true });
+  window.addEventListener('touchstart', (e) => { y0 = window.scrollY <= 0 && !busy && !document.querySelector('#odash,#ogrp,#oddnew') ? e.touches[0].clientY : null; d = 0; }, { passive: true });
   window.addEventListener('touchmove', (e) => {
     if (y0 === null) return;
     d = e.touches[0].clientY - y0;
@@ -3587,19 +3588,20 @@ if ('serviceWorker' in navigator) {
 <script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=273"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="announce.js?v=273"><\/script><script src="dash.js?v=273"><\/script>')</script>
 <script>
 // ================= WHAT'S NEW POP-UP (Nov 17 2026, branch whats-new; read "## What's new pop-up" in HANDOFF.md) =================
-// A "Look what's new" card, shown ONCE per device per release key the next time someone opens index.html (guests included). Never in ?mirror=1, never on
-// sports.html / classic.html, never on top of the sign-in / pay / trial screens or another open sheet (it waits until they close). No network call, no server change.
-// TO ANNOUNCE SOMETHING NEW: switch its isLive() on (or add an item) and change WHATSNEW to a new key. People who already closed an earlier key see only the
-// items they have not been shown before (localStorage 'odd-new-seen'); if nothing is left to show, nothing pops up.
+// A "Look what's new" card listing the LIVE items this device has not been shown yet (guests included). It shows when at least one such item exists,
+// so switching an item's isLive() on later (Calcuttas, group pickleball, Groups on a new account) announces it by itself: no key to change.
+// Never in ?mirror=1, never on an open that came by a link (window.__oddLaunch, read in <head>), never on sports.html / classic.html, never on top of
+// the sign-in / pay / trial screens, another sheet, an open bet form or a focused field (it waits until they close). No network call, no server change.
 (function () {
   if (window.MIRROR || /[?&]mirror=1/.test(location.search)) return;
-  const WHATSNEW = '2026-11-17a', K = 'odd-new-' + WHATSNEW, SEEN = 'odd-new-seen';
+  if (window.__oddLaunch) return; // opened by a link (?pay= ?join= ?open= ?add= ?ref= #slip=): that link's own screen comes first; the card waits for the next plain open
+  const SEEN = 'odd-new-seen', OLD = 'odd-new-2026-11-17a'; // OLD = the first build's per-release key (it also wrote SEEN); kept only for devices that have it
   const lg = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const ls = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
   const go = (href) => () => { try { location.href = href; } catch (e) {} };
   const groupsOn = () => { try { return grpOn(); } catch (e) { return false; } };
-  const openGroups = () => { try { navGo('groups'); } catch (e) {} }; // the Groups tab: grpLoad + OddGroups.open (it has its own Close / ‹ Back)
-  // THE LIST. One entry per thing to announce: {id, icon, title, line, isLive(), open()}. Only items whose isLive() is true are shown, in this order.
+  const openGroups = () => { try { if (grpOn()) navGo('groups'); } catch (e) {} }; // the Groups tab: grpLoad + OddGroups.open (it has its own Close / ‹ Back)
+  // THE LIST. One entry per thing to announce: {id, icon, title, line, isLive(), open()}. Only live items this device has not been shown are listed, in this order.
   const ITEMS = [
     { id: 'pga', icon: '⛳', title: 'PGA Tour', line: 'Live PGA Tour leaderboard for this week’s tournament.', isLive: () => true, open: go('pga.html') },
     { id: 'golfgps', icon: '📍', title: 'Golf GPS', line: 'Yards to the pin on a satellite map of your course, hole by hole.', isLive: () => true, open: go('golfgps.html') },
@@ -3613,19 +3615,34 @@ if ('serviceWorker' in navigator) {
     // TODO wire when group pickleball games ship: isLive and open as above.
     { id: 'group-pickleball', icon: '🏓', title: 'Group pickleball games', line: 'Pickleball games with your group.', isLive: () => false, open: () => {} },
   ];
-  const seen = () => { try { const a = JSON.parse(lg(SEEN) || '[]'); return Array.isArray(a) ? a.map(String) : []; } catch (e) { return []; } };
-  const live = () => { const s = seen(); return ITEMS.filter((it) => { try { return !s.includes(it.id) && it.isLive(); } catch (e) { return false; } }); };
-  // Anything else that is up and asks for the person's attention first: the sign-in / pay / trial screens (gate), the name picker, the sport warning, the
-  // Kalshi cash-out, the Groups lock, Groups, the owner dashboard, the More sheet, the sync sheet, an info sheet, a team page, a game view, a live overlay, a score pop-up
-  // (z-index 400, it would sit on the card's buttons), an invite in progress.
+  const isLive = (it) => { try { return !!it.isLive(); } catch (e) { return false; } };
+  const seen = () => {
+    let a = null; try { a = JSON.parse(lg(SEEN) || 'null'); } catch (e) {}
+    if (Array.isArray(a)) return a.map(String);
+    return lg(OLD) ? ['pga', 'golfgps', 'pickleball'] : []; // a device that closed the first build's card without the list: it was shown the three always-live items
+  };
+  const live = () => { const s = seen(); return ITEMS.filter((it) => !s.includes(it.id) && isLive(it)); };
+  // Anything else that is up and asks for the person's attention first. Also: a field with the focus, an open bet form, a finger on the screen or a scroll.
   const el = (id) => document.getElementById(id);
-  const busy = () => !!(el('gate') || el('gnm') || el('oddwarn') || el('kcom') || el('oglock') || el('ogrp') || el('odash') || el('bnmore')
-    || ['infosheet', 'teampage', 'mv', 'lvov', 'syncsheet', 'spop'].some((id) => { const x = el(id); return x && !x.hidden; })
-    || (() => { try { return !!grpPend(); } catch (e) { return false; } })() || document.hidden);
+  const vis = (id) => { const x = el(id); return !!x && !x.hidden; };
+  const busy = () => {
+    if (document.hidden) return true;
+    if (el('gate') || el('gnm') || el('oddwarn') || el('kcom') || el('oglock') || el('ogrp') || el('odash') || el('bnmore')) return true; // sign-in / pay / trial, name picker, sport warning, cash-out, Groups lock, Groups, dashboard, More
+    if (['infosheet', 'teampage', 'mv', 'lvov', 'syncsheet', 'aisheet', 'spop'].some(vis)) return true; // info sheet, team page, game view, live overlay, sync, Ask AI, score pop-up (z 400)
+    try { if (grpPend()) return true; } catch (e) {} // a group invite in progress
+    try { if (typeof BF !== 'undefined' && BF && BF.step) return true; } catch (e) {} // the Add bet / prop / parlay form is open
+    const a = document.activeElement; if (a && a !== document.body && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || (a && a.isContentEditable)) return true; // never take the focus from a field
+    try { if (typeof touching === 'function' && touching()) return true; } catch (e) {}
+    if (Date.now() - (window.__scrollAt || 0) < 1200) return true;
+    return false;
+  };
+  // Signed in: wait for the account check (gate.js -> oddGroupsChanged / oddMe), at most 10 s, so the Groups items are known before the first card.
+  const T0 = Date.now(); let meSeen = false;
+  const ready = () => { if (!lg('odd-tok') || meSeen || Date.now() - T0 > 10000) return true; try { return !!(window.oddMe && window.oddMe()); } catch (e) { return false; } };
   function css() {
     if (el('oddnewcss')) return; const st = document.createElement('style'); st.id = 'oddnewcss';
-    st.textContent = '#oddnew{position:fixed;inset:0;z-index:150;background:rgba(5,8,16,.62);display:flex;align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom));box-sizing:border-box;overscroll-behavior:contain}'
-      + '#oddnew .onb{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:20px;box-shadow:0 14px 40px #000a;width:min(520px,100%);max-height:100%;overflow-y:auto;overflow-x:hidden;padding:14px 16px 16px;box-sizing:border-box;font:15px/1.4 system-ui,-apple-system,sans-serif;text-align:left;outline:none}'
+    st.textContent = '#oddnew{position:fixed;inset:0;z-index:150;background:rgba(5,8,16,.62);display:flex;align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));box-sizing:border-box}'
+      + '#oddnew .onb{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:20px;box-shadow:0 14px 40px #000a;width:min(520px,100%);max-height:100%;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:14px 16px 16px;box-sizing:border-box;font:15px/1.4 system-ui,-apple-system,sans-serif;text-align:left;outline:none}'
       + '#oddnew .onh{display:flex;align-items:center;justify-content:space-between;gap:10px}#oddnew h2{margin:0;font:800 20px/1.25 system-ui,-apple-system,sans-serif;color:var(--ink)}'
       + '#oddnew .onx{flex:none;min-width:44px;min-height:44px;padding:0 12px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:12px;font:700 14px system-ui,-apple-system,sans-serif;cursor:pointer}'
       + '#oddnew .ons{margin:4px 0 10px;color:var(--muted);font-size:14px}'
@@ -3634,18 +3651,23 @@ if ('serviceWorker' in navigator) {
       + '#oddnew .oni:hover,#oddnew .oni:focus-visible{border-color:var(--blue)}#oddnew .oni>span:first-child{flex:none;font-size:26px;line-height:1;width:32px;text-align:center}'
       + '#oddnew .onm{flex:1;min-width:0;overflow-wrap:anywhere}#oddnew .onm b{display:block;font-size:16px}#oddnew .onm small{display:block;color:var(--muted);font-size:13px;line-height:1.35;margin-top:2px}#oddnew .oni i{flex:none;font-style:normal;color:var(--muted);font-size:22px}'
       + '#oddnew .onf{display:flex;justify-content:flex-end;margin-top:12px}#oddnew .ong{min-height:48px;min-width:120px;padding:10px 22px;border:1px solid var(--blue);background:var(--blue);color:var(--bg);border-radius:12px;font:800 16px system-ui,-apple-system,sans-serif;cursor:pointer}'
-      + '@media (max-width:767px){#oddnew .ong{width:100%}}'
-      + '@media (min-width:768px){#oddnew .onb{width:min(880px,100%);padding:20px 22px 22px}#oddnew h2{font-size:24px}#oddnew .onl{grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}#oddnew .oni{flex-direction:column;align-items:flex-start;min-height:132px;padding:14px}#oddnew .oni i{display:none}}';
+      + '@media not all and (min-width:768px) and (min-height:600px){#oddnew .ong{width:100%}}'
+      + '@media (min-width:768px) and (min-height:600px){#oddnew .onb{width:min(880px,100%);padding:20px 22px 22px}#oddnew h2{font-size:24px}#oddnew .onl{grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}#oddnew .oni{flex-direction:column;align-items:flex-start;min-height:132px;padding:14px}#oddnew .oni i{display:none}}';
     document.head.appendChild(st);
   }
-  let shown = false, tries = 0;
+  let shown = false, tries = 0, T = 0, onKey = null, prevFocus = null, openedAt = 0;
+  // Close: every item still live is now seen. An item that stopped being live while the card was up (Groups switched off) stays unseen.
   function close(list) {
-    const o = el('oddnew'); if (!o) return; o.remove(); document.removeEventListener('keydown', onKey, true);
-    ls(K, String(Date.now())); const s = seen(); list.forEach((it) => { if (!s.includes(it.id)) s.push(it.id); }); ls(SEEN, JSON.stringify(s.slice(-60)));
+    const o = el('oddnew'); if (!o) return; o.remove(); if (onKey) document.removeEventListener('keydown', onKey, true); onKey = null;
+    const s = seen(); list.forEach((it) => { if (isLive(it) && !s.includes(it.id)) s.push(it.id); }); ls(SEEN, JSON.stringify(s.slice(-60)));
+    try { if (prevFocus && prevFocus !== document.body && document.contains(prevFocus) && prevFocus.focus) prevFocus.focus({ preventScroll: true }); } catch (e) {}
+    prevFocus = null;
   }
-  let onKey = () => {};
+  // Something opened ABOVE the card (sign-in screen, name picker, a game view, an info sheet): Escape and Tab belong to it.
+  const above = () => !!(el('gate') || el('gnm') || vis('mv') || vis('infosheet') || vis('aisheet'));
   function show() {
     if (shown || el('oddnew')) return; const list = live(); if (!list.length) return; shown = true; css();
+    prevFocus = document.activeElement;
     const o = document.createElement('div'); o.id = 'oddnew'; o.setAttribute('role', 'dialog'); o.setAttribute('aria-modal', 'true'); o.setAttribute('aria-labelledby', 'oddnew-t');
     const b = document.createElement('div'); b.className = 'onb'; b.tabIndex = -1;
     const h = document.createElement('div'); h.className = 'onh';
@@ -3658,20 +3680,34 @@ if ('serviceWorker' in navigator) {
       const ic = document.createElement('span'); ic.textContent = it.icon; ic.setAttribute('aria-hidden', 'true'); r.appendChild(ic);
       const m = document.createElement('span'); m.className = 'onm'; const bb = document.createElement('b'); bb.textContent = it.title; const sm = document.createElement('small'); sm.textContent = it.line; m.appendChild(bb); m.appendChild(sm); r.appendChild(m);
       const ch = document.createElement('i'); ch.textContent = '›'; ch.setAttribute('aria-hidden', 'true'); r.appendChild(ch);
-      r.onclick = () => { close(list); try { it.open(); } catch (e) {} };
+      r.onclick = () => { const on = isLive(it); close(list); if (on) { try { it.open(); } catch (e) {} } }; // re-checked at the tap: Groups switched off meanwhile = the card just closes
       l.appendChild(r);
     });
     b.appendChild(l);
     const f = document.createElement('div'); f.className = 'onf'; const ok = document.createElement('button'); ok.type = 'button'; ok.className = 'ong'; ok.textContent = 'Got it'; f.appendChild(ok); b.appendChild(f);
     o.appendChild(b);
-    x.onclick = () => close(list); ok.onclick = () => close(list); o.addEventListener('click', (ev) => { if (ev.target === o) close(list); });
-    onKey = (ev) => { if (ev.key === 'Escape') close(list); }; document.addEventListener('keydown', onKey, true);
-    document.body.appendChild(o); try { b.focus({ preventScroll: true }); } catch (e) {} // the card takes the focus (no ring on a button nobody touched); Tab reaches Close, the items and Got it
+    x.onclick = () => close(list); ok.onclick = () => close(list);
+    o.addEventListener('click', (ev) => { if (ev.target === o && Date.now() - openedAt > 600) close(list); }); // a tap that was already on its way when the card appeared does not count
+    onKey = (ev) => {
+      if (!el('oddnew') || above()) return;
+      if (ev.key === 'Escape') { ev.preventDefault(); close(list); return; }
+      if (ev.key !== 'Tab') return; // Tab / Shift+Tab stay inside the card
+      const fs = [...b.querySelectorAll('button')]; if (!fs.length) return; const a = document.activeElement, i = fs.indexOf(a);
+      if (ev.shiftKey ? (i <= 0) : (i === -1 || i === fs.length - 1)) { ev.preventDefault(); (ev.shiftKey ? fs[fs.length - 1] : fs[0]).focus(); }
+    };
+    document.addEventListener('keydown', onKey, true);
+    document.body.appendChild(o); openedAt = Date.now(); try { b.focus({ preventScroll: true }); } catch (e) {} // the card takes the focus (no ring on a button nobody touched)
   }
-  // Wait for the page and the account check to settle (gate.js may still put up the sign-in / pay screen), then show when nothing else is open.
-  function tick() { if (shown || lg(K)) return; if (busy()) { if (++tries < 400) setTimeout(tick, 1500); return; } show(); }
-  window.oddWhatsNew = { items: ITEMS, key: WHATSNEW, show: () => { shown = false; show(); } }; // for tests and the manager; show() ignores the release key but not the list
-  if (!lg(K)) setTimeout(tick, 2500);
+  // Wait for the page and the account check to settle, then show when nothing else is going on. No live unseen item = stop (a later account check starts it again).
+  function tick() {
+    clearTimeout(T); if (shown) return;
+    if (!ready() || busy()) { if (++tries < 400) T = setTimeout(tick, 1500); return; }
+    if (!live().length) return; show();
+  }
+  const prevG = window.oddGroupsChanged; // gate.js calls this each time it has the account from the server (index.html's v272 handler, kept as it is)
+  window.oddGroupsChanged = function () { meSeen = true; let r; try { if (prevG) r = prevG.apply(this, arguments); } finally { if (!shown && !el('oddnew')) { clearTimeout(T); T = setTimeout(tick, Math.max(400, T0 + 2500 - Date.now())); } /* never before 2.5 s after load */ } return r; };
+  window.oddWhatsNew = { items: ITEMS, busy, ready, show: () => { shown = false; show(); } }; // for tests and the manager: shows the live unseen items now
+  T = setTimeout(tick, 2500);
 })();
 // ================= end what's new pop-up =================
 </script>

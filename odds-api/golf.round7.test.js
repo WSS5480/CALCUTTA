@@ -126,6 +126,32 @@ chk('6 (G1) wording: a bet after the start needs Bob AND Cat to sign', async () 
   const N = ['ann', 'bob', 'cat', 'dan'], x = await mk(N, { net: 'gross', heads: { on: true, kind: 'player', type: 'match', amt: 50 } }, { entry: 10 }, { orgOut: true, nT: 3, tOf: (i) => 'T' + i }), id = x.id, pid = x.pid; await nums(N, id, pid, { orgOut: true }); ok(await call('ann', 'start', { id }));
   const r = await call('ann', 'match', { id, op: 'add', a: pid.bob, b: pid.cat }); assert.strictEqual(r.s, 202); assert.ok(/It needs (Bob AND Cat|Cat AND Bob) to sign/.test(r.j.note), r.j.note);
 });
+chk('7 (R2/R3, round 8) in a money game a member on no team (and a neutral organizer) cannot dispute, before Final or after it', async () => {
+  const N = ['ann', 'bob', 'cat'], x = await mk(N, { net: 'gross' }, { entry: 10 }, { orgOut: true, nT: 2, tOf: (i) => 'T' + i }), id = x.id, pid = x.pid; ok(await call('zed', 'join', { code: x.code }), 'Zed joins with the code, on no team');
+  ok(await call('ann', 'start', { id })); await card('bob', id, 'T1', pid.bob, (h) => PAR[h - 1]); await card('cat', id, 'T2', pid.cat, (h) => PAR[h - 1] + 2); ok(await conf('cat', id, 'T1')); ok(await conf('bob', id, 'T2'));
+  const d = (w, h) => call(w, 'dispute', { id, tid: 'T1', hole: h, note: 'was a bogey', want: { p: { [pid.bob]: PAR[h - 1] + 1 } } });
+  assert.strictEqual((await d('zed', 1)).s, 403, 'live: no team, no dispute'); assert.strictEqual((await d('ann', 1)).s, 403, 'live: a neutral organizer neither');
+  ok(await call('ann', 'final', { id })); const before = paidOut(await board(id));
+  for (let h = 1; h <= 18; h++) assert.strictEqual((await d('zed', h)).s, 403, 'after Final: hole ' + h); assert.strictEqual((await d('ann', 2)).s, 403);
+  const g = await board(id); assert.ok(!g.payout.contested); assert.strictEqual(paidOut(g), before); assert.ok(/^Bob /.test(before), before);
+});
+chk('8 (round 8) an objection to a change on an UNCONFIRMED hole closes 30 minutes after the change, even while the round is live', async () => {
+  const N = ['ann', 'bob', 'cat'], x = await mk(N, { net: 'gross' }, { entry: 10 }), id = x.id, pid = x.pid; await nums(N, id, pid); ok(await call('ann', 'start', { id }));
+  await card('bob', id, 'T2', pid.bob, (h) => PAR[h - 1], 2); // entered, never confirmed
+  ok(await call('cat', 'dispute', { id, tid: 'T2', hole: 2, note: 'he had a birdie', want: { p: { [pid.bob]: PAR[1] - 1 } } }));
+  let r = await call('ann', 'resolve', { id, tid: 'T2', hole: 2, p: { [pid.bob]: PAR[1] - 1 } }); if (r.s === 202) { const q = r.j.game.pending.find((y) => y.n === r.j.n); assert.ok(!q.cum, 'no "since they were confirmed" total for a hole that was never confirmed'); r = ok(await call(q.who[0].toLowerCase(), 'sign', { id, n: r.j.n })); } else ok(r);
+  const hs = await harmOf('bob', id), e = hs.find((y) => !y.afterFinal); assert.ok(e, 'a change other teams can object to'); assert.ok(e.until, 'it has its own end: 30 minutes');
+  const ob = hs.length ? (await call('ann', 'get', { id })).j.game.harm.find((y) => y.h === e.h && y.canObject) ? 'ann' : 'cat' : null;
+  NOW += 31 * M; r = await call(ob, 'object', { id, h: e.h }); assert.strictEqual(r.s, 409, 'closed after 30 minutes'); assert.ok(/ended at/.test(r.j.error), r.j.error); assert.strictEqual((await call('ann', 'get', { id })).j.game.day.status, 'live');
+});
+chk('9 (round 8) a tournament director who is not neutral cannot set a handicap (directly, not only at Start)', async () => {
+  db['lock:ent'] = { id: 'lock:ent', data: { keys: { [ACC('club')]: true } }, updated: 1 }; G._reset(); FS.install(G, {});
+  let r = ok(await call('club', 'create', { kind: 'day', title: 'Club day', course: COURSE, day: { fmt: 'stroke', teams: 2, teamSize: 1, net: 'net' }, pot: { entry: 20 } })); const id = r.j.game.id, code = r.j.game.code;
+  r = ok(await call('bob', 'join', { code, tid: 'T1' })); const bob = r.j.game.me; ok(await call('club', 'team', { id, op: 'hcp', pid: bob, hcp: 10, reason: 'club card' }), 'neutral: alone');
+  const k = Object.keys(db).find((y) => db[y].data && db[y].data.id === id); db[k].data.calcId = 'calc1'; G._reset(); FS.install(G, {}); await G.setLotHolders(id, [ACC('club')]);
+  r = await call('club', 'team', { id, op: 'hcp', pid: bob, hcp: 12, reason: 'club card' }); assert.strictEqual(r.s, 403, 'he holds a Calcutta lot'); assert.ok(r.j.notNeutral);
+});
+
 (async () => {
   const only = process.argv.slice(2).filter((a) => !a.startsWith('--'))[0], list = process.argv.includes('--list'); let bad = 0;
   if (list) { CHECKS.forEach(([n], i) => console.log(i + '\t' + n)); return; }

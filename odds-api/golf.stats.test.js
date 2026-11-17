@@ -47,7 +47,7 @@ async function round(a, b, over, sign) { later(); let r = ok(await call(a, 'crea
   for (let k = 0; k < 3; k++) await round('rex', 'sue', 1, true); later();
   if (process.env.DBG) { const rr = (await ST.statsFor(ACC('rex'), {})).filter((x) => x.kind === 'golf-round'); console.log(JSON.stringify(rr.map((x) => [x.date, x.score, x.extra.card, x.extra.confirmed, x.extra.confirmWhy, x.extra.hcpNote]))); }
   h = await ST.handicapFor(ACC('rex')); // (how many rounds ONE confirmer may account for is the stats module's own limit: 2 at 99f409a, 8 for rounds scored in games after its follow-up)
-  assert.ok(h.confirmedRounds >= 2, 'golf\'s extra.card is read as confirmed by the real module: ' + JSON.stringify(h.makeup && h.makeup.text)); assert.strictEqual(h.use, null); assert.ok(/3 different|3 confirmed rounds/.test(h.why || ''), h.why);
+  assert.ok(h.confirmedRounds >= 2, 'golf\'s extra.card is read as confirmed by the real module: ' + JSON.stringify(h.makeup && h.makeup.text)); assert.strictEqual(h.use, null); assert.ok(/3 different|3 confirmed rounds|only a number the organizer approved/.test(h.why || ''), h.why); /* round 8: stats 54e0b93 words it as the approval rule */
   assert.deepStrictEqual(h.makeup.who.map((w) => w.name), ['Sue']); const c1 = h.confirmedRounds;
   t('real stats: a card signed hole by hole by an account on another team is CONFIRMED (extra.card others / by / byName); one confirmer three times -> still no number ("' + h.why + '")');
   // 3. two more opponents sign two more rounds: three different confirmers -> the money-game number exists

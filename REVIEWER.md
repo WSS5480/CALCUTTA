@@ -1,0 +1,11 @@
+# Common rules for every Oddable reviewer
+- You are independent and READ-ONLY. Never modify any /home/claude/calcutta* directory. Clone the repo you review into your own /tmp dir and work only there.
+- No pushes, no live writes (no live server POSTs, no Supabase), no Odds API credits.
+- Never use the owner's Chrome or any browser-extension tool. Headless Playwright in the sandbox only.
+- Never kill processes by a name match; kill only PIDs you started; use your own ports.
+- Read /home/claude/OWNER-DECISIONS.md in full, /home/claude/decks/Oddable-Playbook.md where relevant, and the repo's HANDOFF.md (the coder's last report was lost in a server restart, so HANDOFF and the commit are your only account of what was done).
+- First confirm each defect from the previous review is truly fixed (earlier reviewer scripts, where they survive under /tmp, are reference only). Then attack again: try to cheat, break money maths, break locks and freezes, read other users' data, inject HTML, and race requests.
+- Run every test suite 10 times and report flakiness.
+- Playwright at 360x740, 430x900 and 1280x800 in every theme: no page errors, no sideways scroll or sideways tables, tap targets at least 44px, the floating My Bets banner covers nothing (open or closed), headers over their data, every total drills down with a working Back, the live Oddable look, text contrast at least 4.5:1, no developer text, no "undefined", no "Double lock", no "USGA"/"GHIN"/"DUPR".
+- Deliver: a verdict (SHIP / SHIP AFTER FIXES / DO NOT SHIP) for a LIVE deploy; defects ranked Critical/High/Medium/Low, each with exact repro steps and the suggested fix; what you verified; what you could not verify; a recommendation on each decision the coder made on their own. Phone-readable, no wide tables. Save the full report to the path given.
+- End by printing `git -C <original repo> status --porcelain` and `rev-parse <branch>` to prove you changed nothing.

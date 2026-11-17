@@ -57,6 +57,7 @@
         LASTHASH = after;
         // reload only when bets were added/removed/settled or pins changed; field-level differences (stake, app pick) must never trigger reloads or two devices ping-pong forever
         const sig = (d) => stable({ b: d.bets.map((b) => [String(b.id), b.res == null ? 0 : 1]).sort(), p: [...d.pins].map(String).sort() });
+        if (document.getElementById('ogolf') && sig(gatherFrom(local)) !== sig(gather())) { paint(); return true; } // money golf (feature session): never reload under the golf overlay either
         if (sig(gatherFrom(local)) !== sig(gather()) && !editing() && !document.querySelector('#odash,#ogrp')) {
           const t = +g('sync-rl') || 0;
           if (Date.now() - t > 60000) { s('sync-rl', String(Date.now())); location.reload(); return; }

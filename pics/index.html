@@ -516,9 +516,30 @@ function navRender() { swRender();
   const anyLive = Object.values(ALL).some((g) => g.state === 'in');
   if (grpOn()) return navRender5(anyLive); // v272: the five-tab bar, only for an account Groups is switched on for. Everyone else: the bar below, unchanged.
   const it = [['all', '🏠', 'Games'], ['livepg', '📡', 'Live'], ['bets', '🧾', 'My Bets'], ['surv', '🛡️', 'Survivor'], ['win', '✅', 'Winning'], ['lose', '🔻', 'Losing']];
+  if (golfOn()) it.push(['golf', '⛳', 'Golf']); // money golf (feature session): only for an account the server switched it on for
   try { if (localStorage.getItem('odd-dash') === '1') it.push(['dash', '📊', 'Dashboard']); } catch (e) {}
   $('#bn').classList.toggle('n7', it.length > 6); $('#bn').innerHTML = it.map(([k, i, l]) => `<button class="${(k === 'livepg' ? VIEW === 'live' : k === 'bets' ? VIEW === 'bets' : k === 'surv' ? VIEW === 'surv' : VIEW === 'main' && FILT === k) ? 'on' : ''}" onclick="navGo('${k}')"><span>${i}</span>${l}${k === 'livepg' && anyLive ? '<i class="dot"></i>' : ''}</button>`).join('');
 }
+// ================= Money golf (feature session, Nov 17 2026; dark) =================
+// golfOn(): the server said money golf is on for THIS signed-in account (gate.js keeps `me.golfMoney` in 'odd-golfm'; env GOLF_MONEY_ENABLED / GOLF_MONEY_OWNER_ONLY /
+// GOLF_MONEY_TESTERS on the odds server, and the boot check of the sign-up dates). False for everybody else and in ?mirror=1: no menu item, pics/golf.js is never
+// requested, no /golf/ call. It sits BESIDE the Golf days of Groups (pics/golfday.js inside #ogrp) and Golf GPS; it changes neither. Its overlay is #ogolf.
+function golfOn() { try { return !/[?&]mirror=1/.test(location.search) && localStorage.getItem('odd-golfm') === '1' && !!localStorage.getItem('odd-tok'); } catch (e) { return false; } }
+let GOLFL = 0; const GOLFQ = [];
+function golfLoad(then) { // pics/golf.js, fetched the first time it is needed
+  if (window.oddGolf) { if (then) then(); return; } if (then) GOLFQ.push(then); if (GOLFL) return; GOLFL = 1;
+  const sc = document.createElement('script'); sc.src = 'golf.js?v=274'; sc.onload = () => { GOLFQ.splice(0).forEach((f) => { try { f(); } catch (e) {} }); }; sc.onerror = () => { GOLFL = 0; GOLFQ.length = 0; sc.remove(); }; document.head.appendChild(sc);
+}
+// Invite links https://<site>/?join=golf.<code> (the Groups / Calcutta pattern): read ONLY when the server says money golf exists (/acct/status `golfMoney`; gate.js calls
+// oddGolfSw BEFORE the Groups one, so main's grpCapture never sees a golf link). The code is kept for this tab (sessionStorage 'odd-gjoin') and taken out of the address bar.
+// A guest gets the sign-up sheet; once signed in with money golf on for the account, the join screen opens (golfJoinRun, from oddGolfChanged on every account read).
+const golfPend = (v) => { try { if (v === undefined) return sessionStorage.getItem('odd-gjoin') || ''; if (v) sessionStorage.setItem('odd-gjoin', v); else sessionStorage.removeItem('odd-gjoin'); } catch (e) {} return ''; };
+function golfCapture() { try { const u = new URL(location.href), m = /^golf\.([A-Za-z0-9]{4,40})$/.exec(u.searchParams.get('join') || ''); if (!m) return; golfPend(m[1]); u.searchParams.delete('join'); history.replaceState(history.state, '', u.pathname + (u.searchParams.toString() ? '?' + u.searchParams.toString() : '') + u.hash); } catch (e) {} }
+function golfJoinRun() { const c = golfPend(); if (!c || !golfOn()) return; golfPend(null); golfLoad(() => { if (golfOn() && window.oddGolf) window.oddGolf({ code: c }); }); }
+window.oddGolfSw = function () { golfCapture(); if (!golfPend()) return; setTimeout(() => { try { if (golfPend() && window.__oddLock === 'guest' && !lsg('odd-tok') && window.oddSignUp) window.oddSignUp('golf:' + golfPend()); } catch (e) {} }, 400); };
+window.oddGolfChanged = function (changed) { try { if (changed !== false) { if (!golfOn()) { const o = document.getElementById('ogolf'); if (o) o.remove(); } navMore(false); navRender(); } } catch (e) {} golfJoinRun(); };
+if (golfOn()) setTimeout(() => { golfLoad(); golfJoinRun(); }, 1500); // a known money-golf account: the overlay file is ready (it also re-opens a golf screen that was open)
+// ================= end money golf =================
 // ================= v272 GROUPS PHASE 2: the switch, the five-tab bar, invite links =================
 // grpOn(): the server said Groups is on for THIS signed-in account (gate.js keeps `me.groups` from /acct/me in 'odd-grp'; env GROUPS_ENABLED / GROUPS_OWNER_ONLY /
 // GROUPS_TESTERS on the odds server). False for everybody else and in ?mirror=1: no tab, no More sheet, pics/groups.js is never requested, no /groups call.
@@ -533,6 +554,7 @@ function navRender5(anyLive) {
 function navMore(open) {
   let e = document.getElementById('bnmore'); if (e) e.remove(); if (open === false) return;
   const it = [['surv', '🛡️', 'Survivor', 'Pick one team a week'], ['win', '✅', 'Winning', 'Games going your way'], ['lose', '🔻', 'Losing', 'Games going against you']];
+  if (golfOn()) it.push(['golf', '⛳', 'Golf', 'Games with money shown, pools, tournaments']); // money golf (feature session)
   try { if (localStorage.getItem('odd-dash') === '1') it.push(['dash', '📊', 'Dashboard', 'Owner only']); } catch (x) {}
   e = document.createElement('div'); e.id = 'bnmore'; e.setAttribute('role', 'dialog'); e.setAttribute('aria-label', 'More');
   e.innerHTML = '<div class="bnsheet"><div class="bnhd"><b>More</b><button class="bnx" onclick="navMore(false)" aria-label="Close">Close</button></div>' + it.map(([k, i, l, d]) => `<button class="bnrow${(k === 'surv' ? VIEW === 'surv' : VIEW === 'main' && FILT === k) && !grpOpen() ? ' on' : ''}" onclick="navGo('${k}')"><span>${i}</span><span class="bnl"><b>${l}</b><small>${d}</small></span><i>›</i></button>`).join('') + '</div>';
@@ -576,6 +598,7 @@ function navGo(k) {
   if (k === 'groups') { grpLoad(() => { if (grpOn()) window.OddGroups.open(); }); return; }
   if (grpOpen()) { try { window.OddGroups.close(); } catch (e) {} }
   if (k === 'livepg') { setView('live'); return; }
+  if (k === 'golf') { golfLoad(() => { if (golfOn() && window.oddGolf) window.oddGolf(); }); return; } // money golf (feature session)
   if (k === 'bets') { setView('bets'); return; }
   if (k === 'surv') { setView('surv'); return; }
   if (k === 'dash') { if (window.oddDash) window.oddDash(); return; }
@@ -3295,6 +3318,7 @@ loadAll();
 // Auto-update: when the app comes back to the front (or every 10 minutes) check for a newer version and reload into it
 const vnum = (x) => +((/(?:Pics|Oddable) v(\d+)/.exec(x) || [])[1] || 0);
 async function checkUpdate() {
+  if (document.getElementById('ogolf')) return; // money golf (feature session): never reload under the golf overlay
   if (document.querySelector('#odash,#ogrp')) return; // never reload under the owner dashboard or Groups
   try {
     const t = await (await fetch('index.html?c=' + Date.now(), { cache: 'no-store' })).text();
@@ -3312,6 +3336,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 setTimeout(() => { if (lsg('kal-id')) kalshiSync(false); }, 3000); setTimeout(loadBooks, 2500); setTimeout(() => lkPull(true), 3500); if (!window.MIRROR) setTimeout(checkUpdate, 4000); if (/[?&]add=1/.test(location.search)) setTimeout(() => { try { history.replaceState(null, '', location.pathname); } catch (e) {} setView('bets'); setTimeout(() => { addMenu(true); const m = document.getElementById('addmenu'); if (!m || m.hidden) betsRender(); }, 150); }, 1200); if (!window.MIRROR) setInterval(checkUpdate, 10 * 60 * 1000);
 if ('serviceWorker' in navigator) {
   const had = !!navigator.serviceWorker.controller; let rl = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (document.getElementById('ogolf')) rl = true; }); // money golf (feature session): registered before main's listener below, so it runs first; no reload under the golf overlay
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((r) => { r.update().catch(() => {}); const up = () => { if (!document.hidden) r.update().catch(() => {}); }; document.addEventListener('visibilitychange', up); setInterval(up, 300000); }).catch(() => {});
   navigator.serviceWorker.addEventListener('controllerchange', () => { if (had && !rl && !document.querySelector('#odash,#ogrp')) { rl = true; location.reload(); } });
 }
@@ -3327,6 +3352,7 @@ if ('serviceWorker' in navigator) {
     d = e.touches[0].clientY - y0;
     if (d > 0 && window.scrollY <= 0) set(Math.min(d * 0.5, 70), d > 110 ? 'Release to refresh' : '↓ Pull to refresh'); else set(0);
   }, { passive: true });
+  window.addEventListener('touchstart', () => { if (document.getElementById('ogolf')) y0 = null; }, { passive: true }); // money golf (feature session): runs after main's touchstart above; no pull-to-refresh under the golf overlay
   window.addEventListener('touchend', async () => {
     if (y0 === null) return;
     const go = d > 110; y0 = null;

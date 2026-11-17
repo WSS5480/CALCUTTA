@@ -1,0 +1,22 @@
+{
+  "_note": "HAND-BUILT test fixture in the shape documented by open-source ESPN golf parsers (status.position.displayName, status.thru, status.teeTime, status.type.name CUT/WD, statistics[name=scoreToPar], linescores[] per round with period/value/displayValue and nested hole linescores, sortOrder, earnings). NOT a captured live response: the sandbox cannot reach ESPN.",
+  "events": [{
+    "id": "401999001", "name": "Test Classic", "date": "2026-11-19T12:00Z", "endDate": "2026-11-22T23:00Z",
+    "status": { "type": { "name": "STATUS_IN_PROGRESS", "state": "in" } },
+    "competitions": [{
+      "status": { "period": 3, "type": { "state": "in" } },
+      "competitors": [
+        { "id": "11", "sortOrder": 2, "athlete": { "displayName": "Ann Alpha" }, "score": { "displayValue": "-8" }, "status": { "position": { "displayName": "T2" }, "thru": 12, "teeTime": "2026-11-21T14:10Z", "type": { "name": "STATUS_IN_PROGRESS" } },
+          "linescores": [ { "period": 1, "value": 68, "displayValue": "-4", "linescores": [{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}] }, { "period": 2, "value": 70, "displayValue": "-2" }, { "period": 3, "value": 34, "displayValue": "-2", "linescores": [{},{},{},{},{},{},{},{},{},{},{},{}] } ] },
+        { "id": "12", "sortOrder": 1, "athlete": { "displayName": "Bea Bravo" }, "score": "-10", "status": { "position": { "displayName": "1" }, "thru": 18, "teeTime": "2026-11-21T13:00Z" },
+          "linescores": [ { "period": 1, "value": 66, "displayValue": "-6" }, { "period": 2, "value": 70, "displayValue": "-2" }, { "period": 3, "value": 70, "displayValue": "-2" } ] },
+        { "id": "13", "sortOrder": 70, "athlete": { "displayName": "Cal Cutline" }, "score": { "displayValue": "+5" }, "status": { "position": { "displayName": "CUT" }, "type": { "name": "STATUS_CUT" } },
+          "statistics": [ { "name": "scoreToPar", "displayValue": "+5" } ],
+          "linescores": [ { "period": 1, "value": 75, "displayValue": "+3" }, { "period": 2, "value": 74, "displayValue": "+2" } ] },
+        { "id": "14", "sortOrder": 80, "athlete": { "displayName": "Dee Done" }, "status": { "position": { "displayName": "WD" }, "type": { "name": "STATUS_WITHDRAWN" }, "teeTime": "2026-11-19T12:40Z" }, "linescores": [] },
+        { "id": "15", "sortOrder": 3, "athlete": { "displayName": "Eve Even" }, "score": { "displayValue": "E" }, "earnings": 0, "status": { "position": { "displayName": "T40" }, "thru": { "value": 9 }, "teeTime": "2026-11-21T15:00Z" },
+          "linescores": [ { "period": 1, "value": 72, "displayValue": "E" }, { "period": 2, "value": 72, "displayValue": "E" } ] }
+      ]
+    }]
+  }]
+}

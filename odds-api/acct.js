@@ -253,5 +253,13 @@ const phoneEmail = (id) => crypto.createHmac('sha256', KEY()).update('phoneid|' 
 function ownerOk(req) { const e = verify(req.headers['x-token']); return !!e && dashOk(e, req); }
 // Groups (groups.js): who is signed in (the account id inside a valid token, or null). Never sent to other players.
 function who(req) { if (!on()) return null; const e = verify(req.headers['x-token']); if (!e) return null; if (e === 'owner' && !OWNER_PIN()) return null; return e; }
+// Money golf (feature session, Nov 17 2026; dark). Two ADDED wrappers, main's gFlag and handle above are untouched. With GOLF_MONEY_ENABLED unset (or anything
+// but exactly "1") they return main's answer unchanged: the very same `me` object, and /acct/status exactly as main sends it. With "1" AND golf-gate.js on (the boot
+// check passed): `me` gets golfMoney: true for an account the golf switches let in (GOLF_MONEY_OWNER_ONLY / GOLF_MONEY_TESTERS), and /acct/status gets
+// golfMoney: true (money golf exists: the phone keeps ?join=golf.<code> links). The status field is ADDED to whatever main's handle sent, so it composes with
+// any other added status flag (Calcutta, pickleball) instead of replacing it.
+const gmOn = (e) => { if (process.env.GOLF_MONEY_ENABLED !== '1') return false; try { const GG = require('./golf-gate'); return e === undefined ? GG.on() : GG.onFor(e); } catch (er) { return false; } };
+const gFlagG0 = gFlag; gFlag = function (me, e) { const m = gFlagG0(me, e); return m && gmOn(e || null) ? Object.assign({}, m, { golfMoney: true }) : m; }; // eslint-disable-line no-func-assign
+const handleG0 = handle; handle = function (req, res) { if (process.env.GOLF_MONEY_ENABLED === '1' && String(req.url).split('?')[0] === '/acct/status' && gmOn()) { const end0 = res.end; res.end = function (b) { try { const j = JSON.parse(b); if (j && typeof j === 'object' && !Array.isArray(j)) b = JSON.stringify(Object.assign(j, { golfMoney: true })); } catch (er) {} return end0.call(this, b); }; } return handleG0(req, res); }; // eslint-disable-line no-func-assign
 module.exports = { gFlag, guestMode, expired, handle, check, on, phoneEmail, ownerOk, ma, maReady: () => !!(URL_() && SECRET()), who, isOwnerPhone, namesGet, ownerName: OWNER_NAME,
   tokenAcct, revoke, revLoad, mint, shape, cleanRef, uncache: (e) => CACHE.delete(e) }; // v271 (second line): for sync.js (token sync) and recover.js // ma / maReady: courts.js reads the app settings from My Apps; who / isOwnerPhone / namesGet / ownerName: groups.js

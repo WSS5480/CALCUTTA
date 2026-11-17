@@ -1,0 +1,23 @@
+{
+ "_note": "HAND-BUILT in the list shape typed by @opengolfapi/client 0.1.0 CourseSummary {id, course_name, city, state, lat, lng, par_total, holes_count}. NOT a captured live response.",
+ "courses": [
+  {
+   "id": "og-123",
+   "course_name": "Palm Valley Golf Club",
+   "city": "McAllen",
+   "state": "TX",
+   "lat": 26.2,
+   "lng": -98.3,
+   "par_total": 72,
+   "holes_count": 18
+  },
+  {
+   "id": "og-456",
+   "course_name": "Champion Lakes",
+   "city": "Mission",
+   "state": "TX",
+   "par_total": 71,
+   "holes_count": 18
+  }
+ ]
+}

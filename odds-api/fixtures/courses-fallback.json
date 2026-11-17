@@ -1,0 +1,2425 @@
+{
+"note": "Sample courses saved in the app. Used ONLY when the live course list (OpenGolfAPI) cannot be reached. Every number was copied from OpenGolfAPI answers on Nov 16 2026 (preview coursecheck log); tees without a hole list had no complete, checked hole list in the directory.",
+"license": "ODbL-1.0",
+"attribution": "Course data: OpenGolfAPI contributors (ODbL)",
+"courses": [
+{
+"extId": "fb-01",
+"name": "McAllen Country Club",
+"city": "McAllen",
+"state": "TX",
+"area": "Rio Grande Valley",
+"tees": [
+{
+"key": "white-male",
+"name": "White",
+"color": "white",
+"gender": "Male",
+"rating": 67.4,
+"slope": 115,
+"par": 71,
+"yards": 6528,
+"holes": [
+{
+"n": 1,
+"par": 4,
+"hcp": 17,
+"yards": 270
+},
+{
+"n": 2,
+"par": 3,
+"hcp": 15,
+"yards": 130
+},
+{
+"n": 3,
+"par": 5,
+"hcp": 7,
+"yards": 450
+},
+{
+"n": 4,
+"par": 4,
+"hcp": 3,
+"yards": 370
+},
+{
+"n": 5,
+"par": 4,
+"hcp": 5,
+"yards": 375
+},
+{
+"n": 6,
+"par": 5,
+"hcp": 11,
+"yards": 430
+},
+{
+"n": 7,
+"par": 4,
+"hcp": 1,
+"yards": 410
+},
+{
+"n": 8,
+"par": 3,
+"hcp": 13,
+"yards": 140
+},
+{
+"n": 9,
+"par": 4,
+"hcp": 9,
+"yards": 268
+},
+{
+"n": 10,
+"par": 4,
+"hcp": 6,
+"yards": 268
+},
+{
+"n": 11,
+"par": 5,
+"hcp": 14,
+"yards": 439
+},
+{
+"n": 12,
+"par": 4,
+"hcp": 12,
+"yards": 312
+},
+{
+"n": 13,
+"par": 3,
+"hcp": 16,
+"yards": 120
+},
+{
+"n": 14,
+"par": 4,
+"hcp": 4,
+"yards": 370
+},
+{
+"n": 15,
+"par": 3,
+"hcp": 18,
+"yards": 145
+},
+{
+"n": 16,
+"par": 4,
+"hcp": 2,
+"yards": 350
+},
+{
+"n": 17,
+"par": 4,
+"hcp": 10,
+"yards": 380
+},
+{
+"n": 18,
+"par": 4,
+"hcp": 8,
+"yards": 355
+}
+]
+},
+{
+"key": "gold-male",
+"name": "Gold",
+"color": "gold",
+"gender": "Male",
+"rating": 71.9,
+"slope": 122,
+"par": 71,
+"yards": 6454,
+"holes": []
+},
+{
+"key": "blue-male",
+"name": "Blue",
+"color": "blue",
+"gender": "Male",
+"rating": 69.1,
+"slope": 118,
+"par": 71,
+"yards": 5946,
+"holes": [
+{
+"n": 1,
+"par": 4,
+"hcp": 17,
+"yards": 271
+},
+{
+"n": 2,
+"par": 3,
+"hcp": 15,
+"yards": 145
+},
+{
+"n": 3,
+"par": 5,
+"hcp": 7,
+"yards": 456
+},
+{
+"n": 4,
+"par": 4,
+"hcp": 3,
+"yards": 378
+},
+{
+"n": 5,
+"par": 4,
+"hcp": 5,
+"yards": 383
+},
+{
+"n": 6,
+"par": 5,
+"hcp": 11,
+"yards": 443
+},
+{
+"n": 7,
+"par": 4,
+"hcp": 1,
+"yards": 429
+},
+{
+"n": 8,
+"par": 3,
+"hcp": 13,
+"yards": 141
+},
+{
+"n": 9,
+"par": 4,
+"hcp": 9,
+"yards": 339
+},
+{
+"n": 10,
+"par": 4,
+"hcp": 6,
+"yards": 281
+},
+{
+"n": 11,
+"par": 5,
+"hcp": 14,
+"yards": 512
+},
+{
+"n": 12,
+"par": 4,
+"hcp": 12,
+"yards": 316
+},
+{
+"n": 13,
+"par": 3,
+"hcp": 16,
+"yards": 154
+},
+{
+"n": 14,
+"par": 4,
+"hcp": 4,
+"yards": 401
+},
+{
+"n": 15,
+"par": 3,
+"hcp": 18,
+"yards": 154
+},
+{
+"n": 16,
+"par": 4,
+"hcp": 2,
+"yards": 377
+},
+{
+"n": 17,
+"par": 4,
+"hcp": 10,
+"yards": 389
+},
+{
+"n": 18,
+"par": 4,
+"hcp": 8,
+"yards": 377
+}
+]
+},
+{
+"key": "red-female",
+"name": "Red",
+"color": "red",
+"gender": "Female",
+"rating": 70.8,
+"slope": 121,
+"par": 71,
+"yards": 5180,
+"holes": [
+{
+"n": 1,
+"par": 4,
+"hcp": 17,
+"yards": 249
+},
+{
+"n": 2,
+"par": 3,
+"hcp": 15,
+"yards": 126
+},
+{
+"n": 3,
+"par": 5,
+"hcp": 7,
+"yards": 365
+},
+{
+"n": 4,
+"par": 4,
+"hcp": 3,
+"yards": 300
+},
+{
+"n": 5,
+"par": 4,
+"hcp": 5,
+"yards": 363
+},
+{
+"n": 6,
+"par": 5,
+"hcp": 11,
+"yards": 370
+},
+{
+"n": 7,
+"par": 4,
+"hcp": 1,
+"yards": 372
+},
+{
+"n": 8,
+"par": 3,
+"hcp": 13,
+"yards": 128
+},
+{
+"n": 9,
+"par": 4,
+"hcp": 9,
+"yards": 263
+},
+{
+"n": 10,
+"par": 4,
+"hcp": 6,
+"yards": 266
+},
+{
+"n": 11,
+"par": 5,
+"hcp": 14,
+"yards": 419
+},
+{
+"n": 12,
+"par": 4,
+"hcp": 12,
+"yards": 295
+},
+{
+"n": 13,
+"par": 3,
+"hcp": 16,
+"yards": 112
+},
+{
+"n": 14,
+"par": 4,
+"hcp": 4,
+"yards": 339
+},
+{
+"n": 15,
+"par": 3,
+"hcp": 18,
+"yards": 142
+},
+{
+"n": 16,
+"par": 4,
+"hcp": 2,
+"yards": 348
+},
+{
+"n": 17,
+"par": 4,
+"hcp": 10,
+"yards": 375
+},
+{
+"n": 18,
+"par": 4,
+"hcp": 8,
+"yards": 318
+}
+]
+}
+]
+},
+{
+"extId": "fb-02",
+"name": "Palm View Golf Course",
+"city": "McAllen",
+"state": "TX",
+"area": "Rio Grande Valley",
+"tees": [
+{
+"key": "black-male",
+"name": "Black",
+"color": "black",
+"gender": "Male",
+"rating": 72.2,
+"slope": 125,
+"par": 72,
+"yards": 6783,
+"holes": []
+},
+{
+"key": "blue-male",
+"name": "Blue",
+"color": "blue",
+"gender": "Male",
+"rating": 71.2,
+"slope": 119,
+"par": 72,
+"yards": 6384,
+"holes": []
+},
+{
+"key": "white-male",
+"name": "White",
+"color": "white",
+"gender": "Male",
+"rating": 67.6,
+"slope": 111,
+"par": 72,
+"yards": 5814,
+"holes": []
+},
+{
+"key": "red-female",
+"name": "Red",
+"color": "red",
+"gender": "Female",
+"rating": 67.7,
+"slope": 106,
+"par": 72,
+"yards": 4816,
+"holes": []
+}
+]
+},
+{
+"extId": "fb-03",
+"name": "Tierra Del Sol Golf Club",
+"city": "Pharr",
+"state": "TX",
+"area": "Rio Grande Valley",
+"tees": [
+{
+"key": "blue-male",
+"name": "Blue",
+"color": "blue",
+"gender": "Male",
+"rating": 72,
+"slope": 118,
+"par": 72,
+"yards": 6827,
+"holes": []
+},
+{
+"key": "white-male",
+"name": "White",
+"color": "white",
+"gender": "Male",
+"rating": 69.9,
+"slope": 113,
+"par": 72,
+"yards": 6266,
+"holes": []
+},
+{
+"key": "gold-male",
+"name": "Gold",
+"color": "gold",
+"gender": "Male",
+"rating": 69,
+"slope": 110,
+"par": 72,
+"yards": 5820,
+"holes": []
+},
+{
+"key": "red-female",
+"name": "Red",
+"color": "red",
+"gender": "Female",
+"rating": 70.1,
+"slope": 114,
+"par": 72,
+"yards": 5266,
+"holes": []
+}
+]
+},
+{
+"extId": "fb-04",
+"name": "Los Lagos Municipal Golf Course",
+"city": "Edinburg",
+"state": "TX",
+"area": "Rio Grande Valley",
+"tees": [
+{
+"key": "black-male",
+"name": "Black",
+"color": "black",
+"gender": "Male",
+"rating": 75.5,
+"slope": 137,
+"par": 72,
+"yards": 7188,
+"holes": []
+}
+]
+},
+{
+"extId": "fb-05",
+"name": "Tierra Santa Golf Club",
+"city": "Weslaco",
+"state": "TX",
+"area": "Rio Grande Valley",
+"tees": [
+{
+"key": "black-male",
+"name": "Black",
+"color": "black",
+"gender": "Male",
+"rating": 73.6,
+"slope": 124,
+"par": 72,
+"yards": 7139,
+"holes": []
+},
+{
+"key": "blue-male",
+"name": "Blue",
+"color": "blue",
+"gender": "Male",
+"rating": 70.8,
+"slope": 119,
+"par": 72,
+"yards": 6601,
+"holes": []
+},
+{
+"key": "white-male",
+"name": "White",
+"color": "white",
+"gender": "Male",
+"rating": 68.2,
+"slope": 110,
+"par": 72,
+"yards": 6045,
+"holes": []
+},
+{
+"key": "red-female",
+"name": "Red",
+"color": "red",
+"gender": "Female",
+"rating": 71.3,
+"slope": 121,
+"par": 72,
+"yards": 5283,
+"holes": []
+}
+]
+},
+{
+"extId": "fb-06",
+"name": "Tony Butler Golf Course",
+"city": "Harlingen",
+"state": "TX",
+"area": "Rio Grande Valley",
+"tees": [
+{
+"key": "blue-male",
+"name": "Blue",
+"color": "blue",
+"gender": "Male",
+"rating": 70.5,
+"slope": 128,
+"par": 71,
+"yards": 6320,
+"holes": []
+},
+{
+"key": "white-male",
+"name": "White",
+"color": "white",
+"gender": "Male",
+"rating": 68.2,
+"slope": 122,
+"par": 71,
+"yards": 5837,
+"holes": []
+},
+{
+"key": "red-female",
+"name": "Red",
+"color": "red",
+"gender": "Female",
+"rating": 68.9,
+"slope": 112,
+"par": 71,
+"yards": 5113,
+"holes": []
+}
+]
+},
+{
+"extId": "fb-07",
+"name": "Treasure Hills Golf Club",
+"city": "Harlingen",
+"state": "TX",
+"area": "Rio Grande Valley",
+"tees": [
+{
+"key": "blue-male",
+"name": "Blue",
+"color": "blue",
+"gender": "Male",
+"rating": 74.8,
+"slope": 135,
+"par": 72,
+"yards": 6960,
+"holes": []
+},
+{
+"key": "white-male",
+"name": "White",
+"color": "white",
+"gender": "Male",
+"rating": 72.3,
+"slope": 130,
+"par": 72,
+"yards": 6424,
+"holes": []
+},
+{
+"key": "gold-male",
+"name": "Gold",
+"color": "gold",
+"gender": "Male",
+"rating": 67.2,
+"slope": 114,
+"par": 72,
+"yards": 5422,
+"holes": []
+},
+{
+"key": "red-female",
+"name": "Red",
+"color": "red",
+"gender": "Female",
+"rating": 71.3,
+"slope": 123,
+"par": 72,
+"yards": 5230,
+"holes": []
+}
+]
+},
+{
+"extId": "fb-08",
+"name": "Harlingen Country Club",
+"city": "Palm Valley",
+"state": "TX",
+"area": "Rio Grande Valley",
+"tees": [
+{
+"key": "black-male",
+"name": "Black",
+"color": "black",
+"gender": "Male",
+"rating": 71.6,
+"slope": 128,
+"par": 72,
+"yards": 6541,
+"holes": []
+},
+{
+"key": "blue-male",
+"name": "Blue",
+"color": "blue",
+"gender": "Male",
+"rating": 70.2,
+"slope": 123,
+"par": 72,
+"yards": 6261,
+"holes": []
+},
+{
+"key": "white-male",
+"name": "White",
+"color": "white",
+"gender": "Male",
+"rating": 67.1,
+"slope": 113,
+"par": 72,
+"yards": 5625,
+"holes": []
+},
+{
+"key": "white-female",
+"name": "White",
+"color": "white",
+"gender": "Female",
+"rating": 74.1,
+"slope": 128,
+"par": 72,
+"yards": 5625,
+"holes": []
+}
+]
+},
+{
+"extId": "fb-09",
+"name": "Brownsville Golf Center",
+"city": "Brownsville",
+"state": "TX",
+"area": "Rio Grande Valley",
+"tees": [
+{
+"key": "blue-male",
+"name": "Blue",
+"color": "blue",
+"gender": "Male",
+"rating": 69.9,
+"slope": 130,
+"par": 70,
+"yards": 6144,
+"holes": []
+},
+{
+"key": "white-male",
+"name": "White",
+"color": "white",
+"gender": "Male",
+"rating": 67.3,
+"slope": 116,
+"par": 70,
+"yards": 5652,
+"holes": []
+},
+{
+"key": "red-female",
+"name": "Red",
+"color": "red",
+"gender": "Female",
+"rating": 70.3,
+"slope": 120,
+"par": 70,
+"yards": 5091,
+"holes": []
+}
+]
+},
+{
+"extId": "fb-10",
+"name": "South Padre Island Golf Club",
+"city": "Laguna Vista",
+"state": "TX",
+"area": "Rio Grande Valley",
+"tees": [
+{
+"key": "black-male",
+"name": "Black",
+"color": "black",
+"gender": "Male",
+"rating": 72.8,
+"slope": 130,
+"par": 72,
+"yards": 6931,
+"holes": []
+},
+{
+"key": "blue-male",
+"name": "Blue",
+"color": "blue",
+"gender": "Male",
+"rating": 70.8,
+"slope": 127,
+"par": 72,
+"yards": 6291,
+"holes": []
+},
+{
+"key": "white-male",
+"name": "White",
+"color": "white",
+"gender": "Male",
+"rating": 67.6,
+"slope": 121,
+"par": 72,
+"yards": 5542,
+"holes": []
+},
+{
+"key": "red-female",
+"name": "Red",
+"color": "red",
+"gender": "Female",
+"rating": 71.6,
+"slope": 120,
+"par": 72,
+"yards": 5239,
+"holes": []
+}
+]
+},
+{
+"extId": "fb-11",
+"name": "Pebble Beach Golf Links",
+"city": "Pebble Beach",
+"state": "CA",
+"area": "",
+"tees": [
+{
+"key": "blue-male",
+"name": "Blue",
+"color": "blue",
+"gender": "Male",
+"rating": 74.9,
+"slope": 144,
+"par": 72,
+"yards": 6802,
+"holes": [
+{
+"n": 1,
+"par": 4,
+"hcp": 6,
+"yards": 378
+},
+{
+"n": 2,
+"par": 5,
+"hcp": 10,
+"yards": 509
+},
+{
+"n": 3,
+"par": 4,
+"hcp": 12,
+"yards": 397
+},
+{
+"n": 4,
+"par": 4,
+"hcp": 16,
+"yards": 333
+},
+{
+"n": 5,
+"par": 3,
+"hcp": 14,
+"yards": 189
+},
+{
+"n": 6,
+"par": 5,
+"hcp": 2,
+"yards": 498
+},
+{
+"n": 7,
+"par": 3,
+"hcp": 18,
+"yards": 107
+},
+{
+"n": 8,
+"par": 4,
+"hcp": 4,
+"yards": 416
+},
+{
+"n": 9,
+"par": 4,
+"hcp": 8,
+"yards": 483
+},
+{
+"n": 10,
+"par": 4,
+"hcp": 3,
+"yards": 444
+},
+{
+"n": 11,
+"par": 4,
+"hcp": 9,
+"yards": 370
+},
+{
+"n": 12,
+"par": 3,
+"hcp": 17,
+"yards": 202
+},
+{
+"n": 13,
+"par": 4,
+"hcp": 7,
+"yards": 401
+},
+{
+"n": 14,
+"par": 5,
+"hcp": 1,
+"yards": 559
+},
+{
+"n": 15,
+"par": 4,
+"hcp": 13,
+"yards": 393
+},
+{
+"n": 16,
+"par": 4,
+"hcp": 11,
+"yards": 400
+},
+{
+"n": 17,
+"par": 3,
+"hcp": 15,
+"yards": 182
+},
+{
+"n": 18,
+"par": 5,
+"hcp": 5,
+"yards": 541
+}
+]
+},
+{
+"key": "gold-male",
+"name": "Gold",
+"color": "gold",
+"gender": "Male",
+"rating": 73.4,
+"slope": 137,
+"par": 72,
+"yards": 6472,
+"holes": [
+{
+"n": 1,
+"par": 4,
+"hcp": 6,
+"yards": 349
+},
+{
+"n": 2,
+"par": 5,
+"hcp": 10,
+"yards": 491
+},
+{
+"n": 3,
+"par": 4,
+"hcp": 12,
+"yards": 381
+},
+{
+"n": 4,
+"par": 4,
+"hcp": 16,
+"yards": 308
+},
+{
+"n": 5,
+"par": 3,
+"hcp": 14,
+"yards": 145
+},
+{
+"n": 6,
+"par": 5,
+"hcp": 2,
+"yards": 490
+},
+{
+"n": 7,
+"par": 3,
+"hcp": 18,
+"yards": 98
+},
+{
+"n": 8,
+"par": 4,
+"hcp": 4,
+"yards": 388
+},
+{
+"n": 9,
+"par": 4,
+"hcp": 8,
+"yards": 463
+},
+{
+"n": 10,
+"par": 4,
+"hcp": 3,
+"yards": 428
+},
+{
+"n": 11,
+"par": 4,
+"hcp": 9,
+"yards": 349
+},
+{
+"n": 12,
+"par": 3,
+"hcp": 17,
+"yards": 187
+},
+{
+"n": 13,
+"par": 4,
+"hcp": 7,
+"yards": 390
+},
+{
+"n": 14,
+"par": 5,
+"hcp": 1,
+"yards": 545
+},
+{
+"n": 15,
+"par": 4,
+"hcp": 13,
+"yards": 375
+},
+{
+"n": 16,
+"par": 4,
+"hcp": 11,
+"yards": 378
+},
+{
+"n": 17,
+"par": 3,
+"hcp": 15,
+"yards": 176
+},
+{
+"n": 18,
+"par": 5,
+"hcp": 5,
+"yards": 531
+}
+]
+},
+{
+"key": "white-male",
+"name": "White",
+"color": "white",
+"gender": "Male",
+"rating": 71.7,
+"slope": 135,
+"par": 72,
+"yards": 6083,
+"holes": [
+{
+"n": 1,
+"par": 4,
+"hcp": 6,
+"yards": 337
+},
+{
+"n": 2,
+"par": 5,
+"hcp": 10,
+"yards": 458
+},
+{
+"n": 3,
+"par": 4,
+"hcp": 12,
+"yards": 340
+},
+{
+"n": 4,
+"par": 4,
+"hcp": 16,
+"yards": 295
+},
+{
+"n": 5,
+"par": 3,
+"hcp": 14,
+"yards": 134
+},
+{
+"n": 6,
+"par": 5,
+"hcp": 2,
+"yards": 465
+},
+{
+"n": 7,
+"par": 3,
+"hcp": 18,
+"yards": 94
+},
+{
+"n": 8,
+"par": 4,
+"hcp": 4,
+"yards": 364
+},
+{
+"n": 9,
+"par": 4,
+"hcp": 8,
+"yards": 436
+},
+{
+"n": 10,
+"par": 4,
+"hcp": 3,
+"yards": 408
+},
+{
+"n": 11,
+"par": 4,
+"hcp": 9,
+"yards": 338
+},
+{
+"n": 12,
+"par": 3,
+"hcp": 17,
+"yards": 176
+},
+{
+"n": 13,
+"par": 4,
+"hcp": 7,
+"yards": 370
+},
+{
+"n": 14,
+"par": 5,
+"hcp": 1,
+"yards": 490
+},
+{
+"n": 15,
+"par": 4,
+"hcp": 13,
+"yards": 338
+},
+{
+"n": 16,
+"par": 4,
+"hcp": 11,
+"yards": 368
+},
+{
+"n": 17,
+"par": 3,
+"hcp": 15,
+"yards": 166
+},
+{
+"n": 18,
+"par": 5,
+"hcp": 5,
+"yards": 506
+}
+]
+}
+]
+},
+{
+"extId": "fb-12",
+"name": "Black At Bethpage State Park Golf Course",
+"city": "Farmingdale",
+"state": "NY",
+"area": "",
+"tees": [
+{
+"key": "championship-male",
+"name": "Championship",
+"color": "championship",
+"gender": "Male",
+"rating": 77.5,
+"slope": 155,
+"par": 71,
+"yards": 7465,
+"holes": [
+{
+"n": 1,
+"par": 4,
+"hcp": 7,
+"yards": 430
+},
+{
+"n": 2,
+"par": 4,
+"hcp": 13,
+"yards": 389
+},
+{
+"n": 3,
+"par": 3,
+"hcp": 17,
+"yards": 230
+},
+{
+"n": 4,
+"par": 5,
+"hcp": 1,
+"yards": 517
+},
+{
+"n": 5,
+"par": 4,
+"hcp": 3,
+"yards": 478
+},
+{
+"n": 6,
+"par": 4,
+"hcp": 11,
+"yards": 408
+},
+{
+"n": 7,
+"par": 5,
+"hcp": 9,
+"yards": 553
+},
+{
+"n": 8,
+"par": 3,
+"hcp": 15,
+"yards": 210
+},
+{
+"n": 9,
+"par": 4,
+"hcp": 5,
+"yards": 460
+},
+{
+"n": 10,
+"par": 4,
+"hcp": 8,
+"yards": 502
+},
+{
+"n": 11,
+"par": 4,
+"hcp": 10,
+"yards": 435
+},
+{
+"n": 12,
+"par": 4,
+"hcp": 4,
+"yards": 516
+},
+{
+"n": 13,
+"par": 5,
+"hcp": 6,
+"yards": 608
+},
+{
+"n": 14,
+"par": 3,
+"hcp": 18,
+"yards": 158
+},
+{
+"n": 15,
+"par": 4,
+"hcp": 2,
+"yards": 484
+},
+{
+"n": 16,
+"par": 4,
+"hcp": 12,
+"yards": 490
+},
+{
+"n": 17,
+"par": 3,
+"hcp": 14,
+"yards": 207
+},
+{
+"n": 18,
+"par": 4,
+"hcp": 16,
+"yards": 411
+}
+]
+},
+{
+"key": "regulation-male",
+"name": "Regulation",
+"color": "regulation",
+"gender": "Male",
+"rating": 74.2,
+"slope": 148,
+"par": 71,
+"yards": 6704,
+"holes": []
+},
+{
+"key": "forward-male",
+"name": "Forward",
+"color": "forward",
+"gender": "Male",
+"rating": 71.4,
+"slope": 144,
+"par": 71,
+"yards": 6220,
+"holes": [
+{
+"n": 1,
+"par": 4,
+"hcp": 7,
+"yards": 426
+},
+{
+"n": 2,
+"par": 4,
+"hcp": 13,
+"yards": 346
+},
+{
+"n": 3,
+"par": 3,
+"hcp": 17,
+"yards": 128
+},
+{
+"n": 4,
+"par": 5,
+"hcp": 1,
+"yards": 438
+},
+{
+"n": 5,
+"par": 4,
+"hcp": 3,
+"yards": 401
+},
+{
+"n": 6,
+"par": 4,
+"hcp": 11,
+"yards": 376
+},
+{
+"n": 7,
+"par": 5,
+"hcp": 9,
+"yards": 489
+},
+{
+"n": 8,
+"par": 3,
+"hcp": 15,
+"yards": 152
+},
+{
+"n": 9,
+"par": 4,
+"hcp": 5,
+"yards": 293
+},
+{
+"n": 10,
+"par": 4,
+"hcp": 8,
+"yards": 377
+},
+{
+"n": 11,
+"par": 4,
+"hcp": 10,
+"yards": 412
+},
+{
+"n": 12,
+"par": 4,
+"hcp": 4,
+"yards": 403
+},
+{
+"n": 13,
+"par": 5,
+"hcp": 6,
+"yards": 472
+},
+{
+"n": 14,
+"par": 3,
+"hcp": 18,
+"yards": 136
+},
+{
+"n": 15,
+"par": 4,
+"hcp": 2,
+"yards": 417
+},
+{
+"n": 16,
+"par": 4,
+"hcp": 12,
+"yards": 431
+},
+{
+"n": 17,
+"par": 3,
+"hcp": 14,
+"yards": 178
+},
+{
+"n": 18,
+"par": 4,
+"hcp": 16,
+"yards": 332
+}
+]
+}
+]
+},
+{
+"extId": "fb-13",
+"name": "Torrey Pines South Course",
+"city": "San Diego",
+"state": "CA",
+"area": "",
+"tees": [
+{
+"key": "black-male",
+"name": "Black",
+"color": "black",
+"gender": "Male",
+"rating": 78.8,
+"slope": 148,
+"par": 72,
+"yards": 7802,
+"holes": [
+{
+"n": 1,
+"par": 4,
+"hcp": 5,
+"yards": 451
+},
+{
+"n": 2,
+"par": 4,
+"hcp": 15,
+"yards": 389
+},
+{
+"n": 3,
+"par": 3,
+"hcp": 13,
+"yards": 201
+},
+{
+"n": 4,
+"par": 4,
+"hcp": 3,
+"yards": 490
+},
+{
+"n": 5,
+"par": 4,
+"hcp": 11,
+"yards": 454
+},
+{
+"n": 6,
+"par": 5,
+"hcp": 9,
+"yards": 564
+},
+{
+"n": 7,
+"par": 4,
+"hcp": 1,
+"yards": 462
+},
+{
+"n": 8,
+"par": 3,
+"hcp": 17,
+"yards": 177
+},
+{
+"n": 9,
+"par": 5,
+"hcp": 7,
+"yards": 615
+},
+{
+"n": 10,
+"par": 4,
+"hcp": 16,
+"yards": 454
+},
+{
+"n": 11,
+"par": 3,
+"hcp": 14,
+"yards": 225
+},
+{
+"n": 12,
+"par": 4,
+"hcp": 2,
+"yards": 505
+},
+{
+"n": 13,
+"par": 5,
+"hcp": 6,
+"yards": 621
+},
+{
+"n": 14,
+"par": 4,
+"hcp": 8,
+"yards": 437
+},
+{
+"n": 15,
+"par": 4,
+"hcp": 12,
+"yards": 517
+},
+{
+"n": 16,
+"par": 3,
+"hcp": 18,
+"yards": 227
+},
+{
+"n": 17,
+"par": 4,
+"hcp": 4,
+"yards": 443
+},
+{
+"n": 18,
+"par": 5,
+"hcp": 10,
+"yards": 570
+}
+]
+},
+{
+"key": "green-male",
+"name": "Green",
+"color": "green",
+"gender": "Male",
+"rating": 73.3,
+"slope": 134,
+"par": 72,
+"yards": 6635,
+"holes": [
+{
+"n": 1,
+"par": 4,
+"hcp": 5,
+"yards": 419
+},
+{
+"n": 2,
+"par": 4,
+"hcp": 15,
+"yards": 344
+},
+{
+"n": 3,
+"par": 3,
+"hcp": 13,
+"yards": 146
+},
+{
+"n": 4,
+"par": 4,
+"hcp": 3,
+"yards": 420
+},
+{
+"n": 5,
+"par": 4,
+"hcp": 11,
+"yards": 393
+},
+{
+"n": 6,
+"par": 5,
+"hcp": 9,
+"yards": 505
+},
+{
+"n": 7,
+"par": 4,
+"hcp": 1,
+"yards": 424
+},
+{
+"n": 8,
+"par": 3,
+"hcp": 17,
+"yards": 149
+},
+{
+"n": 9,
+"par": 5,
+"hcp": 7,
+"yards": 514
+},
+{
+"n": 10,
+"par": 4,
+"hcp": 16,
+"yards": 352
+},
+{
+"n": 11,
+"par": 3,
+"hcp": 14,
+"yards": 190
+},
+{
+"n": 12,
+"par": 4,
+"hcp": 2,
+"yards": 444
+},
+{
+"n": 13,
+"par": 5,
+"hcp": 6,
+"yards": 504
+},
+{
+"n": 14,
+"par": 4,
+"hcp": 8,
+"yards": 394
+},
+{
+"n": 15,
+"par": 4,
+"hcp": 12,
+"yards": 355
+},
+{
+"n": 16,
+"par": 3,
+"hcp": 18,
+"yards": 183
+},
+{
+"n": 17,
+"par": 4,
+"hcp": 4,
+"yards": 398
+},
+{
+"n": 18,
+"par": 5,
+"hcp": 10,
+"yards": 491
+}
+]
+},
+{
+"key": "white-male",
+"name": "White",
+"color": "white",
+"gender": "Male",
+"rating": 70.9,
+"slope": 128,
+"par": 72,
+"yards": 6145,
+"holes": [
+{
+"n": 1,
+"par": 4,
+"hcp": 5,
+"yards": 409
+},
+{
+"n": 2,
+"par": 4,
+"hcp": 15,
+"yards": 323
+},
+{
+"n": 3,
+"par": 3,
+"hcp": 13,
+"yards": 142
+},
+{
+"n": 4,
+"par": 4,
+"hcp": 3,
+"yards": 384
+},
+{
+"n": 5,
+"par": 4,
+"hcp": 11,
+"yards": 382
+},
+{
+"n": 6,
+"par": 5,
+"hcp": 9,
+"yards": 449
+},
+{
+"n": 7,
+"par": 4,
+"hcp": 1,
+"yards": 387
+},
+{
+"n": 8,
+"par": 3,
+"hcp": 17,
+"yards": 139
+},
+{
+"n": 9,
+"par": 5,
+"hcp": 7,
+"yards": 457
+},
+{
+"n": 10,
+"par": 4,
+"hcp": 16,
+"yards": 308
+},
+{
+"n": 11,
+"par": 3,
+"hcp": 14,
+"yards": 171
+},
+{
+"n": 12,
+"par": 4,
+"hcp": 2,
+"yards": 411
+},
+{
+"n": 13,
+"par": 5,
+"hcp": 6,
+"yards": 486
+},
+{
+"n": 14,
+"par": 4,
+"hcp": 8,
+"yards": 359
+},
+{
+"n": 15,
+"par": 4,
+"hcp": 12,
+"yards": 339
+},
+{
+"n": 16,
+"par": 3,
+"hcp": 18,
+"yards": 151
+},
+{
+"n": 17,
+"par": 4,
+"hcp": 4,
+"yards": 375
+},
+{
+"n": 18,
+"par": 5,
+"hcp": 10,
+"yards": 473
+}
+]
+}
+]
+},
+{
+"extId": "fb-14",
+"name": "Tpc Sawgrass The Players Stadium Course",
+"city": "Ponte Vedra Beach",
+"state": "FL",
+"area": "",
+"tees": [
+{
+"key": "the-players-male",
+"name": "The Players",
+"color": "the players",
+"gender": "Male",
+"rating": 76.8,
+"slope": 155,
+"par": 72,
+"yards": 7352,
+"holes": [
+{
+"n": 1,
+"par": 4,
+"hcp": 11,
+"yards": 424
+},
+{
+"n": 2,
+"par": 5,
+"hcp": 15,
+"yards": 555
+},
+{
+"n": 3,
+"par": 3,
+"hcp": 17,
+"yards": 182
+},
+{
+"n": 4,
+"par": 4,
+"hcp": 9,
+"yards": 387
+},
+{
+"n": 5,
+"par": 4,
+"hcp": 3,
+"yards": 469
+},
+{
+"n": 6,
+"par": 4,
+"hcp": 13,
+"yards": 413
+},
+{
+"n": 7,
+"par": 4,
+"hcp": 1,
+"yards": 450
+},
+{
+"n": 8,
+"par": 3,
+"hcp": 7,
+"yards": 236
+},
+{
+"n": 9,
+"par": 5,
+"hcp": 5,
+"yards": 601
+},
+{
+"n": 10,
+"par": 4,
+"hcp": 12,
+"yards": 419
+},
+{
+"n": 11,
+"par": 5,
+"hcp": 8,
+"yards": 573
+},
+{
+"n": 12,
+"par": 4,
+"hcp": 16,
+"yards": 365
+},
+{
+"n": 13,
+"par": 3,
+"hcp": 18,
+"yards": 183
+},
+{
+"n": 14,
+"par": 4,
+"hcp": 4,
+"yards": 485
+},
+{
+"n": 15,
+"par": 4,
+"hcp": 6,
+"yards": 470
+},
+{
+"n": 16,
+"par": 5,
+"hcp": 10,
+"yards": 537
+},
+{
+"n": 17,
+"par": 3,
+"hcp": 14,
+"yards": 141
+},
+{
+"n": 18,
+"par": 4,
+"hcp": 2,
+"yards": 462
+}
+]
+},
+{
+"key": "blue-male",
+"name": "Blue",
+"color": "blue",
+"gender": "Male",
+"rating": 73.9,
+"slope": 148,
+"par": 72,
+"yards": 6670,
+"holes": [
+{
+"n": 1,
+"par": 4,
+"hcp": 11,
+"yards": 394
+},
+{
+"n": 2,
+"par": 5,
+"hcp": 15,
+"yards": 507
+},
+{
+"n": 3,
+"par": 3,
+"hcp": 17,
+"yards": 160
+},
+{
+"n": 4,
+"par": 4,
+"hcp": 9,
+"yards": 359
+},
+{
+"n": 5,
+"par": 4,
+"hcp": 3,
+"yards": 446
+},
+{
+"n": 6,
+"par": 4,
+"hcp": 13,
+"yards": 360
+},
+{
+"n": 7,
+"par": 4,
+"hcp": 1,
+"yards": 407
+},
+{
+"n": 8,
+"par": 3,
+"hcp": 7,
+"yards": 195
+},
+{
+"n": 9,
+"par": 5,
+"hcp": 5,
+"yards": 546
+},
+{
+"n": 10,
+"par": 4,
+"hcp": 12,
+"yards": 392
+},
+{
+"n": 11,
+"par": 5,
+"hcp": 8,
+"yards": 519
+},
+{
+"n": 12,
+"par": 4,
+"hcp": 16,
+"yards": 332
+},
+{
+"n": 13,
+"par": 3,
+"hcp": 18,
+"yards": 156
+},
+{
+"n": 14,
+"par": 4,
+"hcp": 4,
+"yards": 436
+},
+{
+"n": 15,
+"par": 4,
+"hcp": 6,
+"yards": 421
+},
+{
+"n": 16,
+"par": 5,
+"hcp": 10,
+"yards": 486
+},
+{
+"n": 17,
+"par": 3,
+"hcp": 14,
+"yards": 128
+},
+{
+"n": 18,
+"par": 4,
+"hcp": 2,
+"yards": 426
+}
+]
+},
+{
+"key": "white-male",
+"name": "White",
+"color": "white",
+"gender": "Male",
+"rating": 70.8,
+"slope": 138,
+"par": 72,
+"yards": 6086,
+"holes": [
+{
+"n": 1,
+"par": 4,
+"hcp": 11,
+"yards": 360
+},
+{
+"n": 2,
+"par": 5,
+"hcp": 15,
+"yards": 469
+},
+{
+"n": 3,
+"par": 3,
+"hcp": 17,
+"yards": 134
+},
+{
+"n": 4,
+"par": 4,
+"hcp": 9,
+"yards": 324
+},
+{
+"n": 5,
+"par": 4,
+"hcp": 3,
+"yards": 422
+},
+{
+"n": 6,
+"par": 4,
+"hcp": 13,
+"yards": 333
+},
+{
+"n": 7,
+"par": 4,
+"hcp": 1,
+"yards": 382
+},
+{
+"n": 8,
+"par": 3,
+"hcp": 7,
+"yards": 168
+},
+{
+"n": 9,
+"par": 5,
+"hcp": 5,
+"yards": 522
+},
+{
+"n": 10,
+"par": 4,
+"hcp": 12,
+"yards": 351
+},
+{
+"n": 11,
+"par": 5,
+"hcp": 8,
+"yards": 469
+},
+{
+"n": 12,
+"par": 4,
+"hcp": 16,
+"yards": 296
+},
+{
+"n": 13,
+"par": 3,
+"hcp": 18,
+"yards": 141
+},
+{
+"n": 14,
+"par": 4,
+"hcp": 4,
+"yards": 377
+},
+{
+"n": 15,
+"par": 4,
+"hcp": 6,
+"yards": 366
+},
+{
+"n": 16,
+"par": 5,
+"hcp": 10,
+"yards": 470
+},
+{
+"n": 17,
+"par": 3,
+"hcp": 14,
+"yards": 115
+},
+{
+"n": 18,
+"par": 4,
+"hcp": 2,
+"yards": 387
+}
+]
+}
+]
+},
+{
+"extId": "fb-15",
+"name": "Pinehurst No. 2",
+"city": "Pinehurst",
+"state": "NC",
+"area": "",
+"tees": [
+{
+"key": "blue-male",
+"name": "Blue",
+"color": "blue",
+"gender": "Male",
+"rating": 73.7,
+"slope": 133,
+"par": 72,
+"yards": 6961,
+"holes": [
+{
+"n": 1,
+"par": 4,
+"hcp": 11,
+"yards": 393
+},
+{
+"n": 2,
+"par": 4,
+"hcp": 3,
+"yards": 439
+},
+{
+"n": 3,
+"par": 4,
+"hcp": 9,
+"yards": 350
+},
+{
+"n": 4,
+"par": 4,
+"hcp": 1,
+"yards": 474
+},
+{
+"n": 5,
+"par": 5,
+"hcp": 15,
+"yards": 508
+},
+{
+"n": 6,
+"par": 3,
+"hcp": 5,
+"yards": 203
+},
+{
+"n": 7,
+"par": 4,
+"hcp": 7,
+"yards": 393
+},
+{
+"n": 8,
+"par": 5,
+"hcp": 17,
+"yards": 469
+},
+{
+"n": 9,
+"par": 3,
+"hcp": 13,
+"yards": 174
+},
+{
+"n": 10,
+"par": 5,
+"hcp": 18,
+"yards": 580
+},
+{
+"n": 11,
+"par": 4,
+"hcp": 8,
+"yards": 455
+},
+{
+"n": 12,
+"par": 4,
+"hcp": 10,
+"yards": 419
+},
+{
+"n": 13,
+"par": 4,
+"hcp": 6,
+"yards": 375
+},
+{
+"n": 14,
+"par": 4,
+"hcp": 2,
+"yards": 433
+},
+{
+"n": 15,
+"par": 3,
+"hcp": 12,
+"yards": 183
+},
+{
+"n": 16,
+"par": 5,
+"hcp": 16,
+"yards": 513
+},
+{
+"n": 17,
+"par": 3,
+"hcp": 14,
+"yards": 185
+},
+{
+"n": 18,
+"par": 4,
+"hcp": 4,
+"yards": 415
+}
+]
+},
+{
+"key": "white-male",
+"name": "White",
+"color": "white",
+"gender": "Male",
+"rating": 70.7,
+"slope": 126,
+"par": 72,
+"yards": 6307,
+"holes": [
+{
+"n": 1,
+"par": 4,
+"hcp": 11,
+"yards": 376
+},
+{
+"n": 2,
+"par": 4,
+"hcp": 3,
+"yards": 411
+},
+{
+"n": 3,
+"par": 4,
+"hcp": 9,
+"yards": 330
+},
+{
+"n": 4,
+"par": 4,
+"hcp": 1,
+"yards": 434
+},
+{
+"n": 5,
+"par": 5,
+"hcp": 15,
+"yards": 462
+},
+{
+"n": 6,
+"par": 3,
+"hcp": 5,
+"yards": 178
+},
+{
+"n": 7,
+"par": 4,
+"hcp": 7,
+"yards": 385
+},
+{
+"n": 8,
+"par": 5,
+"hcp": 17,
+"yards": 440
+},
+{
+"n": 9,
+"par": 3,
+"hcp": 13,
+"yards": 148
+},
+{
+"n": 10,
+"par": 5,
+"hcp": 18,
+"yards": 455
+},
+{
+"n": 11,
+"par": 4,
+"hcp": 8,
+"yards": 375
+},
+{
+"n": 12,
+"par": 4,
+"hcp": 10,
+"yards": 360
+},
+{
+"n": 13,
+"par": 4,
+"hcp": 6,
+"yards": 358
+},
+{
+"n": 14,
+"par": 4,
+"hcp": 2,
+"yards": 419
+},
+{
+"n": 15,
+"par": 3,
+"hcp": 12,
+"yards": 170
+},
+{
+"n": 16,
+"par": 5,
+"hcp": 16,
+"yards": 478
+},
+{
+"n": 17,
+"par": 3,
+"hcp": 14,
+"yards": 162
+},
+{
+"n": 18,
+"par": 4,
+"hcp": 4,
+"yards": 366
+}
+]
+}
+]
+}
+]
+}

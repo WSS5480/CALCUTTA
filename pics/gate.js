@@ -502,6 +502,8 @@
   }
   function setMe(m) {
     me = m; early = null; if (!m) return; setTimeout(drawAcct, 0);
+    // Money golf (feature session, Nov 17 2026): the server says, on the same `me`, whether money golf is on for THIS account (odds-api/acct.js golfMoney). Not said = no menu item, no file, no call.
+    try { const gm = m.golfMoney === true ? '1' : null, gc = g('odd-golfm') !== gm; if (gc) s('odd-golfm', gm); if (window.oddGolfChanged) setTimeout(() => { try { window.oddGolfChanged(gc); } catch (e) {} }, 0); } catch (e) {}
     // v272 Groups phase 2: the server says, on the `me` this phone already gets, whether Groups is on for THIS account (odds-api/acct.js gFlag). Not said = no Groups: no tab, no file, no call.
     try { const gv = m.groups === true ? '1' : null; if (g('odd-grp') !== gv) s('odd-grp', gv); if (window.oddGroupsChanged) setTimeout(() => { try { window.oddGroupsChanged(); } catch (e) {} }, 0); } catch (e) {} setTimeout(() => { try { if (window.oddDays) window.oddDays(); } catch (e) {} }, 0);
     // v267 /?pay=1 (a renewal reminder): straight to the ONE pay screen. v270: time left = the early screen; time ended in guest mode = the pay sheet (it is not up by itself any more); GUEST_MODE=0 and ended = the subscribe wall is already up.
@@ -618,6 +620,7 @@
   async function status() { // -> true / false = is the gate on; throws when the server cannot be reached
     const r = await fetch(API + '/status', { cache: 'no-store', signal: AbortSignal.timeout(12000) }), j = await r.json(); const on = j.gate === true; s('odd-gate', on ? '1' : '0');
     if (typeof j.guest === 'boolean') { gmode = j.guest; s('odd-guest', gmode ? '1' : '0'); } else { gmode = GUEST_MODE; s('odd-guest', null); } // an older server does not say: the constant decides
+    if (j.golfMoney === true) { s('odd-gmsw', '1'); try { if (window.oddGolfSw) window.oddGolfSw(); } catch (e) {} } else if (g('odd-gmsw')) s('odd-gmsw', null); // money golf (feature session): it exists on the server (GOLF_MONEY_ENABLED=1, boot check passed); before the Groups line so a golf invite is kept
     if (j.groups === true) { s('odd-gsw', '1'); try { if (window.oddGroupsSw) window.oddGroupsSw(); } catch (e) {} } else if (g('odd-gsw')) { s('odd-gsw', null); s('odd-grp', null); } // v272: Groups exists on the server at all (GROUPS_ENABLED=1). Not said = dark: nothing Groups-related is kept or run
     return on;
   }

@@ -63,6 +63,9 @@ setInterval(plTick, 20 * 60 * 1000); setTimeout(plTick, 90 * 1000);
 // Groups (Phase 1, dark): light tick so the server re-reads running contests' group bets and their pregame prices before kickoff (groups.js spaces it: every
 // 5 min in game windows, else every 30). Does NOTHING unless GROUPS_ENABLED=1 (checked here and again inside tick()). Needs Supabase.
 if (process.env.SUPABASE_URL) { setInterval(() => { if (process.env.GROUPS_ENABLED !== '1') return; try { require('./groups').tick().catch((e) => console.error('groups tick:', e && e.message)); } catch (e) { console.error('groups tick:', e && e.message); } }, 5 * 60 * 1000); }
+// Money golf (feature session, Nov 17 2026; dark): with GOLF_MONEY_ENABLED unset (or anything but exactly "1") this line does nothing: no require, no timer, no read.
+// On: golf-gate.js asks golf.moneySwitch() once (it refuses, with a log line, until the sign-up dates are filled in: backfill-acctsince.js) and only then wires golf.
+if (process.env.GOLF_MONEY_ENABLED === '1') { try { require('./golf-gate').boot().catch((e) => console.error('golf boot:', e && e.message)); } catch (e) { console.error('golf boot:', e && e.message); } }
 // Free Render services sleep when idle; ping our own public URL so the tick keeps running (set KEEP_AWAKE=0 to turn off)
 if (process.env.RENDER_EXTERNAL_URL && process.env.KEEP_AWAKE !== '0') {
   setInterval(() => fetch(process.env.RENDER_EXTERNAL_URL + '/health').catch(() => {}), 10 * 60 * 1000);
@@ -93,6 +96,9 @@ http.createServer(async (req, res) => {
   if (req.url.startsWith('/betpush')) { try { if (await require('./betwatch').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"alerts error"}'); } } // v266 phone alerts for a player's bets: OFF unless BETPUSH_ENABLED=1
   if (req.url.startsWith('/courts')) { try { if (await require('./courts').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"court search error"}'); } }
   if (req.url.startsWith('/golfcourse')) { try { if (await require('./golfcourse').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"golf course error"}'); } } // v264 Golf GPS: /golfcourse/search, /holes, /mark, /flagreport
+  // Money golf (dark): /golf/<op> only (never /golfday, /golfcourse). Unset = this line does nothing and /golf/* answers what main answers (404). =1: golf-gate.js applies
+  // GOLF_MONEY_OWNER_ONLY / GOLF_MONEY_TESTERS and the boot check (blocked = 403 {off:true}, /golf/on = {on:false}, /golf/preview = 404), then golf.js handles it.
+  if (process.env.GOLF_MONEY_ENABLED === '1' && req.url.startsWith('/golf/')) { try { if (await require('./golf-gate').handle(req, res)) return; } catch (e) { console.error('golf:', e && e.message); res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"golf error"}'); } }
   // Groups (Phase 1, dark): every /groups/* answer is decided by the switches at the top of groups.js handle() (GROUPS_ENABLED, GROUPS_OWNER_ONLY, GROUPS_TESTERS).
   // If groups.js itself cannot load while Groups is off, the bet-status question still gets the safe "not in a group" answer (a failing status call must never block a bet).
   if (req.url.startsWith('/groups')) { try { if (await require('./groups').handle(req, res)) return; } catch (e) { console.error('groups:', e && e.message); res.setHeader('Access-Control-Allow-Origin', '*'); if (process.env.GROUPS_ENABLED !== '1' && req.url.split('?')[0] === '/groups/bet/status') return res.end('{"betLock":0,"canBet":false,"saved":false}'); res.statusCode = 500; return res.end('{"error":"groups error"}'); } }

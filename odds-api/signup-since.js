@@ -33,7 +33,8 @@ async function sinceSet(e, at) {
 //   3. BOOT GUARD: until that marker row exists nothing is stamped "on first look": an account with no stamp reads known: false (golf: "the sign-up date is
 //      not on file", it cannot sign for another team). After the backfill, a PHONE account with no stamp first reached Oddable after it, so it is stamped
 //      now, once (it can sign for another team SIGNER_MIN_DAYS later). Main's acct.js does not stamp at sign-up, so that first look is the stamp.
-//   Email accounts (My Apps) with no stamp: their start is acct.createdAt(account) when main supplies it; main does not, so they read "not on file".
+//   Email accounts (My Apps) with no stamp: their start is acct.createdAt(account) when main supplies it; main does not, so (review fix 1, Nov 17 2026) they
+//   are stamped now on first look, the same as phone accounts: they wait SIGNER_MIN_DAYS, then can sign. Before the backfill they still read "not on file".
 const BFROW = 'lock:acctsince:done'; let BF = { at: 0, v: null }, BFWARN = false, EMWARN = false;
 async function backfilled() {
   if (BF.v && BF.v.at) return BF.v; if (D.now() - BF.at < 30e3 && BF.at <= D.now()) return null;
@@ -49,8 +50,8 @@ async function sinceOf(e, now) {
   const bf = await backfilled(); if (!bf) return { t, known: false };
   if (e !== 'owner' && !/@phone\.oddable$/.test(String(e))) { // an EMAIL account (made on My Apps) with no stamp: its start is the My Apps creation time, never "joined today"
     const A = D.acct(); let c = 0; if (typeof A.createdAt === 'function') { try { c = Number(await A.createdAt(e)) || 0; } catch (er) {} }
-    if (!(c > 1.4e12)) { if (!EMWARN) { EMWARN = true; console.error('signup-since: acct.createdAt(account) missing or empty: email accounts with no sign-up stamp read "join date not on file"'); } return { t, known: false }; }
-    const at = Math.min(t, Math.max(c, N(bf.launch)));
+    if (!(c > 1.4e12) && !EMWARN) { EMWARN = true; console.error('signup-since: acct.createdAt(account) missing or empty: email accounts with no sign-up stamp are stamped now on first look, like phone accounts'); }
+    const at = c > 1.4e12 ? Math.min(t, Math.max(c, N(bf.launch))) : t; // no My Apps date: stamped NOW (review fix 1): errs toward "too new", a one-day wait, never "not on file" forever
     try { const got = Number(await sinceSet(e, at)); if (got > 1.4e12) return { t: Math.min(got, t), known: true }; } catch (er) {}
     return { t, known: false };
   }

@@ -7,7 +7,7 @@ const assert = require('assert'), fs = require('fs'), path = require('path'), { 
 const ROOT = path.join(__dirname, '..'), rd = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 let n = 0; const ok = (m) => { n++; console.log('  ok', m); };
 const A = require('./acct'), ME = { role: 'member', email: 'x@phone.oddable' };
-const status = () => new Promise((done) => { const res = { h: {}, statusCode: 0, setHeader(k, v) { this.h[k] = v; }, end(b) { done(JSON.parse(b)); } }; A.handle({ method: 'GET', url: '/acct/status', headers: {} }, res); });
+const status = (hd) => new Promise((done) => { const res = { h: {}, statusCode: 0, setHeader(k, v) { this.h[k] = v; }, end(b) { done(JSON.parse(b)); } }; A.handle({ method: 'GET', url: '/acct/status', headers: hd || {} }, res); });
 (async () => {
   // 1. everything unset: main's answers, and nothing golf is even loaded
   const s0 = await status(); assert.strictEqual(A.gFlag(ME, 'x@phone.oddable'), ME, 'the same object'); assert.strictEqual(A.gFlag(null, 'x'), null); assert.ok(!('golfMoney' in s0), JSON.stringify(s0));
@@ -39,6 +39,13 @@ const status = () => new Promise((done) => { const res = { h: {}, statusCode: 0,
   process.env.GOLF_MONEY_OWNER_ONLY = '1'; assert.strictEqual(A.gFlag(ME, 'x@phone.oddable'), ME, 'not the owner'); assert.strictEqual(A.gFlag(ME, 'owner').golfMoney, true, 'owner PIN'); assert.strictEqual(A.gFlag(ME, 'boss@phone.oddable').golfMoney, true, 'owner phone');
   r = await call('/golf/create', 'x@phone.oddable', {}); assert.deepStrictEqual([r.s, r.j.off], [403, true]); r = await call('/golf/preview', null, { code: 'ABCDEFGHJK' }); assert.strictEqual(r.s, 404, 'signed-out preview in owner-only mode');
   process.env.GOLF_MONEY_TESTERS = require('./limits').keyOf('x@phone.oddable'); assert.strictEqual(A.gFlag(ME, 'x@phone.oddable').golfMoney, true, 'a tester'); assert.deepStrictEqual((await call('/golf/on', 'x@phone.oddable')).j, { on: true });
+  // review fix 6: owner-only, /acct/status carries golfMoney ONLY for a request signed in as an allowed account (guests' phones never catch ?join=golf.)
+  process.env.MYAPPS_URL = 'https://myapps.test'; process.env.MYAPPS_SECRET = 'test-secret'; const tk = (e) => ({ 'x-token': A.mint(e) });
+  assert.ok(!('golfMoney' in (await status())), 'owner-only: no token, no flag'); assert.ok(!('golfMoney' in (await status(tk('y@phone.oddable')))), 'owner-only: an account not let in');
+  assert.ok(!('golfMoney' in (await status({ 'x-token': 'junk.sig' }))), 'a bad token'); assert.strictEqual((await status(tk('x@phone.oddable'))).golfMoney, true, 'a tester'); assert.strictEqual((await status(tk('boss@phone.oddable'))).golfMoney, true, 'the owner\'s phone');
+  delete process.env.GOLF_MONEY_OWNER_ONLY; assert.strictEqual((await status()).golfMoney, true, 'not owner-only: everyone (money golf exists)'); process.env.GOLF_MONEY_OWNER_ONLY = '1';
+  delete process.env.MYAPPS_URL; delete process.env.MYAPPS_SECRET; assert.ok(/if \(golfOn\(\)\) golfCapture\(\)/.test(rd('pics/index.html').split('\n').find((l) => l.startsWith('window.oddGolfChanged'))), 'allowed accounts catch the link from me.golfMoney');
+  ok('owner-only: /acct/status says golfMoney only to a signed-in account the switches let in (tester, owner phone), never to a guest or another account; the phone catches the link from `me` instead');
   delete process.env.GOLF_MONEY_TESTERS; delete process.env.GOLF_MONEY_OWNER_ONLY;
   for (const v of ['0', 'true', ' 1', '']) { process.env.GOLF_MONEY_ENABLED = v; assert.strictEqual(A.gFlag(ME, 'x'), ME, v); assert.strictEqual(GG.onFor('x'), false, v); assert.ok(!('golfMoney' in (await status())), v); }
   delete process.env.GOLF_MONEY_ENABLED; ok('GOLF_MONEY_OWNER_ONLY / GOLF_MONEY_TESTERS decide like Groups and Calcutta; only exactly "1" switches it on');
@@ -49,7 +56,11 @@ const status = () => new Promise((done) => { const res = { h: {}, statusCode: 0,
   ['checkUpdate', 'controllerchange', 'touchstart'].forEach((w) => assert.ok(ix.split('\n').some((l) => l.includes('ogolf') && l.includes(w === 'checkUpdate' ? "getElementById('ogolf')) return" : w)), w)); assert.ok(sy.includes("document.getElementById('ogolf') && sig(gatherFrom(local)) !== sig(gather())"));
   ok('phone: the overlay loads only through golfLoad() when gate.js kept `me.golfMoney`; no script tag; ?mirror=1 never; no reload / pull-to-refresh / sync reload under #ogolf');
   // 7. no clash with main: routes, element ids, document-level click attributes, storage keys, globals
-  const gj = rd('pics/golf.js'), mainPics = fs.readdirSync(path.join(ROOT, 'pics')).filter((f) => /\.(js|html)$/.test(f) && f !== 'golf.js').map((f) => require('child_process').execFileSync('git', ['show', '8af1f79:pics/' + f], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64e6 })).join('\n'); // MAIN's files (8af1f79), not this branch's added lines
+  // MAIN's files at the merge base (git merge-base HEAD origin/main, or GOLF_BASE), not this branch's added lines; plus every pics file that is NOT at the
+  // base (other dark features merged beside golf, e.g. calcutta.js / localevents.js), read from the tree, so their ids are checked too.
+  const cp = require('child_process'), BASE = process.env.GOLF_BASE || cp.execFileSync('git', ['merge-base', 'HEAD', 'origin/main'], { cwd: ROOT, encoding: 'utf8' }).trim();
+  const atBase = new Set(cp.execFileSync('git', ['ls-tree', '--name-only', BASE, 'pics/'], { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean).map((f) => f.slice(5)));
+  const gj = rd('pics/golf.js'), mainPics = fs.readdirSync(path.join(ROOT, 'pics')).filter((f) => /\.(js|html)$/.test(f) && f !== 'golf.js').map((f) => atBase.has(f) ? cp.execFileSync('git', ['show', BASE + ':pics/' + f], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64e6 }) : rd('pics/' + f)).join('\n');
   ['data-team', 'data-gt', 'data-gp', 'data-lm', 'data-lmmode', 'data-ga'].forEach((a) => assert.ok(!new RegExp(a + '[=\\]"\']').test(gj), a));
   const ids = new Set(); (gj.match(/id="([A-Za-z][\w-]*)"/g) || []).concat(gj.match(/id = '([A-Za-z][\w-]*)'/g) || []).forEach((x) => ids.add(/['"]([A-Za-z][\w-]*)['"]/.exec(x)[1])); (gj.match(/getElementById\('([A-Za-z][\w-]*)'/g) || []).forEach((x) => ids.add(/'([A-Za-z][\w-]*)'/.exec(x)[1]));
   const clash = [...ids].filter((i) => new RegExp('id="' + i + '"|id=\'' + i + '\'|getElementById\\(\'' + i + '\'\\)|\\.id = \'' + i + '\'|#' + i + '[\\s,{.:\\[>)\'"]').test(mainPics)); assert.deepStrictEqual(clash, [], 'element ids also used by main: ' + clash);
@@ -60,7 +71,8 @@ const status = () => new Promise((done) => { const res = { h: {}, statusCode: 0,
   // 8. main's code preserved; no code after a // comment; the rules sheet; golfday untouched
   require('child_process').execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'golf', 'main-preserved.js')], { cwd: ROOT, stdio: 'pipe' }); ok('main\'s code preserved in every touched file, and no code hides after a // comment (scripts/golf/main-preserved.js)');
   assert.ok(/never collects, holds or pays money/.test(gj.slice(gj.indexOf('rule: {'), gj.indexOf('heads:'))), 'the rules sheet says it'); ok('the rules sheet (ⓘ The rule) says Oddable never collects, holds or pays money');
-  const ch = require('child_process').execFileSync('git', ['diff', '--name-only', '8af1f79', '--', 'odds-api/golfday.js', 'pics/golfday.js', 'odds-api/golfcourse.js', 'pics/golfgps.js', 'pics/golfgps.html', 'pics/groups.js', 'odds-api/groups.js', 'odds-api/limits.js', 'odds-api/pairing.js'], { cwd: ROOT, encoding: 'utf8' }).trim(); assert.strictEqual(ch, '', ch);
-  ok('golfday.js (both), golfcourse.js, Golf GPS, groups.js (both), limits.js and pairing.js are byte for byte main\'s');
+  // relative to the base: unchanged, or changed only by another feature (no added line of the diff mentions money golf)
+  const ch = cp.execFileSync('git', ['diff', '--no-color', '-U0', BASE, '--', 'odds-api/golfday.js', 'pics/golfday.js', 'odds-api/golfcourse.js', 'pics/golfgps.js', 'pics/golfgps.html', 'pics/groups.js', 'odds-api/groups.js', 'odds-api/limits.js', 'odds-api/pairing.js'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64e6 }).split('\n').filter((l) => /^[+-][^+-]/.test(l) && /GOLF_MONEY|golf-gate|signup-since|oddGolf|OddGolf\b|ogolf|odd-golfm|lock:golf:/.test(l)); assert.deepStrictEqual(ch, [], ch.join('\n'));
+  ok('golfday.js (both), golfcourse.js, Golf GPS, groups.js (both), limits.js and pairing.js: money golf changed no line of them (base ' + BASE.slice(0, 7) + ')');
   console.log('PASS ' + n + ' money-golf-on-main checks'); process.exit(0);
 })().catch((e) => { console.error('FAIL', e); process.exit(1); });

@@ -1665,7 +1665,7 @@ Money golf sits BESIDE main's casual Golf days (golfday.js, v273, `/golfday`, in
 
 ### Decisions (2026-11-17, golf feature session)
 - Sign-up date source on main = signup-since.js (the stats code, same row), because main stamps nothing and the full stats feature was not to be brought. Reason: owner GOLF-AGE needs a server date; untrusted dates must keep the switch off.
-- After the backfill, a phone account with no stamp is stamped at first look ("now"): it can sign for another team one day later (errs toward "too new"). Email (My Apps) accounts with no stamp stay "not on file" (main has no acct.createdAt) and cannot sign for another team. Optional for the main-line session: stamp at sign-up as the stats branch's acct.js does.
+- After the backfill, a phone account with no stamp is stamped at first look ("now"): it can sign for another team one day later (errs toward "too new"). Email (My Apps) accounts with no stamp: stamped "now" on first look too (review fix 1, Nov 17; was "not on file" forever because main has no acct.createdAt), so they wait one day and then can sign. If main ever supplies acct.createdAt, that date is used instead. Optional for the main-line session: stamp at sign-up as the stats branch's acct.js does.
 - acct.js: wrappers (function rebinding) instead of rewriting main's gFlag / status lines, so main's lines stay as they are and the status flag composes with other branches' flags.
 - `lock:ent` -> `lock:golf:ent` for golf's own enterprise stand-in and course links (main's limits.js owns `lock:ent`). With main's limits.js present golf's caps and enterprise flag come from limits.js; `/golf/ent op:enterprise` only writes golf's stand-in row (course links still matter).
 
@@ -1686,10 +1686,19 @@ Anything live or on real phones; the backfill against the real Supabase table; t
 ### What the main-line session must do to turn it on
 1. Review this branch; rebase onto origin/main. Expected conflicts (all "keep both"): HANDOFF.md; with feat/calcutta-on-main / feat/pickleball-group-game-on-main: pics/sync.js (each adds one guard line after `const sig`), pics/index.html (nav item lines near the Dashboard line, guards near checkUpdate / controllerchange / touchstart), pics/gate.js (setMe and status lines), odds-api/server.js (route lines near /golfday), odds-api/acct.js (their gFlag/status line replacements; this branch's wrappers sit before module.exports and need no change). Their early-return `/acct/status` lines each answer alone: when several switches are on, only the first flag is sent unless the main-line session merges them into one line (golf's flag is added by wrapper and survives).
 2. Bump the version (`golf.js?v=` in index.html golfLoad, plus the usual markers).
-3. Run `node scripts/golf/main-preserved.js <new base>` and every suite.
+3. Run `node scripts/golf/main-preserved.js` (base = `git merge-base HEAD origin/main` by default; or pass a base / GOLF_BASE) and every suite. golf.main.test.js uses the same merge base and tolerates other dark features in the tree (Calcutta, pickleball).
 4. Push with GOLF_MONEY_* unset; check `/golf/on` = 404 and `/health`.
 5. On the server shell (Render): `node odds-api/backfill-acctsince.js --launch=YYYY-MM-DD` (dry run), then `--write` (writes `lock:acctsince` stamps + marker `lock:acctsince:done`).
 6. Set `GOLF_MONEY_ENABLED=1` and `GOLF_MONEY_OWNER_ONLY=1`; the log must say `golf: money golf is ON`; owner's `/golf/on` -> `{on:true}`.
+
+### Review fixes, Nov 17 2026 (after review of 9dc3d74; origin/main v275 b5a11c1 merged in, only HANDOFF.md conflicted)
+- Fix 1: odds-api/signup-since.js sinceOf: email accounts with no stamp and no acct.createdAt are stamped now on first look (golf.stats.test.js check 3).
+- Fix 2: scripts/golf/main-preserved.js and odds-api/golf.main.test.js take the base from `git merge-base HEAD origin/main` (or GOLF_BASE / argument), never a hard-coded hash. The id clash check reads main's files at the base plus every pics file not at the base (other features' new files), and the "untouched main files" check now fails only if a changed line mentions money golf.
+- Fix 3: pics/golf.js course form ids ft/fh/fr/fs renamed gft/gfh/gfr/gfs (pics/localevents.js uses ft). All 70 golf ids checked against calcutta-combined 76cb5c3 pics: no other shared id.
+- Fix 5: payout screen "Payout settled." now has its space; "Who won what" (odds-api/golf.js payoutView o.paid) is ordered by best place won, then amount (golf.round3.test.js check "review fix 5").
+- Fix 6: GOLF_MONEY_OWNER_ONLY=1: /acct/status carries golfMoney only for a request whose x-token is an allowed account (acct.js gmStatus). The phone sends no token there, so allowed accounts catch ?join=golf. links from `me.golfMoney` (index.html oddGolfChanged calls golfCapture). Guests never get the sign-up sheet. Not owner-only: unchanged (flag to everyone).
+- Fix 4 (Golf button placement) NOT done: the owner is deciding where it goes.
+- What to port changed since 9dc3d74: odds-api/signup-since.js, odds-api/acct.js (golf wrapper block only), odds-api/golf.js (payoutView sort), pics/golf.js, pics/index.html (golf block only), scripts/golf/main-preserved.js, the golf tests.
 
 ### To-do for the owner
 1. Decide: keep casual Golf days beside money golf, or retire them once money golf is live.

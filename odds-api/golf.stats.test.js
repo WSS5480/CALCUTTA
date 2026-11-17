@@ -41,12 +41,14 @@ const quiet = async (fn) => { const e = console.error, said = []; console.error 
   assert.strictEqual(await SS.since(ACC('ann')), Date.parse('2026-03-01T15:00:00Z')); assert.strictEqual(await SS.since(ACC('bob')), Date.parse('2026-10-02T06:00:00Z')); assert.ok(db[SS.BFROW].data.at, 'marker row');
   const again = await BF.run({ db: S, phoneEmail, sinceKey: SS.sinceKey, now: NOW + 1000, write: true }); assert.strictEqual(again.added, 0, 'running it again changes nothing');
   t('backfill-acctsince.js: dry run writes nothing; --write stamps ann (first bet) and bob (first daily-log day) and writes the marker; a second run adds nothing');
-  // 3. After the backfill: the switch turns on; an account with no stamp (a phone account first seen after the backfill) is stamped now, once; email accounts without
-  //    acct.createdAt (main has none) and guests stay "not on file"
+  // 3. After the backfill: the switch turns on; an account with no stamp (a phone account first seen after the backfill) is stamped now, once; so is an email account
+  //    without acct.createdAt (main has none; review fix 1); guests stay "not on file"
   SS._reset(); [s] = await quiet(() => G.moneySwitch({ GOLF_MONEY_ENABLED: '1' })); assert.deepStrictEqual([s.on, s.minDays], [true, 1]); assert.strictEqual(await SS.sinceBackfilled(), true);
   let si = await SS.sinceOf(ACC('cat'), NOW); assert.deepStrictEqual(si, { t: NOW, known: true }); si = await SS.sinceOf(ACC('cat'), NOW + 5 * 864e5); assert.deepStrictEqual(si, { t: NOW, known: true }, 'set once: the first look stays');
-  const [em] = await quiet(() => SS.sinceOf('someone@example.com', NOW)); assert.strictEqual(em.known, false); assert.strictEqual((await SS.sinceOf('guest:abc', NOW)).known, false);
-  t('after the backfill: the switch is ON (minDays 1); a phone account with no stamp is stamped at first look and never moves; email accounts (no acct.createdAt on main) and guests are "not on file"');
+  const [em] = await quiet(() => SS.sinceOf('someone@example.com', NOW)); assert.deepStrictEqual(em, { t: NOW, known: true }, 'email account (no acct.createdAt on main): stamped now on first look (review fix 1)');
+  assert.strictEqual(await SS.since('someone@example.com'), NOW, 'the stamp is written'); const em2 = await SS.sinceOf('someone@example.com', NOW + 25 * 3600e3); assert.deepStrictEqual(em2, { t: NOW, known: true }, 'set once');
+  assert.ok(NOW + 23 * 3600e3 - em2.t < 864e5 && NOW + 25 * 3600e3 - em2.t >= 864e5, 'under a day old after 23 h (cannot sign), a day old after 25 h (can sign)'); assert.strictEqual((await SS.sinceOf('guest:abc', NOW)).known, false);
+  t('after the backfill: the switch is ON (minDays 1); phone AND email accounts with no stamp are stamped at first look and never move (email: waits a day, then can sign); guests are "not on file"');
   // 4. The ONE signer bar with the brought module: 1 day by the server stamp (owner GOLF-AGE). dan was first seen 23 hours ago: refused; 25 hours later: signs
   db = {}; SS._reset(); G._reset(); await BF.run({ db: S, phoneEmail, sinceKey: SS.sinceKey, now: NOW - 30 * 864e5, launch: Date.parse('2026-01-15T00:00:00Z'), write: true }); // an empty database, backfilled a month ago (--launch given)
   await SS.sinceSet(ACC('ann'), NOW - 200 * 864e5); await SS.sinceSet(ACC('bob'), NOW - 90 * 864e5); await SS.sinceSet(ACC('dan'), NOW - 23 * 3600e3);

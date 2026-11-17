@@ -536,11 +536,12 @@ function golfLoad(then) { // pics/golf.js, fetched the first time it is needed
 // Invite links https://<site>/?join=golf.<code> (the Groups / Calcutta pattern): read ONLY when the server says money golf exists (/acct/status `golfMoney`; gate.js calls
 // oddGolfSw BEFORE the Groups one, so main's grpCapture never sees a golf link). The code is kept for this tab (sessionStorage 'odd-gjoin') and taken out of the address bar.
 // A guest gets the sign-up sheet; once signed in with money golf on for the account, the join screen opens (golfJoinRun, from oddGolfChanged on every account read).
+// Owner-only mode (review fix 6): /acct/status carries no golfMoney, so guests never catch the link; an allowed account catches it in oddGolfChanged instead.
 const golfPend = (v) => { try { if (v === undefined) return sessionStorage.getItem('odd-gjoin') || ''; if (v) sessionStorage.setItem('odd-gjoin', v); else sessionStorage.removeItem('odd-gjoin'); } catch (e) {} return ''; };
 function golfCapture() { try { const u = new URL(location.href), m = /^golf\.([A-Za-z0-9]{4,40})$/.exec(u.searchParams.get('join') || ''); if (!m) return; golfPend(m[1]); u.searchParams.delete('join'); history.replaceState(history.state, '', u.pathname + (u.searchParams.toString() ? '?' + u.searchParams.toString() : '') + u.hash); } catch (e) {} }
 function golfJoinRun() { const c = golfPend(); if (!c || !golfOn()) return; golfPend(null); golfLoad(() => { if (golfOn() && window.oddGolf) window.oddGolf({ code: c }); }); }
 window.oddGolfSw = function () { golfCapture(); if (!golfPend()) return; setTimeout(() => { try { if (golfPend() && window.__oddLock === 'guest' && !lsg('odd-tok') && window.oddSignUp) window.oddSignUp('golf:' + golfPend()); } catch (e) {} }, 400); };
-window.oddGolfChanged = function (changed) { try { if (changed !== false) { if (!golfOn()) { const o = document.getElementById('ogolf'); if (o) o.remove(); } navMore(false); navRender(); } } catch (e) {} golfJoinRun(); };
+window.oddGolfChanged = function (changed) { try { if (golfOn()) golfCapture(); } catch (e) {} try { if (changed !== false) { if (!golfOn()) { const o = document.getElementById('ogolf'); if (o) o.remove(); } navMore(false); navRender(); } } catch (e) {} golfJoinRun(); };
 if (golfOn()) setTimeout(() => { golfLoad(); golfJoinRun(); }, 1500); // a known money-golf account: the overlay file is ready (it also re-opens a golf screen that was open)
 // ================= end money golf =================
 // ================= v272 GROUPS PHASE 2: the switch, the five-tab bar, invite links =================

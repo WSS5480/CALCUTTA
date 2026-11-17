@@ -1,11 +1,12 @@
-// Run: node scripts/golf/main-preserved.js [base]   (default base 8af1f79 = main v274, the commit the golf-money-on-main branch is built on)
+// Run: node scripts/golf/main-preserved.js [base]   (default base = `git merge-base HEAD origin/main`, i.e. the main this branch was last merged with; or env GOLF_BASE)
 // Proves that money golf changed NOTHING of main's code in main's files it touched: for each file, the lines the branch ADDED are removed and the result must
 // equal main's file byte for byte (no line of main's is removed or changed; there are NO sanctioned replacements on this branch). Any other change = FAIL.
 // Also (the mistake found twice in this project): every ADDED line is scanned for a `//` comment followed by more code on the same line (code after a
 // line comment never runs). The scan strips strings, template text and regex literals first; a hit = FAIL with the line.
 // The new golf files (golf.js, golf-gate.js, signup-since.js, ...) are not main's, so they are not listed here; the same `//` scan runs over every line of them.
 const { execFileSync } = require('child_process'), fs = require('fs'), path = require('path');
-const ROOT = path.join(__dirname, '..', '..'), BASE = process.argv[2] || '8af1f79';
+const ROOT = path.join(__dirname, '..', '..'), BASE = process.argv[2] || process.env.GOLF_BASE || mergeBase();
+function mergeBase() { try { return execFileSync('git', ['merge-base', 'HEAD', 'origin/main'], { cwd: ROOT, encoding: 'utf8' }).trim().slice(0, 12); } catch (e) { console.log('FAIL: no base: git merge-base HEAD origin/main failed (fetch origin, or pass the base as an argument / GOLF_BASE)'); process.exit(2); } }
 const FILES = ['pics/gate.js', 'pics/index.html', 'pics/sync.js', 'odds-api/acct.js', 'odds-api/server.js'];
 const NEW = ['odds-api/golf.js', 'odds-api/golf-gate.js', 'odds-api/signup-since.js', 'odds-api/backfill-acctsince.js', 'odds-api/golf-score.js', 'odds-api/golf-feed.js', 'odds-api/golf-courses.js', 'odds-api/ratings.js', 'pics/golf.js'];
 // Code after a line comment: strip quoted text and regex literals, find `//`, and look for statement code in what follows (a `;` or `}` followed by code,

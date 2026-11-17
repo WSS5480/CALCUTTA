@@ -185,6 +185,12 @@ chk('LOW 3 a flight where no paid team finished: its share goes to the other fli
   NOW += 6 * 3600e3; for (const tid of ['T3', 'T4']) ok(await sg(await call('ann', 'team', { id, op: 'withdraw', tid, reason: 'rain' }), id)); const r = ok(await call('ann', 'final', { id })); g = r.j.game;
   assert.strictEqual(g.payout.pool, 40); assert.strictEqual(g.payout.paid.reduce((a, x) => a + x.amt, 0), 40, 'the whole pool is paid: ' + paidOut(g)); assert.ok(g.payout.lines.some((l) => l.flight === 'Flight B' && l.moved === true && l.pool === 0) && g.payout.lines.every((l) => !l.notWon));
 });
+chk('review fix 5 (Nov 17): "Who won what" lists 1st place before 2nd, whatever the join order', async () => {
+  const N = ['ann', 'bob', 'cat', 'dan'], { id, pid } = await mk(N, { net: 'net' }, { entry: 10 }); await nums(N, id, pid, {}); ok(await call('ann', 'start', { id }));
+  const over = { T1: 3, T2: 2, T3: 1, T4: 0 }; for (const [who, tid] of [['ann', 'T1'], ['bob', 'T2'], ['cat', 'T3'], ['dan', 'T4']]) await card(who, id, tid, pid[who], (h) => PAR[h - 1] + (h <= over[tid] ? 1 : 0));
+  for (const [who, tid] of [['bob', 'T1'], ['cat', 'T2'], ['dan', 'T3'], ['ann', 'T4']]) ok(await conf(who, id, tid));
+  const g = ok(await call('ann', 'final', { id })).j.game, names = g.payout.paid.map((x) => x.name); assert.ok(names.length >= 2, paidOut(g)); assert.deepStrictEqual(names.slice(0, 2), ['Dan', 'Cat'], 'Dan (1st) before Cat (2nd): ' + paidOut(g));
+});
 chk('LOW 5, 8, 10, 11: a tee time moved later moves the handicap lock; an Enterprise day is created without the stats module; a confirm needs the card opened; the record carries the flight place', async () => {
   let r = ok(await call('ann', 'create', { kind: 'day', title: 'Rain', course: COURSE, day: { fmt: 'stroke', teams: 2, teamSize: 1, net: 'net', teeTime: NOW + 3600e3 }, pot: { entry: 0 } })); r = ok(await call('ann', 'setup', { id: r.j.game.id, day: { teeTime: NOW + 3 * 3600e3 } })); assert.strictEqual(r.j.game.day.lockAt, NOW + 3 * 3600e3, 'L5');
   db['lock:golf:ent'] = { id: 'lock:golf:ent', data: { keys: { [ACC('club')]: true } }, updated: 1 }; G._reset(); D.stats = () => null; r = await call('club', 'create', { kind: 'day', title: 'No stats', course: COURSE, day: { fmt: 'stroke', teams: 2, teamSize: 1, net: 'net' }, pot: { entry: 0 } }); assert.strictEqual(r.s, 200, 'L8'); assert.strictEqual(r.j.game.ent, true);

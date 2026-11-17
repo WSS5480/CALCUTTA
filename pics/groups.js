@@ -231,7 +231,7 @@
   addGame({ key: 'picks', title: 'Picks contest', blurb: 'Everyone\'s bets on one board, graded by Oddable from final scores. Bragging rights only.',
     state: (gr) => { const c = picks(gr)[0]; return !c ? { k: 'none', text: 'No picks contest in this group' } : c.ended ? { k: 'finished', text: 'Final · ' + span(c) } : c.started ? { k: 'open', text: 'Running · ' + span(c) } : { k: 'open', text: 'Starts ' + esc(fmtDay(c.startDay)) + ' · ' + span(c) }; },
     open: (gr) => { const c = picks(gr)[0]; if (!c) { err = 'This group has no picks contest.'; return paint(); } openContest(gr, c.cid); } });
-  addGame({ key: 'golf', title: 'Golf day', blurb: 'A round at one course: each player logs his own score hole by hole, live leaderboard, Golf GPS for the course.',
+  addGame({ key: 'golf', title: 'Golf day', blurb: 'A round at one course: each player logs their own score hole by hole, live leaderboard, Golf GPS for the course.',
     state: (gr) => within(post('/golfday/list', { g: gr.id }), 12000).then((j) => (j.open ? { k: 'open', text: 'Open · ' + esc(j.open.name) + ' · ' + esc(fmtDay(j.open.date)) } : (j.past || []).length ? { k: 'finished', text: 'Last one · ' + esc(j.past[0].name) + ' · ' + esc(fmtDay(j.past[0].date)) } : { k: 'none', text: 'No Golf day yet' + (j.comm ? ': start one' : '') })),
     open: (gr) => gdOpen(gr) });
   // v275 (integration): group pickleball (pics/local.js, server odds-api/local.js) as a catalog entry. State: ONE POST /local/list for the group (the call

@@ -112,7 +112,7 @@
   },
   "golf-day": {
    "name": "Golf day",
-   "line": "A round at one course: each player logs his own score hole by hole, live leaderboard, Golf GPS for the course.",
+   "line": "A round at one course: each player logs their own score hole by hole, live leaderboard, Golf GPS for the course.",
    "info": "For a round your group plays together: the commissioner starts a Golf day at a course and picks stroke play gross, stroke play net (each player types their own strokes) or Stableford, over 18, the front 9 or the back 9. Each player logs their own score hole by hole and the leaderboard updates for everyone. Golf GPS shows the course. Skins and match play are not in Golf days yet."
   }
  },

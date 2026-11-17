@@ -5,7 +5,11 @@
 // line comment never runs). The scan strips strings, template text and regex literals first; a hit = FAIL with the line.
 // The new golf files (golf.js, golf-gate.js, signup-since.js, ...) are not main's, so they are not listed here; the same `//` scan runs over every line of them.
 const { execFileSync } = require('child_process'), fs = require('fs'), path = require('path');
-const ROOT = path.join(__dirname, '..', '..'), BASE = process.argv[2] || process.env.GOLF_BASE || mergeBase();
+// --others-ok: the tree ALSO holds other dark features (Calcutta, pickleball) that replaced some of main's lines. A removed/changed main line is then tolerated
+// only when neither it nor any line added in the same diff hunk mentions money golf (GOLFY); golf's own lines must still be pure additions. Default: strict.
+const ARGS = process.argv.slice(2), OTHERS = ARGS.includes('--others-ok'), POS = ARGS.filter((a) => !a.startsWith('--'));
+const GOLFY = /GOLF_MONEY|golf-gate|signup-since|oddGolf|OddGolf\b|ogolf|odd-golfm|odd-gmsw|odd-gjoin|golfMoney|gmOn|gmStatus|golfLoad|golfOn|golfCapture|lock:golf:/;
+const ROOT = path.join(__dirname, '..', '..'), BASE = POS[0] || process.env.GOLF_BASE || mergeBase();
 function mergeBase() { try { return execFileSync('git', ['merge-base', 'HEAD', 'origin/main'], { cwd: ROOT, encoding: 'utf8' }).trim().slice(0, 12); } catch (e) { console.log('FAIL: no base: git merge-base HEAD origin/main failed (fetch origin, or pass the base as an argument / GOLF_BASE)'); process.exit(2); } }
 const FILES = ['pics/gate.js', 'pics/index.html', 'pics/sync.js', 'odds-api/acct.js', 'odds-api/server.js'];
 const NEW = ['odds-api/golf.js', 'odds-api/golf-gate.js', 'odds-api/signup-since.js', 'odds-api/backfill-acctsince.js', 'odds-api/golf-score.js', 'odds-api/golf-feed.js', 'odds-api/golf-courses.js', 'odds-api/ratings.js', 'pics/golf.js'];
@@ -31,13 +35,14 @@ let bad = 0;
 for (const f of FILES) {
   const main = execFileSync('git', ['show', BASE + ':' + f], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64e6 }), cur = fs.readFileSync(path.join(ROOT, f), 'utf8');
   const diff = execFileSync('git', ['diff', '--no-color', '-U0', BASE, '--', f], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64e6 });
-  const added = new Set(), minus = [], plus = []; let nl = 0;
-  diff.split('\n').forEach((l) => { const h = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(l); if (h) { nl = Number(h[1]); return; } if (l.startsWith('+++') || l.startsWith('---')) return; if (l.startsWith('+')) { added.add(nl); plus.push([nl, l.slice(1)]); nl++; } else if (l.startsWith('-')) minus.push(l.slice(1)); });
-  let ok = true; minus.forEach((m) => { ok = false; console.log('  FAIL ' + f + ': a line of main\'s was removed or changed: ' + m.slice(0, 140)); });
-  const back = cur.split('\n').filter((l, i) => !added.has(i + 1)).join('\n'), same = back === main; if (!same) ok = false;
+  const added = new Set(), minus = [], plus = [], hp = []; let nl = 0, hk = -1;
+  diff.split('\n').forEach((l) => { const h = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(l); if (h) { nl = Number(h[1]); hk++; hp[hk] = []; return; } if (l.startsWith('+++') || l.startsWith('---')) return; if (l.startsWith('+')) { added.add(nl); plus.push([nl, l.slice(1)]); hp[hk].push(l.slice(1)); nl++; } else if (l.startsWith('-')) minus.push([hk, l.slice(1)]); });
+  let ok = true, other = 0; minus.forEach(([h, m]) => { if (OTHERS && !GOLFY.test(m) && !hp[h].some((x) => GOLFY.test(x))) { other++; return; } ok = false; console.log('  FAIL ' + f + ': a line of main\'s was removed or changed: ' + m.slice(0, 140)); });
+  const back = cur.split('\n').filter((l, i) => !added.has(i + 1)).join('\n'), same = back === main || (OTHERS && other > 0 && ok); if (!same) ok = false;
+  if (other) console.log('  note ' + f + ': ' + other + ' main line(s) replaced by ANOTHER feature (no money-golf line in those hunks); tolerated with --others-ok');
   const sw = plus.map(([n, l]) => [n, swallow(l)]).filter((x) => x[1]); sw.forEach(([n, c]) => { ok = false; console.log('  FAIL ' + f + ':' + n + ': code after a // comment: ' + c); });
   console.log((ok ? '  ok   ' : '  FAIL ') + f + ': ' + plus.length + ' added line(s), 0 replaced; without them the file is ' + (same ? 'main\'s, byte for byte' : 'NOT main\'s') + '; // scan of the added lines: ' + (sw.length ? sw.length + ' HIT(S)' : 'clean'));
   if (!ok) bad++;
 }
 for (const f of NEW) { const ls = fs.readFileSync(path.join(ROOT, f), 'utf8').split('\n'), hits = ls.map((l, i) => [i + 1, swallow(l)]).filter((x) => x[1]); hits.forEach(([n, c]) => console.log('  FAIL ' + f + ':' + n + ': code after a // comment: ' + c)); if (hits.length) bad++; else console.log('  ok   ' + f + ': // scan of ' + ls.length + ' lines: clean'); }
-console.log(bad ? 'FAILED: ' + bad + ' file(s)' : 'PASS: main preserved in all ' + FILES.length + ' files (base ' + BASE + '), and no code hides after a // comment in them or in the ' + NEW.length + ' new golf files'); process.exit(bad ? 1 : 0);
+console.log(bad ? 'FAILED: ' + bad + ' file(s)' : 'PASS: main preserved in all ' + FILES.length + ' files (base ' + BASE + (OTHERS ? ', other features tolerated' : '') + '), and no code hides after a // comment in them or in the ' + NEW.length + ' new golf files'); process.exit(bad ? 1 : 0);

@@ -251,14 +251,25 @@ html.cb .pinhd{opacity:.85}
 #addmenu label small{display:block;font-weight:400;font-size:12px;color:var(--muted);margin-top:2px}#addmenu{max-width:min(300px,calc(100vw - 32px))}
 html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}button,a,select,input,label,[onclick],.pill,.tab,.card{touch-action:manipulation}button,[onclick]{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}button:active,[onclick]:active{opacity:.78}
 .bbtn{flex-wrap:wrap}
+/* v265: every page and view fills the same width as the Games view on tablets and desktops. Only rules for 900px and wider here; phones are untouched.
+   Team page: was a 820px column in the middle of the screen. Live: game cards in columns like the Games view. Rest of season / Results weeks: the game cards inside an open week in columns (they were one card per row, each over 800px tall). */
+@media (min-width:900px){
+.tpw{max-width:1200px}
+#livepage .lpg,#list>details[open]:has(>.card>.lv){display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));column-gap:14px;align-items:start}
+#list>details[open]:has(>.card>.lv)::details-content{display:contents}
+#livepage .lpg>*,#list>details:has(>.card>.lv)>*{grid-column:1/-1;min-width:0}
+#livepage .lpg>.gc,#list>details>.card:has(>.lv){grid-column:auto}
+#livepage .lpg>.gc{margin:0 0 14px!important}
+}
+@media (min-width:1500px){.tpw{max-width:1360px}}
 </style>
 </head>
 <body>
 <div id="sc">
-<!-- Pics v262 -->
+<!-- Pics v265 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v262</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v265</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
   <div id="arbbar" class="arbbar" hidden onclick="arbBarTap()" role="button" aria-label="Arbitrage alert"><span class="mq" id="arbmq"></span></div>
   <div class="mrow" id="mrow"><label><span>League</span><select id="lgsel" aria-label="League" autocomplete="off"><option value="nfl">🏈 NFL</option><option value="cfb">🎓 NCAA</option><option value="pga">⛳ PGA Tour</option><option value="pickleball">🏓 Pickleball</option><option value="nba">🏀 NBA</option><option value="mlb">⚾ MLB</option><option value="nhl">🏒 NHL</option><option value="ncaab">🏀 NCAAB</option></select></label><label id="gvlab"><span>View</span><select id="gvsel" aria-label="View" autocomplete="off" onchange="gvSet(this.value)"></select></label></div>
   <div class="srow"><input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team"><select id="conf" aria-label="Conference"><option value="">All</option></select></div>
@@ -266,7 +277,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v262 (PGA Tour leaderboard · score pop-ups · today's bets cards)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v265 (every page fills tablet and desktop screens)</div>
   <div class="sub nsw" id="nsw"></div>
   <div class="sub" id="spset"><label>Score pop-ups <select id="spsel" aria-label="Score pop-ups" autocomplete="off" onchange="spSet(this.value)"><option value="mine">My bets only</option><option value="all">All live games</option><option value="off">Off</option></select></label><div style="font-size:11px;opacity:.75;margin-top:4px">A card pops up when a live game scores or ends, with where your bets stand right now.</div></div>
   </details>
@@ -285,7 +296,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </div>
 <div id="plb" hidden></div>
 <nav class="bn" id="bn"></nav>
-<script src="trophy.js?v=262"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
+<script src="trophy.js?v=265"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
 <script>
 const SC = document.getElementById('sc');
 // The page scrolls inside #sc so the banner and bottom bar (outside it) can never drift on iOS
@@ -1818,7 +1829,7 @@ async function alertPush() {
   ASQ = Date.now();
   try { const r = await fetch(ALU, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': alertTok() }, body: JSON.stringify({ week: CUR, rec: { lock: a.lock, dogs: a.dogs, helper: { id: h.g.id, abbr: h.abbr, conf: h.conf } } }) }); if (!r.ok) return; const j = await r.json(); if (j && j.rec && j.week === CUR && alertTake(Object.assign({}, ASV, { [CUR]: j.rec }))) render(); } catch (e) {}
 }
-async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=262')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
+async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=265')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
 const trGrade = (p) => { const g = ALL[p.id]; if (!g || g.state !== 'post') return null; const m = (g.home.abbr === p.abbr ? 1 : -1) * (g.home.score - g.away.score) + p.line; return m === 0 ? 'push' : m > 0 ? 'hit' : 'miss'; };
 function trophyData() {
   if (CFB || !window.Trophy || !Trophy.ready()) return null;
@@ -3242,6 +3253,6 @@ if ('serviceWorker' in navigator) {
   });
 })();
 </script>
-<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=262"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
+<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=265"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
 </body>
 </html>

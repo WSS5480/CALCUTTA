@@ -3,6 +3,7 @@
 // Each check runs on its own (a failure does not stop the others) so the before/after table is complete.
 const PH = require('./groups.testenv'); // Phase 1: switches set to "Groups open"; phone-file checks run only where the Groups phone code exists (see that file)
 const assert = require('assert'), http = require('http'), fs = require('fs'), path = require('path');
+const LATE = (r, re) => { assert.strictEqual(r.s, 200, JSON.stringify(r.j)); assert.strictEqual(r.j.personal, true, 'personal answer: ' + JSON.stringify(r.j)); assert.strictEqual(r.j.gl, 0); assert.ok(!/Saved to your group/.test(JSON.stringify(r.j))); assert.match(r.j.text, /Saved as a personal bet\.$/); if (re) assert.match(r.j.text, re); return r; }; // fix 1 (review of 342da87): no price yet / closed / started = main's personal answer
 const G = require('./groups'), GR = require('./grade'), S = require('./sync'), D = G._deps;
 let db = {}, writes = {};
 D.S = {
@@ -69,7 +70,7 @@ test('R1 CRITICAL: moneyline at +99900 is graded at the ESPN reference (+130; ro
 test('R1 CRITICAL (round 4: replaces "even money"): no posted price -> the bet NEVER counts, whatever was typed; "Longest odds that count" is only a cap on top', async () => {
   const g = await mk('ann'); await joinAll(g, ['bob']); row('bob', [bet('b2', '505', 'LV', 'ml', 99900, 100)]); // the add step refuses it; here it sits in the book anyway
   const { bets, t } = await mine('bob', g); const b = bets.find((x) => x.id === 'b2'); assert.ok(b && !b.ok && !b.pl, JSON.stringify(b)); assert.strictEqual(t.win, 0);
-  NOW = START - 5 * H; const r = await call('bob', 'bet/add', { bet: bet('b9', '505', 'LV', 'ml', 99900, 100, { fin: undefined, finPL: undefined }) }); assert.strictEqual(r.s, 409); assert.match(r.j.error, /No posted price for this game yet/);
+  NOW = START - 5 * H; const r = await call('bob', 'bet/add', { bet: bet('b9', '505', 'LV', 'ml', 99900, 100, { fin: undefined, finPL: undefined }) }); LATE(r, /No price is posted/);
   const bad = await call('ann', 'create', { name: 'Bad odds', take: { kind: 'none', v: 0 }, join: { requests: true, open: false, max: 8, late: 'no' }, contest: Object.assign({}, CDEF, { maxOdds: 99900 }) }); assert.strictEqual(bad.s, 400, 'max setting is +5000');
 });
 test('R1 CRITICAL: a $1,000,000 stake counts as the cap; "no cap" counts as $1,000', async () => {

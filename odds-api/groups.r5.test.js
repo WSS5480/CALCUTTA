@@ -4,6 +4,7 @@
 //   ODD_ROOT=/path/to/a/322d2a0/checkout node odds-api/groups.r5.test.js     (expect every line FAIL)
 const PH = require('./groups.testenv'); // main-line port: Groups switches set to "open"; phone-file checks run only against the feature branch's phone file (ODD_PREVIEW_ROOT)
 const assert = require('assert'), http = require('http'), fs = require('fs'), path = require('path'), vm = require('vm'), crypto = require('crypto');
+const LATE = (r, re) => { assert.strictEqual(r.s, 200, JSON.stringify(r.j)); assert.strictEqual(r.j.personal, true, 'personal answer: ' + JSON.stringify(r.j)); assert.strictEqual(r.j.gl, 0); assert.ok(!/Saved to your group/.test(JSON.stringify(r.j))); assert.match(r.j.text, /Saved as a personal bet\.$/); if (re) assert.match(r.j.text, re); return r; }; // fix 1 (review of 342da87): no price yet / closed / started = main's personal answer
 const ROOT = process.env.ODD_ROOT ? path.resolve(process.env.ODD_ROOT) : path.join(__dirname, '..'), R = path.join(ROOT, 'odds-api') + '/';
 const G = require(R + 'groups'), GR = require(R + 'grade'), PAIR = require(R + 'pairing'), LIM = require(R + 'limits'), D = G._deps;
 const X = { db: {}, BOARD: 'ok', SUMMARY: 'ok', NOTICK: false };
@@ -107,7 +108,7 @@ test('H1 if the fresh read fails the add is REFUSED with 503 "Couldn\'t check th
 });
 test('H1 adds close 2 minutes before the listed kickoff: 1:59 before = "Bets on this game are closed", 2:01 before = saved', async () => {
   const g = await mk('ann', { cap: 100 }); await joinAll(g, ['bob']); NOW = K509 - 2 * MIN + 1000;
-  const a = await add('bob', bet('c1', '509', 'MIA', 'ml', 140, 100)); assert.strictEqual(a.s, 409, JSON.stringify(a.j)); assert.strictEqual(a.j.error, 'Bets on this game are closed: group bets stop 2 minutes before kickoff. Nothing was added.');
+  const a = await add('bob', bet('c1', '509', 'MIA', 'ml', 140, 100)); LATE(a); assert.strictEqual(a.j.text, 'Group bets close 2 minutes before kickoff. Saved as a personal bet.');
   NOW = K509 - 2 * MIN - 1000; assert.strictEqual((await add('bob', bet('c2', '509', 'MIA', 'ml', 140, 100))).s, 200); assert.ok(!/\block(s|ed)?\b/i.test(a.j.error));
 });
 test('M1 ESPN down from 50 minutes before kickoff: a bet 40 minutes out is refused (503), never "Saved to your group." for a bet that is sure to void', async () => {
@@ -117,7 +118,7 @@ test('M1 ESPN down from 50 minutes before kickoff: a bet 40 minutes out is refus
 test('M2 a game that starts BEFORE its listed time (first pitch 8 minutes early): an add 5 minutes before the listed time sees ESPN\'s "in progress" and is refused', async () => {
   const g = await mk('ann', { cap: 100 }); await joinAll(g, ['bob']); gm('509').state = (now) => (now < K509 - 8 * MIN ? 'pre' : now < K509 + 3 * H ? 'in' : 'post');
   await tickAt(K509 - 9 * MIN); NOW = K509 - 5 * MIN; const a = await add('bob', bet('e1', '509', 'MIA', 'ml', 140, 100));
-  assert.strictEqual(a.s, 409, JSON.stringify(a.j)); assert.match(a.j.error, /already started/); assert.deepStrictEqual(Object.keys(book('bob')), []);
+  LATE(a, /already started/); assert.deepStrictEqual(Object.keys(book('bob')), []);
 });
 // =============================== HIGH 2: honor-system props ===============================
 test('H2 a prop must NAME ITS GAME and be added before that kickoff: no game = refused, after the final = refused, however the honor switch is set', async () => {
@@ -125,7 +126,7 @@ test('H2 a prop must NAME ITS GAME and be added before that kickoff: no game = r
   let r = await add('bob', { id: 'x1', kind: 'prop', text: 'Mahomes over 250 pass yds', odds: 5000, stake: 100, day: '2026-11-22', lg: 'nfl' });
   assert.strictEqual(r.s, 409, JSON.stringify(r.j)); assert.strictEqual(r.j.error, 'A prop must name its game: pick the game first, then add the prop before it starts. Nothing was added.');
   NOW = gm('502').start + 5 * H; r = await add('bob', { id: 'x2', kind: 'prop', text: 'Chiefs to win', odds: 900, stake: 100, day: '2026-11-22', lg: 'nfl' }); assert.strictEqual(r.s, 409, 'after the final, no game named');
-  r = await add('bob', prop('x3', '502', 'Mahomes over 250 pass yds', 5000, 100)); assert.strictEqual(r.s, 409, 'after the final, game named'); assert.match(r.j.error, /already started/);
+  r = await add('bob', prop('x3', '502', 'Mahomes over 250 pass yds', 5000, 100)); LATE(r, /already started/); // after the final, game named
   assert.deepStrictEqual(Object.keys(book('bob')), []); assert.strictEqual((await add('bob', Object.assign(prop('x4', '503', 'No price', 0, 10), { odds: undefined }))).s, 400, 'a prop needs a price: it is what it pays');
 });
 test('H2 never self-marked: the phone\'s own "won $1,000,000" counts for nothing; the commissioner enters the result after the game and ONE other member confirms; paid from the typed price capped at +500, stake capped', async () => {

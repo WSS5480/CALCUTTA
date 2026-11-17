@@ -310,6 +310,26 @@ async function refresh(r, ctx, opt) {
   if (r.kind !== 'prop' && g.state === 'pre' && now < g.start) { const ref = refOf(Object.assign({}, r, { g })); if (ref) takeRef(ref, o); } // a prop (round 5) follows its game's kickoff and start, never a price
   return Object.keys(o).length ? o : null;
 }
+// REVIEW OF 342da87, FIX 2 (server sleep / restart): the kickoff reference is normally a pregame read inside the 30 minutes before kickoff, made by an add
+// or by the 5-minute Groups tick. If the server slept or restarted through that whole window there is no such read. At GRADING time such a leg gets ONE
+// fallback: ESPN's event summary (`pickcenter` = the pregame lines ESPN keeps on the event), read only once ESPN shows the game started (or over), one call per
+// game, cached 6 hours (a failed call is not cached: tried again on the next pass). Taken as the reference AT KICKOFF (ra = kickoff - 1 minute, rs
+// 'espn-pregame'). Only when that has no posted price for the bet's market either is the bet void. The CURRENT / CLOSE price of each block is used (parseOdds).
+const PCK = new Map(), PCK_MS = 6 * 36e5;
+async function pregameOdds(r) {
+  if (!r || !r.gid || !LG[r.lg] || !r.g || !r.g.home) return null; const k = r.lg + '|' + r.gid, c = PCK.get(k), now = D.now(); if (c && now - c.at < PCK_MS) return c.v;
+  let v = null;
+  try { const res = await D.fetch('https://site.api.espn.com/apis/site/v2/sports/' + LG[r.lg].p + '/summary?event=' + encodeURIComponent(r.gid), { signal: AbortSignal.timeout(12000) });
+    if (!res.ok) { if (res.status >= 500 || res.status === 429) return undefined; } else { const j = await res.json(), pc = j && Array.isArray(j.pickcenter) ? j.pickcenter.filter((x) => x && typeof x === 'object') : []; if (pc.length) v = parseOdds({ odds: pc }, r.g.home.abbr, r.g.away.abbr, r.lg); } }
+  catch (e) { return undefined; } // undefined = ESPN did not answer: nothing decided, asked again on the next pass
+  PCK.set(k, { at: now, v }); if (PCK.size > 2000) PCK.delete(PCK.keys().next().value); return v;
+}
+// withGame + the fallback above. Returns the leg with its game; when the fallback found a full reference, also rp / rl / rs / ra (the caller stores them).
+async function withRef(r, ctx) {
+  const w = await withGame(r, ctx); if (!w || w.x || !w.gid || w.kind === 'prop' || !eqv(w) || refOk(w) || !kicked(w) || w.g.canc || w.cv) return w;
+  const O = await pregameOdds(w); if (O === undefined) return Object.assign(w, { refWait: 1 }); if (!O) return w; /* refWait: the caller does not grade this pass */ const ra = Number(w.kick) - 6e4, ref = refOf(Object.assign({}, w, { g: Object.assign({}, w.g, { odds: O, at: ra }) }));
+  if (!ref || !ref.full || ref.rs !== 'espn') return w; return Object.assign(w, { rp: ref.rp, rl: ref.rl, rs: 'espn-pregame', ra });
+}
 // The void rule (the only way a bet is voided besides the commissioner's void, which follows the same rules). Returns '' or the reason.
 //   cancelled / forfeited: void right away. Postponed, suspended or moved to a later time: void once 48 hours have passed since the ORIGINAL kickoff
 //   without a final score, unless the contest carries postponed games to their new date (opt.carry, set before the start); a carried game that is
@@ -411,4 +431,4 @@ async function windowOpen(lgs, ctx) {
   for (const lg of lgs) for (const dd of [d, addDay(d, 1)]) { const gs = await day(lg, dd, ctx); if (gs.some((g) => (g.state === 'in') || (g.start > now - 15 * 6e4 && g.start < now + 2 * 36e5))) return true; }
   return false;
 }
-module.exports = { freshGame, FRESH_MS, VOIDCM, FOLK, REFWIN, NOREF, NOREFP, refOk, kicked, k0Of, amOfPm, REFK, VOID, VOIDC, VOIDE, voidWhy, eqv, legPrice, altPm, lineWhy, addWhy, lineFar, parlayWhy, refresh, follow, better, tolOf, TOLS, mlFromSpread, pmOf, impl, refOf, parseOdds, fav, TOL, LINE_TOL, LG, LGS, normLg, parseKt, ktLeague, ktType, legKey, resolveLeg, withGame, store, legResult, gradeBet, priceMult, windowOpen, day, chiDay, okDay, addDay, NFLAB, _deps: D, _reset: () => { DAYC.clear(); FLY.clear(); BYID.clear(); FOLLOW.clear(); FFLY.clear(); } };
+module.exports = { withRef, pregameOdds, freshGame, FRESH_MS, VOIDCM, FOLK, REFWIN, NOREF, NOREFP, refOk, kicked, k0Of, amOfPm, REFK, VOID, VOIDC, VOIDE, voidWhy, eqv, legPrice, altPm, lineWhy, addWhy, lineFar, parlayWhy, refresh, follow, better, tolOf, TOLS, mlFromSpread, pmOf, impl, refOf, parseOdds, fav, TOL, LINE_TOL, LG, LGS, normLg, parseKt, ktLeague, ktType, legKey, resolveLeg, withGame, store, legResult, gradeBet, priceMult, windowOpen, day, chiDay, okDay, addDay, NFLAB, _deps: D, _reset: () => { PCK.clear(); DAYC.clear(); FLY.clear(); BYID.clear(); FOLLOW.clear(); FFLY.clear(); } };

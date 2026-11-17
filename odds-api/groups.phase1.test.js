@@ -6,6 +6,7 @@
 //   D  the member index write after an approval is retried, and a missing entry is rebuilt (H3)
 //   E  NOT fixed here, waiting for the owner (H1, H2, H4): written as checks that FAIL today, skipped with the reason. Run them with ODD_RUN_OPEN=1.
 const assert = require('assert'), http = require('http'), crypto = require('crypto');
+const LATE = (r, re) => { assert.strictEqual(r.s, 200, JSON.stringify(r.j)); assert.strictEqual(r.j.personal, true, 'personal answer: ' + JSON.stringify(r.j)); assert.strictEqual(r.j.gl, 0); assert.ok(!/Saved to your group/.test(JSON.stringify(r.j))); assert.match(r.j.text, /Saved as a personal bet\.$/); if (re) assert.match(r.j.text, re); return r; }; // fix 1 (review of 342da87): no price yet / closed / started = main's personal answer
 const G = require('./groups'), GR = require('./grade'), S = require('./sync'), LIM = require('./limits'), D = G._deps;
 const ENV = (o) => { ['GROUPS_ENABLED', 'GROUPS_OWNER_ONLY', 'GROUPS_TESTERS'].forEach((k) => { if (o && o[k] != null) process.env[k] = o[k]; else delete process.env[k]; }); };
 const X = { db: {}, reads: 0, writes: 0, NOREAD: false, failKey: '', failN: 0, espn: 'ok', fetches: 0 };
@@ -148,7 +149,7 @@ test('B1 another sport: an NBA bet from a member of an NFL-only contest is answe
   fresh(); const g = await mk('ann'); await joinAll(g, ['bob']); NOW = START - 5 * H;
   personal(await add('bob', bet('n1', '701', 'BOS', 'ml', -170, 30)), /Not NFL/);
   NOW = START + H; personal(await add('bob', bet('n2', '701', 'LAL', 'ml', 150, 30)), /outside your contests/); // the NBA game is in progress: still a personal bet, not "already started, nothing added"
-  let r = await add('bob', bet('f0', '501', 'NYG', 'ml', -110, 30)); assert.strictEqual(r.s, 409); assert.match(r.j.error, /already started.*Nothing was added/, 'a late bet INSIDE the contest is still refused (round 3 L2)');
+  let r = await add('bob', bet('f0', '501', 'NYG', 'ml', -110, 30)); LATE(r, /already started/); // fix 1: a late bet inside the contest is main's personal answer, never in the group
   r = await add('bob', bet('f1', '502', 'KC', 'ml', 130, 30)); assert.strictEqual(r.s, 200); assert.strictEqual(r.j.text, 'Saved to your group.'); assert.strictEqual(r.j.counted, 1);
   assert.deepStrictEqual(Object.keys(book('bob')), ['f1'], 'only the bet a contest can count is in the group book'); assert.deepStrictEqual(X.db[SID.bob].data.bets.map((b) => b.id), ['f1'], 'and only it was written to My Bets by the server');
   const v = await view('bob', g, START + 2 * DAY); assert.deepStrictEqual(Object.keys(v.by), ['f1']);
@@ -199,7 +200,7 @@ test('C1 ESPN not answering (an error, or a 5xx): the bet is REFUSED with "try a
 test('C2 the H5 case itself: a LATE bet while ESPN is down is never told "Saved to your group. Locked." (the old code saved it and threw it out later); an old copy of the scoreboard is not proof either', async () => {
   fresh(); const g = await mk('ann'); await joinAll(g, ['bob']); NOW = START - 5 * H; assert.strictEqual((await add('bob', bet('a0', '502', 'KC', 'ml', 130, 10))).s, 200); // the server now holds a copy of that day's games, all "not started"
   NOW = START + 2.5 * H; X.espn = 'throw'; // game 509 kicked off 30 minutes ago and ESPN is down
-  let r = await add('bob', bet('late', '509', 'MIA', 'ml', 140, 100)); assert.notStrictEqual(r.s, 200); assert.ok(!/Saved|Locked\./.test(JSON.stringify(r.j).replace('Nothing was locked.', ''))); assert.ok(!book('bob').late);
+  let r = await add('bob', bet('late', '509', 'MIA', 'ml', 140, 100)); assert.ok(r.s !== 200 || r.j.personal === true, JSON.stringify(r.j)); assert.ok(!/Saved to your group|Locked\./.test(JSON.stringify(r.j))); assert.ok(!book('bob').late);
   fresh(); const g2 = await mk('ann'); await joinAll(g2, ['bob']); NOW = START - 5 * H; assert.strictEqual((await add('bob', bet('a0', '502', 'KC', 'ml', 130, 10))).s, 200);
   NOW += 20 * 6e4; X.espn = 'throw'; // 20 minutes later, still before every kickoff, ESPN is down: the copy the server holds is 20 minutes old
   r = await add('bob', bet('old', '509', 'MIA', 'ml', 140, 100)); assert.strictEqual(r.s, 503, 'a 20-minute-old copy is not "checked just now": ' + JSON.stringify(r.j)); assert.ok(!book('bob').old);

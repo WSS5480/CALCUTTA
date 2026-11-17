@@ -3,6 +3,7 @@
 // round) and passes now. To see that: ODD_ROOT=/path/to/a/486f127/checkout node odds-api/groups.r3.test.js  (expect every line FAIL).
 const PH = require('./groups.testenv'); // Phase 1: switches set to "Groups open"; phone-file checks run only where the Groups phone code exists (see that file)
 const assert = require('assert'), http = require('http'), fs = require('fs'), path = require('path');
+const LATE = (r, re) => { assert.strictEqual(r.s, 200, JSON.stringify(r.j)); assert.strictEqual(r.j.personal, true, 'personal answer: ' + JSON.stringify(r.j)); assert.strictEqual(r.j.gl, 0); assert.ok(!/Saved to your group/.test(JSON.stringify(r.j))); assert.match(r.j.text, /Saved as a personal bet\.$/); if (re) assert.match(r.j.text, re); return r; }; // fix 1 (review of 342da87): no price yet / closed / started = main's personal answer
 const ROOT = process.env.ODD_ROOT ? path.resolve(process.env.ODD_ROOT) : path.join(__dirname, '..'), R = path.join(ROOT, 'odds-api') + '/';
 const G = require(R + 'groups'), GR = require(R + 'grade'), S = require(R + 'sync'), PAIR = require(R + 'pairing'), LIM = require(R + 'limits'), D = G._deps;
 const X = { db: {}, DOWN: false, LOSTACK: false, NOREAD: false };
@@ -91,12 +92,12 @@ test('C1 "Kalshi-tagged bets only" filters among SERVER-ADDED bets by a ticker c
 // =============================== CRITICAL 2: the price is settled at kickoff ===============================
 test('C2 (round 4: replaces "even money") no posted price: a moneyline with nothing posted is REFUSED when added, never paid at +100 or +500', async () => {
   const g = await mk('ann'); await joinAll(g, ['bob']); NOW = START - 5 * H;
-  const r = await add('bob', bet('n2', '501', 'NYG', 'ml', 500, 100)); assert.strictEqual(r.s, 409); assert.match(r.j.error, /^No posted price for this game yet — it can't count in your group/);
+  const r = await add('bob', bet('n2', '501', 'NYG', 'ml', 500, 100)); LATE(r, /^No price is posted for this game yet, so it can't count in your group/);
   const v = await view('bob', g, START + 2 * DAY); assert.deepStrictEqual(v.bets, []);
 });
 test('C2 the price typed never beats the reference: SF -500 on ESPN, +500 typed -> graded at -500', async () => {
   const g = await mk('ann'); await joinAll(g, ['bob']); NOW = START - 2.5 * DAY;
-  assert.strictEqual((await add('bob', bet('n5', '506', 'SF', 'ml', 500, 100))).s, 409, 'round 4: before ESPN posts a price the bet is refused');
+  LATE(await add('bob', bet('n5', '506', 'SF', 'ml', 500, 100)), /No price is posted/); // round 4 + fix 1: before ESPN posts a price the bet is not in the group
   NOW = START - 20 * H; assert.strictEqual((await add('bob', bet('n5', '506', 'SF', 'ml', 500, 100))).s, 200);
   const v = await view('bob', g, START + 2 * DAY); assert.strictEqual(v.by.n5.res, 'won'); assert.strictEqual(v.by.n5.pl, 20);
 });
@@ -112,7 +113,7 @@ test('C2 worse of the price typed and the reference AT KICKOFF: the line moves a
 test('C2 the line check runs with or without a reference PRICE: ESPN has PHI -7.5 and no prices, PHI -5.5 is refused for its line; at the line, and on the moneyline, it is refused for having no posted price (round 4)', async () => {
   const g = await mk('ann'); await joinAll(g, ['bob']); NOW = START - 5 * H;
   let r = await add('bob', bet('n4', '505', 'PHI', 'sp', 500, 100, { line: -5.5 })); assert.strictEqual(r.s, 409, JSON.stringify(r.j)); assert.match(r.j.error, /Line too far from the market: the main line is PHI -7.5/);
-  r = await add('bob', bet('n4b', '505', 'PHI', 'sp', 500, 100, { line: -7.5 })); assert.strictEqual(r.s, 409); assert.match(r.j.error, /No posted price/); r = await add('bob', bet('n3', '505', 'PHI', 'ml', 500, 100)); assert.strictEqual(r.s, 409); assert.match(r.j.error, /No posted price/);
+  r = await add('bob', bet('n4b', '505', 'PHI', 'sp', 500, 100, { line: -7.5 })); LATE(r, /No price is posted/); r = await add('bob', bet('n3', '505', 'PHI', 'ml', 500, 100)); LATE(r, /No price is posted/);
   const v = await view('bob', g, START + 2 * DAY); assert.deepStrictEqual(v.bets, []);
   assert.strictEqual(typeof GR.lineWhy, 'function'); assert.ok(GR.lineWhy({ kind: 'sp', side: 'home', line: -5.5, lg: 'nfl', rl: -7.5 }), 'no rp given, still refused');
 });
@@ -124,7 +125,7 @@ test('C2 no line at all: a spread or total is refused when added ("No line poste
 test('C2 "Longest odds that count" stays an upper cap ON TOP of the reference rule (typed +400, reference +380, contest cap +150 -> +150)', async () => {
   GAMES.find((x) => x.id === '506').oddsFrom = 0; const g = await mk('ann', { maxOdds: 150 }); await joinAll(g, ['bob']); NOW = START - 5 * H; GAMES.find((x) => x.id === '506').as = 31;
   assert.strictEqual((await add('bob', bet('c1', '506', 'ARI', 'ml', 400, 100))).s, 200); const v = await view('bob', g, START + 2 * DAY); assert.strictEqual(v.by.c1.pl, 150);
-  const g2 = await mk('ann', { maxOdds: 5000 }); await joinAll(g2, ['cat']); NOW = START - 5 * H; assert.strictEqual((await add('cat', bet('c2', '501', 'NYG', 'ml', 5000, 100))).s, 409, 'a +5000 setting never makes a bet with no posted price count');
+  const g2 = await mk('ann', { maxOdds: 5000 }); await joinAll(g2, ['cat']); NOW = START - 5 * H; LATE(await add('cat', bet('c2', '501', 'NYG', 'ml', 5000, 100)), /No price is posted/); // a +5000 setting never makes a bet with no posted price count
 });
 // =============================== CRITICAL 3: parlays ===============================
 test('C3 parlays: the same leg twice and two legs from one game are refused; legs are capped (default 4, commissioner setting)', async () => {
@@ -177,7 +178,7 @@ test('H5 idempotent add: same id + same bet = success with the stored bet (never
   st = await call('cat', 'bet/status', { id: 'never' }); assert.strictEqual(st.j.saved, false);
   assert.strictEqual(X.db[SID.cat].data.bets.filter((y) => y.id === 'x2').length, 1, 'one copy in My Bets'); assert.ok(X.db[SID.cat].data.bets[0].gl === t0);
   const v = await view('cat', g, START + 2 * DAY); assert.strictEqual(v.bets.length, 1); assert.strictEqual(v.t.stake, 100); assert.strictEqual(v.by.x2.pl, 130);
-  X.DOWN = true; r = await add('cat', bet('x9', '509', 'MIA', 'ml', 140, 10)); X.DOWN = false; NOW = START - 6 * H; assert.notStrictEqual(r.s, 200); assert.strictEqual((await call('cat', 'bet/status', { id: 'x9' })).j.saved, false, 'a failed upload left nothing');
+  X.DOWN = true; r = await add('cat', bet('x9', '509', 'MIA', 'ml', 140, 10)); X.DOWN = false; NOW = START - 6 * H; assert.ok(r.s !== 200 || r.j.personal === true, JSON.stringify(r.j)); assert.strictEqual((await call('cat', 'bet/status', { id: 'x9' })).j.saved, false, 'a failed upload left nothing');
 });
 test('H5 / M13 phone: one bet id per bet reused on every retry, waits 60 s with "Saving…", asks bet/status by id after a timeout; a failed status check never falls back to personal', async () => {
   PH.phoneCheck(() => { const c = client(); assert.ok(/60000/.test(c) && c.includes('Saving…'), '60 s wait with a Saving state'); assert.ok(c.includes("post('bet/status', id ? { id: id } : {})") && c.includes('st = await blStatus(bet.id)'), 'asks bet/status by id');
@@ -286,7 +287,7 @@ test('L1 the leftover cent of the main-pot split goes to the LARGEST pot (not to
 });
 test('L2 a bet added after kickoff gets an honest answer (refused, nothing added), not "Saved to your group. Locked."', async () => {
   const g = await mk('ann'); await joinAll(g, ['bob']); NOW = START + 3 * H + 60e3; const r = await add('bob', bet('late1', '502', 'KC', 'ml', 130, 100));
-  assert.strictEqual(r.s, 409); assert.match(r.j.error, /already started.*Nothing was added/); assert.ok(!/Saved/.test(JSON.stringify(r.j))); assert.strictEqual((await call('bob', 'bet/status', { id: 'late1' })).j.saved, false);
+  LATE(r, /already started/); assert.strictEqual((await call('bob', 'bet/status', { id: 'late1' })).j.saved, false);
 });
 test('L3 a parlay that lost its first leg is not shown or scored early: nothing about it reaches the standings before its last game kicks off', async () => {
   const g = await mk('ann'); await joinAll(g, ['bob', 'cat']); NOW = START - 6 * H;

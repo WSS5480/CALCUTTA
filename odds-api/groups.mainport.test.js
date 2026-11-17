@@ -41,13 +41,13 @@ const evOf = (g, now) => { const s0 = startOf(g, now), st = g.state ? g.state(no
   return { id: g.id, date: new Date(s0).toISOString(), status, competitions: [{ date: new Date(s0).toISOString(), status, odds: od ? [od] : undefined, competitors: [{ homeAway: 'home', score: sc(g.hs), team: tm(g.home) }, { homeAway: 'away', score: sc(g.as), team: tm(g.away) }] }] }; };
 D.fetch = async (u) => { // ESPN as the server sees it: the scoreboard by league and day, and the event lookup (summary?event=) with real HTTP statuses
   const now = D.now(), sm = /sports\/([a-z-]+\/[a-z-]+)\/summary\?event=(\w+)/.exec(u);
-  if (sm) { if (X.SUMMARY === 'down') return { ok: false, status: 503, json: async () => ({}) }; const g = GAMES.find((x) => PATH[x.lg || 'nfl'] === sm[1] && x.id === sm[2]); if (!g) return { ok: false, status: 404, json: async () => ({}) }; const ev = evOf(g, now); return { ok: true, status: 200, json: async () => ({ header: { id: ev.id, competitions: ev.competitions } }) }; }
+  if (sm) { X.sumCalls = (X.sumCalls || 0) + 1; if (X.SUMMARY === 'down') return { ok: false, status: 503, json: async () => ({}) }; const g = GAMES.find((x) => PATH[x.lg || 'nfl'] === sm[1] && x.id === sm[2]); if (!g) return { ok: false, status: 404, json: async () => ({}) }; const ev = evOf(g, now); return { ok: true, status: 200, json: async () => Object.assign({ header: { id: ev.id, competitions: ev.competitions } }, X.PC && X.PC[g.id] ? { pickcenter: [X.PC[g.id]] } : {}) }; } // fix 2: ESPN's pregame lines on the event (pickcenter)
   if (X.BOARD === 'down') return { ok: false, status: 503, json: async () => ({}) };
   const m = /sports\/([a-z-]+\/[a-z-]+)\/scoreboard\?dates=(\d{8})/.exec(u);
   return { ok: true, status: 200, json: async () => ({ events: !m ? [] : GAMES.filter((g) => PATH[g.lg || 'nfl'] === m[1] && ymd(startOf(g, now)) === m[2]).map((g) => evOf(g, now)) }) };
 };
 let NOW = START - 3 * DAY; D.now = () => NOW;
-const fresh = () => { X.db = {}; WHO.forEach((w) => { X.db[SID[w]] = { id: SID[w], salt: 's', pinhash: 'h', data: { bets: [] }, updated: 1 }; }); GAMES = BASE(); X.BOARD = X.SUMMARY = 'ok'; X.NOTICK = false; G._reset(); if (LIM._reset) LIM._reset(); NOW = START - 3 * DAY; };
+const fresh = () => { X.db = {}; WHO.forEach((w) => { X.db[SID[w]] = { id: SID[w], salt: 's', pinhash: 'h', data: { bets: [] }, updated: 1 }; }); GAMES = BASE(); X.BOARD = X.SUMMARY = 'ok'; X.NOTICK = false; X.PC = {}; X.sumCalls = 0; G._reset(); if (LIM._reset) LIM._reset(); NOW = START - 3 * DAY; };
 const srv = http.createServer(async (req, res) => { if (!(await G.handle(req, res))) { res.statusCode = 404; res.end('{}'); } }); let P;
 const call = async (who, op, b, ip) => { const r = await fetch('http://127.0.0.1:' + P + '/groups/' + op, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': who ? 't-' + who : '', 'x-ip': ip || ('9.9.' + (WHO.indexOf(who) >> 8) + '.' + (WHO.indexOf(who) & 255)) }, body: JSON.stringify(b || {}) }); return { s: r.status, j: await r.json() }; };
 const CDEF = { cname: 'Picks', sport: 'nfl', fmt: 'standings', start: START - 2 * DAY, runs: 'w4', kalshi: false, honor: false, types: { sp: true, ml: true, ou: true, prop: true, parlay: true }, legs: 4, metric: 'win', minBets: 0, minPaid: 0, cap: 0, entry: 25, split: '100' };
@@ -149,9 +149,31 @@ test('H2H 3 the weekly prize of a week with an open bet is paid 72 hours after i
   const bob = st.rows.find((x) => x.name === 'BOBname'); assert.ok(bob.owedWk > 0, 'BOB had the week\'s high score');
   const pool = 100, owed = Math.round(st.rows.reduce((a, x) => a + x.owed, 0) * 100); assert.ok(owed <= pool * 100 && st.rows.every((x) => Math.round(x.owed * 100) === x.owed * 100), 'to the cent, never more than the pool');
 });
+// =============================== REVIEW OF 342da87: fix 1 (personal, not refused) and fix 2 (server asleep through the kickoff window) ===============================
+test('FIX 1 no posted price yet, inside the last 2 minutes, or after ESPN shows the game started: main\'s personal answer with a plain sentence (kept on the phone, never in the group); ESPN unreadable stays 503', async () => {
+  const g = await mk('ann', { entry: 0 }); await joinAll(g, ['bob']); NOW = START - 6 * H;
+  let r = await add('bob', bet('n1', '501', 'NYG', 'ml', -110, 10)); assert.strictEqual(r.s, 200); assert.deepStrictEqual([r.j.personal, r.j.gl, r.j.text], [true, 0, "No price is posted for this game yet, so it can't count in your group. Saved as a personal bet."]);
+  r = await add('bob', { id: 'np', kind: 'parlay', stake: 10, day: '2026-11-22', lg: 'nfl', legs: [leg('502', 'KC', 'ml', 130), leg('501', 'NYG', 'ml', -110)] }); assert.strictEqual(r.j.personal, true, 'a parlay with a no-price leg too: ' + JSON.stringify(r.j));
+  NOW = gm('509').start - 60e3; r = await add('bob', bet('c1', '509', 'MIA', 'ml', 140, 10)); assert.deepStrictEqual([r.s, r.j.personal, r.j.text], [200, true, 'Group bets close 2 minutes before kickoff. Saved as a personal bet.']);
+  NOW = gm('509').start + 10 * 60e3; r = await add('bob', bet('s1', '509', 'MIA', 'ml', 140, 10)); assert.deepStrictEqual([r.s, r.j.personal, r.j.text], [200, true, "This game has already started, so it can't count in your group. Saved as a personal bet."]);
+  assert.deepStrictEqual(Object.keys(book('bob')), [], 'nothing went into the group book'); assert.ok(!X.db[SID.bob].data.bets.length, 'and nothing was written to My Bets by the server');
+  NOW = START - 50 * 60e3; G._reset(); X.BOARD = 'down'; X.SUMMARY = 'down'; r = await add('bob', bet('d1', '502', 'KC', 'ml', 130, 10)); assert.strictEqual(r.s, 503, JSON.stringify(r.j)); assert.match(r.j.error, /Couldn't check this game — try again\. Nothing was added\./);
+});
+test('FIX 2 the server slept through the 30 minutes before kickoff: at grading the kickoff reference comes from ESPN\'s pregame lines on the event (one call per game, kept); none posted there either = void; ESPN not answering = graded on a later pass, never voided for it', async () => {
+  const g = await mk('ann', { entry: 0 }); await joinAll(g, ['bob', 'cat', 'dan']); NOW = START - 6 * H; const K = gm('502').start;
+  assert.strictEqual((await add('bob', bet('b1', '502', 'KC', 'ml', 200, 100))).s, 200); assert.strictEqual((await add('cat', bet('c1', '502', 'KC', 'ml', 130, 100))).s, 200); assert.strictEqual((await add('dan', bet('d1', '509', 'MIA', 'ml', 140, 100))).s, 200);
+  X.NOTICK = true; X.PC = { '502': O('BUF -3', 47.5, 120, -140) }; // no tick ran near kickoff (server asleep); ESPN kept KC +120 as the pregame line of 502; nothing for 509
+  X.SUMMARY = 'down'; let v = await view('bob', g, K + 5 * H); assert.deepStrictEqual([v.by.b1.res, v.by.b1.ok], ['', true], 'ESPN summary down: not graded yet, not void'); X.SUMMARY = 'ok';
+  X.sumCalls = 0; v = await view('bob', g, K + 5 * H + 60e3); assert.deepStrictEqual([v.by.b1.res, v.by.b1.pl], ['won', 120], 'typed +200, ESPN pregame +120: graded at +120');
+  const st = Object.values(X.db['lock:gl:' + g.id + ':' + g.contests[0].cid].data.b).map((P) => P.b1).find(Boolean); assert.strictEqual(Object.values(st.r)[0].rs, 'espn-pregame', 'stored with the leg');
+  const vc = await view('cat', g, K + 5 * H + 2 * 60e3); assert.deepStrictEqual([vc.by.c1.res, vc.by.c1.pl], ['won', 120], 'typed +130 -> the lower +120');
+  const vd = await view('dan', g, K + 5 * H + 3 * 60e3); assert.ok(vd.by.d1.voided && vd.by.d1.res === 'push', 'no pregame line anywhere for 509: void, stake back');
+  assert.ok(X.sumCalls <= 6, 'summary read once per game, then kept: ' + X.sumCalls);
+});
+
 (async () => {
   await new Promise((r) => srv.listen(0, '127.0.0.1', () => { P = srv.address().port; r(); }));
-  const only = process.argv[2]; let fail = 0, n = 0; const err = console.error; console.error = () => {};
+  const only = process.argv[2]; let fail = 0, n = 0; const err = console.error; console.error = process.env.DBG ? err : () => {};
   for (const [name, fn] of tests) { if (only && !name.includes(only)) continue; n++; fresh(); try { await fn(); console.log('  PASS ' + name); } catch (e) { fail++; console.log('  FAIL ' + name + '\n        ' + String((e && e.message) || e).split('\n').slice(0, 14).join('\n        ')); } }
   console.error = err; srv.close();
   console.log(fail ? '\n' + fail + ' OF ' + n + ' MAIN-LINE PORT CHECKS FAILED' : '\nALL ' + n + ' MAIN-LINE PORT CHECKS PASSED'); process.exit(fail ? 1 : 0);

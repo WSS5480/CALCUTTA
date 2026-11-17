@@ -3,6 +3,7 @@
 // No network, no database: in-memory fakes like groups.test.js.
 const PH = require('./groups.testenv'); // Phase 1: switches set to "Groups open"; phone-file checks run only where the Groups phone code exists (see that file)
 const assert = require('assert'), http = require('http'), fs = require('fs'), path = require('path');
+const LATE = (r, re) => { assert.strictEqual(r.s, 200, JSON.stringify(r.j)); assert.strictEqual(r.j.personal, true, 'personal answer: ' + JSON.stringify(r.j)); assert.strictEqual(r.j.gl, 0); assert.ok(!/Saved to your group/.test(JSON.stringify(r.j))); assert.match(r.j.text, /Saved as a personal bet\.$/); if (re) assert.match(r.j.text, re); return r; }; // fix 1 (review of 342da87): no price yet / closed / started = main's personal answer
 const G = require('./groups'), GR = require('./grade'), S = require('./sync'), D = G._deps;
 let db = {}, writes = {}, DOWN = false;
 D.S = {
@@ -105,7 +106,7 @@ test('G16: if the upload fails the bet is NOT placed (nothing stored, clear erro
 });
 test('G16: a bet added after its game started is REFUSED with an honest message (round 3); a void (postponed game) shows its reason to every member', async () => {
   const g = await mk('ann'); await joinAll(g, ['bob', 'cat']); NOW = START - 5 * H; assert.strictEqual((await addBet('bob', bet('p1', '504', 'MIA', 'ml', 120, 100))).s, 200);
-  NOW = START + H; const late = await addBet('bob', bet('late', '501', 'NYG', 'ml', -110, 100)); assert.strictEqual(late.s, 409); assert.match(late.j.error, /already started.*Nothing was added/);
+  NOW = START + H; const late = await addBet('bob', bet('late', '501', 'NYG', 'ml', -110, 100)); LATE(late, /already started/);
   NOW = START + 3 * DAY; G._reset(); const st = await call('cat', 'standings', { id: g.id, cid: g.contests[0].cid }); const bob = st.j.rows.find((x) => x.name === 'BOBname');
   const p = await call('cat', 'player', { id: g.id, cid: g.contests[0].cid, pid: bob.pid }); const v = p.j.bets.find((x) => x.id === 'p1'); assert.ok(v, 'another member sees it'); assert.strictEqual(v.res, 'push'); assert.match(v.vr, /postponed or cancelled/);
   const own = await call('bob', 'player', { id: g.id, cid: g.contests[0].cid, pid: bob.pid }); assert.ok(!own.j.bets.some((x) => x.id === 'late'), 'the refused bet is nowhere');

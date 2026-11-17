@@ -450,17 +450,18 @@ async function contestBets(g, c, ctx) {
     if (e && e.g) return; // graded: nothing moves any more
     for (const k of Object.keys(st)) { const x = st[k]; if (!x || !x.gid) continue; const rk = k + '|' + x.kick + '|' + (x.pp || ''), rf = await (RFP[rk] || (RFP[rk] = GR.refresh(x, ctx, { carry: !!c.rules.carry }).catch(() => null))); if (rf) w.o.RF[k] = rf; } });
   // 3. ledger: apply observations, then grade frozen copies whose games are final
-  const L = clone(L0); let ch = applyObs(L, obs, now);
+  const L = clone(L0); let ch = applyObs(L, obs, now); const PREF = []; // fix 2: kickoff references taken from ESPN's pregame lines at grading, written with the ledger
   const grades = [];
   await pmap(Object.keys(L.b).filter((pid) => mem.some((m) => m.pid === pid)).flatMap((pid) => Object.keys(L.b[pid]).map((id) => [pid, id])), 6, async ([pid, id]) => {
     const e = L.b[pid][id]; if (e.g) return; const s = e.s || {}; const ks = legKeys(s), rv = { x: '' };
-    const legs = []; for (const k of ks) { const st = e.r[k]; if (!st) { const r = RES[k]; legs.push(r && r.x ? r : { x: 'Not matched to a game when it was added' }); continue; } legs.push(await GR.withGame(st, ctx)); }
+    const legs = []; for (const k of ks) { const st = e.r[k]; if (!st) { const r = RES[k]; legs.push(r && r.x ? r : { x: 'Not matched to a game when it was added' }); continue; } const w = await GR.withRef(st, ctx); if (w && w.rs === 'espn-pregame' && st.rs !== 'espn-pregame') { const f = {}; ['rp', 'rl', 'rs', 'ra'].forEach((q) => { st[q] = f[q] = w[q]; }); PREF.push({ pid, id, k, f }); ch++; } /* fix 2 (review of 342da87): the kickoff reference from ESPN's pregame lines when the server missed the window; stored so it is read once */ legs.push(w); }
+    if (legs.some((x) => x && x.refWait)) { RV[pid + '|' + id] = rv; return; } // fix 2: ESPN's pregame lines could not be read just now: graded on a later pass, never voided for it
     let gb; try { gb = GR.gradeBet(s, legs, { maxOdds: c.rules.maxOdds || 500, carry: !!c.rules.carry, endAt: chiEnd(c.endDay) }); } catch (er) { gb = { x: 'Bet Oddable cannot read' }; } if (gb.x) { rv.x = gb.x; rv.sport = /sport/.test(gb.x) || !!gb.rule; } else if (gb.res) { const gg = { res: gb.res, pl: gb.pl, at: now }; GRADEK.forEach((q) => { if (gb[q]) gg[q] = gb[q]; }); grades.push({ pid, id, g: gg, sj: JSON.stringify(s) }); }
     RV[pid + '|' + id] = rv;
   });
   ch += applyGrades(L, grades);
   if (ch && !ctx.dry) { // write the ledger: on a conflict, redo on the fresh copy (applyObs/applyGrades are repeatable)
-    try { await rmw(LK(g.id, c.cid), { b: {} }, async (x) => { x.b = x.b || {}; applyObs(x, obs, now); applyGrades(x, grades); return {}; }, 8); } catch (e) { console.error('groups: ledger', e.message); }
+    try { await rmw(LK(g.id, c.cid), { b: {} }, async (x) => { x.b = x.b || {}; applyObs(x, obs, now); PREF.forEach((q) => { const e = x.b[q.pid] && x.b[q.pid][q.id], st = e && !e.g && e.r && e.r[q.k]; if (st && st.rs !== 'espn-pregame') Object.assign(st, q.f); }); applyGrades(x, grades); return {}; }, 8); } catch (e) { console.error('groups: ledger', e.message); }
   }
   // 4. judge every ledger bet for each member
   const out = {};
@@ -493,6 +494,12 @@ function normType(o, what) { if (o.type == null || o.type === '') o.type = 'ml';
 RLIM.bet = [60, 600e3, 6000, 600e3];
 const DIFF_MSG = 'A different bet is already saved under this id. ' + 'Group bets are final when you add them.';
 const STARTED_MSG = "That game has already started, so this bet can't go into your group. Nothing was added.";
+// REVIEW OF 342da87, FIX 1: a bet on a game with no posted price yet, or added inside the last 2 minutes / after ESPN shows the game started, is not refused
+// outright any more: like "can't find this game" it gets main's personal answer (200 personal:true, kept on the phone as a personal bet, never in the group).
+// ESPN unreadable stays a 503 (nothing saved). [why, the sentence the phone shows]
+const LATE_PERSONAL = { [NOPRICE_MSG]: ['no price is posted for this game yet', "No price is posted for this game yet, so it can't count in your group. Saved as a personal bet."],
+  [CLOSED_MSG]: ['group bets close 2 minutes before kickoff', 'Group bets close 2 minutes before kickoff. Saved as a personal bet.'],
+  [STARTED_MSG]: ['the game has already started', "This game has already started, so it can't count in your group. Saved as a personal bet."] };
 const BETKEYS = ['id', 'kind', 'type', 'side', 'line', 'odds', 'mult', 'stake', 'lg', 'gid', 'day', 'home', 'away', 'week', 'text', 'note', 'appSu', 'appConf', 'appAts', 'appLine', 'noApp', 'pp', 'legs', 'pay', 'src', 'kt', 'ks'];
 const scalar = (v) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean';
 function cleanBet(x) {
@@ -593,7 +600,7 @@ async function countsWhere(u, bet, R, gs, now) {
 // so the phone keeps it as an ordinary personal bet (plain sync carries it like any other) and can say why. (Main's answer, kept by the manager's decision
 // of Nov 17 2026; the feature branch's 409 was NOT ported.)
 const lc1 = (t) => String(t || '').replace(/\.$/, ''); // the reason as the contest gives it, without its closing full stop
-const personalOut = (bet, why) => ({ ok: true, personal: true, saved: false, counted: 0, code: 'personal', id: String(bet.id), gl: 0, why, text: 'No contest in your groups can count this bet (' + lc1(why) + '). It was NOT added to a group: it stays a personal bet.' });
+const personalOut = (bet, why, text) => ({ ok: true, personal: true, saved: false, counted: 0, code: 'personal', id: String(bet.id), gl: 0, why, text: text || 'No contest in your groups can count this bet (' + lc1(why) + '). It was NOT added to a group: it stays a personal bet.' });
 // IDEMPOTENT (round 3): the phone makes the bet id once and reuses it on every retry. Same id + same bet = success with the stored bet (a lost answer can
 // never make a second bet); same id + a different bet = 409. The book write is the one commit point.
 async function betAdd(u, ip, raw, now) {
@@ -604,7 +611,7 @@ async function betAdd(u, ip, raw, now) {
   const gs = await inRunning(u, now); if (!gs.length) return personalOut(bet, 'you are not in a running group contest'); // Phase 1 (B2): was a 409
   // A refusal from the add check (game already started, closed, no price, ESPN not answering) only stands when one of the player's contests could have taken
   // the bet at all. A bet plainly outside every contest (another sport, other dates: by what the bet itself says, which can only ever keep a bet OUT) is personal.
-  let R; try { R = await addCheck(bet, now); } catch (er) { if (!plausible(u, gs, bet, now)) return personalOut(bet, 'it is outside your contests: another sport or other dates'); if (er && er.message === NOGAME_MSG) return personalOut(bet, "Oddable can't find this game on the scores service, so it can't count in a group"); throw er; } // main-line port: a game ESPN answers it does not have = main's personal answer (it can never count)
+  let R; try { R = await addCheck(bet, now); } catch (er) { if (!plausible(u, gs, bet, now)) return personalOut(bet, 'it is outside your contests: another sport or other dates'); if (er && er.message === NOGAME_MSG) return personalOut(bet, "Oddable can't find this game on the scores service, so it can't count in a group"); const lateW = LATE_PERSONAL[er && er.message]; if (lateW) return personalOut(bet, lateW[0], lateW[1]); throw er; } // main-line port: a game ESPN answers it does not have = main's personal answer (it can never count)
   // Round 4: a bet that counts nowhere (too many legs, a hedge, a kind of bet the contest does not take, over the limits) is never "Saved to your group".
   // Main-line port: answered as a personal bet (200 personal:true), main's answer, with the first contest's reason.
   const W = await countsWhere(u, bet, R, gs, now);

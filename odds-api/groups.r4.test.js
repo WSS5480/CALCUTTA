@@ -4,6 +4,7 @@
 //   ODD_ROOT=/path/to/a/1e47e93/checkout node odds-api/groups.r4.test.js     (expect every line FAIL)
 const PH = require('./groups.testenv'); // main-line port: Groups switches set to "open"; phone-file checks run only against the feature branch's phone file (ODD_PREVIEW_ROOT)
 const assert = require('assert'), http = require('http'), fs = require('fs'), path = require('path'), vm = require('vm'), crypto = require('crypto');
+const LATE = (r, re) => { assert.strictEqual(r.s, 200, JSON.stringify(r.j)); assert.strictEqual(r.j.personal, true, 'personal answer: ' + JSON.stringify(r.j)); assert.strictEqual(r.j.gl, 0); assert.ok(!/Saved to your group/.test(JSON.stringify(r.j))); assert.match(r.j.text, /Saved as a personal bet\.$/); if (re) assert.match(r.j.text, re); return r; }; // fix 1 (review of 342da87): no price yet / closed / started = main's personal answer
 const ROOT = process.env.ODD_ROOT ? path.resolve(process.env.ODD_ROOT) : path.join(__dirname, '..'), R = path.join(ROOT, 'odds-api') + '/';
 const G = require(R + 'groups'), GR = require(R + 'grade'), PAIR = require(R + 'pairing'), LIM = require(R + 'limits'), D = G._deps;
 const X = { db: {}, BOARD: 'ok', SUMMARY: 'ok', NOTICK: false };
@@ -93,8 +94,8 @@ test('1 `follow` asks ESPN for the event in EVERY league the contest allows (not
 test('2 HIGH no posted price at kickoff: the bet is VOID and does not count, moneylines included (no +100); it is refused when nothing is posted at add time', async () => {
   const g = await mk('ann'); await joinAll(g, ['bob', 'cat']); const K = gm('502').start; gm('502').odds = (now) => (now < K - 2 * H ? O('BUF -2.5', 47.5, 130, -150) : undefined); // ESPN takes the odds down two hours before kickoff
   NOW = START - 6 * H; assert.strictEqual((await add('bob', bet('n1', '502', 'KC', 'ml', 130, 100))).s, 200); assert.strictEqual((await add('cat', bet('n2', '502', 'KC', 'sp', -110, 100, { line: 2.5 }))).s, 200);
-  let r = await add('bob', bet('n3', '501', 'NYG', 'ml', 100, 100)); assert.strictEqual(r.s, 409); assert.match(r.j.error, /^No posted price for this game yet — it can't count in your group/);
-  r = await add('bob', bet('n4', '505', 'PHI', 'ml', 100, 100)); assert.strictEqual(r.s, 409, 'a spread line but no moneyline price is not a moneyline reference'); assert.match(r.j.error, /^No posted price/);
+  let r = await add('bob', bet('n3', '501', 'NYG', 'ml', 100, 100)); LATE(r, /^No price is posted for this game yet, so it can't count in your group/);
+  r = await add('bob', bet('n4', '505', 'PHI', 'ml', 100, 100)); LATE(r, /^No price is posted/); // a spread line but no moneyline price is not a moneyline reference
   for (const [w, id] of [['bob', 'n1'], ['cat', 'n2']]) { const v = await view(w, g, START + 2 * DAY), b = v.by[id]; assert.ok(b, 'listed'); assert.deepStrictEqual([b.res, b.pl || 0, b.ok, b.nr, b.voided], ['push', 0, false, true, true], JSON.stringify(b)); assert.strictEqual(b.vr, NOREF); assert.strictEqual(b.why, NOREF);
     assert.deepStrictEqual([v.t.win, v.t.n, v.t.stake, v.t.w, v.t.p], [0, 0, 0, 0, 0], 'stake back: nothing in the standings'); }
   assert.strictEqual(GR.NOREF, NOREF); assert.strictEqual(GR.legPrice({ kind: 'ml', side: 'home', kick: K, rd: -300 }, 5, 500).v, NOREF, 'the price-from-the-spread path is gone'); assert.ok(GR.refOk({ kind: 'ml', side: 'home', kick: K, rp: -150, ra: K - 10 * 6e4 }) && !GR.refOk({ kind: 'ml', side: 'home', kick: K, rp: -150, ra: K - 40 * 6e4 }) && !GR.refOk({ kind: 'sp', side: 'home', line: -3, kick: K, rp: -110, ra: K - 6e4 }));
@@ -129,7 +130,7 @@ test('4 a placeholder kickoff time: the bet follows ESPN\'s time until the game 
   NOW = real - 2 * H; G._reset(); let v = await view('bob', g, null, 'ann'); assert.deepStrictEqual([v.bets.length, v.hidden], [0, 1], '2 hours before the real kickoff (13 hours after the placeholder) bob\'s pick is still hidden');
   assert.strictEqual((await add('cat', bet('tc', '502', 'BUF', 'ml', -150, 100))).s, 200, 'adds are still open');
   const kick = Object.values(X.db).filter((x) => x.id.startsWith('lock:gl:')).map((x) => Object.values(x.data.b).map((p) => Object.values(p).map((e) => Object.values(e.r)[0].kick))).flat(2); assert.ok(kick.length && kick.every((k) => k === real), 'the stored kickoff is the real one: ' + kick);
-  NOW = real + 60e3; G._reset(); const late = await add('cat', bet('td', '502', 'BUF', 'sp', -110, 10, { line: -2.5 })); assert.strictEqual(late.s, 409); assert.match(late.j.error, /already started/);
+  NOW = real + 60e3; G._reset(); const late = await add('cat', bet('td', '502', 'BUF', 'sp', -110, 10, { line: -2.5 })); LATE(late, /already started/);
   NOW = real - 6 * 6e4; G._reset(); v = await view('bob', g, real + 2 * DAY); assert.deepStrictEqual([v.by.tb.res, v.by.tb.pl], ['won', 130], 'priced at the reference of the REAL kickoff');
 });
 // =============================== 5. the reference does not depend on a tick; every running group is ticked ===============================

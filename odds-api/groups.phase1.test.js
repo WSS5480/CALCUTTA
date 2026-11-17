@@ -55,8 +55,11 @@ const joinAll = async (g, ws) => { for (const w of ws) { const r = await call(w,
 const bet = (id, gid, side, type, odds, stake, o) => { const g = GAMES.find((x) => x.id === gid); return Object.assign({ id, gid, lg: g.lg || 'nfl', away: g.away.abbr, home: g.home.abbr, day: GR.chiDay(g.start), side, type, odds, stake }, o || {}); };
 const add = (w, b) => call(w, 'bet/add', { bet: b });
 const book = (w) => ((X.db['lock:gb:' + MKOF(E(w))] || {}).data || {}).b || {};
-const view = async (w, g, at, cid) => { if (at != null) NOW = at; G._reset(); const st = await call(w, 'standings', { id: g.id, cid: cid || g.contests[0].cid }); assert.strictEqual(st.s, 200, JSON.stringify(st.j)); const me = st.j.rows.find((x) => x.name === w.toUpperCase() + 'name'); const p = await call(w, 'player', { id: g.id, cid: cid || g.contests[0].cid, pid: me.pid }); return { st: st.j, row: me, bets: p.j.bets, t: p.j.t, by: Object.fromEntries(p.j.bets.map((b) => [b.id, b])) }; };
-const personal = (r, re) => { assert.strictEqual(r.s, 200, JSON.stringify(r.j)); assert.strictEqual(r.j.personal, true, 'answered as a personal bet: ' + JSON.stringify(r.j)); assert.strictEqual(r.j.gl, 0); assert.strictEqual(r.j.saved, false); assert.ok(!/Saved to your group/.test(JSON.stringify(r.j)), 'never told "Saved to your group"'); assert.match(r.j.text, /NOT added to a group and is not locked/); if (re) assert.match(r.j.why, re); return r; };
+// Main-line port of the round 4/5 rules: the kickoff reference must be read inside the last 30 minutes before kickoff (in production the 5-minute tick
+// does it). The clock jumps here, so before a jump FORWARD the harness runs the tick the server would have run 5 minutes before each kickoff on the way.
+const kickTicks = async (to) => { const ts = [...new Set(GAMES.map((g) => g.start - 5 * 6e4))].filter((t) => t > NOW && t <= to).sort((a, b) => a - b); for (const t of ts) { NOW = t; await G.tick({ force: true }); } };
+const view = async (w, g, at, cid) => { if (at != null) { await kickTicks(at); NOW = at; } G._reset(); const st = await call(w, 'standings', { id: g.id, cid: cid || g.contests[0].cid }); assert.strictEqual(st.s, 200, JSON.stringify(st.j)); const me = st.j.rows.find((x) => x.name === w.toUpperCase() + 'name'); const p = await call(w, 'player', { id: g.id, cid: cid || g.contests[0].cid, pid: me.pid }); return { st: st.j, row: me, bets: p.j.bets, t: p.j.t, by: Object.fromEntries(p.j.bets.map((b) => [b.id, b])) }; };
+const personal = (r, re) => { assert.strictEqual(r.s, 200, JSON.stringify(r.j)); assert.strictEqual(r.j.personal, true, 'answered as a personal bet: ' + JSON.stringify(r.j)); assert.strictEqual(r.j.gl, 0); assert.strictEqual(r.j.saved, false); assert.ok(!/Saved to your group/.test(JSON.stringify(r.j)), 'never told "Saved to your group"'); assert.match(r.j.text, /NOT added to a group: it stays a personal bet/); if (re) assert.match(r.j.why, re); return r; };
 const NOTIN = { betLock: 0, canBet: false, saved: false };
 // every route of /groups (besides on, bet/status, invite, preview), with a body that would be valid enough to reach its code
 const OPS = ['mine', 'create', 'edit', 'get', 'join', 'request', 'cancel', 'decide', 'requests', 'paid', 'leave', 'delete', 'standings', 'player', 'limits', 'partners', 'sidepot', 'contest/add', 'contest/edit', 'contest/delete', 'bet/add', 'bet/edit', 'bet/delete', 'bet/swap', 'bet/void', 'bet/voidable', 'ent/contact', 'ent/admin', 'access', 'nonsense'];
@@ -84,7 +87,7 @@ test('A2 OWNER ONLY (GROUPS_ENABLED=1, GROUPS_OWNER_ONLY=1): the owner-PIN sign-
   const g = await mk('steve'); await joinAll(g, ['tess']); let r = await call('owner', 'mine', {}); assert.strictEqual(r.s, 200); r = await call('owner', 'join', { code: g.code }); assert.strictEqual(r.s, 200, 'the owner-PIN sign-in can join');
   r = await call('tess', 'mine', {}); assert.strictEqual(r.s, 200); assert.strictEqual(r.j.groups.length, 1); assert.strictEqual(r.j.betLock, 1);
   r = await call('tess', 'bet/status', {}); assert.strictEqual(r.s, 200); assert.deepStrictEqual(r.j, { betLock: 1, canBet: true }, 'the normal answer for a member');
-  NOW = START - 5 * H; r = await add('tess', bet('t1', '502', 'KC', 'ml', 130, 20)); assert.strictEqual(r.s, 200); assert.strictEqual(r.j.text, 'Saved to your group. Locked.'); r = await add('steve', bet('s1', '502', 'BUF', 'ml', -150, 20)); assert.strictEqual(r.s, 200, 'the owner\'s phone account places a group bet');
+  NOW = START - 5 * H; r = await add('tess', bet('t1', '502', 'KC', 'ml', 130, 20)); assert.strictEqual(r.s, 200); assert.strictEqual(r.j.text, 'Saved to your group.'); r = await add('steve', bet('s1', '502', 'BUF', 'ml', -150, 20)); assert.strictEqual(r.s, 200, 'the owner\'s phone account places a group bet');
   r = await add('owner', bet('o1', '502', 'KC', 'ml', 130, 20)); assert.strictEqual(r.s, 409); assert.match(r.j.error, /Turn on sync/, 'the owner-PIN sign-in has no synced bets: it can run groups but not place a group bet (as reviewed)');
   r = await call('steve', 'standings', { id: g.id, cid: g.contests[0].cid }); assert.strictEqual(r.s, 200); assert.strictEqual(r.j.rows.length, 3);
 });
@@ -143,40 +146,40 @@ test('A6 the bet merge follows the same master switch: a group bet is locked in 
 // =============================== B. a bet no contest can count ===============================
 test('B1 another sport: an NBA bet from a member of an NFL-only contest is answered "personal" (not saved, not locked), even when that game has already started; an NFL bet still locks', async () => {
   fresh(); const g = await mk('ann'); await joinAll(g, ['bob']); NOW = START - 5 * H;
-  personal(await add('bob', bet('n1', '701', 'BOS', 'ml', -170, 30)), /Not in this contest's sport/);
+  personal(await add('bob', bet('n1', '701', 'BOS', 'ml', -170, 30)), /Not NFL/);
   NOW = START + H; personal(await add('bob', bet('n2', '701', 'LAL', 'ml', 150, 30)), /outside your contests/); // the NBA game is in progress: still a personal bet, not "already started, nothing added"
   let r = await add('bob', bet('f0', '501', 'NYG', 'ml', -110, 30)); assert.strictEqual(r.s, 409); assert.match(r.j.error, /already started.*Nothing was added/, 'a late bet INSIDE the contest is still refused (round 3 L2)');
-  r = await add('bob', bet('f1', '502', 'KC', 'ml', 130, 30)); assert.strictEqual(r.s, 200); assert.strictEqual(r.j.text, 'Saved to your group. Locked.'); assert.strictEqual(r.j.counted, 1);
+  r = await add('bob', bet('f1', '502', 'KC', 'ml', 130, 30)); assert.strictEqual(r.s, 200); assert.strictEqual(r.j.text, 'Saved to your group.'); assert.strictEqual(r.j.counted, 1);
   assert.deepStrictEqual(Object.keys(book('bob')), ['f1'], 'only the bet a contest can count is in the group book'); assert.deepStrictEqual(X.db[SID.bob].data.bets.map((b) => b.id), ['f1'], 'and only it was written to My Bets by the server');
   const v = await view('bob', g, START + 2 * DAY); assert.deepStrictEqual(Object.keys(v.by), ['f1']);
 });
 test('B2 dates: a game before the contest starts, a game after it ends, and a member whose contests are all over: personal each time, with the reason', async () => {
   fresh(); const g = await mk('ann', { start: START + DAY, runs: 'w4' }); await joinAll(g, ['bob']); NOW = START - 5 * H;
-  personal(await add('bob', bet('d1', '502', 'KC', 'ml', 130, 10)), /its game is before Picks starts/);
-  assert.strictEqual((await add('bob', bet('d2', '503', 'CHI', 'ml', -160, 10))).j.text, 'Saved to your group. Locked.', 'a game inside the dates locks');
+  personal(await add('bob', bet('d1', '502', 'KC', 'ml', 130, 10)), /Picks: The game is outside this contest's dates/);
+  assert.strictEqual((await add('bob', bet('d2', '503', 'CHI', 'ml', -160, 10))).j.text, 'Saved to your group.', 'a game inside the dates locks');
   fresh(); const w = await mk('ann', { runs: 'weekend' }); await joinAll(w, ['bob']); NOW = START - 5 * H;
-  personal(await add('bob', bet('d3', '503', 'CHI', 'ml', -160, 10)), /its game is after Picks ends/);
+  personal(await add('bob', bet('d3', '503', 'CHI', 'ml', -160, 10)), /Picks: The game is outside this contest's dates/);
   NOW = START + 6 * DAY; assert.deepStrictEqual((await call('bob', 'bet/status', {})).j, { betLock: 0, canBet: true }); personal(await add('bob', bet('d4', '503', 'CHI', 'ml', -160, 10)), /not in a running group contest/); // the weekend contest is over
   assert.deepStrictEqual(Object.keys(book('bob')), []);
 });
 test('B3 a bet the server cannot check (a player prop): personal in an ordinary contest; saved and locked, and SAID to be honor-only, in a contest with the honor rule', async () => {
   fresh(); const g = await mk('ann'); await joinAll(g, ['bob']); NOW = START - 5 * H; const prop = (id) => ({ id, kind: 'prop', text: 'Mahomes over 250.5 passing yards', odds: -110, stake: 20, day: '2026-11-22', lg: 'nfl', pp: { gid: '502' } });
-  personal(await add('bob', prop('p1')), /Oddable can't check this bet \(Player prop\)/);
-  fresh(); const h = await mk('ann', { honor: true }); await joinAll(h, ['bob']); NOW = START - 5 * H; const r = await add('bob', prop('p2')); assert.strictEqual(r.s, 200); assert.ok(r.j.gl > 0 && r.j.honor === true); assert.match(r.j.text, /^Saved to your group\. Locked\. Oddable can't check this bet itself: it counts only under your group's honor rule\.$/);
+  personal(await add('bob', prop('p1')), /count only where the commissioner turned on the honor system/);
+  fresh(); const h = await mk('ann', { honor: true, entry: 0 }) /* main-line port: honor props only in a free contest */; await joinAll(h, ['bob']); NOW = START - 5 * H; const r = await add('bob', prop('p2')); assert.strictEqual(r.s, 200); assert.ok(r.j.gl > 0 && r.j.honor === true, JSON.stringify(r.j)); assert.match(r.j.text, /^Saved to your group\. Oddable can't check this prop itself: the commissioner enters its result after the game and another member confirms it\.$/);
 });
 test('B4 two contests, one can count it: saved and locked once, told how many count it; over the weekly limit in the only contest: personal', async () => {
   fresh(); const g1 = await mk('ann'); await joinAll(g1, ['bob']); const g2 = await mk('cat', { sport: 'nba' }); await joinAll(g2, ['bob']); NOW = START - 5 * H;
-  let r = await add('bob', bet('n1', '701', 'BOS', 'ml', -170, 30)); assert.strictEqual(r.s, 200); assert.deepStrictEqual([r.j.text, r.j.counted, r.j.groups], ['Saved to your group. Locked.', 1, 2]);
-  r = await add('bob', bet('f1', '502', 'KC', 'ml', 130, 30)); assert.deepStrictEqual([r.j.text, r.j.counted], ['Saved to your group. Locked.', 1]);
+  let r = await add('bob', bet('n1', '701', 'BOS', 'ml', -170, 30)); assert.strictEqual(r.s, 200); assert.deepStrictEqual([r.j.text, r.j.counted, r.j.groups], ['Saved to your group.', 1, 2]);
+  r = await add('bob', bet('f1', '502', 'KC', 'ml', 130, 30)); assert.deepStrictEqual([r.j.text, r.j.counted], ['Saved to your group.', 1]);
   let v = await view('bob', g1, START + 2 * DAY); assert.deepStrictEqual([v.by.f1.ok, v.by.n1.ok, v.t.n], [true, false, 1], 'the NFL contest counts the NFL bet only'); v = await view('bob', g2, START + 2 * DAY, g2.contests[0].cid); assert.deepStrictEqual([v.by.n1.ok, v.by.f1.ok, v.t.n], [true, false, 1], 'the NBA contest counts the NBA bet only');
   fresh(); const g5 = await mk('ann', { maxBets: 5 }); await joinAll(g5, ['bob']); NOW = START - 5 * H;
-  const five = [bet('w1', '501', 'NYG', 'ml', -110, 10), bet('w2', '502', 'BUF', 'ml', -150, 10), bet('w3', '509', 'NE', 'ml', -160, 10), bet('w4', '502', 'Over', 'ou', -110, 10, { line: 47.5 }), bet('w5', '509', 'Over', 'ou', -110, 10, { line: 40 })];
+  const five = [bet('w1', '509', 'NE', 'sp', -110, 10, { line: -3 }) /* 501 has no posted price: round 4 refuses it */, bet('w2', '502', 'BUF', 'ml', -150, 10), bet('w3', '509', 'NE', 'ml', -160, 10), bet('w4', '502', 'Over', 'ou', -110, 10, { line: 47.5 }), bet('w5', '509', 'Over', 'ou', -110, 10, { line: 40 })];
   for (const b of five) { NOW += 1000; r = await add('bob', b); assert.ok(r.s === 200 && r.j.gl > 0, b.id + JSON.stringify(r.j)); }
   NOW += 1000; personal(await add('bob', bet('w6', '502', 'BUF', 'sp', -110, 10, { line: -2.5 })), /Over the weekly limit: only the first 5 bets/); assert.deepStrictEqual(Object.keys(book('bob')).sort(), ['w1', 'w2', 'w3', 'w4', 'w5']);
   assert.ok((await add('bob', bet('w7', '503', 'CHI', 'ml', -160, 10))).j.gl > 0, 'a game in NEXT week still goes in');
 });
 test('B5 plain sync does NOT reject a personal bet: after the "personal" answer the phone keeps it and its ordinary sync stores it, editable and deletable, outside every contest', async () => {
-  fresh(); const g = await mk('ann'); await joinAll(g, ['bob']); NOW = START - 5 * H; const nb = bet('n1', '701', 'BOS', 'ml', -170, 30); personal(await add('bob', nb), /sport/); assert.strictEqual((await add('bob', bet('f1', '502', 'KC', 'ml', 130, 30))).s, 200);
+  fresh(); const g = await mk('ann'); await joinAll(g, ['bob']); NOW = START - 5 * H; const nb = bet('n1', '701', 'BOS', 'ml', -170, 30); personal(await add('bob', nb), /Not NFL/); assert.strictEqual((await add('bob', bet('f1', '502', 'KC', 'ml', 130, 30))).s, 200);
   const row = () => X.db[SID.bob], push = (inc) => { NOW += 1000; const cur = row(); cur.data = S.merge(cur.data, inc, NOW, cur.updated); cur.updated = NOW; };
   push({ bets: [Object.assign({ t: NOW }, nb)] }); let st = row().data.bets.find((b) => b.id === 'n1'); assert.ok(st && !st.gl, 'stored as an ordinary bet'); push({ bets: [Object.assign({}, nb, { t: NOW + 5000, stake: 99 })] }); assert.strictEqual(row().data.bets.find((b) => b.id === 'n1').stake, 99, 'editable');
   push({ bets: [], tomb: ['n1'] }); assert.ok(!row().data.bets.some((b) => b.id === 'n1'), 'deletable'); assert.ok(row().data.bets.some((b) => b.id === 'f1' && b.gl > 0), 'the group bet beside it stays locked');
@@ -187,10 +190,10 @@ test('B5 plain sync does NOT reject a personal bet: after the "personal" answer 
 test('C1 ESPN not answering (an error, or a 5xx): the bet is REFUSED with "try again" (503), nothing saved, nothing locked, never "Saved to your group"; it goes in once ESPN is back', async () => {
   for (const mode of ['throw', '500']) {
     fresh(); const g = await mk('ann'); await joinAll(g, ['bob']); NOW = START - 5 * H; X.espn = mode;
-    let r = await add('bob', bet('e1', '502', 'KC', 'ml', 130, 30)); assert.strictEqual(r.s, 503, mode + ': ' + JSON.stringify(r.j)); assert.match(r.j.error, /can't check that game right now.*NOT added to your group\. Nothing was locked\. Try again/); assert.ok(!/Saved/.test(JSON.stringify(r.j)));
+    let r = await add('bob', bet('e1', '502', 'KC', 'ml', 130, 30)); assert.strictEqual(r.s, 503, mode + ': ' + JSON.stringify(r.j)); assert.match(r.j.error, /Couldn't check this game — try again\. Nothing was added/); assert.ok(!/Saved/.test(JSON.stringify(r.j)));
     r = await add('bob', { id: 'e2', kind: 'parlay', stake: 10, day: '2026-11-22', lg: 'nfl', legs: [{ gid: '502', side: 'KC', type: 'ml', o: 130, lg: 'nfl', home: 'BUF', away: 'KC', day: '2026-11-22' }, { gid: '509', side: 'MIA', type: 'ml', o: 140, lg: 'nfl', home: 'NE', away: 'MIA', day: '2026-11-22' }] }); assert.strictEqual(r.s, 503, 'a parlay too');
     assert.deepStrictEqual(Object.keys(book('bob')), []); assert.deepStrictEqual(X.db[SID.bob].data.bets, []); assert.deepStrictEqual((await call('bob', 'bet/status', { id: 'e1' })).j, { betLock: 1, canBet: true, saved: false }, 'the phone asking by id is told it was not saved');
-    X.espn = 'ok'; NOW += 3 * 6e4; r = await add('bob', bet('e1', '502', 'KC', 'ml', 130, 30)); assert.strictEqual(r.s, 200, JSON.stringify(r.j)); assert.strictEqual(r.j.text, 'Saved to your group. Locked.'); assert.deepStrictEqual(Object.keys(book('bob')), ['e1']);
+    X.espn = 'ok'; NOW += 3 * 6e4; r = await add('bob', bet('e1', '502', 'KC', 'ml', 130, 30)); assert.strictEqual(r.s, 200, JSON.stringify(r.j)); assert.strictEqual(r.j.text, 'Saved to your group.'); assert.deepStrictEqual(Object.keys(book('bob')), ['e1']);
   }
 });
 test('C2 the H5 case itself: a LATE bet while ESPN is down is never told "Saved to your group. Locked." (the old code saved it and threw it out later); an old copy of the scoreboard is not proof either', async () => {
@@ -200,12 +203,12 @@ test('C2 the H5 case itself: a LATE bet while ESPN is down is never told "Saved 
   fresh(); const g2 = await mk('ann'); await joinAll(g2, ['bob']); NOW = START - 5 * H; assert.strictEqual((await add('bob', bet('a0', '502', 'KC', 'ml', 130, 10))).s, 200);
   NOW += 20 * 6e4; X.espn = 'throw'; // 20 minutes later, still before every kickoff, ESPN is down: the copy the server holds is 20 minutes old
   r = await add('bob', bet('old', '509', 'MIA', 'ml', 140, 100)); assert.strictEqual(r.s, 503, 'a 20-minute-old copy is not "checked just now": ' + JSON.stringify(r.j)); assert.ok(!book('bob').old);
-  X.espn = 'ok'; NOW += 3 * 6e4; r = await add('bob', bet('old', '509', 'MIA', 'ml', 140, 100)); assert.strictEqual(r.s, 200); assert.strictEqual(r.j.text, 'Saved to your group. Locked.');
+  X.espn = 'ok'; NOW += 3 * 6e4; r = await add('bob', bet('old', '509', 'MIA', 'ml', 140, 100)); assert.strictEqual(r.s, 200); assert.strictEqual(r.j.text, 'Saved to your group.');
 });
 test('C3 an ESPN outage does not block bets that are outside every contest (personal), and a game ESPN simply does not list is not an outage', async () => {
   fresh(); const g = await mk('ann'); await joinAll(g, ['bob']); NOW = START - 5 * H; X.espn = 'throw';
   personal(await add('bob', bet('n1', '701', 'BOS', 'ml', -170, 30)), /outside your contests/); // NBA bet, NFL contest, ESPN down
-  X.espn = 'ok'; NOW += 3 * 6e4; const r = await add('bob', Object.assign(bet('x1', '502', 'KC', 'ml', 130, 30), { gid: '99999' })); personal(r, /Oddable can't check this bet \(Game not found/); // ESPN answered: no such game. Not checked, no honor rule: personal
+  X.espn = 'ok'; NOW += 3 * 6e4; const r = await add('bob', Object.assign(bet('x1', '502', 'KC', 'ml', 130, 30), { gid: '99999' })); personal(r, /can't find this game/); // ESPN answered: no such game. Not checked, no honor rule: personal
 });
 
 // =============================== D. the member index ===============================
@@ -219,7 +222,7 @@ test('D2 if every try fails, opening Groups (and the bet status before that) reb
   fresh(); const g = await mk('ann', {}, { auto: false }); await call('bob', 'join', { code: g.code }); const req = (await call('ann', 'get', { id: g.id })).j.group.reqs[0];
   X.failKey = 'lock:gm:' + MKOF(E('bob')); X.failN = 99; let r = await call('ann', 'decide', { id: g.id, pid: req.pid, ok: true }); assert.strictEqual(r.s, 200, 'the approval itself stands'); assert.ok(r.j.group.members.length === 2);
   assert.ok(!X.db[X.failKey].data.g.includes(g.id), 'the index entry is missing (the old code left bob stranded here: approved, but no group on his phone)'); X.failN = 0;
-  r = await call('bob', 'bet/status', {}); assert.deepStrictEqual(r.j, { betLock: 1, canBet: true }, 'his next bet already goes to the group'); NOW = START - 5 * H; assert.strictEqual((await add('bob', bet('r1', '502', 'KC', 'ml', 130, 10))).j.text, 'Saved to your group. Locked.');
+  r = await call('bob', 'bet/status', {}); assert.deepStrictEqual(r.j, { betLock: 1, canBet: true }, 'his next bet already goes to the group'); NOW = START - 5 * H; assert.strictEqual((await add('bob', bet('r1', '502', 'KC', 'ml', 130, 10))).j.text, 'Saved to your group.');
   r = await call('bob', 'mine', {}); assert.strictEqual(r.s, 200); assert.deepStrictEqual(r.j.groups.map((x) => x.id), [g.id], 'opening Groups shows the group'); assert.deepStrictEqual(r.j.pending, []); assert.strictEqual(r.j.betLock, 1);
   const ix = X.db[X.failKey].data; assert.ok(ix.g.includes(g.id) && !ix.q.includes(g.id), 'and the index entry is back');
   X.failKey = 'lock:gm:' + MKOF(E('cat')); X.failN = 99; r = await call('cat', 'mine', {}); assert.strictEqual(r.s, 200, 'a failing index never breaks opening Groups'); assert.deepStrictEqual(r.j.groups, []);
@@ -284,7 +287,7 @@ open('H1 a moneyline on a game with NO odds on ESPN must not pay even money to a
   const v = await view('bob', g, START + 2 * DAY); assert.ok(!(v.by.fav && v.by.fav.pl === 100), 'NYG won 45-3 with nothing posted and the bet paid +100: ' + JSON.stringify(v.by.fav));
 });
 open('H2 an honor-system contest must not take the phone\'s win AMOUNT at face value', 'DECIDE BEFORE PUBLIC LAUNCH (owner). Today: with the honor rule on, a bet the server cannot check counts with the result AND the dollar amount the phone reports. Fix to decide: keep the phone\'s won / lost, but work the amount out on the server from the bet\'s own price, capped by "Longest odds that count".', async () => {
-  fresh(); const g = await mk('ann', { honor: true }); await joinAll(g, ['bob']); NOW = START - 5 * H; const p = { id: 'hp', kind: 'prop', text: 'Mahomes over 250.5 passing yards', odds: -110, stake: 1, day: '2026-11-22', lg: 'nfl', pp: { gid: '502' } };
+  fresh(); const g = await mk('ann', { honor: true, entry: 0 }) /* main-line port: honor props only in a free contest */; await joinAll(g, ['bob']); NOW = START - 5 * H; const p = { id: 'hp', kind: 'prop', text: 'Mahomes over 250.5 passing yards', odds: -110, stake: 1, day: '2026-11-22', lg: 'nfl', pp: { gid: '502' } };
   assert.strictEqual((await add('bob', p)).s, 200); const cur = X.db[SID.bob]; cur.data = S.merge(cur.data, { bets: [Object.assign({}, p, { res: 'won', fin: 'won', finPL: 1000000 })] }, NOW + 1, cur.updated); cur.updated = NOW + 1;
   const v = await view('bob', g, START + 2 * DAY); assert.ok(!(v.by.hp && v.by.hp.pl >= 1000), 'a $1 prop "won" $' + (v.by.hp && v.by.hp.pl));
 });

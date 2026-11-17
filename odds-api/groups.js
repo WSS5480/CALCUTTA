@@ -60,7 +60,7 @@ const SEASON_END = { all: '2027-04-16', nfl: '2027-01-11', ncaaf: '2027-01-20', 
 const PLAYOFF_END = { all: '2027-06-25', nfl: '2027-02-15', ncaaf: '2027-01-20', nba: '2027-06-25', mlb: '2027-11-05', nhl: '2027-06-25', ncaab: '2027-04-07' };
 const leaguesOf = (sport) => (sport === 'all' ? GR.LGS.slice() : [sport]);
 const SPLITS = { '60/30/10': [60, 30, 10], '100': [100], '50/30/20': [50, 30, 20], '70/30': [70, 30], 'none': [] };
-const FMTS = ['standings', 'best5'], METRICS = ['win', 'units', 'ret', 'pct'];
+const FMTS = ['standings', 'best5', 'h2h'], WEEKLY = [0, 10, 20, 25, 30, 40, 50], METRICS = ['win', 'units', 'ret', 'pct'];
 const MAXBETS = [0, 5, 6, 7, 8, 10, 12, 15, 20, 25], CAPS = [0, 10, 25, 50, 100, 250, 500, 1000], MAXODDS = [150, 200, 300, 400, 500, 750, 1000, 2000, 3000, 5000], NOCAP = 1000, MAXM = [2, 3, 4, 5, 6, 7, 8, 10, 12, 16, 20, 30, 50, 100, 200, 300, 500, 1000, 2000, 5000], MINPAID = [0, 1, 2, 3, 5, 8, 10, 12, 15, 20, 25, 30];
 const MSPLIT = { '50/50': [50, 50], '40/60': [40, 60], '60/40': [60, 40] };
 function runsEnd(runs, startDay, sport, endDay) {
@@ -85,7 +85,7 @@ function cleanTake(tk, maxPot) { // Commissioner's take (G10): none / whole perc
 function cleanContest(b, now, maxMembers) {
   const name = cleanName(b.cname || b.name || 'Picks standings', 30); if (name.length < 2) throw bad(400, 'Give the contest a name (2+ characters)');
   const sport = String(b.sport || ''); if (!SPORTS.includes(sport)) throw bad(400, 'Pick a sport');
-  const fmt = String(b.fmt || ''); if (!FMTS.includes(fmt)) throw bad(400, 'That format is coming soon. Pick Standings or Best five.');
+  const fmt = String(b.fmt || ''); if (!FMTS.includes(fmt)) throw bad(400, 'Pick Standings, Best five or Head-to-head.');
   const start = Number(b.start); if (!Number.isFinite(start) || start < now + 60e3) throw bad(400, 'The start must be in the future');
   if (start > now + 400 * DAY) throw bad(400, 'The start is too far away');
   const runs = String(b.runs || ''), startDay = chiDay(start), endDay = runsEnd(runs, startDay, sport, b.endDay);
@@ -94,7 +94,9 @@ function cleanContest(b, now, maxMembers) {
   const T = b.types || {}, types = { sp: !!T.sp, ml: !!T.ml, ou: !!T.ou, prop: !!T.prop, parlay: !!T.parlay };
   if (!Object.values(types).some(Boolean)) throw bad(400, 'Pick at least one kind of bet that counts');
   const legs = types.parlay ? Math.round(Number(b.legs == null ? 4 : b.legs)) : 0; if (types.parlay && !(legs >= 2 && legs <= 10)) throw bad(400, 'Parlay legs must be 2 to 10'); // round 3: default 4
-  const metric = String(b.metric || ''); if (!METRICS.includes(metric)) throw bad(400, 'Pick how the winner is decided');
+  const metric = fmt === 'h2h' ? 'win' : String(b.metric || ''); if (!METRICS.includes(metric)) throw bad(400, 'Pick how the winner is decided'); // head-to-head: a week is won on graded net dollars
+  // Round 5: the weekly high-score prize is paid out of this contest's prize pool: a whole share of it, chosen here, set before the start and final with the money rules.
+  const weekly = Math.round(Number(b.weekly || 0)); if (!WEEKLY.includes(weekly)) throw bad(400, 'Weekly high-score prize: pick the share of the prize pool from the list (none, or 10% to 50%)');
   const minBets = Math.round(Number(b.minBets || 0)); if (!(minBets >= 0 && minBets <= 10)) throw bad(400, 'Least bets a week: 0 to 10');
   // Rules review (Nov 16 2026): Best five rewards betting MORE, not better. "Most bets per week" (default 10 in Best five, no limit in standings; 0 = no limit):
   // only the first N bets a member adds for a week count; later ones are shown as "Over the weekly limit". Set before the start, locked with the bet rules.
@@ -107,7 +109,7 @@ function cleanContest(b, now, maxMembers) {
   const split = String(b.split || 'none'); if (!(split in SPLITS)) throw bad(400, 'Pick a payout split');
   const pot = b.pot === 'side' ? 'side' : 'main';
   const take = pot === 'side' ? cleanTake(b.take, entry * (maxMembers || 50)) : { kind: 'none', v: 0 };
-  return { kind: 'picks', name, pot, sport, fmt, start, startDay, endDay, runs, rules: { kalshi: !!b.kalshi, honor: !!b.honor, carry: !!b.carry, types, legs, metric, minBets, maxBets, minPaid, cap, maxOdds, entry, split, take } };
+  return { kind: 'picks', name, pot, sport, fmt, start, startDay, endDay, runs, rules: { kalshi: !!b.kalshi, honor: !!b.honor, carry: !!b.carry, types, legs, metric, minBets, maxBets, minPaid, cap, maxOdds, entry, split, weekly, take } };
 }
 // Calcutta contest: DATA MODEL ONLY (G13; the auction and Calcutta screens are not built). Shape follows the CalcSetup / CalcAuction / CalcBoard mockups.
 function cleanCalc(b) {
@@ -141,6 +143,10 @@ const splitOf = (g) => g.contests.filter((c) => c.pot === 'main' && c.kind !== '
 const mainOf = (g) => g.contests.filter((c) => c.pot === 'main'), sideOf = (g) => g.contests.filter((c) => c.pot === 'side');
 const inContest = (c, g) => (c.pot === 'side' ? g.members.filter((m) => (c.inn || []).includes(m.pid)) : g.members);
 const placesOf = (poolC, split) => { const sp = SPLITS[split] || []; const parts = sp.map((p) => Math.floor(poolC * p / 100)); if (parts.length) parts[0] += poolC - parts.reduce((a, x) => a + x, 0); return parts.map((c, i) => ({ place: i + 1, pct: sp[i], amt: c / 100, c })); };
+// Round 5, WEEKLY HIGH-SCORE PRIZE: rules.weekly percent of the contest's prize pool is set aside and divided evenly over the contest's weeks (whole cents;
+// the odd cents go to the earliest weeks). The places are paid from what is left. Display only, like every money figure here.
+const wkCut = (poolC, c) => { const pct = Number(c.rules && c.rules.weekly) || 0, W = c.kind === 'picks' ? weekOf(c, c.endDay) : 0; if (!pct || !(W > 0) || !(poolC > 0)) return { c: 0, pct: 0, per: [] }; const tot = Math.floor(poolC * pct / 100), each = Math.floor(tot / W); return { c: tot, pct, per: Array.from({ length: W }, (_, i) => each + (i < tot - each * W ? 1 : 0)) }; };
+const wkOut = (k) => (k.c ? { pct: k.pct, amt: k.c / 100, weeks: k.per.length, each: k.per.map((x) => x / 100) } : undefined);
 const takeOf = (potC, tk) => (tk.kind === 'pct' ? Math.round(potC * tk.v / 100) : tk.kind === 'flat' ? Math.min(cents(tk.v), potC) : 0);
 // ---------- games built by other engines report their money into the group's pots (rules review, Nov 16 2026) ----------
 // registerGame(type, { potSummary(ref) -> { bids | pot, take, pool, paidOut?, inPlay?, main? }, attachToGroup?(ref, groupId, contestId) })
@@ -149,8 +155,12 @@ const takeOf = (potC, tk) => (tk.kind === 'pct' ? Math.round(potC * tk.v / 100) 
 // A MAIN Calcutta (attached with pot 'main', and not reporting main: false) is listed in the group's main pot: its bids, take and prize pool are added to
 // the main pot's totals. Its own payout table decides who is paid (the main-pot split between picks contests never touches it). Side games are listed
 // with the side pots. Summaries are read through a 30-second cache when a group is read, so pots(g) stays a plain function. Display only, as always.
-const GAMES = {}, EXTC = new Map();
-function registerGame(type, api) { if (!/^[a-z]{1,8}$/.test(String(type)) || !api || typeof api.potSummary !== 'function') throw new Error('bad game type'); GAMES[type] = api; }
+// ROUND 4: the three game types are 'calcutta', 'golf' and 'events' (the older short names 'calc' and 'event' are the same types). An engine that also
+// gives create({ groupId, accountId, name, pot }) -> { ref, name? } lets the commissioner start that game from the group hub (/groups/game/add); every
+// registered type is listed in the group's answer (full().games), and the phone shows "+ Add a ..." only for types that have a handler.
+const GAMES = {}, EXTC = new Map(), GALIAS = { calcutta: 'calc', events: 'event' }, GNAME = { calc: 'Calcutta', golf: 'golf contest', event: 'local event' }, gkey = (t) => GALIAS[String(t)] || String(t);
+function registerGame(type, api) { if (!/^[a-z]{1,8}$/.test(String(type)) || !api || typeof api.potSummary !== 'function') throw new Error('bad game type'); GAMES[gkey(type)] = api; }
+const gamesOut = () => ['calc', 'golf', 'event'].filter((k) => GAMES[k]).map((k) => ({ type: k, name: GNAME[k], create: typeof GAMES[k].create === 'function' }));
 const m2 = (v) => { const n = Math.round(Number(v) * 100) / 100; return Number.isFinite(n) && n >= 0 && n <= 1e9 ? n : 0; };
 async function extLoad(g) {
   const list = (g.contests || []).filter((c) => c.kind === 'ext' && GAMES[c.type]); if (!list.length) return g;
@@ -166,13 +176,14 @@ function pots(g) {
   const ids = M.map((c) => c.cid); let used = 0; const shareC = ids.map((id) => { const v = Math.floor(poolC * (Number(ms[id]) || 0) / 100); used += v; return v; }); if (shareC.length) shareC[shareC.indexOf(Math.max(...shareC))] += poolC - used; // round 3: the leftover cent goes to the LARGEST pot
   const main = { entry: entryC / 100, members: n, paid, expected: entryC * n / 100, pot: potC / 100, take: takeC / 100, takeText: takeText(g.money.take), pool: poolC / 100, msplit: g.money.msplit,
     parts: M.map((c) => ({ cid: c.cid, name: c.name, kind: c.kind, entry: c.rules.entry || 0, entries: (cents(c.rules.entry || 0) * paid) / 100 })),
-    shares: M.map((c, i) => ({ cid: c.cid, name: c.name, pct: Number(ms[c.cid]) || 0, amt: shareC[i] / 100, split: c.rules.split, places: placesOf(shareC[i], c.rules.split) })) };
+    shares: M.map((c, i) => { const k = wkCut(shareC[i], c); return { cid: c.cid, name: c.name, pct: Number(ms[c.cid]) || 0, amt: shareC[i] / 100, split: c.rules.split, places: placesOf(shareC[i] - k.c, c.rules.split), weekly: wkOut(k) }; }) };
   const sides = sideOf(g).map((c) => { const mem = inContest(c, g), pd = mem.filter((m) => (c.paid || {})[m.pid]).length, pC = cents(c.rules.entry || 0) * pd, tC = takeOf(pC, c.rules.take), pl = pC - tC;
-    return { cid: c.cid, name: c.name, kind: c.kind, entry: c.rules.entry || 0, members: mem.length, paid: pd, expected: (c.rules.entry || 0) * mem.length, pot: pC / 100, take: tC / 100, takeText: takeText(c.rules.take), pool: pl / 100, split: c.rules.split, places: placesOf(pl, c.rules.split) }; });
+    return { cid: c.cid, name: c.name, kind: c.kind, entry: c.rules.entry || 0, members: mem.length, paid: pd, expected: (c.rules.entry || 0) * mem.length, pot: pC / 100, take: tC / 100, takeText: takeText(c.rules.take), pool: pl / 100, split: c.rules.split, places: placesOf(pl - wkCut(pl, c).c, c.rules.split), weekly: wkOut(wkCut(pl, c)) }; });
   const ext = extOf(g), em = ext.filter((x) => x.where === 'main'), es = ext.filter((x) => x.where === 'side'), sum = (l, k) => l.reduce((a, x) => a + cents(x[k]), 0);
   main.games = em; main.total = (potC + sum(em, 'pot')) / 100; main.totalTake = (takeC + sum(em, 'take')) / 100; main.totalPool = (poolC + sum(em, 'pool')) / 100; // picks entries + main games (a Main Calcutta's bids)
   return { main, sides, sideGames: es, sideTotal: (sides.reduce((a, s) => a + cents(s.pot), 0) + sum(es, 'pot')) / 100 };
 }
+const weeklyOf = (g, c) => { const P = pots(g), s = c.pot === 'side' ? P.sides.find((x) => x.cid === c.cid) : P.main.shares.find((x) => x.cid === c.cid); return s && s.weekly ? s.weekly.each.map(cents) : []; }; // cents per week
 const prizeOf = (g, c) => { const P = pots(g); if (c.pot === 'side') { const s = P.sides.find((x) => x.cid === c.cid); return s ? s.places : []; } const s = P.main.shares.find((x) => x.cid === c.cid); return s ? s.places : []; };
 const takeText = (tk) => (tk.kind === 'pct' ? (tk.v ? 'Commissioner keeps ' + tk.v + '% of the pot' : 'Commissioner keeps nothing') : tk.kind === 'flat' ? (tk.v ? 'Commissioner keeps $' + (Number.isInteger(tk.v) ? tk.v : tk.v.toFixed(2)) + ' of the pot' : 'Commissioner keeps nothing') : 'Commissioner keeps nothing');
 
@@ -260,7 +271,7 @@ const isComm = (g, mk) => g.comm === mk;
 const newPid = (g) => { let p; do { p = rnd(6); } while (g.members.some((m) => m.pid === p) || (g.reqs || []).some((m) => m.pid === p)); return p; };
 // Fix 6: once anyone besides the commissioner has joined or asked to join, the money and bet rules are locked (entry, take, splits, cap, ranking, bet rules).
 const engaged = (g) => !!g.engaged || g.members.length > 1 || (g.reqs || []).length > 0;
-const MONEYKEYS = ['kalshi', 'honor', 'carry', 'types', 'legs', 'metric', 'minBets', 'maxBets', 'minPaid', 'cap', 'maxOdds', 'entry', 'split', 'take'];
+const MONEYKEYS = ['kalshi', 'honor', 'carry', 'types', 'legs', 'metric', 'minBets', 'maxBets', 'minPaid', 'cap', 'maxOdds', 'entry', 'split', 'weekly', 'take'];
 const DATEKEYS = ['start', 'startDay', 'endDay', 'runs']; // owner (round 2): contest dates also lock once anyone else has joined
 
 // ---------- bets: the contest ledger (fixes 1-4, G11) ----------
@@ -270,7 +281,7 @@ const legsOf = (b) => (b.kind === 'parlay' ? (Array.isArray(b.legs) ? b.legs : [
 function snap(b) {
   const pick = (o, ks) => { const r = {}; ks.forEach((k) => { if (o[k] !== undefined && o[k] !== null && o[k] !== '') r[k] = typeof o[k] === 'string' ? String(o[k]).slice(0, 120) : o[k]; }); return r; };
   const s = pick(b, ['kind', 'type', 'side', 'line', 'odds', 'mult', 'stake', 'lg', 'gid', 'day', 'home', 'away', 'src', 'kt', 'ks', 'text']); // round 3: nothing about a later sale (cash / soldN): a bet is what it was when it was added
-  if (b.kind === 'prop' && b.pp && b.pp.gid != null && !b.kt) s.pg = String(b.pp.gid).slice(0, 20);
+  if (b.pp && b.pp.gid != null && b.pp.gid !== '' && b.kind !== 'parlay' && (b.kt ? GR.ktType(b.kt) === 'prop' : b.kind === 'prop')) s.pg = String(b.pp.gid).slice(0, 20); // round 5: a Kalshi prop names its game the same way
   if (b.kind === 'parlay') s.legs = (Array.isArray(b.legs) ? b.legs : []).slice(0, 12).map((l) => pick(l || {}, ['gid', 'side', 'type', 'line', 'lg', 'home', 'away', 'text', 'day', 'o', 'k']));
   if (s.stake != null) s.stake = N(s.stake); return s;
 }
@@ -303,10 +314,12 @@ function applyObs(L, obs, now) {
     }
     if (o.h && !e.h) { e.h = o.h; ch++; }
     // Round 3, rule 1: the reference price / line is re-read until kickoff; the last pregame one stays. Never touched at or after kickoff.
-    Object.keys(o.RF || {}).forEach((k) => { const st = e.r[k], rf = o.RF[k]; if (!st || !rf || !(now < st.kick) || e.g) return; GR.REFK.forEach((f) => { if (rf[f] != null && st[f] !== rf[f]) { st[f] = rf[f]; ch++; } }); });
+    // Round 4: the kickoff itself is followed until the game really starts (grade.js refresh only answers with pregame facts), and a postponement is noted (pp).
+    Object.keys(o.RF || {}).forEach((k) => { const st = e.r[k]; let rf = o.RF[k]; if (!st || !rf || e.g) return; if (rf.ra != null && st.ra != null && rf.ra < st.ra) rf = { kick: rf.kick, pp: rf.pp, go: rf.go }; /* an older read never replaces a newer reference */ GR.FOLK.forEach((f) => { if (rf[f] != null && st[f] !== rf[f]) { st[f] = rf[f]; ch++; } }); });
   });
   return ch;
 }
+const GRADEK = ['vr', 'nr', 'pa', 'px'];
 function applyGrades(L, gr) { let ch = 0; gr.forEach((x) => { const e = L.b && L.b[x.pid] && L.b[x.pid][x.id]; if (e && !e.g && x.g && JSON.stringify(e.s) === x.sj) { e.g = x.g; ch++; } }); return ch; }
 // Classify a ledger entry for a contest: null = outside the contest (dates / before joining). Else the bet as the group sees it, ok = counts.
 const KTSHAPE = /^KX[A-Z0-9]{2,30}(-[A-Z0-9.]{1,40}){1,3}$/; // "Kalshi-tagged bets only": the tag is the bet's own claim (not verified); the server only checks the ticker's shape
@@ -320,30 +333,47 @@ function judge(c, e, id, rv, now, from) {
   const g = e.g, h = e.h, srv = !!(g && g.res), stake = Math.round(N(s.stake) * 100) / 100;
   const out = { id: String(id).slice(0, 60), d, what: lbl(s), type, kalshi: s.src === 'kalshi' && KTSHAPE.test(String(s.kt || '').toUpperCase()), stake, kick: k.min, last: k.max, gr: '', res: '', vis: false, gl: !!e.gl, vr: (e.g && e.g.vr) || '' };
   // G6 + fix 3 + fix 9: every game known -> shown once the LAST one kicked off (a parlay stays hidden even after a leg lost); any unknown kickoff -> hidden until the bet is graded settled
-  out.vis = k.all ? now >= k.max : (!k.any.length || now >= Math.max(...k.any)) && (srv || (!!(h && h.res) && !!sday && now > chiEnd(sday)));
-  out.legsM = legKeys(s).map((key) => { const x = R[key], E = x && x.gid && x.kind !== 'prop' ? GR.eqv(x) : null; return E ? { game: x.lg + '|' + x.gid, kind: E.kind, dir: E.kind === 'ou' ? (E.ovr ? 'over' : 'under') : E.side } : { x: 'x|' + key }; });
+  // Round 5 (L1): the listed time alone is not enough. Others see a bet once ESPN itself has shown every one of its games in progress or over (go), or the bet is graded.
+  const allGo = legKeys(s).every((key) => R[key] && R[key].go);
+  out.vis = k.all ? now >= k.max && (allGo || srv) : (!k.any.length || now >= Math.max(...k.any)) && (srv || (!!(h && h.res) && !!sday && now > chiEnd(sday)));
+  out.legsM = legKeys(s).map((key) => { const x = R[key], E = x && x.gid && x.kind !== 'prop' ? GR.eqv(x) : null; return E ? { game: x.lg + '|' + x.gid, kind: E.kind, dir: E.kind === 'ou' ? (E.ovr ? 'over' : 'under') : E.side } : x && x.gid && x.kind === 'prop' ? { x: 'x|' + key + '|' + String(s.text || '').slice(0, 80), pgame: x.lg + '|' + x.gid } : { x: 'x|' + key }; }); // a prop: its own market, and its game for the 2 x cap
   const no = (why) => Object.assign(out, { why });
   if (r.kalshi && !out.kalshi) return no('Kalshi-tagged bets only');
   if (!r.types[type]) return no('This kind of bet does not count here');
   if (type === 'parlay' && legsOf(s).length > r.legs) return no('More than ' + r.legs + ' legs');
   if (k.min != null && e.f >= k.min) return no('Added after the game started');
+  if (g && g.nr) return Object.assign(no(g.vr || GR.NOREF), { res: 'push', pl: 0, plFull: 0, u: 0, cs: 0, capped: false, voided: 1, nr: 1, gr: 'void', vr: g.vr || GR.NOREF, f: e.f }); // round 4: no posted price at kickoff = void, shown plainly, counts nowhere (stake back)
   if (e.v) { // commissioner void (G16): same rules as the automatic void, reason shown to every member
     Object.assign(out, { res: 'push', pl: 0, plFull: 0, u: 0, cs: Math.min(stake, r.cap || NOCAP), capped: false, gr: 'void', voided: 1, ok: true, f: e.f, vr: 'Voided by the commissioner (' + (e.v.k === 'duplicate' ? 'entered twice by mistake' : 'game postponed or cancelled') + '): ' + cleanName(e.v.why, 120) }); return out; }
   if (rv && rv.x && !srv) {
     if (rv.sport) return no(rv.x);
+    if (!isProp(s)) return no("Oddable can't check this bet (" + rv.x + ')'); // round 4: the honor system is for true props only; a game bet is graded by the server or it does not count
     if (!r.honor) return no("Oddable can't check this bet (" + rv.x + ')');
     const rl = [...new Set(Object.values(R).map((x) => x.lg).filter(Boolean))]; if (c.sport !== 'all' && (rl.length ? !(rl.length === 1 && rl[0] === c.sport) : claimSport(s) !== c.sport)) return no('Not ' + SPORTN[c.sport]);
-    if (k.min == null && e.f > chiEnd(sday)) return no('Added after its day was over');
+    if (k.min == null) return no('A prop must name its game'); // round 5 (H2): no game, no kickoff: nothing ties it to a time, so it never counts (after the sport check, so another sport's prop says so)
   }
   let res = '', pl = 0;
-  if (srv) { res = g.res; pl = g.pl; out.gr = 'srv'; }
-  else if (rv && rv.x && r.honor && h && h.res && (k.all ? now >= k.max : !!sday && now > chiEnd(sday))) { res = h.res; pl = h.pl; out.gr = 'honor'; } // round 2: never before the game kicked off
-  else if (rv && rv.x && r.honor) out.gr = 'honor';
-  if (res && k.all && now < k.max) { res = ''; pl = 0; } // round 3: a parlay that already lost a leg is not shown (or scored) before its last game kicks off
+  if (srv) { res = g.res; pl = g.pl; out.gr = 'srv'; out.as = gradedAs(s, R, g); if (g.res === 'push' && g.vr) out.voided = 1; /* round 5 (L7): a void of any kind (game cancelled / postponed, the commissioner's game void) uses no weekly slot and no stake room */ }
+  // ROUND 5 (H2), HONOR SYSTEM: the RESULT of a prop is entered by the commissioner after the game and confirmed by another member (two, when the prop is
+  // the commissioner's own): e.hr, written only by /groups/prop/result and /groups/prop/confirm. Nothing a phone marks is read. The payout is worked out
+  // here from the price typed when the bet was added, capped at "Longest odds that count"; the stake caps apply below like any bet.
+  else if (rv && rv.x && r.honor) { out.gr = 'honor'; const hr = e.hr; out.hr = hr ? { res: hr.res, n: (hr.ok || []).length, need: hr.need, fin: !!hr.fin } : { res: '', n: 0, need: 0, fin: false };
+    const due = honorDue(e); out.hrDue = Number.isFinite(due) ? due : 0;
+    if (hr && hr.fin && hr.res === 'void' && k.all && now >= k.max) { Object.assign(out, { res: 'push', pl: 0, plFull: 0, u: 0, cs: 0, capped: false, voided: 1, vr: 'Prop voided by the commissioner and a member', ok: true, f: e.f }); return out; } // main-line port: commissioner + one member
+    else if (hr && hr.fin && k.all && now >= k.max) { res = hr.res; const pm = GR.priceMult(s); pl = res === 'won' ? Math.round(stake * Math.min(pm == null ? 0 : pm, (r.maxOdds || 500) / 100, HONOR_MAXM) * 100) / 100 : res === 'lost' ? -stake : 0; } // even money at most (main-line port)
+    else if (k.all && now >= due) { res = 'lost'; pl = -stake; out.hr.auto = 1; } } // main-line port: no confirmed result 72 hours after the game = a LOSS
+  if (res && k.all && now < k.max && !out.voided) { res = ''; pl = 0; } // (round 5: a void is told at once; nothing about a pick is given away by it) // round 3: a parlay that already lost a leg is not shown (or scored) before its last game kicks off
   out.res = res; const capv = r.cap || NOCAP, cs = stake > capv ? capv : stake;
   out.plFull = pl; out.cs = cs; out.capped = cs < stake; out.pl = res ? Math.round((stake > 0 ? pl * cs / stake : 0) * 100) / 100 : 0;
   out.u = res === 'won' ? Math.round((stake > 0 ? pl / stake : 0) * 1000) / 1000 : res === 'lost' ? -1 : 0;
   out.ok = true; out.f = e.f; return out;
+}
+// Round 4: what a bet was GRADED as, in the server's own reading of it (market, line and the price it paid at), so the label can never disagree with the grade.
+function gradedAs(s, R, g) {
+  if (s.kind === 'parlay') return g.px ? 'Parlay, legs multiplied: x' + g.px : '';
+  const x = R[legKeys(s)[0]], E = x ? GR.eqv(x) : null; if (!E || !g.pa) return '';
+  const t = E.kind === 'ml' ? 'Moneyline' : E.kind === 'sp' ? 'Spread ' + (E.line > 0 ? '+' : '') + E.line : (E.ovr ? 'Over ' : 'Under ') + E.line;
+  return t + ' at ' + (g.pa > 0 ? '+' : '') + g.pa + ' (the price at kickoff, or yours if lower)';
 }
 // Round 3: one member's counted bets in one contest, in the order the server saved them (first added wins):
 //   HEDGE  a member cannot hold opposing sides of the same game: team against team across moneyline, spread and parlay legs; over against under.
@@ -357,7 +387,7 @@ function memberRules(c, list) {
     if (G.some((m) => { const k = m.game + (m.kind === 'ou' ? '|T' : '|S'); return pos[k] && pos[k] !== m.dir; })) { Object.assign(x, { ok: false, why: 'Hedge, not counted: you already have the other side of this game in this contest', pl: 0, cs: 0, capped: false }); return; }
     G.forEach((m) => { pos[m.game + (m.kind === 'ou' ? '|T' : '|S')] = m.dir; });
     if (x.voided) return;
-    const mk = x.type === 'parlay' ? 'P|' + M.map((m) => (m.game ? m.game + '|' + m.kind + '|' + m.dir : m.x)).sort().join('&') : M[0] ? (M[0].game ? M[0].game + '|' + M[0].kind : M[0].x) : 'x|' + x.id, games = [...new Set(G.map((m) => m.game))];
+    const mk = x.type === 'parlay' ? 'P|' + M.map((m) => (m.game ? m.game + '|' + m.kind + '|' + m.dir : m.x)).sort().join('&') : M[0] ? (M[0].game ? M[0].game + '|' + M[0].kind : M[0].x) : 'x|' + x.id, games = [...new Set(G.map((m) => m.game).concat(M.filter((m) => m.pgame).map((m) => m.pgame)))];
     let avail = cap - (usedM[mk] || 0); games.forEach((gm) => { avail = Math.min(avail, 2 * cap - (usedG[gm] || 0)); });
     const cs = r2(Math.min(x.stake, avail));
     if (!(cs > 0)) { Object.assign(x, { ok: false, why: 'Over the stake limit: $' + cap + ' counts on one market and $' + 2 * cap + ' on one game', pl: 0, cs: 0, capped: false }); return; }
@@ -369,7 +399,7 @@ function memberRules(c, list) {
 const hedges = memberRules; // older name
 // "Most bets per week": per member and contest week, only the first N counted bets (by the server's first-seen time, then id) count.
 function weekCap(c, list) { const n = Number(c.rules.maxBets) || 0; if (!n) return list; const seen = {};
-  list.filter((x) => x.ok).sort((a, b) => (a.f - b.f) || (a.id < b.id ? -1 : 1)).forEach((x) => { const w = weekOf(c, x.d); seen[w] = (seen[w] || 0) + 1; if (seen[w] > n) Object.assign(x, { ok: false, over: 1, why: 'Over the weekly limit: only the first ' + n + ' bets you add for a week count', pl: 0 }); }); return list; }
+  list.filter((x) => x.ok && !x.voided && !(x.res === 'push' && x.vr)).sort((a, b) => (a.f - b.f) || (a.id < b.id ? -1 : 1)).forEach((x) => { const w = weekOf(c, x.d); seen[w] = (seen[w] || 0) + 1; /* round 5 (L7): a void of any kind uses no weekly slot */ if (seen[w] > n) Object.assign(x, { ok: false, over: 1, why: 'Over the weekly limit: only the first ' + n + ' bets you add for a week count', pl: 0 }); }); return list; }
 // The sport a bet SAYS it is on (honor-system bets the server could not match to a game): its league, a Kalshi ticker, else football by team abbreviation.
 function claimSport(s) { const ls = legsOf(s).map((l) => GR.normLg(l.lg || s.lg) || GR.ktLeague(l.kt || s.kt) || ((l.home || l.away) ? (GR.NFLAB.has(String(l.home).toUpperCase()) || GR.NFLAB.has(String(l.away).toUpperCase()) ? 'nfl' : 'ncaaf') : '')); const u = [...new Set(ls)]; return u.length === 1 ? u[0] : ''; }
 const lbl = (b) => cleanName(String(b.text || (b.kind === 'parlay' ? (Array.isArray(b.legs) ? b.legs.length : 0) + '-leg parlay' : (b.side || '?') + ' ' + (b.type === 'ou' || b.type === 'tot' ? b.line : b.line ? (b.line > 0 ? '+' : '') + b.line : 'ML') + (b.away && b.home ? ' (' + b.away + '@' + b.home + ')' : ''))), 90);
@@ -385,7 +415,7 @@ async function contestBets(g, c, ctx) {
   const L0 = clone((led && led.data) || { b: {} }); L0.b = L0.b || {};
   const rowOf = (sid) => { if (!ctx.rows.has(sid)) ctx.rows.set(sid, D.S.dbGet(sid).catch(() => null)); return ctx.rows.get(sid); };
   const books = await pmap(mem, 8, async (m) => rowOf(BK(m.mk)));
-  const rows = c.rules.honor ? await pmap(mem, 8, async (m) => (m.sid ? rowOf(m.sid) : null)) : []; // the phone's own result marks, honor-system contests only
+  const rows = []; // round 5 (H2): a phone's own result marks are never read, honor-system contests included (results come from /groups/prop/result + confirm)
   const minDay = GR.addDay(c.startDay, -2), obs = [], RV = {};
   // 1. observe each member's BOOK (round 3: the one way in). A phone's synced bets are never read here, whatever fields they carry.
   for (let i = 0; i < mem.length; i++) {
@@ -402,8 +432,9 @@ async function contestBets(g, c, ctx) {
   }
   // 2. resolve each leg's game (kickoff, league) for live copies and frozen copies; a stored resolution is never looked up again
   const work = []; obs.forEach((o) => work.push({ pid: o.pid, id: o.id, s: o.s, o })); const live = new Set(obs.map((o) => o.pid + '|' + o.id)); Object.keys(L0.b).forEach((pid) => { if (!mem.some((m) => m.pid === pid)) return; Object.keys(L0.b[pid]).forEach((id) => { const e = L0.b[pid][id]; if (!e.g) work.push({ pid, id, s: e.s, e, o: live.has(pid + '|' + id) ? obs.find((o) => o.pid === pid && o.id === id) : null }); }); });
-  const RESP = {}, RES = {}; // legKey -> resolution promise / result (failures too, this pass only)
-  const resolve = (leg, k, d) => RESP[k] || (RESP[k] = GR.resolveLeg(leg, allowed, ctx, d).catch(() => ({ key: k, x: 'Bet Oddable cannot read' })).then((r) => (RES[k] = r))); // one odd bet never breaks the standings
+  const RES = {}; // legKey -> why a leg is out (this pass only)
+  // ROUND 4: a leg is tied to its game ONLY by the add step (the resolution stored in the member's book). Nothing is looked up here: a leg that was not
+  // matched when the bet was added is never matched later, so it can never be graded.
   await pmap(work, 6, async (w) => {
     const s = w.s || {}, e = w.e || (L0.b[w.pid] && L0.b[w.pid][w.id]), stored = (e && e.r) || {}, ls = legsOf(s);
     if (!w.o) { w.o = { pid: w.pid, id: w.id, U: now, R: {} }; obs.push(w.o); } // a frozen copy (bet maybe deleted on the phone): only its resolutions are added
@@ -412,19 +443,19 @@ async function contestBets(g, c, ctx) {
       if (stored[k]) { w.o.R[k] = stored[k]; continue; }
       const r0 = w.o.r0 && w.o.r0[k]; // resolved (and line-checked) when the bet was added
       if (r0 && r0.gid) { if (allowed.includes(r0.lg)) w.o.R[k] = r0; else RES[k] = { key: k, x: "Not in this contest's sport" }; continue; }
-      const r = await resolve(leg, k, String(s.day || '').slice(0, 10)); if (!r.x) w.o.R[k] = GR.store(r);
     }
   });
   // 2b. rule 1: until kickoff, read each open bet's pregame reference again (ESPN scoreboard, cached 10 minutes; one read per market)
   const RFP = {}; await pmap(work, 6, async (w) => { const e = w.e || (L0.b[w.pid] && L0.b[w.pid][w.id]), st = Object.assign({}, (e && e.r) || {}, w.o.R); w.o.RF = w.o.RF || {};
-    for (const k of Object.keys(st)) { const x = st[k]; if (!x || !x.gid || !(now < x.kick)) continue; const rf = await (RFP[k] || (RFP[k] = GR.refresh(x, ctx).catch(() => null))); if (rf) w.o.RF[k] = rf; } });
+    if (e && e.g) return; // graded: nothing moves any more
+    for (const k of Object.keys(st)) { const x = st[k]; if (!x || !x.gid) continue; const rk = k + '|' + x.kick + '|' + (x.pp || ''), rf = await (RFP[rk] || (RFP[rk] = GR.refresh(x, ctx, { carry: !!c.rules.carry }).catch(() => null))); if (rf) w.o.RF[k] = rf; } });
   // 3. ledger: apply observations, then grade frozen copies whose games are final
   const L = clone(L0); let ch = applyObs(L, obs, now);
   const grades = [];
   await pmap(Object.keys(L.b).filter((pid) => mem.some((m) => m.pid === pid)).flatMap((pid) => Object.keys(L.b[pid]).map((id) => [pid, id])), 6, async ([pid, id]) => {
     const e = L.b[pid][id]; if (e.g) return; const s = e.s || {}; const ks = legKeys(s), rv = { x: '' };
-    const legs = []; for (const k of ks) { const st = e.r[k]; if (!st) { const r = RES[k]; legs.push(r && r.x ? r : { x: 'Game not found yet' }); continue; } legs.push(await GR.withGame(st, ctx)); }
-    let gb; try { gb = GR.gradeBet(s, legs, { maxOdds: c.rules.maxOdds || 500, carry: !!c.rules.carry, endAt: chiEnd(c.endDay) }); } catch (er) { gb = { x: 'Bet Oddable cannot read' }; } if (gb.x) { rv.x = gb.x; rv.sport = /sport/.test(gb.x) || !!gb.rule; } else if (gb.res) grades.push({ pid, id, g: Object.assign({ res: gb.res, pl: gb.pl, at: now }, gb.vr ? { vr: gb.vr } : {}), sj: JSON.stringify(s) });
+    const legs = []; for (const k of ks) { const st = e.r[k]; if (!st) { const r = RES[k]; legs.push(r && r.x ? r : { x: 'Not matched to a game when it was added' }); continue; } legs.push(await GR.withGame(st, ctx)); }
+    let gb; try { gb = GR.gradeBet(s, legs, { maxOdds: c.rules.maxOdds || 500, carry: !!c.rules.carry, endAt: chiEnd(c.endDay) }); } catch (er) { gb = { x: 'Bet Oddable cannot read' }; } if (gb.x) { rv.x = gb.x; rv.sport = /sport/.test(gb.x) || !!gb.rule; } else if (gb.res) { const gg = { res: gb.res, pl: gb.pl, at: now }; GRADEK.forEach((q) => { if (gb[q]) gg[q] = gb[q]; }); grades.push({ pid, id, g: gg, sj: JSON.stringify(s) }); }
     RV[pid + '|' + id] = rv;
   });
   ch += applyGrades(L, grades);
@@ -433,7 +464,7 @@ async function contestBets(g, c, ctx) {
   }
   // 4. judge every ledger bet for each member
   const out = {};
-  mem.forEach((m) => { const from = Math.max(c.start, m.joined || 0), P = L.b[m.pid] || {}; out[m.pid] = weekCap(c, memberRules(c, Object.keys(P).map((id) => { try { return judge(c, P[id], id, RV[m.pid + '|' + id], now, from); } catch (er) { return null; } }).filter(Boolean))); });
+  mem.forEach((m) => { const from = Math.max(c.start, m.joined || 0), P = L.b[m.pid] || {}; out[m.pid] = weekCap(c, memberRules(c, Object.keys(P).map((id) => { try { return judge(honorC(g, c), P[id], id, RV[m.pid + '|' + id], now, from); } catch (er) { return null; } }).filter(Boolean))); });
   if (ctx.dry) return out; // a look only: nothing written, nothing cached
   if (now >= c.start && g.owner && USEM.get(g.id + ':' + c.cid) !== mem.length) { USEM.set(g.id + ':' + c.cid, mem.length); LIM.recordPlay(g.owner, 'picks', g.id + ':' + c.cid, mem.map((m) => m.mk), g.name + ' · ' + c.name).catch(() => {}); } // one usage call for every game type (limits.recordPlay) // G15: enterprise usage counter (no-op for standard accounts)
   CACHE.set(key, { at: D.now(), u: g.u, v: out }); if (CACHE.size > 500) CACHE.delete(CACHE.keys().next().value);
@@ -444,9 +475,23 @@ async function contestBets(g, c, ctx) {
 // The phone calls /groups/bet/add BEFORE it keeps a new bet while its player is in a running or upcoming group contest. The server writes the bet straight into
 // the player's synced-bets row with `sa` = `gl` = the server's time; sync.js then keeps that copy forever (no edit, swap or delete from any phone). If this call
 // fails the phone does not keep the bet ("Not saved, try again"): there are no local-only group bets. A bet the server did not save this way never counts.
-const LOCKED_MSG = 'Group bets lock when you add them: they cannot be edited, deleted or swapped, even before kickoff. The commissioner can only void a bet under the void rules (a postponed or cancelled game, or a duplicate added by mistake within 2 minutes), and the reason is shown to everyone.';
+const LOCKED_MSG = 'Group bets are final when you add them: they cannot be edited, deleted or swapped, even before kickoff. The commissioner can only void a bet under the void rules (a postponed or cancelled game, or a duplicate added by mistake within 2 minutes), and the reason is shown to everyone.';
+const NOGAME_MSG = "Can't find this game — it can't count in your group. Nothing was added.", NOCHECK_MSG = "Couldn't check this game — try again. Nothing was added.";
+// ROUND 5 (review H1 / M1 / M2), THE LATE-NEWS RULE:
+//   - inside the last 30 minutes before a game's kickoff EVERY add reads that game from ESPN again, fresh (no 10-minute copy). The price and line stored with
+//     the bet are the ones ESPN showed at that moment, so nobody is paid at a price from before the news.
+//   - the same fresh read is made whenever the copy the server holds is not a good answer from the last 10 minutes (ESPN failing), at any distance from kickoff.
+//   - if that read fails the add is refused: "Couldn't check this game — try again" (HTTP 503, nothing added). Never "Saved" for a bet that is sure to void.
+//   - adds CLOSE 2 minutes before the listed kickoff, or the moment ESPN shows the game started (an early first pitch), whichever comes first.
+const FRESHWIN = 30 * 6e4, CLOSE_MS = 2 * 6e4, STALE_MS = 10 * 6e4;
+const CLOSED_MSG = 'Bets on this game are closed: group bets stop 2 minutes before kickoff. Nothing was added.';
+const PROPGAME_MSG = 'A prop must name its game: pick the game first, then add the prop before it starts. Nothing was added.';
+const NOPRICE_MSG = "No posted price for this game yet — it can't count in your group until there is one. Try closer to kickoff. Nothing was added.";
+const TYN = { sp: 'sp', ml: 'ml', ou: 'ou', tot: 'ou' };
+// Round 4: a bet is stored as what it will be graded as. Only moneyline / spread / total, written one way; a moneyline carries no line.
+function normType(o, what) { if (o.type == null || o.type === '') o.type = 'ml'; if (typeof o.type !== 'string' || !TYN[o.type]) throw bad(400, 'Unknown kind of ' + what + ': pick moneyline, spread or total'); o.type = TYN[o.type]; if (o.type === 'ml') o.line = 0; }
 RLIM.bet = [60, 600e3, 6000, 600e3];
-const DIFF_MSG = 'A different bet is already locked under this id. ' + 'Group bets lock when you add them.';
+const DIFF_MSG = 'A different bet is already saved under this id. ' + 'Group bets are final when you add them.';
 const STARTED_MSG = "That game has already started, so this bet can't go into your group. Nothing was added.";
 const BETKEYS = ['id', 'kind', 'type', 'side', 'line', 'odds', 'mult', 'stake', 'lg', 'gid', 'day', 'home', 'away', 'week', 'text', 'note', 'appSu', 'appConf', 'appAts', 'appLine', 'noApp', 'pp', 'legs', 'pay', 'src', 'kt', 'ks'];
 const scalar = (v) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean';
@@ -466,7 +511,9 @@ function cleanBet(x) {
   o.stake = Math.round(st * 100) / 100; if (o.line != null && !Number.isFinite(Number(o.line))) throw bad(400, 'Bad line');
   if (o.odds != null && !Number.isFinite(Number(o.odds))) throw bad(400, 'Bad odds');
   if (!okDay(String(o.day || ''))) throw bad(400, 'Bad day');
+  if (o.kind === undefined && !o.kt) normType(o, 'bet'); if (o.kind === 'parlay') o.legs.forEach((l) => { if (l.gid != null && l.gid !== '') normType(l, 'parlay leg'); });
   if (o.kind === undefined && !o.kt && GR.priceMult(o) == null) throw bad(400, 'Enter the odds: group bets need a price');
+  if (o.kind === 'prop' && !o.kt && GR.priceMult(o) == null) throw bad(400, 'Enter the odds: a group prop is paid from the price you enter when you add it'); // round 5 (H2)
   if (o.kind === 'parlay' && !(Number(o.mult) > 1 && Number(o.mult) <= 1001) && !o.legs.every((l) => Number.isFinite(Number(l.o)) && Math.abs(Number(l.o)) >= 100 && Math.abs(Number(l.o)) <= 5000)) throw bad(400, 'This parlay has no payout: enter each leg\'s odds or the parlay\'s payout');
   const j = JSON.stringify(o); if (j.length > 8000) throw bad(413, 'Bet too big'); return JSON.parse(j);
 }
@@ -481,25 +528,30 @@ async function inRunning(u, now) { // the groups (with a picks contest not yet o
 // posted line and must be within the sport's tolerance of it (main line only in hockey / baseball); a parlay cannot repeat a leg or a game.
 // A leg it cannot match (a prop, a market it cannot read, ESPN not answering) is kept and judged later: only an honor-system contest can count it,
 // and a spread / total that never gets a line does not count anywhere. Returns the resolutions to store with the bet (with al = the line at add time).
-// PHASE 1 (review H5), THE RULE THAT CANNOT BE GAMED: a bet goes into a group only if, at this moment, ESPN told the server that its game exists and has not
-// started. If ESPN cannot be read for a leg (an error, a timeout, an old copy), the bet is REFUSED with "try again" (503, nothing added, nothing locked). It is
-// not kept as "saved, will be checked": that would put a bet in the book that nobody has checked for kickoff or for its line, would tell the player it is in
-// when it may be thrown out later, and would make an ESPN outage the best time to add a late bet. A refusal costs one retry; a wrong "Locked" costs trust.
-const NOCHECK_MSG = "Oddable can't check that game right now (the scores service did not answer), so this bet was NOT added to your group. Nothing was locked. Try again in a minute.";
-const FRESH_MS = 15 * 6e4; // a game read from ESPN longer ago than this is not "checked just now" (the scoreboard copy is kept 10 minutes)
+// ROUND 4 (manager rule): EVERY game leg must be tied to a real game the server knows (league, ESPN event id, both teams, date) RIGHT NOW, and that market
+// must have a posted price right now. A leg that does not match is refused ("Can't find this game"); when ESPN could not be read the add is refused
+// ("Couldn't check this game — try again"), never accepted blind. Only a true prop (a player prop, a Kalshi market that is not a game market) has no game
+// to match: it is kept for honor-system contests alone (betAdd refuses it when the player has none).
+const isProp = (s) => s.kind !== 'parlay' && (s.kt ? GR.ktType(s.kt) === 'prop' : s.kind === 'prop');
 async function addCheck(bet, now) {
-  const s = snap(bet), ctx = { budget: 24, fresh: true }, R = {}, got = [], keys = new Set();
+  const s = snap(bet), ctx = { budget: 60, strict: true }, R = {}, got = [], keys = new Set(), prop = isProp(s);
   for (const l of legsOf(s)) {
     const leg = s.kind === 'parlay' ? Object.assign({ lg: s.lg }, l) : s, k = GR.legKey(leg);
     if (keys.has(k)) throw bad(409, 'The same leg is in this parlay twice. Nothing was added.'); keys.add(k);
-    ctx.miss = 0; let threw = false;
-    const r = await GR.resolveLeg(leg, GR.LGS, ctx, String(s.day || '').slice(0, 10)).catch(() => { threw = true; return { key: k, x: 'Bet Oddable cannot read' }; });
-    if (threw) throw bad(400, "Oddable can't read this bet. Nothing was added.");
-    if (r.x) { if (r.kick != null && now >= r.kick) throw bad(409, STARTED_MSG); if (ctx.miss) throw bad(503, NOCHECK_MSG); continue; } // not matched to a game: fine only when ESPN answered every read
+    if (prop && !(leg.pg != null && leg.pg !== '')) throw bad(409, PROPGAME_MSG); // round 5 (H2): a prop is entered before ITS game's kickoff, like any bet
+    let r = await GR.resolveLeg(leg, GR.LGS, ctx, String(s.day || '').slice(0, 10)).catch(() => ({ key: k, x: 'Bet Oddable cannot read', nf: 1 }));
+    if (r.x) { if (r.kick != null && now >= r.kick) throw bad(409, STARTED_MSG);
+      if (r.nf || /match|not found|No game/i.test(r.x)) throw ctx.fail ? bad(503, NOCHECK_MSG) : bad(409, NOGAME_MSG);
+      throw bad(409, r.x + '. Nothing was added.'); }
     if (now >= r.kick || (r.g && r.g.state !== 'pre')) throw bad(409, STARTED_MSG);
-    if (r.g ? now - Number(r.g.seen || 0) > FRESH_MS : ctx.miss > 0) throw bad(503, NOCHECK_MSG); // matched, but from a copy ESPN did not confirm just now
+    if (r.g && (r.kick - now <= FRESHWIN || ctx.fail || now - Number(r.g.at || 0) > STALE_MS)) { // round 5: read this game fresh
+      const f = await GR.freshGame(r.g, ctx); if (f.fail) throw bad(503, NOCHECK_MSG); if (f.gone) throw bad(409, NOGAME_MSG);
+      r = Object.assign({}, r, { g: f.g, kick: f.g.start }); if (now >= r.kick || f.g.state !== 'pre') throw bad(409, STARTED_MSG); }
+    if (r.g && r.g.off) throw bad(409, 'That game is postponed or cancelled. Nothing was added.');
+    if (now >= r.kick - CLOSE_MS) throw bad(409, CLOSED_MSG);
     got.push(r); if (r.kind === 'prop') { R[k] = GR.store(r); continue; }
     const st = GR.store(r), why = GR.addWhy(Object.assign({}, st, { g: r.g })); if (why) throw bad(409, why + '. Nothing was added.');
+    if (!(st.ra > 0)) throw bad(409, NOPRICE_MSG);
     if (st.rl != null) st.al = st.rl; R[k] = st;
   }
   if (s.kind === 'parlay') { const pw = GR.parlayWhy(got); if (pw) throw bad(409, pw + '. Nothing was added.'); }
@@ -516,32 +568,32 @@ async function mirror(sid, p) {
     return false; });
 }
 const bookGet = async (mk, id) => { const r = await D.S.dbGet(BK(mk)); return (r && r.data && r.data.b && r.data.b[String(id)]) || null; };
-const savedOut = (p, n, again) => ({ ok: true, id: String(p.s.id), gl: p.at, sa: p.at, bet: lockedOf(p), groups: n, again: !!again, text: 'Saved to your group. Locked.' });
-// PHASE 1 (review B2, owner decision G16 "every bet counts for the group"): would ANY of this player's contests count this bet if it were saved right now?
-// Asked with the contest's own code (judge, memberRules, weekCap) on a what-if copy of the bet, so the answer at the add step is the answer the standings
-// would give: other sport, a game before the contest starts or before the player joined, after it ends, a kind of bet the contest leaves out, a bet the
-// server cannot check in a contest without the honor rule, the other side of a game already held, over the stake limit, over the weekly limit.
-// n = how many contests would count it; why = the first reason when none does; honor = it only counts under a contest's honor rule.
-async function countable(u, gs, bet, R, now) {
-  const s = snap(bet), ctx = { rows: new Map(), budget: 40 }, keys = legKeys(s), whys = []; let n = 0, honor = false;
-  for (const g of gs) for (const c of g.contests) {
-    if (c.kind !== 'picks' || cEnded(c, now)) continue; const m = inContest(c, g).find((x) => x.mk === u.mk); if (!m) continue;
-    const allowedL = leaguesOf(c.sport), r = {}, legs = [];
-    keys.forEach((k) => { const st = R[k]; if (st && st.gid && allowedL.includes(st.lg)) r[k] = st; });
-    for (const k of keys) legs.push(r[k] ? await GR.withGame(r[k], ctx).catch(() => r[k]) : { key: k, x: R[k] && R[k].gid ? "Not in this contest's sport" : 'Game not found' });
-    let gb; try { gb = GR.gradeBet(s, legs, { maxOdds: c.rules.maxOdds || 500, carry: !!c.rules.carry, endAt: chiEnd(c.endDay) }); } catch (er) { gb = { x: 'Bet Oddable cannot read' }; }
-    const rv = { x: gb.x || '', sport: !!gb.x && (/sport/.test(gb.x) || !!gb.rule) }, from = Math.max(c.start, m.joined || 0), e = { f: now, s, r, gl: now };
-    let j = null; try { j = judge(c, e, bet.id, rv, now, from); } catch (er) { j = null; }
-    if (!j) { const k = kicksOf(s, r), d = k.min != null ? chiDay(k.min) : String(s.day || '').slice(0, 10);
-      whys.push(d > c.endDay ? 'its game is after ' + c.name + ' ends' : (k.min != null ? k.min < c.start : d < c.startDay) ? 'its game is before ' + c.name + ' starts' : 'its game is before you joined ' + c.name); continue; }
-    if (j.ok) { let mine = []; try { mine = ((await contestBets(g, c, Object.assign(ctx, { only: u.mk, dry: true })))[m.pid] || []).filter((x) => x.id !== j.id).map((x) => Object.assign({}, x)); } catch (er) { mine = []; } weekCap(c, memberRules(c, mine.concat(j))); }
-    if (j.ok) { n++; if (j.gr === 'honor') honor = true; } else whys.push(j.why || 'it does not count in ' + c.name);
+// "Saved to your group." is said ONLY for a bet that counts as entered in at least one of the player's contests (round 4). skips = the contests it does not count in, with the reason.
+// (Main-line port, Nov 17 2026: the owner's word is "final", not "locked", outside the weekly picks.)
+const savedOut = (p, n, again, W) => ({ ok: true, id: String(p.s.id), gl: p.at, sa: p.at, bet: lockedOf(p), groups: n, again: !!again, text: 'Saved to your group.', note: 'Bets are final when you add them.', counts: W ? W.yes : undefined, skips: W && W.no.length ? W.no : undefined });
+// PHASE 1 (review B2, owner decision G16 "every bet counts for the group") + ROUND 4/5 (feature session): would ANY of this player's contests count this bet
+// if it were saved right now? Every picks contest the player is in gets the same checks the standings use (judge, memberRules, weekCap) on a what-if copy
+// (ctx.only + ctx.dry: one member, nothing written), plus the round-4 checks (sport of every matched leg; a prop only where the honor system is on, and
+// main-line port: never in a contest with money, see honorOn). Returns { yes: [names], no: [{ group, contest, why }], honor }.
+async function countsWhere(u, bet, R, gs, now) {
+  const s = snap(bet), yes = [], no = [], ctx = { rows: new Map(), budget: 40, only: u.mk, dry: true }, prop = isProp(s); let honor = false;
+  for (const g of gs) for (const c of g.contests.filter((x) => x.kind === 'picks' && !cEnded(x, now))) {
+    const m = inContest(c, g).find((x) => x.mk === u.mk); if (!m) continue;
+    const from = Math.max(c.start, m.joined || 0), allowed = leaguesOf(c.sport), tag = { group: g.name, contest: c.name }; let why = '', j = null;
+    if (Object.values(R).some((x) => x.lg && !allowed.includes(x.lg))) why = 'Not ' + SPORTN[c.sport];
+    else if (prop && !c.rules.honor) why = "Oddable can't check props, so they count only where the commissioner turned on the honor system";
+    else if (prop && !honorOn(g, c)) why = HONOR_MONEY_WHY;
+    if (!why) { try { j = judge(honorC(g, c), { f: now, s, r: R, gl: now }, bet.id, null, now, from); } catch (e) { j = null; } if (!j) why = "The game is outside this contest's dates"; else if (!j.ok) why = j.why; }
+    if (!why) { let mine = []; try { mine = ((await contestBets(g, c, ctx))[m.pid] || []).filter((x) => x.id !== j.id).map((x) => Object.assign({}, x)); } catch (e) {} weekCap(c, memberRules(c, mine.concat(j))); if (!j.ok) why = j.why; }
+    if (why) no.push(Object.assign(tag, { why })); else { yes.push(g.name + ' · ' + c.name); if (prop) honor = true; } // a prop counts here only under the honor rule (checked above)
   }
-  return { n, honor, why: whys[0] || 'you are not in a running group contest' };
+  return { yes, no, honor };
 }
-// The answer when no contest can count the bet: NOT saved to the group book, NOT locked, never "Saved to your group". HTTP 200 with personal: true and gl: 0,
-// so the phone keeps it as an ordinary personal bet (plain sync carries it like any other) and can say why.
-const personalOut = (bet, why) => ({ ok: true, personal: true, saved: false, counted: 0, code: 'personal', id: String(bet.id), gl: 0, why, text: 'No contest in your groups can count this bet (' + why + '). It was NOT added to a group and is not locked: it stays a personal bet.' });
+// The answer when no contest can count the bet: NOT saved to the group book, NOT final, never "Saved to your group". HTTP 200 with personal: true and gl: 0,
+// so the phone keeps it as an ordinary personal bet (plain sync carries it like any other) and can say why. (Main's answer, kept by the manager's decision
+// of Nov 17 2026; the feature branch's 409 was NOT ported.)
+const lc1 = (t) => String(t || '').replace(/\.$/, ''); // the reason as the contest gives it, without its closing full stop
+const personalOut = (bet, why) => ({ ok: true, personal: true, saved: false, counted: 0, code: 'personal', id: String(bet.id), gl: 0, why, text: 'No contest in your groups can count this bet (' + lc1(why) + '). It was NOT added to a group: it stays a personal bet.' });
 // IDEMPOTENT (round 3): the phone makes the bet id once and reuses it on every retry. Same id + same bet = success with the stored bet (a lost answer can
 // never make a second bet); same id + a different bet = 409. The book write is the one commit point.
 async function betAdd(u, ip, raw, now) {
@@ -550,17 +602,20 @@ async function betAdd(u, ip, raw, now) {
   const prior = await bookGet(u.mk, bet.id);
   if (prior) { if (JSON.stringify(prior.s) !== sj) throw bad(409, DIFF_MSG); await mirror(sid, prior).catch(() => false); return savedOut(prior, 0, true); }
   const gs = await inRunning(u, now); if (!gs.length) return personalOut(bet, 'you are not in a running group contest'); // Phase 1 (B2): was a 409
-  // A refusal from the add check (game already started, line too far, ESPN not answering) only stands when one of the player's contests could have taken the
-  // bet at all. A bet plainly outside every contest (another sport, other dates: by what the bet itself says, which can only ever keep a bet OUT) is personal.
-  let R; try { R = await addCheck(bet, now); } catch (er) { if (!plausible(u, gs, bet, now)) return personalOut(bet, 'it is outside your contests: another sport or other dates'); throw er; }
-  const cn = await countable(u, gs, bet, R, now); if (!cn.n) return personalOut(bet, cn.why); // Phase 1 (B2): never "Saved to your group. Locked." for a bet no contest can count
+  // A refusal from the add check (game already started, closed, no price, ESPN not answering) only stands when one of the player's contests could have taken
+  // the bet at all. A bet plainly outside every contest (another sport, other dates: by what the bet itself says, which can only ever keep a bet OUT) is personal.
+  let R; try { R = await addCheck(bet, now); } catch (er) { if (!plausible(u, gs, bet, now)) return personalOut(bet, 'it is outside your contests: another sport or other dates'); if (er && er.message === NOGAME_MSG) return personalOut(bet, "Oddable can't find this game on the scores service, so it can't count in a group"); throw er; } // main-line port: a game ESPN answers it does not have = main's personal answer (it can never count)
+  // Round 4: a bet that counts nowhere (too many legs, a hedge, a kind of bet the contest does not take, over the limits) is never "Saved to your group".
+  // Main-line port: answered as a personal bet (200 personal:true), main's answer, with the first contest's reason.
+  const W = await countsWhere(u, bet, R, gs, now);
+  if (!W.yes.length) { const n0 = W.no[0]; return personalOut(bet, n0 ? (W.no.length > 1 ? 'your contests' : n0.contest) + ': ' + lc1(n0.why) : 'you are not in a running group contest'); }
   const p = await rmw(BK(u.mk), { b: {} }, async (x) => { x.b = x.b || {}; const old = x.b[bet.id];
     if (old) { if (JSON.stringify(old.s) !== sj) throw bad(409, DIFF_MSG); return { nochange: true, v: old }; }
     const ids = Object.keys(x.b); if (ids.length >= 3000) { const cutoff = now - 400 * DAY; ids.forEach((i) => { if (x.b[i].at < cutoff) delete x.b[i]; }); if (Object.keys(x.b).length >= 3000) throw bad(409, 'Too many group bets on this account'); }
     return (x.b[bet.id] = { s: bet, at: now, r: R }); }, 8);
   gs.forEach((g) => g.contests.forEach((c) => CACHE.delete(g.id + ':' + c.cid)));
   await mirror(sid, p).catch(() => false);
-  return Object.assign(savedOut(p, gs.length, false), { counted: cn.n }, cn.honor ? { honor: true, text: "Saved to your group. Locked. Oddable can't check this bet itself: it counts only under your group's honor rule." } : {});
+  return Object.assign(savedOut(p, gs.length, false, W), { counted: W.yes.length }, W.honor ? { honor: true, text: "Saved to your group. Oddable can't check this prop itself: the commissioner enters its result after the game and another member confirms it." } : {});
 }
 // By what the bet itself says (its league / ticker / teams and its day): could any of the player's contests take it? Used ONLY to choose between two answers
 // that both keep the bet out of every contest ("refused" or "personal"), so a made-up league or day gains nothing.
@@ -573,7 +628,10 @@ function plausible(u, gs, bet, now) {
 //   'postponed'  the bet's game is postponed, cancelled or moved (checked against ESPN)
 //   'duplicate'  the same member added the same bet twice within 2 minutes; only the LATER copy can be voided, and only before its game starts
 const sameBet = (a, b) => JSON.stringify(Object.assign({}, a, { id: 0 })) === JSON.stringify(Object.assign({}, b, { id: 0 }));
-async function voidable(g, now, ctx) {
+// ROUND 5 (M4): A VOID FOR A POSTPONED OR CANCELLED GAME IS PER GAME, NEVER PER MEMBER. The commissioner voids the GAME: every member's single bet on it
+// is void, and it drops out of every parlay that holds it (the other legs play on), in every picks contest of the group, in one step. Only a game that
+// is not being played and has not been played. 'duplicate' stays per bet (the later copy of the same bet, added within 2 minutes, before its game starts).
+async function voidable(g, now, ctx, raw) {
   const out = [], nm = await names();
   for (const c of g.contests.filter((x) => x.kind === 'picks' && !cEnded(x, now))) {
     await contestBets(g, c, ctx); const led = await D.S.dbGet(LK(g.id, c.cid)).catch(() => null), B = (led && led.data && led.data.b) || {};
@@ -581,20 +639,149 @@ async function voidable(g, now, ctx) {
       for (const id of ids) { const e = P[id]; if (!e || e.v || (e.g && e.g.res)) continue; const k = kicksOf(e.s, e.r || {});
         const twin = ids.find((j) => j !== id && sameBet(P[j].s, e.s) && e.f >= P[j].f && e.f - P[j].f <= 120e3 && (e.f > P[j].f || j < id));
         if (twin && !(k.min != null && now >= k.min)) { out.push({ cid: c.cid, pid: m.pid, name: shownName(m, nm), bid: id, kind: 'duplicate', text: 'The same bet added twice, ' + Math.round((e.f - P[twin].f) / 1000) + ' seconds apart' }); continue; }
-        let off = false; for (const r of Object.values(e.r || {})) { const w = await GR.withGame(r, ctx).catch(() => null), gm = w && w.g; if (gm && (gm.off || gm.canc || gm.start > r.kick + 6 * 36e5)) off = true; }
-        if (off) out.push({ cid: c.cid, pid: m.pid, name: shownName(m, nm), bid: id, kind: 'postponed', text: k.min != null && now >= k.min ? lbl(e.s) : 'A bet on a postponed or cancelled game' }); } }
+        // Round 4: NEVER during play. Round 5: decided game by game. A game can be voided only while it is not in progress or final, and it is cancelled,
+        // explicitly postponed (not a delay, not a moved time), or was postponed and 48 hours have passed.
+        const games = [], names0 = []; for (const r of Object.values(e.r || {})) { if (!r || !r.gid || r.cv) continue; const w = await GR.withGame(r, ctx).catch(() => null), gm = w && w.g; if (!gm) continue;
+          if (gm.state === 'in' || gm.done) continue; if (gm.canc || gm.off || (Number(r.pp) > 0 && now > GR.k0Of(r) + 48 * 36e5)) { games.push(r.lg + '|' + r.gid); names0.push(gm.away.abbr + ' @ ' + gm.home.abbr); } }
+        if (games.length) out.push({ cid: c.cid, pid: m.pid, name: shownName(m, nm), bid: id, kind: 'postponed', games, gnames: names0, text: k.min != null && now >= k.min ? lbl(e.s) : 'A bet on a postponed or cancelled game' }); } }
   }
-  const seen = new Set(); return out.filter((x) => { const k = x.pid + '|' + x.bid; if (seen.has(k)) return false; seen.add(k); return true; });
+  const seen = new Set(), bets = out.filter((x) => { const k = x.pid + '|' + x.bid + '|' + x.kind; if (seen.has(k)) return false; seen.add(k); return true; });
+  if (raw) return bets;
+  const byGame = new Map(); bets.filter((x) => x.kind === 'postponed').forEach((x) => x.games.forEach((gk, i) => { const o = byGame.get(gk) || { cid: x.cid, pid: x.pid, bid: x.bid, kind: 'postponed', game: gk, name: x.gnames[i], bets: new Set(), who: new Set() }; o.bets.add(x.pid + '|' + x.bid); o.who.add(x.pid); byGame.set(gk, o); }));
+  return bets.filter((x) => x.kind === 'duplicate').concat([...byGame.values()].map((o) => ({ cid: o.cid, pid: o.pid, bid: o.bid, kind: 'postponed', game: o.game, name: o.name, n: o.bets.size, members: o.who.size,
+    text: o.bets.size + (o.bets.size === 1 ? ' bet' : ' bets') + ' from ' + o.who.size + (o.who.size === 1 ? ' member' : ' members') + ' on this game. Voiding it takes the game out for everyone at once: single bets are void, and it drops out of every parlay.' })));
 }
 async function betVoid(u, b, now) {
   const g0 = await gread(b.id); if (!g0 || !canSee(g0, u.mk)) throw bad(404, 'Group not found'); if (!isComm(g0, u.mk)) throw bad(403, 'Only the commissioner can void a bet');
   const reason = cleanName(b.reason, 120); if (reason.length < 3) throw bad(400, 'Give the reason: every member will see it');
   const kind = b.kind === 'duplicate' ? 'duplicate' : b.kind === 'postponed' ? 'postponed' : ''; if (!kind) throw bad(400, 'A bet can only be voided for a postponed or cancelled game, or a duplicate entered by mistake within 2 minutes');
-  const ctx = { rows: new Map(), budget: 40 }, hit = (await voidable(g0, now, ctx)).find((x) => x.pid === String(b.pid || '') && x.bid === String(b.bid || '') && x.kind === kind);
-  if (!hit) throw bad(409, kind === 'duplicate' ? 'Not a duplicate under the void rules: the same bet, added twice within 2 minutes, before its game starts (only the later copy)' : 'That game is not postponed or cancelled');
-  for (const c of g0.contests.filter((x) => x.kind === 'picks')) { await rmw(LK(g0.id, c.cid), { b: {} }, async (x) => { const e = x.b && x.b[hit.pid] && x.b[hit.pid][hit.bid]; if (!e || e.v) return { nochange: true }; e.v = { k: kind, why: reason, at: now }; return {}; }, 8); CACHE.delete(g0.id + ':' + c.cid); }
-  const g = await gmut(g0.id, (g) => { g.voids = (g.voids || []).concat({ at: now, pid: hit.pid, name: hit.name, bid: hit.bid, kind, reason }).slice(-200); g.u = now; return g; });
-  return { ok: true, group: full(g, u.mk, now) };
+  const ctx = { rows: new Map(), budget: 40 }, raw = await voidable(g0, now, ctx, true), gk = kind === 'postponed' && typeof b.game === 'string' ? b.game.slice(0, 40) : '';
+  const hit = raw.find((x) => x.kind === kind && (gk ? x.games.includes(gk) : x.pid === String(b.pid || '') && x.bid === String(b.bid || '')));
+  if (!hit) throw bad(409, kind === 'duplicate' ? 'Not a duplicate under the void rules: the same bet, added twice within 2 minutes, before its game starts (only the later copy)' : 'This game cannot be voided: it is not postponed or cancelled, or it has already been played or is being played');
+  let entry;
+  if (kind === 'duplicate') {
+    for (const c of g0.contests.filter((x) => x.kind === 'picks')) { await rmw(LK(g0.id, c.cid), { b: {} }, async (x) => { const e = x.b && x.b[hit.pid] && x.b[hit.pid][hit.bid]; if (!e || e.v) return { nochange: true }; e.v = { k: kind, why: reason, at: now }; return {}; }, 8); CACHE.delete(g0.id + ':' + c.cid); }
+    entry = { at: now, pid: hit.pid, name: hit.name, bid: hit.bid, kind, reason };
+  } else { // the GAME, for every member's bet on it, in every picks contest of the group (M4)
+    const games = new Set(gk ? [gk] : hit.games), label = (gk ? [hit.gnames[hit.games.indexOf(gk)]] : hit.gnames).join(', '), done = new Set();
+    for (const c of g0.contests.filter((x) => x.kind === 'picks')) { await rmw(LK(g0.id, c.cid), { b: {} }, async (x) => { let ch = 0;
+        Object.keys(x.b || {}).forEach((pid) => Object.keys(x.b[pid] || {}).forEach((id) => { const e = x.b[pid][id]; if (!e || e.v || (e.g && e.g.res)) return;
+          Object.keys(e.r || {}).forEach((k) => { const st = e.r[k]; if (st && st.gid && games.has(st.lg + '|' + st.gid) && !st.cv) { st.cv = { why: reason, at: now }; ch++; done.add(pid + '|' + id); } }); }));
+        return ch ? {} : { nochange: true }; }, 8); CACHE.delete(g0.id + ':' + c.cid); }
+    entry = { at: now, pid: '', name: 'Every bet on ' + label, bid: '', kind, reason, game: [...games].join(','), n: done.size };
+  }
+  const g = await gmut(g0.id, (g) => { g.voids = (g.voids || []).concat(entry).slice(-200); g.u = now; return g; });
+  return { ok: true, group: full(g, u.mk, now), n: entry.n };
+}
+
+// ---------- ROUND 5 (review H2): HONOR-SYSTEM PROPS ----------
+// Only in a contest whose commissioner turned the honor system on, and only for true props. The whole rule:
+//   1. The prop NAMES ITS GAME, a real game ESPN shows, matched when the bet is added (addCheck). It is entered before that kickoff like any bet (the fresh
+//      read and the 2-minute close apply) and is final when added. It needs a price: that price, capped at "Longest odds that count", is what it pays.
+//   2. Nobody marks their own bet. After the game is over the COMMISSIONER enters the result (won / lost / push): /groups/prop/result.
+//   3. ANOTHER MEMBER confirms it: /groups/prop/confirm (one member; two when the prop is the commissioner's own bet). The bettor cannot confirm. Until it is
+//      confirmed the commissioner can change the result (confirmations start over); once confirmed it is final.
+//   4. The stake caps, hedge rule and weekly limit apply as to any bet. A postponed / cancelled game voids the prop with every other bet on that game.
+// Contests with the honor system on are labelled HONOR_TEXT everywhere.
+const HONOR_TEXT = 'Honor system: props are priced at even money at most and settled by the commissioner and one other member. Use only with people you trust.';
+// MAIN-LINE PORT (manager decision, Nov 17 2026, after review round 6 H1-H3: the honor system can still be gamed). Honor-system props are NOT available in a
+// contest with an entry fee or any money shown: a side pot with an entry, or a main-pot contest of a group whose main pot has an entry. In a FREE contest they stay, with:
+//   - the card showing the game the prop is tied to and when it was added (propList: game, kick, added);
+//   - the price capped at EVEN MONEY (+100), whatever the player typed and whatever "Longest odds that count" says (HONOR_MAXM);
+//   - a prop with no confirmed result HONOR_AUTO (72 hours) after its game settles as a LOSS, unless the commissioner + one other member marked it void
+//     (result 'void', entered and confirmed like any result) before then. After that moment nobody can enter or confirm anything on it.
+// honorOn(g, c) is read wherever the honor rule is applied (judge through honorC, the add step, propList, propSet), so money added later switches it off.
+const HONOR_MAXM = 1, HONOR_AUTO = 72 * 36e5, HONOR_GAME = 4 * 36e5; // the 72 hours start at the end of the game, counted as kickoff + 4 hours
+const HONOR_MONEY_WHY = 'Honor-system props do not count in a contest with an entry fee or prize money';
+const moneyIn = (g, c) => cents(c.rules.entry || 0) > 0 || (c.pot === 'main' && mainOf(g).some((x) => x.kind === 'picks' && cents(x.rules.entry || 0) > 0));
+const honorOn = (g, c) => !!(c && c.rules && c.rules.honor) && !moneyIn(g, c);
+const honorC = (g, c) => (c.rules && c.rules.honor && !honorOn(g, c) ? Object.assign({}, c, { rules: Object.assign({}, c.rules, { honor: false }) }) : c);
+const honorClash = (g) => { const c = g.contests.find((x) => x.kind === 'picks' && x.rules.honor && moneyIn(g, x)); if (c) throw bad(400, 'The honor system is only for contests with no entry fee or prize money ("' + c.name + '"). Turn it off, or set the entry to $0.'); };
+const honorDue = (e) => { let k = -Infinity; Object.values(e.r || {}).forEach((r) => { if (r && Number.isFinite(Number(r.kick))) k = Math.max(k, Number(r.kick)); }); return Number.isFinite(k) ? k + HONOR_GAME + HONOR_AUTO : Infinity; };
+const propOver = async (e, ctx, now) => { let any = false, all = true; for (const r of Object.values(e.r || {})) { if (!r || !r.gid) continue; any = true; const w = await GR.withGame(r, ctx).catch(() => null), gm = w && w.g; if (gm ? !(gm.done && !gm.off) : !(now > Number(r.kick) + 12 * 36e5)) all = false; } return any && all; };
+async function propList(g, u, now, ctx) {
+  const out = [], nm = await names(), me = memberOf(g, u.mk), comm = isComm(g, u.mk), seen = new Set();
+  for (const c of g.contests.filter((x) => x.kind === 'picks' && honorOn(g, x) && cStarted(x, now))) {
+    const mb = await contestBets(g, c, ctx), led = await D.S.dbGet(LK(g.id, c.cid)).catch(() => null), B = (led && led.data && led.data.b) || {};
+    for (const m of inContest(c, g)) { const P = B[m.pid] || {}, mine = m.mk === u.mk;
+      for (const j of (mb[m.pid] || [])) { if (j.gr !== 'honor' || !j.ok || j.voided) continue; const e = P[j.id], key = m.pid + '|' + j.id; if (!e || seen.has(key)) continue;
+        if (!mine && !j.vis) continue; // other members' bets stay hidden until their game has kicked off, props included
+        seen.add(key); const over = await propOver(e, ctx, now), hr = e.hr || null, auto = !(hr && hr.fin) && now >= honorDue(e), fin = !!(hr && hr.fin) || auto, pm = GR.priceMult(e.s || {});
+        // main-line port (review round 6 H1): the card names the game the prop is tied to and when it was added, so a prop about another game is seen
+        const rg = Object.values(e.r || {}).find((r) => r && r.gid) || {}, gw = rg.gid ? await GR.withGame(rg, ctx).catch(() => null) : null, gm = gw && gw.g;
+        out.push({ cid: c.cid, contest: c.name, pid: m.pid, name: shownName(m, nm), bid: j.id, what: j.what, stake: j.stake, cs: j.cs, pays: pm == null ? 0 : Math.round(j.cs * Math.min(pm, (c.rules.maxOdds || 500) / 100, HONOR_MAXM) * 100) / 100, over,
+          game: gm ? gm.away.abbr + ' @ ' + gm.home.abbr : rg.away && rg.home ? rg.away + ' @ ' + rg.home : '', gameId: rg.gid ? rg.lg + '|' + rg.gid : '', kick: Number(rg.kick) || 0, added: Number(e.f) || 0, due: Number.isFinite(honorDue(e)) ? honorDue(e) : 0,
+          res: auto ? 'lost' : hr ? hr.res : '', auto, n: hr ? (hr.ok || []).length : 0, need: hr ? hr.need : m.mk === g.comm ? 2 : 1, fin, mine,
+          canEnter: comm && over && !fin, canConfirm: !!me && !comm && !mine && !!hr && !fin && !(hr.ok || []).includes(me.pid) }); } }
+  }
+  return out;
+}
+async function propSet(u, b, now, confirm) {
+  const g = await gread(b.id); if (!g || !canSee(g, u.mk)) throw bad(404, 'Group not found');
+  const comm = isComm(g, u.mk), me = memberOf(g, u.mk), res = String(b.res || '');
+  if (confirm ? comm || !me : !comm) throw bad(403, confirm ? 'Another member confirms the result, not the commissioner who entered it' : 'Only the commissioner enters a prop result');
+  if (!['won', 'lost', 'push', 'void'].includes(res)) throw bad(400, 'Pick won, lost, push or void');
+  const hit = (await propList(g, u, now, { rows: new Map(), budget: 40 })).find((x) => x.pid === String(b.pid || '') && x.bid === String(b.bid || ''));
+  if (!hit) throw bad(404, 'That prop is not waiting for a result');
+  if (hit.auto) throw bad(409, 'This prop had no confirmed result 72 hours after its game, so it was settled as a loss. It is final.');
+  if (hit.fin) throw bad(409, 'This result is final: it was entered and confirmed');
+  if (!hit.over) throw bad(409, 'A prop result can be entered once its game is over');
+  if (confirm) { if (hit.mine) throw bad(403, 'You cannot confirm your own bet'); if (!hit.res) throw bad(409, 'The commissioner has not entered a result yet'); if (hit.res !== res) throw bad(409, 'The commissioner entered "' + hit.res + '". Confirm that, or ask the commissioner to change it.'); }
+  const bettor = g.members.find((m) => m.pid === hit.pid), need = bettor && bettor.mk === g.comm ? 2 : 1; let fin = false;
+  for (const c of g.contests.filter((x) => x.kind === 'picks' && honorOn(g, x))) { await rmw(LK(g.id, c.cid), { b: {} }, async (x) => { const e = x.b && x.b[hit.pid] && x.b[hit.pid][hit.bid]; if (!e || (e.hr && e.hr.fin)) return { nochange: true };
+      if (!confirm) e.hr = { res, by: me ? me.pid : '', at: now, ok: [], need };
+      else { if (!e.hr || e.hr.res !== res) return { nochange: true }; if (!e.hr.ok.includes(me.pid)) e.hr.ok.push(me.pid); if (e.hr.ok.length >= e.hr.need) { e.hr.fin = 1; e.hr.finAt = now; fin = true; } }
+      return {}; }, 8); CACHE.delete(g.id + ':' + c.cid); }
+  return { ok: true, fin, need, text: confirm ? (fin ? 'Confirmed. This result is final.' : 'Confirmed. One more member must confirm, because this is the commissioner\'s own bet.') : 'Result entered. It counts once ' + (need === 2 ? 'two other members confirm it (it is your own bet).' : 'another member confirms it.'), list: await propList(g, u, now, { rows: new Map(), budget: 40 }) };
+}
+
+// ---------- ROUND 5: HEAD-TO-HEAD ----------
+// THE RULE: before the start the commissioner generates a ROUND-ROBIN schedule (circle method, random order; with an odd number one player sits out each
+// week; when the contest has more weeks than opponents the rounds repeat). It can be generated again until the start. At the start it is frozen: if there is
+// none, or the members changed after it was made, the server makes one itself (same method, order fixed by the contest id) so the contest always plays.
+// A WEEK'S MATCHUP is won by the higher GRADED NET for that week: the dollars won or lost on the player's counted bets of that week, after every rule of the
+// contest (kickoff price, stake caps, weekly limit). It is decided when the week is over and neither player has an open counted bet in it. Equal nets = a tie.
+// A player with fewer counted bets that week than the contest's "least bets a week" (at least 1) FORFEITS the week; both short = a tie. A bye is no result.
+// STANDINGS: most wins, then fewest losses, then season net; still level = same place (the prize money is split, as in every format).
+const hsh = (x) => crypto.createHash('sha256').update(String(x)).digest('hex');
+function rrSchedule(pids, nWeeks) {
+  const p = pids.slice(); if (p.length % 2) p.push(null); const n = p.length, weeks = []; if (n < 2) return weeks;
+  for (let w = 0; w < nWeeks; w++) { const k = w % (n - 1), rest = p.slice(1), arr = [p[0]].concat(rest.slice(rest.length - k), rest.slice(0, rest.length - k)), ms = [];
+    for (let i = 0; i < n / 2; i++) { const a = arr[i], b = arr[n - 1 - i]; ms.push(a && b ? [a, b] : [a || b, null]); } weeks.push(ms); }
+  return weeks;
+}
+const shuffled = (a) => { const o = a.slice(); for (let i = o.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); [o[i], o[j]] = [o[j], o[i]]; } return o; };
+const h2hPids = (sc) => [...new Set(((sc && sc.weeks) || []).flat(2).filter(Boolean))].sort();
+const h2hCovers = (sc, pids, nW) => !!sc && (sc.weeks || []).length === nW && JSON.stringify(h2hPids(sc)) === JSON.stringify(pids.slice().sort());
+const h2hMem = (c, g) => inContest(c, g).filter((m) => !(Number(m.joined) > c.start)).map((m) => m.pid); // who was in when the contest started (a late joiner has no matchups)
+async function ensureH2h(g, c, now) {
+  if (c.fmt !== 'h2h') return null; if (c.h2h && c.h2h.fz) return c.h2h; if (!cStarted(c, now)) return c.h2h || null;
+  const pids = h2hMem(c, g), nW = weekOf(c, c.endDay);
+  const sc = h2hCovers(c.h2h, pids, nW) ? Object.assign({}, c.h2h, { fz: now }) : { at: now, auto: true, fz: now, weeks: rrSchedule(pids.slice().sort((a, b) => (hsh(c.cid + a) < hsh(c.cid + b) ? -1 : 1)), nW) };
+  try { const g2 = await gmut(g.id, (gg) => { const cc = gg.contests.find((x) => x.cid === c.cid); if (!cc || (cc.h2h && cc.h2h.fz)) return { nochange: true, v: gg }; cc.h2h = sc; return gg; }); const c2 = g2 && g2.contests.find((x) => x.cid === c.cid); if (c2 && c2.h2h) { c.h2h = c2.h2h; return c2.h2h; } } catch (e) {}
+  c.h2h = sc; return sc;
+}
+const H2H_OPEN = 72 * 36e5;
+function h2hWeeks(c, sc, mb, now) {
+  const need = Math.max(1, Number(c.rules.minBets) || 0), r2 = (v) => Math.round(v * 100) / 100, rec = {}, inS = {}, weeks = [];
+  const wk = (pid, w) => { const L = (mb[pid] || []).filter((x) => x.ok && !x.voided && weekOf(c, x.d) === w); return { n: L.length, open: L.filter((x) => !x.res).length, net: r2(L.reduce((a, x) => a + (x.res ? x.pl : 0), 0)) }; };
+  const R = (pid) => (rec[pid] = rec[pid] || { w: 0, l: 0, t: 0 });
+  // main-line port (review round 6 M1): one open bet can no longer hold a week forever. A week is settled when it is over and every counted bet in it is
+  // graded, or H2H_OPEN (72 hours) after its last game (the week's end, or the latest kickoff of a counted bet in it, if later); open bets then count as no result.
+  const lastK = (w) => { let t = chiEnd(weekDays(c, w)[1]); Object.keys(mb).forEach((pid) => (mb[pid] || []).forEach((x) => { if (x.ok && !x.voided && weekOf(c, x.d) === w) t = Math.max(t, Number(x.last || x.kick) || 0); })); return t; };
+  ((sc && sc.weeks) || []).forEach((ms, i) => { const w = i + 1, over = now > chiEnd(weekDays(c, w)[1]), late = now > lastK(w) + H2H_OPEN;
+    weeks.push(ms.map(([a, b]) => { inS[a] = true; if (b) inS[b] = true; const A = wk(a, w); if (!b) return { a, b: null, A, bye: true, done: over };
+      const B = wk(b, w), done = over && ((!A.open && !B.open) || late), fa = A.n < need, fb = B.n < need; let win = '';
+      if (done) { win = fa && fb ? 'tie' : fa ? b : fb ? a : A.net > B.net ? a : B.net > A.net ? b : 'tie'; if (win === 'tie') { R(a).t++; R(b).t++; } else { R(win).w++; R(win === a ? b : a).l++; } }
+      return { a, b, A, B, done, win, fa: done && fa, fb: done && fb }; })); });
+  return { weeks, rec, in: inS, need };
+}
+function rankH2h(rows) {
+  const key = (x) => [x.t.minOk ? 1 : 0, x.t.hw, -x.t.hl, x.t.win];
+  rows.sort((a, b) => { const A = key(a), B = key(b); for (let i = 0; i < A.length; i++) if (A[i] !== B[i]) return B[i] - A[i]; return a.pid < b.pid ? -1 : a.pid > b.pid ? 1 : 0; });
+  rows.forEach((x, i) => { const p = rows[i - 1]; x.place = p && JSON.stringify(key(p)) === JSON.stringify(key(x)) ? p.place : i + 1; x.under = !x.t.minOk; x.none = !(x.t.settled > 0); });
+  rows.forEach((x) => { x.tied = rows.filter((y) => y.place === x.place).length > 1; });
+  return rows;
 }
 
 // ---------- P1: partner suggestions (owner, Nov 16 2026). The pairing itself is the shared odds-api/pairing.js; this only gathers the group's people. ----------
@@ -676,12 +863,37 @@ function prizes(rows, places) {
   return owed;
 }
 async function standings(g, c, scope, week, ctx) {
-  const now = D.now(), mb = await contestBets(g, c, ctx), nm = await names();
-  const rows = inContest(c, g).map((m) => ({ pid: m.pid, name: shownName(m, nm), t: score(c, (mb[m.pid] || []).map((x) => Object.assign({}, x)), scope, week, now), noBets: !m.sid }));
-  rank(rows); const owed = prizes(rows, prizeOf(g, c)); rows.forEach((x) => { x.owed = owed[x.pid] || 0; });
+  const now = D.now(), mb = await contestBets(g, c, ctx), nm = await names(), mem = inContest(c, g);
+  const mk = (sc) => mem.map((m) => ({ pid: m.pid, name: shownName(m, nm), t: score(c, (mb[m.pid] || []).map((x) => Object.assign({}, x)), sc, week, now), noBets: !m.sid }));
+  // Round 5: the MONEY is always worked out on the whole contest (seas), whatever the screen is showing. A "this week" view used to hand the places' money to
+  // the week's ranking. rows = what is shown (the week's scores for scope 'week'); seas = the contest so far.
+  const rows = mk(scope), seas = scope === 'week' ? mk('season') : rows, h2h = c.fmt === 'h2h' ? h2hWeeks(c, await ensureH2h(g, c, now), mb, now) : null;
+  [rows, seas].filter((l, i, a) => a.indexOf(l) === i).forEach((list) => { if (h2h) { list.forEach((x) => { const r = h2h.rec[x.pid] || { w: 0, l: 0, t: 0 }; x.t.hw = r.w; x.t.hl = r.l; x.t.ht = r.t; x.t.sched = !!h2h.in[x.pid]; /* main-line port (review round 6 M2): a member with no matchups (joined after the start) is not ranked above anyone who played and is not paid a place this season */ if (!x.t.sched) { x.t.minOk = false; x.t.late = 1; } }); rankH2h(list); list.forEach((x) => { if (x.t.late) x.late = true; }); } else rank(list); });
+  const owed = prizes(seas, prizeOf(g, c));
   const lastW = weekOf(c, c.endDay), curW = Math.max(1, Math.min(lastW, weekOf(c, chiDay(Math.max(now, c.start)))));
-  const hs = []; for (let w = 1; w <= Math.min(curW, lastW); w++) { let best = null; rows.forEach((x) => { const s = x.t.weeks[w]; if (!s || s.short || !s.n) return; if (!best || s.val > best.val) best = { week: w, pid: x.pid, name: x.name, val: s.val, n: s.n }; }); const done = now > chiEnd(weekDays(c, w)[1]); if (best) hs.push(Object.assign(best, { done })); }
-  return { rows, curW, lastW, high: hs };
+  // WEEKLY HIGH SCORE (round 5: it pays). Each week's share of the pool (pots: wkCut) goes to the week's high scorer among members who met "least bets a week";
+  // level scores split it in whole cents. A week is settled when it is over and nobody has an open counted bet in it. A week nobody scores in carries its
+  // prize to the next week; what is left after the last week goes to first place.
+  const per = weeklyOf(g, c), owedW = {}, hs = []; let carry = 0, endDone = false;
+  const wkT = {}; seas.forEach((x) => { wkT[x.pid] = x.t.weeks; });
+  const openIn = (w) => mem.some((m) => (mb[m.pid] || []).some((x) => x.ok && !x.res && weekOf(c, x.d) === w));
+  // main-line port (review round 6 M1): an open bet holds a week's prize at most 72 hours after the week's last game; then the week settles without it.
+  const wLast = (w) => { let t = chiEnd(weekDays(c, w)[1]); mem.forEach((m) => (mb[m.pid] || []).forEach((x) => { if (x.ok && !x.voided && weekOf(c, x.d) === w) t = Math.max(t, Number(x.last || x.kick) || 0); })); return t; };
+  const give = (list, potC) => { const each = Math.floor(potC / list.length); let left = potC - each * list.length; list.forEach((x) => { owedW[x.pid] = (owedW[x.pid] || 0) + each + (left > 0 ? 1 : 0); if (left > 0) left--; }); };
+  for (let w = 1; w <= Math.min(curW, lastW); w++) { let top = [];
+    seas.forEach((x) => { const s = wkT[x.pid][w]; if (!s || s.short || !s.n || (h2h && !h2h.in[x.pid])) return; /* head-to-head: only scheduled members */ if (!top.length || s.val > top[0].s.val) top = [{ x, s }]; else if (s.val === top[0].s.val) top.push({ x, s }); });
+    const done = now > chiEnd(weekDays(c, w)[1]) && (!openIn(w) || now > wLast(w) + H2H_OPEN), potC = (per[w - 1] || 0) + carry;
+    if (done) { if (top.length && potC) { give(top.map((y) => y.x), potC); carry = 0; } else carry = potC; if (w === lastW) endDone = true; }
+    if (top.length) hs.push({ week: w, pid: top[0].x.pid, name: top[0].x.name, val: top[0].s.val, n: top[0].s.n, done, prize: potC / 100, tied: top.length > 1 ? top.map((y) => y.x.name) : undefined });
+  }
+  if (endDone && carry) { const el = seas.filter((x) => x.t.minOk && x.t.settled > 0), top = el.length ? Math.min(...el.map((x) => x.place)) : 0, first = el.filter((x) => x.place === top); if (first.length) give(first, carry); } // main-line port (sim): the best-placed ELIGIBLE member(s), so the carry is not lost when first place has no settled bet
+  rows.forEach((x) => { x.owedPlace = owed[x.pid] || 0; x.owedWk = (owedW[x.pid] || 0) / 100; x.owed = Math.round((x.owedPlace + x.owedWk) * 100) / 100; });
+  return { rows, curW, lastW, high: hs, h2h, weekly: per.map((x) => x / 100) };
+}
+// One week's matchups, with names (the Matchup screen).
+function matchupsOut(st, week) {
+  const nameOf2 = (pid) => (st.rows.find((x) => x.pid === pid) || {}).name || '', side = (pid, S, forf) => ({ pid, name: nameOf2(pid), net: S.net, n: S.n, open: S.open, forfeit: !!forf });
+  return (((st.h2h && st.h2h.weeks) || [])[week - 1] || []).map((m) => (m.bye ? { a: side(m.a, m.A), b: null, bye: true, done: m.done } : { a: side(m.a, m.A, m.fa), b: side(m.b, m.B, m.fb), done: m.done, win: m.win }));
 }
 
 // ---------- views (what each person may see) ----------
@@ -689,7 +901,8 @@ function cpub(c, g, now, pid) {
   const o = { cid: c.cid, kind: c.kind, name: c.name, pot: c.pot, sport: c.sport, sportName: SPORTN[c.sport] || '', started: cStarted(c, now), ended: cEnded(c, now), locked: cStarted(c, now) };
   if (c.kind === 'calcutta') return Object.assign(o, { event: c.event, lots: c.lots, payout: c.payout, rules: c.rules, status: c.status });
   if (c.kind !== 'picks') return Object.assign(o, { type: c.type, ref: c.ref, rules: { entry: c.rules.entry || 0 }, in: c.pot === 'side' && pid ? (c.inn || []).includes(pid) : undefined });
-  Object.assign(o, { fmt: c.fmt, start: c.start, startDay: c.startDay, endDay: c.endDay, runs: c.runs, rules: c.rules, takeText: c.pot === 'side' ? takeText(c.rules.take) : '', weeks: weekOf(c, c.endDay), count: inContest(c, g).length });
+  Object.assign(o, { fmt: c.fmt, start: c.start, startDay: c.startDay, endDay: c.endDay, runs: c.runs, rules: c.rules, takeText: c.pot === 'side' ? takeText(c.rules.take) : '', weeks: weekOf(c, c.endDay), count: inContest(c, g).length, honorText: honorOn(g, c) ? HONOR_TEXT : '', honorOff: c.rules.honor && !honorOn(g, c) ? HONOR_MONEY_WHY : undefined });
+  if (c.fmt === 'h2h') { const pids = h2hMem(c, g); o.h2h = { made: !!c.h2h, auto: !!(c.h2h && c.h2h.auto), final: !!(c.h2h && c.h2h.fz), at: (c.h2h && c.h2h.at) || 0, stale: !!c.h2h && !c.h2h.fz && !h2hCovers(c.h2h, pids, weekOf(c, c.endDay)), players: pids.length }; }
   if (c.pot === 'side') o.in = pid ? (c.inn || []).includes(pid) : undefined;
   return o;
 }
@@ -702,10 +915,12 @@ function full(g, mk, now) {
   o.voids = (g.voids || []).slice(-50).reverse().map((v) => ({ at: v.at, name: v.name, kind: v.kind, reason: v.reason, pid: v.pid }));
   o.contests = g.contests.map((c) => cpub(c, g, now, o.me));
   o.members = g.members.map((m) => ({ pid: m.pid, name: m.name, paid: !!m.paid, comm: m.mk === g.comm, joined: m.joined, noBets: !m.sid, sides: sideOf(g).filter((c) => (c.inn || []).includes(m.pid)).map((c) => ({ cid: c.cid, paid: !!(c.paid || {})[m.pid] })) }));
-  o.capText = LIM.CAP_TEXT; o.entText = LIM.ENTERPRISE_TEXT;
-  if (comm) o.reqs = (g.reqs || []).map((q) => ({ pid: q.pid, name: q.name, at: q.at, ver: q.ver, noBets: !q.sid }));
+  o.capText = LIM.CAP_TEXT; o.entText = LIM.ENTERPRISE_TEXT; o.games = gamesOut();
+  if (comm) o.reqs = reqPage(g, 0).list; // round 4: the first page; /groups/reqs pages through the rest (up to REQMAX waiting)
   o.reqCount = (g.reqs || []).length; return o;
 }
+const REQMAX = 1000, REQPAGE = 50;
+function reqPage(g, from) { const all = g.reqs || [], a = Math.max(0, Math.min(all.length, Math.round(Number(from)) || 0)), list = all.slice(a, a + REQPAGE).map((q) => ({ pid: q.pid, name: q.name, at: q.at, ver: q.ver, noBets: !q.sid })); return { list, from: a, total: all.length, next: a + list.length < all.length ? a + list.length : null }; }
 const canSee = (g, mk) => !!memberOf(g, mk) || isComm(g, mk);
 const cfind = (g, cid) => { const c = g.contests.find((x) => x.cid === String(cid || '')); if (!c) throw bad(404, 'Contest not found'); return c; };
 
@@ -789,7 +1004,7 @@ async function handle(req, res) {
       // told to sign in and lands on that game's own join screen (window.OddJoin handler) instead of "coming soon".
       if (!fn && KINDS[type] && /^[A-Za-z0-9-]{4,40}$/.test(code)) { send(res, 200, { type, kind: KINDS[type], title: '' }); return true; }
       const out = fn ? await fn(code, now).catch(() => null) : null;
-      if (!out) { if (fn) codeFail('c|i|' + ip); throw bad(404, fn ? 'This invite link is not valid or has expired.' : 'This kind of game is coming soon to Oddable.'); }
+      if (!out) { if (fn) codeFail('c|i|' + ip); throw bad(404, fn ? 'This invite link is not valid or has expired.' : 'This kind of game is coming soon to Oddable.'); } // main's answer kept (groups.fix1 F2)
       send(res, 200, { type, kind: out.kind, title: cleanName(out.title, 40) }); return true;
     }
     const u = await me(req);
@@ -805,7 +1020,28 @@ async function handle(req, res) {
     if (op === 'bet/voidable') { const g = await gread(b.id); if (!g || !canSee(g, u.mk)) throw bad(404, 'Group not found'); if (!isComm(g, u.mk)) throw bad(403, 'Only the commissioner can void a bet'); send(res, 200, { list: await voidable(g, now, { rows: new Map(), budget: 40 }), rules: VOID_RULES }); return true; }
     if (op === 'bet/void') { send(res, 200, await betVoid(u, b, now)); return true; } // light: does this player's next bet go to a group?
     if (op === 'bet/edit' || op === 'bet/delete' || op === 'bet/swap') throw bad(409, LOCKED_MSG); // G16: never, even before kickoff
+    if (op === 'prop/list') { const g = await gread(b.id); if (!g || !canSee(g, u.mk)) throw bad(404, 'Group not found'); send(res, 200, { list: await propList(g, u, now, { rows: new Map(), budget: 40 }), label: HONOR_TEXT, comm: isComm(g, u.mk) }); return true; } // round 5 (H2)
+    if (op === 'prop/result') { send(res, 200, await propSet(u, b, now, false)); return true; }
+    if (op === 'prop/confirm') { send(res, 200, await propSet(u, b, now, true)); return true; }
+    if (op === 'contest/schedule') { // round 5, head-to-head: the commissioner generates (or re-generates) the round-robin schedule, any time before the start
+      const g = await gmut(String(b.id || ''), (g) => { if (!isComm(g, u.mk)) throw bad(403, 'Only the commissioner makes the schedule'); const c = cfind(g, b.cid); if (c.kind !== 'picks' || c.fmt !== 'h2h') throw bad(400, 'This contest is not head-to-head');
+        if (cStarted(c, now)) throw bad(409, 'The schedule is final. This contest has started.');
+        // main-line port (review round 6 M3): no re-rolling the draw. The commissioner may make it only until the first member other than himself has joined
+        // (or asked to join). In practice Oddable draws it at the start (ensureH2h: order fixed by the contest id and member ids, which nobody chooses).
+        if (g.members.some((m) => m.mk !== g.comm) || (g.reqs || []).length) throw bad(409, 'The schedule is drawn by Oddable when the contest starts. It can no longer be made or changed by hand: someone has joined.');
+        const pids = h2hMem(c, g); if (pids.length < 2) throw bad(409, 'Head-to-head needs at least 2 players. Invite people first.');
+        c.h2h = { at: now, weeks: rrSchedule(shuffled(pids), weekOf(c, c.endDay)) }; g.u = now; return g; });
+      send(res, 200, { group: full(g, u.mk, now) }); return true; }
     if (op === 'partners') { send(res, 200, await partners(u, b)); return true; } // P1
+    if (op === 'reqs') { const g = await gread(b.id); if (!g || !canSee(g, u.mk)) throw bad(404, 'Group not found'); if (!isComm(g, u.mk)) throw bad(403, 'Only the commissioner sees the requests'); send(res, 200, reqPage(g, b.from)); return true; }
+    if (op === 'game/add') { // round 4: the commissioner starts a Calcutta / golf contest / local event from the hub through that engine's registered create handler
+      const g = await gread(b.id); if (!g || !canSee(g, u.mk)) throw bad(404, 'Group not found'); if (!isComm(g, u.mk)) throw bad(403, 'Only the commissioner can add games');
+      const type = gkey(String(b.type || '')), api = GAMES[type]; if (!api) throw bad(404, 'That kind of game is not available here');
+      if (typeof api.create !== 'function') throw bad(409, 'Start this game from its own screen');
+      let made; try { made = await api.create({ groupId: g.id, accountId: u.e, name: cleanName(b.name, 30), pot: b.pot === 'main' ? 'main' : 'side' }); } catch (er) { throw bad(er.status >= 400 && er.status < 500 ? er.status : 409, er.status ? er.message : 'That game could not be started. Nothing was changed.'); }
+      if (!made || !/^[A-Za-z0-9:_-]{2,60}$/.test(String(made.ref))) throw bad(409, 'That game could not be started. Nothing was changed.');
+      const at = await attachGame(g.id, u.e, { type, ref: String(made.ref), name: made.name || b.name || GNAME[type], pot: b.pot });
+      send(res, 200, { group: full(await gread(g.id), u.mk, now), cid: at.cid, type, ref: String(made.ref) }); return true; }
     if (op === 'stats') { send(res, 200, await require('./gstats').stats({ gread, memberOf, inContest, cEnded, standings, names, shownName, MK, pmap, limit, D, SPORTN }, u, b, now)); return true; } // v274 lifetime stats (odds-api/gstats.js): finished contests and closed Golf days of groups both people are in
     if (op === 'mine') {
       const mi = await D.S.dbGet(MK(u.mk)), x = (mi && mi.data) || {}, ids = [...new Set([...(x.g || []), ...Object.keys(x.own || {})])].slice(-60), qs = (x.q || []).slice(-60);
@@ -833,6 +1069,7 @@ async function handle(req, res) {
       rate('create', u.mk, ip); const ak = LIM.keyOf(u.e), join = cleanJoin(b.join, await LIM.maxPeople(ak, '')), C = cleanContest(Object.assign({}, b.contest || {}, { pot: 'main' }), now, join.max), gname = cleanName(b.name, 30);
       if (gname.length < 2) throw bad(400, 'Give the group a name (2+ characters)');
       const take = cleanTake(b.take, C.rules.entry * join.max);
+      if (C.rules.honor && cents(C.rules.entry || 0) > 0) throw bad(400, 'The honor system is only for contests with no entry fee or prize money. Turn it off, or set the entry to $0.'); // main-line port
       const mi = await D.S.dbGet(MK(u.mk)).catch(() => null), own = (mi && mi.data && mi.data.own) || {};
       if (Object.keys(own).filter((id) => own[id] >= chiDay(now)).length >= MAXMINE) throw bad(400, 'You already run ' + MAXMINE + ' groups');
       const ix = await D.S.dbGet(IDX).catch(() => null); if (ix && ix.data && Object.keys(ix.data.g || {}).length >= MAXG) { const I = ix.data.g; const old = Object.keys(I).filter((id) => I[id].e < dstr(dnum(chiDay(now)) - 60)); if (Object.keys(I).length - old.length >= MAXG) throw bad(503, 'Too many groups right now. Try later.'); try { await rmw(IDX, { g: {} }, async (y) => { old.forEach((id) => delete y.g[id]); return {}; }); } catch (e) {} }
@@ -852,13 +1089,13 @@ async function handle(req, res) {
       const g0 = await gread(b.id), CAPNOW = g0 ? await LIM.maxPeople(g0.owner, g0.id) : 8;
       const g = await gmut(String(b.id || ''), (g) => {
         if (!isComm(g, u.mk)) throw bad(403, 'Only the commissioner can change the rules');
-        if (started(g, now)) throw bad(409, 'Rules are locked. The group has started.');
+        if (started(g, now)) throw bad(409, 'Rules are final. The group has started.');
         const name = cleanName(b.name, 30); if (name.length < 2) throw bad(400, 'Give the group a name (2+ characters)');
         const join = cleanJoin(b.join, Math.max(CAPNOW, g.join.max), g.join.max); if (join.max < g.members.length) throw bad(400, 'More members than that already');
         const mainE = mainOf(g).reduce((a, c) => a + (c.rules.entry || 0), 0), take = b.take ? cleanTake(b.take, mainE * join.max) : g.money.take;
         const ms = b.msplit ? cleanMsplit(b.msplit, splitOf(g)) : g.money.msplit;
-        if (engaged(g) && (JSON.stringify(take) !== JSON.stringify(g.money.take) || JSON.stringify(ms) !== JSON.stringify(g.money.msplit) || join.max !== g.join.max)) throw bad(409, 'Money rules are locked: people have already joined or asked to join.');
-        if (engaged(g) && join.late !== g.join.late) throw bad(409, 'Late joining is locked: people have already joined or asked to join on the terms they saw.'); // round 3
+        if (engaged(g) && (JSON.stringify(take) !== JSON.stringify(g.money.take) || JSON.stringify(ms) !== JSON.stringify(g.money.msplit) || join.max !== g.join.max)) throw bad(409, 'Money rules are final: people have already joined or asked to join.');
+        if (engaged(g) && join.late !== g.join.late) throw bad(409, 'Late joining is final: people have already joined or asked to join on the terms they saw.'); // round 3
         Object.assign(g, { name, join, u: now }); g.money = { take, msplit: ms }; return g; });
       await idxPut(g); send(res, 200, { group: full(g, u.mk, now) }); return true;
     }
@@ -866,21 +1103,22 @@ async function handle(req, res) {
       const g = await gmut(String(b.id || ''), (g) => {
         if (!isComm(g, u.mk)) throw bad(403, 'Only the commissioner can add or change contests');
         const add = op === 'contest/add', old = add ? null : cfind(g, b.cid);
-        if (old && cStarted(old, now)) throw bad(409, 'Rules are locked. This contest has started.');
+        if (old && cStarted(old, now)) throw bad(409, 'Rules are final. This contest has started.');
         if (add && g.contests.length >= MAXC) throw bad(400, 'A group can hold up to ' + MAXC + ' contests');
         const pot = add ? (b.contest && b.contest.pot === 'side' ? 'side' : 'main') : old.pot;
-        if (b.contest && b.contest.kind === 'calcutta') throw bad(400, 'Calcuttas are coming soon');
+        if (b.contest && b.contest.kind === 'calcutta') throw bad(400, 'A Calcutta is started from its own screen (Add a Calcutta on the group)');
         const C = cleanContest(Object.assign({}, b.contest || {}, { pot }), now, g.join.max);
-        if (add && pot === 'main' && engaged(g)) throw bad(409, 'The main pot is locked: people have already joined or asked to join. Add this contest as a side pot.');
-        if (old && engaged(g)) { const keep = MONEYKEYS.filter((k) => JSON.stringify(C.rules[k]) !== JSON.stringify(old.rules[k])); if (keep.length || C.sport !== old.sport || C.fmt !== old.fmt || DATEKEYS.some((k) => String(C[k]) !== String(old[k]))) throw bad(409, 'Money, bet rules and dates are locked: people have already joined or asked to join. You can still change the name.'); }
+        if (add && pot === 'main' && engaged(g)) throw bad(409, 'The main pot is final: people have already joined or asked to join. Add this contest as a side pot.');
+        if (old && engaged(g)) { const keep = MONEYKEYS.filter((k) => JSON.stringify(C.rules[k]) !== JSON.stringify(k === 'weekly' && old.rules[k] == null ? 0 : old.rules[k])); /* a contest made before round 5 has no weekly share: that is 0 */ if (keep.length || C.sport !== old.sport || C.fmt !== old.fmt || DATEKEYS.some((k) => String(C[k]) !== String(old[k]))) throw bad(409, 'Money, bet rules and dates are final: people have already joined or asked to join. You can still change the name.'); }
         if (add) { const cid = rnd(6); const c = Object.assign({ cid, created: now }, C); if (pot === 'side') { c.inn = [memberOf(g, u.mk).pid]; c.paid = {}; } g.contests.push(c); }
-        else { Object.assign(old, C); }
+        else { if (C.fmt !== 'h2h') delete old.h2h; Object.assign(old, C); }
+        honorClash(g); // main-line port: no honor-system props where money is shown (also when a main-pot entry is added beside an honor contest)
         const mids = splitOf(g).map((c) => c.cid); if (pot === 'main') { g.money.msplit = cleanMsplit(b.msplit || (mids.length === 2 && !['even', 'entry'].includes(g.money.msplit.kind) ? g.money.msplit : { kind: 'entry' }), splitOf(g)); const mainE = mainOf(g).reduce((a, c) => a + (c.rules.entry || 0), 0); if (g.money.take.kind === 'flat' && cents(g.money.take.v) > cents(mainE * g.join.max)) throw bad(400, "The commissioner's take cannot be more than the pot (entries x most members)"); }
         g.u = now; return g; });
       await idxPut(g); await memIdx(u.mk, (y) => { y.own[g.id] = gEnd(g); }); send(res, 200, { group: full(g, u.mk, now) }); return true;
     }
     if (op === 'contest/delete') {
-      const g = await gmut(String(b.id || ''), (g) => { if (!isComm(g, u.mk)) throw bad(403, 'Only the commissioner can remove a contest'); const c = cfind(g, b.cid); if (cStarted(c, now)) throw bad(409, 'This contest has started'); if (g.contests.length < 2) throw bad(409, 'A group needs at least one contest. Delete the group instead.'); if (c.pot === 'main' && engaged(g)) throw bad(409, 'The main pot is locked: people have already joined or asked to join.'); if (c.pot === 'side' && (c.inn || []).length > 1) throw bad(409, 'Members are in this side pot'); g.contests = g.contests.filter((x) => x !== c); g.money.msplit = cleanMsplit({ kind: 'entry' }, splitOf(g)); g.u = now; return g; });
+      const g = await gmut(String(b.id || ''), (g) => { if (!isComm(g, u.mk)) throw bad(403, 'Only the commissioner can remove a contest'); const c = cfind(g, b.cid); if (cStarted(c, now)) throw bad(409, 'This contest has started'); if (g.contests.length < 2) throw bad(409, 'A group needs at least one contest. Delete the group instead.'); if (c.pot === 'main' && engaged(g)) throw bad(409, 'The main pot is final: people have already joined or asked to join.'); if (c.pot === 'side' && (c.inn || []).length > 1) throw bad(409, 'Members are in this side pot'); g.contests = g.contests.filter((x) => x !== c); g.money.msplit = cleanMsplit({ kind: 'entry' }, splitOf(g)); g.u = now; return g; });
       await idxPut(g); send(res, 200, { group: full(g, u.mk, now) }); return true;
     }
     if (op === 'sidepot') { // a member opts in or out of a side pot, before that contest starts
@@ -915,7 +1153,7 @@ async function handle(req, res) {
         if (direct) { g.members.push({ pid: newPid(g), mk: u.mk, sid, name: nm, joined: now, paid: false, fixedName: fixed(u.e, sid) }); g.reqs = (g.reqs || []).filter((q) => q.mk !== u.mk); g.engaged = true; g.u = now; joined = true; return g; }
         if (!g.join.requests) throw bad(409, 'This group is not taking new people right now. Ask the commissioner to open it.');
         asked = true; if ((g.reqs || []).some((q) => q.mk === u.mk)) return { nochange: true, v: g };
-        if ((g.reqs || []).length >= 100) throw bad(409, 'Too many requests waiting');
+        if ((g.reqs || []).length >= REQMAX) throw bad(409, 'Too many requests waiting');
         g.reqs = g.reqs || []; g.reqs.push({ pid: newPid(g), mk: u.mk, sid, name: nm, at: now, ver, fixedName: fixed(u.e, sid) }); g.engaged = true; g.u = now; return g; });
       if (asked) { await memIdx(u.mk, (y) => { y.q.push(g.id); }); const o = pub(g, now); o.role = 'pending'; send(res, 200, { ok: true, pending: true, text: 'Request sent. The commissioner approves who joins.', group: o }); return true; }
       await memIdx(u.mk, (y) => { y.g.push(g.id); y.q = y.q.filter((i) => i !== g.id); });
@@ -931,7 +1169,7 @@ async function handle(req, res) {
         if (ended(g, now) || now >= joinOpenUntil(g)) throw bad(409, 'Joining is closed');
         if (g.members.length >= cap) throw bad(409, fullMsg(cap));
         if ((g.reqs || []).some((q) => q.mk === u.mk)) return { nochange: true };
-        if ((g.reqs || []).length >= 100) throw bad(409, 'Too many requests waiting');
+        if ((g.reqs || []).length >= REQMAX) throw bad(409, 'Too many requests waiting');
         g.reqs = g.reqs || []; g.reqs.push({ pid: newPid(g), mk: u.mk, sid, name: nm, at: now, ver, fixedName: fixed(u.e, sid) }); g.engaged = true; g.u = now; return {}; });
       await memIdx(u.mk, (y) => { y.q.push(String(b.id)); });
       send(res, 200, { ok: true, pending: true }); return true;
@@ -949,7 +1187,7 @@ async function handle(req, res) {
       send(res, 200, { group: full(g, u.mk, now) }); if (who && who.ok) tell('group_join', null, { title: 'Joined group: ' + g.name, detail: who.name + ' was approved by the commissioner. ' + g.members.length + ' in the group.', key: 'group_join|' + g.id + '|' + who.mk }); return true;
     }
     if (op === 'requests') {
-      const g = await gmut(String(b.id || ''), (g) => { if (!isComm(g, u.mk)) throw bad(403, 'Only the commissioner can change this'); if (started(g, now)) throw bad(409, 'Rules are locked. The group has started.'); g.join.requests = !!b.on; g.u = now; return g; });
+      const g = await gmut(String(b.id || ''), (g) => { if (!isComm(g, u.mk)) throw bad(403, 'Only the commissioner can change this'); if (started(g, now)) throw bad(409, 'Rules are final. The group has started.'); g.join.requests = !!b.on; g.u = now; return g; });
       await idxPut(g); send(res, 200, { group: full(g, u.mk, now) }); return true;
     }
     if (op === 'paid') { // main pot entry, or (with cid) a side pot entry
@@ -970,16 +1208,16 @@ async function handle(req, res) {
     }
     if (op === 'standings' || op === 'player') {
       const g = await gread(b.id); if (!g || !canSee(g, u.mk)) throw bad(404, 'Group not found');
-      const c = cfind(g, b.cid || (g.contests.find((x) => x.kind === 'picks') || {}).cid); if (c.kind !== 'picks') throw bad(400, c.kind === 'calcutta' ? 'Calcuttas are coming soon' : 'This game opens in its own screen');
+      const c = cfind(g, b.cid || (g.contests.find((x) => x.kind === 'picks') || {}).cid); if (c.kind !== 'picks') throw bad(400, 'This game opens in its own screen');
       const scope = b.scope === 'week' ? 'week' : 'season', lastW = weekOf(c, c.endDay), curW = Math.max(1, Math.min(lastW, weekOf(c, chiDay(Math.max(now, c.start))))), week = Math.max(1, Math.min(lastW, Math.round(Number(b.week)) || curW));
       const ctx = { rows: new Map(), budget: 60 };
-      if (op === 'standings') { const s = await standings(g, c, scope, week, ctx); send(res, 200, { group: full(g, u.mk, now), contest: cpub(c, g, now, (memberOf(g, u.mk) || {}).pid), scope, week, curW: s.curW, lastW: s.lastW, weekDays: weekDays(c, week), rows: s.rows.map((x) => ({ pid: x.pid, name: x.name, place: x.place, tied: x.tied, under: x.under, none: !!x.none, owed: x.owed, noBets: x.noBets, t: Object.assign({}, x.t, { weeks: undefined }) })), high: s.high, prizes: prizeOf(g, c).map((p) => ({ place: p.place, pct: p.pct, amt: p.amt })), pots: pots(g) }); return true; }
+      if (op === 'standings') { const s = await standings(g, c, scope, week, ctx); send(res, 200, { group: full(g, u.mk, now), contest: cpub(c, g, now, (memberOf(g, u.mk) || {}).pid), scope, week, curW: s.curW, lastW: s.lastW, weekDays: weekDays(c, week), rows: s.rows.map((x) => ({ pid: x.pid, name: x.name, place: x.place, tied: x.tied, under: x.under, late: x.late || undefined, none: !!x.none, owed: x.owed, owedPlace: x.owedPlace, owedWk: x.owedWk, noBets: x.noBets, t: Object.assign({}, x.t, { weeks: undefined }) })), high: s.high, weekly: s.weekly, matchups: c.fmt === 'h2h' ? matchupsOut(s, week) : undefined, h2h: c.fmt === 'h2h' ? { need: s.h2h.need, weeks: s.h2h.weeks.length } : undefined, prizes: prizeOf(g, c).map((p) => ({ place: p.place, pct: p.pct, amt: p.amt })), pots: pots(g) }); return true; }
       const m = inContest(c, g).find((x) => x.pid === String(b.pid || '')); if (!m) throw bad(404, 'Not in this contest');
       const mine = m.mk === u.mk, mb = await contestBets(g, c, ctx), list = (mb[m.pid] || []).filter((x) => scope !== 'week' || weekOf(c, x.d) === week);
       const cp = list.map((x) => Object.assign({}, x)), t = score(c, cp, scope, week, now), bestIds = new Set(cp.filter((x) => x.best).map((x) => x.id));
       const shown = list.filter((x) => mine || (x.vis && x.ok)); // G6: other members' bets only after their LAST game kicks off; unknown kickoff = only once graded; not-counted bets stay private
       const hidden = mine ? 0 : list.filter((x) => x.ok && !x.vis).length; // (a parlay that lost a leg early is in this count until its last game kicks off)
-      const bets = shown.sort((a, c2) => (c2.kick || chiStart(c2.d || '2000-01-01')) - (a.kick || chiStart(a.d || '2000-01-01'))).slice(0, 300).map((x) => ({ id: x.id.replace(/[^\w.-]/g, '').slice(0, 40), d: x.d, wk: weekOf(c, x.d), what: x.what, type: x.type, kalshi: x.kalshi, stake: x.stake, cs: x.cs, capped: !!x.capped, res: x.res, pl: x.pl, u: x.u, ok: !!x.ok, why: x.why || '', gr: x.gr || '', best: bestIds.has(x.id), locked: !!x.gl, vr: x.vr || '', voided: !!x.voided }));
+      const bets = shown.sort((a, c2) => (c2.kick || chiStart(c2.d || '2000-01-01')) - (a.kick || chiStart(a.d || '2000-01-01'))).slice(0, 300).map((x) => ({ id: x.id.replace(/[^\w.-]/g, '').slice(0, 40), d: x.d, wk: weekOf(c, x.d), what: x.what, as: x.as || '', nr: !!x.nr, type: x.type, kalshi: x.kalshi, stake: x.stake, cs: x.cs, capped: !!x.capped, res: x.res, pl: x.pl, u: x.u, ok: !!x.ok, why: x.why || '', gr: x.gr || '', best: bestIds.has(x.id), locked: !!x.gl, vr: x.vr || '', voided: !!x.voided, hr: x.hr || undefined }));
       send(res, 200, { name: shownName(m, await names()), pid: m.pid, me: mine, scope, week, t: Object.assign({}, t, { weeks: undefined }), bets, hidden }); return true;
     }
     send(res, 404, { error: 'not found' }); return true;
@@ -999,9 +1237,10 @@ async function tick(opt) { // opt.force: read every running contest now (no 5 / 
   if (!ENABLED()) return { off: true }; // Phase 1 master switch: the tick reads and writes nothing while Groups is off
   if (TK.busy) return { skipped: true }; TK.busy = true; let n = 0; const force = !!(opt && opt.force);
   try {
-    const now = D.now(), ix = await D.S.dbGet(IDX), I = (ix && ix.data && ix.data.g) || {}, today = chiDay(now), ctx = { rows: new Map(), budget: 80 };
-    const ids = Object.keys(I).filter((id) => I[id].e >= today && I[id].s < now + 7 * DAY).slice(0, 300);
-    await pmap(ids, 4, async (id) => {
+    const now = D.now(), ix = await D.S.dbGet(IDX), I = (ix && ix.data && ix.data.g) || {}, today = chiDay(now);
+    const ids = Object.keys(I).filter((id) => I[id].e >= today && I[id].s < now + 7 * DAY); // round 4: EVERY running group, a page of 50 at a time (no 300 cap)
+    for (let pg = 0; pg < ids.length; pg += 50) { const ctx = { rows: new Map(), budget: 80 };
+    await pmap(ids.slice(pg, pg + 50), 4, async (id) => {
       const g = await gread(id).catch(() => null); if (!g) return;
       for (const c of g.contests.filter((c) => c.kind === 'picks' && !cEnded(c, now) && c.start < now + 7 * DAY)) {
         const k = g.id + ':' + c.cid; startedEvent(g, c, k, now);
@@ -1009,14 +1248,14 @@ async function tick(opt) { // opt.force: read every running contest now (no 5 / 
         if (!force && now >= last && now - last < (win ? 4.5 * 6e4 : 29 * 6e4)) continue;
         TK.last.set(k, now); CACHE.delete(k); try { await contestBets(g, c, ctx); n++; } catch (e) { console.error('groups tick:', e.message); }
       }
-    });
+    }); }
   } finally { TK.busy = false; }
   return { observed: n };
 }
 // ---------- G14 invite router (server side): each game type registers how to read its invite code -> {kind, title} or null ----------
 // Review fix (Nov 16 2026): both tables have NO prototype, so a `type` of "__proto__" / "constructor" / "toString" finds nothing (it used to find Object's own and answer 500).
 const INVITE = Object.create(null), KINDS = Object.assign(Object.create(null), { c: 'Calcutta', golf: 'golf game', e: 'local event' }); // types whose engines open their own join screen on the phone (window.OddJoin.register)
-const VOID_RULES = 'A bet can be voided only when its game is postponed or cancelled, or when the same bet was added twice by mistake within 2 minutes (the later copy, before the game starts). The reason is shown to every member.';
+const VOID_RULES = 'A game that is cancelled or postponed and has not been played can be voided for everyone at once: every single bet on it is void and it drops out of every parlay. One bet can be voided only when the same bet was added twice by mistake within 2 minutes (the later copy, before the game starts). Never while a game is being played. A delay or a new start time is not a postponement. The reason is shown to every member.';
 function registerInvite(type, fn) { if (!/^[a-z]{1,8}$/.test(type)) throw new Error('bad invite type'); INVITE[type] = fn; }
 registerInvite('g', async (code, now) => { const c = normCode(code); if (!c) return null; const ix = await D.S.dbGet(CK(c)).catch(() => null), id = ix && ix.data && ix.data.id; const g = id ? await gread(id) : null; if (!g || (g.code !== c && g.mcode !== c) || ended(g, now) || now >= joinOpenUntil(g)) return null; return { kind: 'group', title: g.name }; });
 // ---------- lifetime stats CONTRACT (owner, Nov 16 2026) ----------
@@ -1099,10 +1338,11 @@ async function canAttach(groupId, e) { const g = await gread(groupId).catch(() =
 function wire(M) {
   M = M || {}; const get = (n) => { if (Object.prototype.hasOwnProperty.call(M, n)) return M[n]; try { return require('./' + n); } catch (e) { return null; } }, done = [];
   const C = get('calcutta'), GO = get('golf'), EV = get('events'), ST = get('stats'), fnc = (x) => typeof x === 'function';
+  const mk = (m) => (fnc(m.createForGroup) ? m.createForGroup : undefined); // optional: createForGroup({ groupId, accountId, name, pot }) -> { ref, name? } starts the game from the group hub
   if (C && fnc(C.wireGroups)) { if (C.wireGroups({ registerGame })) done.push('pot:calc'); } /* Calcutta round 4 registers {potSummary, attachToGroup} itself */
-  else if (C && fnc(C.potSummary)) { registerGame('calc', { potSummary: C.potSummary, attachToGroup: C.attachToGroup }); done.push('pot:calc'); }
-  if (GO && fnc(GO.potSummary)) { registerGame('golf', { potSummary: GO.potSummary, attachToGroup: GO.attach || GO.attachToGroup }); done.push('pot:golf'); }
-  if (EV && fnc(EV.potSummary)) { registerGame('event', { potSummary: EV.potSummary, attachToGroup: EV.attachToGroup }); done.push('pot:event'); }
+  else if (C && fnc(C.potSummary)) { registerGame('calcutta', { potSummary: C.potSummary, attachToGroup: C.attachToGroup, create: mk(C) }); done.push('pot:calc'); }
+  if (GO && fnc(GO.potSummary)) { registerGame('golf', { potSummary: GO.potSummary, attachToGroup: GO.attach || GO.attachToGroup, create: mk(GO) }); done.push('pot:golf'); }
+  if (EV && fnc(EV.potSummary)) { registerGame('events', { potSummary: EV.potSummary, attachToGroup: EV.attachToGroup, create: mk(EV) }); done.push('pot:event'); }
   [['c', C], ['golf', GO], ['e', EV]].forEach(([t, m]) => { if (m && fnc(m.inviteInfo)) { registerInvite(t, (code, now) => m.inviteInfo(code, now)); done.push('invite:' + t); } });
   if (ST && fnc(ST.register)) { try { ST.register('groups', statsFor); done.push('stats'); } catch (e) {} }
   return done;
@@ -1110,4 +1350,4 @@ function wire(M) {
 // v272 (Groups phase 2): what the switches say for this account id (null = signed out), WITHOUT the ended-account check: an ended account that would
 // otherwise be let in still gets the Groups tab, with the "Your time has ended" lock in it. acct.js puts this on the `me` it already sends (no new call).
 const onFor = (e) => allowed(e || null);
-module.exports = { onFor, enabled: ENABLED, handle, tick, statsFor, memberStats, memberCheck, canAttach, wire, betVoid, voidable, addCheck, cleanBet, memberRules, registerGame, partners, betAdd, LOCKED_MSG, STARTED_MSG, registerInvite, attachGame, cleanCalc, limits: LIM, cleanContest, cleanTake, pots, prizes, rank, score, judge, applyObs, weekOf, chiDay, chiStart, snap, _deps: D, _reset: () => { RL.clear(); QUEUE.clear(); EXTC.clear(); CACHE.clear(); IDS.map = null; IDF.clear(); NAMES = { at: 0, v: {} }; TK.last.clear(); TK.told.clear(); USEM.clear(); GR._reset(); } };
+module.exports = { onFor, enabled: ENABLED, rrSchedule, h2hWeeks, rankH2h, propList, HONOR_TEXT, CLOSED_MSG, PROPGAME_MSG, NOGAME_MSG, NOCHECK_MSG, NOPRICE_MSG, countsWhere, personalOut, reqPage, gamesOut, honorOn, handle, tick, statsFor, memberStats, memberCheck, canAttach, wire, betVoid, voidable, addCheck, cleanBet, memberRules, registerGame, partners, betAdd, LOCKED_MSG, STARTED_MSG, registerInvite, attachGame, cleanCalc, limits: LIM, cleanContest, cleanTake, pots, prizes, rank, score, judge, applyObs, weekOf, chiDay, chiStart, snap, _deps: D, _reset: () => { RL.clear(); QUEUE.clear(); EXTC.clear(); CACHE.clear(); IDS.map = null; IDF.clear(); NAMES = { at: 0, v: {} }; TK.last.clear(); TK.told.clear(); USEM.clear(); GR._reset(); } };

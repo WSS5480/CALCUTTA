@@ -62,9 +62,16 @@ const BOOKPUT = (sid, bets, u) => { SEEN.push(u); const b = {}; bets.forEach((x)
 const row = (sid, bets, U) => { const u = U == null ? START - 2 * HOUR : U; BOOKPUT(sid, bets, u); db[sid] = { id: sid, salt: 's', pinhash: 'h', data: { bets: bets.map((b) => (b && b.src !== 'kalshi' && b.gl === undefined ? Object.assign({ gl: b.sa > 0 ? b.sa : u }, b) : b)) }, updated: u }; };
 Object.values(SID).forEach((s) => row(s, []));
 // ---- server ----
+// Round 4 (the server as it runs live): (1) every book entry gets the game match the add step would have made at ITS OWN add time (G.addCheck; a bet the
+// add step refuses stays unmatched and can never count); (2) the server ticks when a bet is added and 5 minutes before each kickoff.
+const RMEMO = new Map(), TICKED = new Map();
+const SERVERRAN = async () => { const keep = NOW; let stamp = '';
+  for (const k of Object.keys(db)) { if (k.startsWith('lock:grp:')) stamp += k; if (!k.startsWith('lock:gb:')) continue; const B = (db[k].data && db[k].data.b) || {}; for (const id of Object.keys(B)) { const e = B[id]; stamp += k + id + e.at; if (e.r || !(e.at > 0)) continue; const mk = k + '|' + id + '|' + e.at + '|' + JSON.stringify(e.s); if (!RMEMO.has(mk)) { NOW = e.at; GR._reset(); let r = null; try { r = await G.addCheck(e.s, e.at); } catch (er) {} RMEMO.set(mk, r); } if (RMEMO.get(mk)) e.r = JSON.parse(JSON.stringify(RMEMO.get(mk))); } }
+  const us = [...new Set(SEEN.splice(0).concat(GAMES.map((g) => g.start - 5 * 6e4)))].filter((u) => u < keep && TICKED.get(u) !== stamp).sort((x, y) => x - y);
+  for (const u of us) { NOW = u; GR._reset(); await G.tick({ force: true }); TICKED.set(u, stamp); } NOW = keep; GR._reset(); };
 const srv = http.createServer(async (req, res) => { if (!(await G.handle(req, res))) { res.statusCode = 404; res.end('{}'); } });
 let P, raw = [];
-const call = async (who, op, b, ip) => { if (SEEN.length) { const keep = NOW, us = [...new Set(SEEN.splice(0))].sort((x, y) => x - y); for (const u of us) { if (u < keep) { NOW = u; await G.tick({ force: true }); } } NOW = keep; } const r = await fetch('http://127.0.0.1:' + P + '/groups/' + op, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': who ? 't-' + who : '', 'x-ip': ip || '9.9.9.' + (who || 'x').length }, body: JSON.stringify(b || {}) }); const txt = await r.text(); raw.push(txt); return { s: r.status, j: JSON.parse(txt) }; };
+const call = async (who, op, b, ip) => { await SERVERRAN(); const r = await fetch('http://127.0.0.1:' + P + '/groups/' + op, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': who ? 't-' + who : '', 'x-ip': ip || '9.9.9.' + (who || 'x').length }, body: JSON.stringify(b || {}) }); const txt = await r.text(); raw.push(txt); return { s: r.status, j: JSON.parse(txt) }; };
 const CDEF = { maxBets: 0, cname: 'Picks standings', sport: 'nfl', fmt: 'standings', start: START, runs: 'w4', kalshi: false, honor: false, types: { sp: true, ml: true, ou: true, prop: false, parlay: true }, legs: 3, metric: 'win', minBets: 0, minPaid: 0, cap: 0, entry: 25, split: '60/30/10' };
 const base = (o) => { o = o || {}; return { name: o.name || 'Sunday Crew', take: o.take || { kind: 'pct', v: 10 }, join: Object.assign({ requests: true, open: false, auto: true, max: 8, late: 'no' }, o.join || {}), contest: Object.assign({}, CDEF, o.c || {}) }; }; // round 3: these older checks join straight from the commissioner's code (auto) and use no weekly limit
 const ok = (r, m) => assert.strictEqual(r.s, 200, (m || '') + ' -> ' + r.s + ' ' + JSON.stringify(r.j));
@@ -77,7 +84,7 @@ srv.listen(0, async () => {
   try {
     r = await call(null, 'mine'); assert.strictEqual(r.status || r.s, 401); t('signed-out request refused');
     // ================= validation =================
-    const badOnes = [[{ name: 'x' }, 'name'], [{ c: { sport: 'cricket' } }, 'sport'], [{ c: { fmt: 'h2h' } }, 'coming soon'], [{ c: { start: NOW - 1 } }, 'future'], [{ c: { start: NOW + 500 * DAY } }, 'too far'],
+    const badOnes = [[{ name: 'x' }, 'name'], [{ c: { sport: 'cricket' } }, 'sport'], [{ c: { fmt: 'bankroll' } }, 'Standings, Best five or Head-to-head (round 5: head-to-head is built; bankroll and survivor are not)'], [{ c: { start: NOW - 1 } }, 'future'], [{ c: { start: NOW + 500 * DAY } }, 'too far'],
       [{ take: { kind: 'pct', v: 51 } }, 'take 51%'], [{ take: { kind: 'pct', v: 2.5 } }, 'take 2.5%'], [{ take: { kind: 'flat', v: -5 } }, 'flat negative'], [{ take: { kind: 'flat', v: 200.01 } }, 'flat over the pot (25 x 8)'], [{ join: { max: 20 } }, 'G15: 20 people on a standard account'], [{ take: { kind: 'flat', v: 1.005 } }, 'flat sub-cent'],
       [{ c: { legs: 11 } }, 'legs 11'], [{ c: { cap: 30 } }, 'cap 30'], [{ c: { entry: -1 } }, 'entry negative'], [{ c: { entry: 2.5 } }, 'entry cents'], [{ join: { max: 9 } }, 'max 9 (not on the list)'], [{ c: { types: {} } }, 'no bet types'], [{ c: { runs: 'w21' } }, '21 weeks'], [{ c: { runs: 'custom', endDay: '2026-13-01' } }, 'bad date'], [{ c: { metric: 'vibes' } }, 'metric'], [{ c: { minBets: 11 } }, 'min bets'], [{ c: { minPaid: 7 } }, 'min paid 7'], [{ c: { split: '90/10' } }, 'split'], [{ join: { late: 'always' } }, 'late']];
     for (const [o, m] of badOnes) { G._reset(); r = await call('ann', 'create', base(o), '7.7.7.' + m.length); assert.strictEqual(r.s, 400, 'refused: ' + m + ' got ' + r.s + ' ' + JSON.stringify(r.j)); }
@@ -109,7 +116,7 @@ srv.listen(0, async () => {
     r = await call('bob', 'paid', { id: g1.id, pid: bobPid, paid: true }); assert.strictEqual(r.s, 403);
     r = await call('ann', 'paid', { id: g1.id, pid: bobPid, paid: true }); ok(r); assert.ok(r.j.group.members.find((m) => m.pid === bobPid).paid); t('only the commissioner marks entries paid');
     // ---- FIX 6: money / bet rules locked once someone joined ----
-    r = await call('ann', 'contest/edit', { id: g1.id, cid: C1(g1), contest: Object.assign({}, CDEF, { entry: 500 }) }); assert.strictEqual(r.s, 409, 'entry change refused'); assert.match(r.j.error, /locked/);
+    r = await call('ann', 'contest/edit', { id: g1.id, cid: C1(g1), contest: Object.assign({}, CDEF, { entry: 500 }) }); assert.strictEqual(r.s, 409, 'entry change refused'); assert.match(r.j.error, /final/);
     for (const ch of [{ cap: 100 }, { metric: 'ret' }, { split: '100' }, { types: { sp: true, ml: false, ou: true, prop: false, parlay: true } }, { minPaid: 3 }, { honor: true }, { kalshi: true }]) { r = await call('ann', 'contest/edit', { id: g1.id, cid: C1(g1), contest: Object.assign({}, CDEF, ch) }); assert.strictEqual(r.s, 409, 'locked: ' + JSON.stringify(ch)); }
     r = await call('ann', 'edit', { id: g1.id, name: 'Crew', join: { requests: true, open: false, max: 8, late: 'no' }, take: { kind: 'pct', v: 50 } }); assert.strictEqual(r.s, 409, 'take change refused');
     r = await call('ann', 'contest/edit', { id: g1.id, cid: C1(g1), contest: Object.assign({}, CDEF, { cname: 'Renamed', start: START + HOUR }) }); assert.strictEqual(r.s, 409, 'owner rule (round 2): dates lock once someone joined'); r = await call('ann', 'contest/edit', { id: g1.id, cid: C1(g1), contest: Object.assign({}, CDEF, { cname: 'Renamed' }) }); ok(r, 'name still editable'); assert.strictEqual(r.j.group.contests[0].name, 'Renamed'); assert.strictEqual(r.j.group.engaged, true);
@@ -144,7 +151,7 @@ srv.listen(0, async () => {
     G._reset(); let last; for (let i = 0; i < 6; i++) last = await call('eve', 'create', base({ name: 'Extra ' + i }), '4.4.4.4'); assert.strictEqual(last.s, 429); G._reset(); t('create rate limit (5 per hour per account)');
     // ================= rules lock at start (G2) =================
     NOW = START + 2 * HOUR;
-    r = await call('ann', 'edit', { id: g2.id, name: 'X', join: { requests: true, open: true, max: 3, late: 'no' } }); assert.strictEqual(r.s, 409); assert.match(r.j.error, /locked/);
+    r = await call('ann', 'edit', { id: g2.id, name: 'X', join: { requests: true, open: true, max: 3, late: 'no' } }); assert.strictEqual(r.s, 409); assert.match(r.j.error, /final/);
     r = await call('ann', 'contest/edit', { id: g2.id, cid: C1(g2), contest: Object.assign({}, CDEF, { start: START + 7 * DAY }) }); assert.strictEqual(r.s, 409);
     r = await call('owner', 'edit', { id: g2.id }); assert.ok(r.s === 404 || r.s === 403);
     r = await call('ann', 'requests', { id: g2.id, on: true }); assert.strictEqual(r.s, 409); r = await call('cat', 'leave', { id: g2.id }); assert.strictEqual(r.s, 409); r = await call('ann', 'delete', { id: g2.id }); assert.strictEqual(r.s, 409);
@@ -197,7 +204,7 @@ srv.listen(0, async () => {
     NOW = Z('2026-11-29T18:01:00Z'); G._reset(); r = await call('bob', 'player', { id: S.id, cid: SC, pid: by('CatCovers').pid }); ok(r); assert.strictEqual(r.j.hidden, 0); assert.ok(r.j.bets.some((b) => /GB@CHI/.test(b.what)));
     t('G6: another member\'s bet is never returned before its game kicks off; the bettor sees it');
     r = await call('bob', 'player', { id: S.id, cid: SC, pid: by('BobBets').pid }); ok(r); const why = r.j.bets.filter((b) => !b.ok).map((b) => b.why).sort();
-    assert.deepStrictEqual(why, ['Added after the game started', 'More than 2 legs', "Not in this contest's sport", 'This kind of bet does not count here']); assert.ok(r.j.bets.find((b) => b.capped && b.cs === 100 && b.pl === 90.91));
+    assert.deepStrictEqual(why, ['More than 2 legs', "Not in this contest's sport", "Oddable can't check this bet (Not matched to a game when it was added)", 'This kind of bet does not count here']); /* round 4: a bet that reached the book after its kickoff was never matched to its game, so it can never count */ assert.ok(r.j.bets.find((b) => b.capped && b.cs === 100 && b.pl === 90.91));
     r = await call('cat', 'player', { id: S.id, cid: SC, pid: by('BobBets').pid }); assert.ok(r.j.bets.every((b) => b.ok));
     t('FIX 2: a bet first synced after kickoff never counts ("Synced after the game started"); own drill-down explains every not-counted bet');
     db[SID.bob].data.bets = db[SID.bob].data.bets.filter((b) => b.gid !== '502'); db[SID.bob].updated = NOW; G._reset();
@@ -232,7 +239,7 @@ srv.listen(0, async () => {
 
     // ---- FIX 1: fake results; honor-system rule ----
     NOW = START - DAY; G._reset(); Object.values(SID).forEach((x) => row(x, [])); r = await call('ann', 'create', base({ name: 'Fakes', c: { types: { sp: true, ml: true, ou: true, prop: true, parlay: true } } })); const FK = r.j.group; await call('bob', 'join', { code: FK.code });
-    r = await call('ann', 'create', base({ name: 'Honor', c: { honor: true, types: { sp: true, ml: true, ou: true, prop: true, parlay: true } } })); const HO = r.j.group; await call('bob', 'join', { code: HO.code });
+    r = await call('ann', 'create', base({ name: 'Honor', c: { honor: true, entry: 0, types: { sp: true, ml: true, ou: true, prop: true, parlay: true } } })); const HO = r.j.group; await call('bob', 'join', { code: HO.code }); await call('cat', 'join', { code: HO.code });
     row(SID.bob, [
       { id: 'k-FAKE-yes', kind: 'prop', src: 'kalshi', kt: 'KXNFLGAME-26NOV22KCBUF-KC', ks: 'yes', text: 'fake', stake: 1, mult: 10000, res: 'won', day: '2026-11-22' }, // KC lost: graded lost, the +$9,999 claim ignored
       { id: 'k-FAKE2-yes', kind: 'prop', src: 'kalshi', kt: 'KXNFLGAME-26NOV22SFLAR-LAR', ks: 'yes', text: 'fake cash', stake: 1, mult: 1.5, res: 'won', cash: 10000, day: '2026-11-22' }, // cash-out: cannot be checked
@@ -243,8 +250,12 @@ srv.listen(0, async () => {
     r = await call('bob', 'standings', { id: FK.id, cid: C1(FK) }); bb = r.j.rows.find((x) => x.name === 'BobBets'); assert.strictEqual(bb.t.win, -7, 'fake winners graded as losses (-1, -5); round 3: a bet marked sold stays in the contest and is graded from the score (LAR lost: -1); prop not counted');
     r = await call('bob', 'player', { id: FK.id, cid: C1(FK), pid: bb.pid }); assert.ok(!r.j.bets.some((b) => /Cashed out/.test(b.why)), 'a sale changes nothing'); assert.ok(r.j.bets.some((b) => !b.ok && /can't check/.test(b.why) && /Player prop/.test(b.why)));
     r = await call('bob', 'standings', { id: HO.id, cid: C1(HO) }); bb = r.j.rows.find((x) => x.name === 'BobBets');
-    assert.strictEqual(bb.t.win, 13, 'honor ON: -1 (KC graded) - 1 (the sold bet, graded from the score) - 5 (DAL graded) + 20 (prop, honor) = 13');
-    t('FIX 1: a fake Kalshi bet claiming +$9,999 is graded from the final score (lost); cash-outs/props do not count unless the commissioner turned on the honor rule (then they count on the phone\'s word)');
+    assert.strictEqual(bb.t.win, -7, 'honor ON, round 5 (H2): the phone marking its own prop "won" counts for nothing');
+    { const pl = await call('ann', 'prop/list', { id: HO.id }), pr = pl.j.list.find((x) => x.what === 'Allen 3+ TDs'); assert.ok(pr && pr.canEnter, JSON.stringify(pl.j));
+      assert.strictEqual((await call('ann', 'prop/result', { id: HO.id, pid: pr.pid, bid: pr.bid, res: 'won' })).s, 200); assert.strictEqual((await call('cat', 'prop/confirm', { id: HO.id, pid: pr.pid, bid: pr.bid, res: 'won' })).j.fin, true); }
+    G._reset(); r = await call('bob', 'standings', { id: HO.id, cid: C1(HO) }); bb = r.j.rows.find((x) => x.name === 'BobBets');
+    assert.strictEqual(bb.t.win, 3, 'honor ON: -1 (KC graded) - 1 (the sold bet, graded from the score) - 5 (DAL graded) + 10 (prop typed at +200, paid at EVEN MONEY at most (main-line port): the commissioner entered won, another member confirmed) = 3');
+    t('FIX 1: a fake Kalshi bet claiming +$9,999 is graded from the final score (lost); cash-outs/props do not count unless the commissioner turned on the honor rule (round 5: then the commissioner enters a prop\'s result and another member confirms it; the phone\'s own mark is never read)');
     // ---- per-league grading (G12), all sports contest ----
     NOW = START - DAY; G._reset(); const A = (await call('ann', 'create', base({ name: 'All sports', c: { sport: 'all', types: { sp: true, ml: true, ou: true, prop: false, parlay: true } } }))).j.group, AC = C1(A); await call('eve', 'join', { code: A.code });
     row(SID.eve, [
@@ -270,23 +281,23 @@ srv.listen(0, async () => {
     assert.strictEqual(NB.s, 400);
     NOW = Z('2026-11-21T12:00:00Z'); G._reset(); const NBG = (await call('ann', 'create', base({ name: 'NBA only', c: { sport: 'nba', start: Z('2026-11-22T06:00:00Z') } }))).j.group; await call('eve', 'join', { code: NBG.code });
     NOW = Z('2026-11-29T12:00:00Z'); G._reset(); r = await call('eve', 'player', { id: NBG.id, cid: C1(NBG), pid: (await call('eve', 'get', { id: NBG.id })).j.group.me });
-    assert.ok(r.j.bets.filter((b) => b.ok).every((b) => b.id === 'e3'), 'only the NBA bet counts'); assert.ok(r.j.bets.some((b) => b.id === 'e1' && /not found in NBA games/.test(b.why))); assert.ok(r.j.bets.some((b) => b.id === 'e4' && /sport/.test(b.why)));
+    assert.ok(r.j.bets.filter((b) => b.ok).every((b) => b.id === 'e3'), 'only the NBA bet counts'); assert.ok(r.j.bets.some((b) => b.id === 'e1' && /not found in NBA games|sport/.test(b.why))); assert.ok(r.j.bets.some((b) => b.id === 'e4' && /sport/.test(b.why)));
     t('G12: an NBA contest counts only NBA games; others say "Not in this contest\'s sport"');
     // ---- FIX 3: Kalshi bet filed on its purchase day; unknown kickoff hidden until graded ----
-    NOW = START - DAY; G._reset(); Object.values(SID).forEach((x) => row(x, [])); const V = (await call('ann', 'create', base({ name: 'Peek', c: { honor: true, types: { sp: true, ml: true, ou: true, prop: true, parlay: true } } }))).j.group; await call('bob', 'join', { code: V.code });
+    NOW = START - DAY; G._reset(); Object.values(SID).forEach((x) => row(x, [])); const V = (await call('ann', 'create', base({ name: 'Peek', c: { honor: true, entry: 0, types: { sp: true, ml: true, ou: true, prop: true, parlay: true } } }))).j.group; await call('bob', 'join', { code: V.code });
     row(SID.bob, [{ id: 'k-KXNFLGAME-26NOV29GBCHI-CHI-yes', kind: 'prop', src: 'kalshi', kt: 'KXNFLGAME-26NOV29GBCHI-CHI', ks: 'yes', text: 'Chicago · Green Bay at Chicago', stake: 20, mult: 2, day: '2026-11-22' },
       { id: bid(START - 3 * HOUR), kind: 'prop', lg: 'nfl', text: 'Secret prop pick', stake: 5, odds: 100, day: '2026-11-22' },
       { id: bid(START - 4 * HOUR), kind: 'parlay', legs: [{ gid: '501', side: 'DAL', type: 'ml' }, { gid: '504', side: 'SF', type: 'ml' }], stake: 10, mult: 3.6, day: '2026-11-22' }], START - 2 * HOUR);
     NOW = START + 4 * HOUR; G._reset(); const bp = (await call('ann', 'get', { id: V.id })).j.group.members.find((m) => m.name !== 'AnnTheCommish').pid;
-    raw = []; r = await call('ann', 'player', { id: V.id, cid: C1(V), pid: bp }); assert.strictEqual(r.j.hidden, 3, 'all three hidden'); assert.ok(!/Chicago|Secret prop|parlay/.test(raw.join('')), 'never sent');
+    raw = []; r = await call('ann', 'player', { id: V.id, cid: C1(V), pid: bp }); assert.strictEqual(r.j.hidden, 2, 'the Kalshi bet and the parlay are hidden; round 5 (H2): a prop that names no game counts nowhere, so it is not even in the hidden count'); assert.ok(!/Chicago|Secret prop|parlay/.test(raw.join('')), 'never sent');
     t('FIX 3 + FIX 9: Kalshi bet filed on its purchase day is mapped to its game (Nov 29) and hidden; a bet with unknown kickoff is hidden; a parlay stays hidden until its LAST leg kicks off (leg 1 already lost)');
     NOW = Z('2026-11-23T01:21:00Z'); G._reset(); r = await call('ann', 'player', { id: V.id, cid: C1(V), pid: bp }); assert.ok(r.j.bets.some((b) => /parlay/.test(b.what)), 'parlay shown after its last leg kicked off'); assert.ok(!r.j.bets.some((b) => /Secret/.test(b.what)), 'prop with unknown kickoff still hidden (not settled)');
-    db[SID.bob].data.bets[1].res = 'won'; NOW = Z('2026-11-23T12:00:00Z'); G._reset(); r = await call('ann', 'player', { id: V.id, cid: C1(V), pid: bp }); assert.ok(r.j.bets.some((b) => /Secret/.test(b.what)), 'shown once settled and its day is over');
+    db[SID.bob].data.bets[1].res = 'won'; NOW = Z('2026-11-23T12:00:00Z'); G._reset(); r = await call('ann', 'player', { id: V.id, cid: C1(V), pid: bp }); assert.ok(!r.j.bets.some((b) => /Secret/.test(b.what)), 'round 5 (H2): a prop with no game never counts, whatever the phone marks, and a bet that does not count stays private'); { const own = await call('bob', 'player', { id: V.id, cid: C1(V), pid: bp }), sp = own.j.bets.find((b) => /Secret/.test(b.what)); assert.ok(sp && !sp.ok && /A prop must name its game/.test(sp.why), JSON.stringify(sp)); }
     assert.ok(!r.j.bets.some((b) => /Chicago/.test(b.what))); r = await call('bob', 'standings', { id: V.id, cid: C1(V) }); assert.ok(r.j.rows.find((x) => x.name === 'BobBets').t.open >= 1, 'open-bet counts stay visible (count only)');
-    t('unknown-kickoff bets appear only once settled; other members\' open-bet COUNTS stay visible');
+    t('a prop that names no game never counts (round 5); other members\' open-bet COUNTS stay visible');
     // ================= FIX 7: fewest bets to place; ties; prize split =================
     NOW = START - DAY; G._reset(); Object.values(SID).forEach((x) => row(x, [])); const M7 = (await call('ann', 'create', base({ name: 'Return', c: { metric: 'ret', minPaid: 10 } }))).j.group; await call('bob', 'join', { code: M7.code });
-    row(SID.ann, Array.from({ length: 12 }, (_, i) => ({ id: 'a' + i, gid: i < 9 ? '501' : '502', away: 'X', home: 'Y', day: '2026-11-22', side: i < 9 ? 'NYG' : 'KC', type: 'ml', stake: 100, odds: -110 })), START - 2 * HOUR);
+    row(SID.ann, Array.from({ length: 12 }, (_, i) => ({ id: 'a' + i, gid: i < 9 ? '501' : '502', day: '2026-11-22', side: i < 9 ? 'NYG' : 'KC', type: 'ml', stake: 100, odds: -110 })), START - 2 * HOUR);
     row(SID.bob, [{ id: 'b1', gid: '501', day: '2026-11-22', side: 'NYG', type: 'ml', stake: 5, odds: 400 }], START - 2 * HOUR);
     NOW = Z('2026-11-23T12:00:00Z'); G._reset(); r = await call('ann', 'standings', { id: M7.id, cid: C1(M7) }); rows = r.j.rows;
     assert.strictEqual(rows[0].name, 'AnnTheCommish'); assert.strictEqual(rows[1].name, 'BobBets'); assert.strictEqual(rows[1].under, true); assert.ok(rows[1].t.ret > rows[0].t.ret, 'Bob has the better return but only 1 bet'); assert.strictEqual(rows[1].owed, 0);
@@ -318,7 +329,7 @@ srv.listen(0, async () => {
     r = await call('eve', 'contest/add', { id: PG.id, contest: Object.assign({}, CDEF, { cname: 'NBA picks', pot: 'main', sport: 'nba', entry: 10, split: '100' }), msplit: { kind: '60/40' } }); ok(r, 'second main contest');
     let pg = r.j.group; assert.strictEqual(pg.contests.length, 2); assert.deepStrictEqual(Object.values(pg.money.msplit.pct), [60, 40]);
     r = await call('eve', 'contest/add', { id: PG.id, contest: Object.assign({}, CDEF, { cname: 'Side NHL', pot: 'side', sport: 'nhl', start: START + 2 * DAY, entry: 20, split: '100', take: { kind: 'pct', v: 10 } }) }); ok(r, 'side pot'); pg = r.j.group; const side = pg.contests.find((c) => c.pot === 'side');
-    r = await call('eve', 'contest/add', { id: PG.id, contest: { kind: 'calcutta' } }); assert.strictEqual(r.s, 400); assert.match(r.j.error, /coming soon/i);
+    r = await call('eve', 'contest/add', { id: PG.id, contest: { kind: 'calcutta' } }); assert.strictEqual(r.s, 400); assert.match(r.j.error, /own screen/i);
     for (const w of ['bob', 'cat', 'dan']) ok(await call(w, 'join', { code: pg.code }));
     r = await call('bob', 'sidepot', { id: PG.id, cid: side.cid, on: true }); ok(r); r = await call('cat', 'sidepot', { id: PG.id, cid: side.cid, on: true }); ok(r);
     r = await call('dan', 'sidepot', { id: PG.id, cid: 'nope', on: true }); assert.strictEqual(r.s, 404);
@@ -330,7 +341,7 @@ srv.listen(0, async () => {
     assert.deepStrictEqual([Pm.entry, Pm.paid, Pm.pot, Pm.take, Pm.pool], [35, 4, 140, 14, 126], 'main pot: 4 x (25 + 10) = 140, take 10% = 14, pool 126');
     assert.deepStrictEqual(Pm.shares.map((s) => [s.pct, s.amt]), [[60, 75.6], [40, 50.4]]); assert.deepStrictEqual(Pm.shares[0].places.map((p) => p.amt), [45.36, 22.68, 7.56]); assert.deepStrictEqual(Pm.shares[1].places.map((p) => p.amt), [50.4]);
     assert.deepStrictEqual([Ps.members, Ps.paid, Ps.pot, Ps.take, Ps.pool, Ps.places[0].amt], [3, 3, 60, 6, 54, 54], 'side pot: Eve + Bob + Cat x 20 = 60, own take 10%');
-    t('G13: a group holds several contests: main pot = entries of main-pot contests, commissioner\'s take off the top, 60/40 split between them, each split by its own places; side pot with its own entry, take, opt-ins and paid marks; Calcutta "coming soon"');
+    t('G13: a group holds several contests: main pot = entries of main-pot contests, commissioner\'s take off the top, 60/40 split between them, each split by its own places; side pot with its own entry, take, opt-ins and paid marks; a Calcutta is started from its own screen');
     r = await call('bob', 'standings', { id: PG.id, cid: side.cid }); ok(r); assert.strictEqual(r.j.rows.length, 3, 'side pot standings: only opted-in members');
     r = await call('dan', 'player', { id: PG.id, cid: side.cid, pid: r.j.rows[0].pid }); ok(r, 'members can view side pot players');
     NOW = START + HOUR; r = await call('dan', 'sidepot', { id: PG.id, cid: side.cid, on: true }); assert.strictEqual(r.s, 200, 'NHL side pot starts at its own time');
@@ -389,7 +400,7 @@ srv.listen(0, async () => {
     raw = []; r = await call(null, 'invite', { type: 'g', code: IV.code.replace('-', '') }); ok(r, 'signed out'); assert.deepStrictEqual(r.j, { type: 'g', kind: 'group', title: 'Invite Me' });
     assert.ok(!/DanDog|\$|take|members|code/i.test(JSON.stringify(r.j)), 'no member names or money in the public preview');
     r = await call(null, 'invite', { type: 'g', code: 'ZZZZ-ZZZZ' }); assert.strictEqual(r.s, 404); assert.strictEqual(r.j.error, 'This invite link is not valid or has expired.');
-    r = await call(null, 'invite', { type: 'golf', code: 'ABCD' }); ok(r, 'round 3: every game type routes'); assert.deepStrictEqual(r.j, { type: 'golf', kind: 'golf game', title: '' }); r = await call(null, 'invite', { type: 'zzz', code: 'ABCD' }); assert.strictEqual(r.s, 404); assert.match(r.j.error, /coming soon/);
+    r = await call(null, 'invite', { type: 'golf', code: 'ABCD' }); ok(r, 'round 3: every game type routes'); assert.deepStrictEqual(r.j, { type: 'golf', kind: 'golf game', title: '' }); r = await call(null, 'invite', { type: 'zzz', code: 'ABCD' }); assert.strictEqual(r.s, 404); assert.match(r.j.error, /coming soon to Oddable/); /* main's answer for an unknown type (groups.fix1 F2), kept by the main-line port */
     NOW = START + HOUR; r = await call(null, 'invite', { type: 'g', code: IV.code }); assert.strictEqual(r.s, 404); assert.strictEqual(r.j.error, 'This invite link is not valid or has expired.', 'started (no late join): same message as a wrong code');
     r = await call('eve', 'preview', { code: IV.code }); assert.strictEqual(r.s, 404); assert.strictEqual(r.j.error, 'This invite link is not valid or has expired.');
     G._reset(); let n429 = 0; for (let i = 0; i < 400; i++) { const x = await call(null, 'invite', { type: 'g', code: 'QQQQ-Q' + String(i).padStart(3, '0') }, '8.8.8.8'); if (x.s === 429) n429++; } assert.strictEqual(n429, 250, 'round 3: one address is stopped after 150 WRONG codes in 15 minutes (a whole clubhouse on one Wi-Fi is far below that); ' + n429 + ' of 400 refused');

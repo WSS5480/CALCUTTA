@@ -39,14 +39,17 @@ async function recordUse(accountKey, gameId, players, title) {
 //   await limits.recordPlay(accountKey, gameType, gameId, playerKey, title?)
 //     accountKey  limits.keyOf(<the creator's account id from acct.who>)      gameType  'picks' | 'calcutta' | 'golf' | 'event' | ...
 //     gameId      the engine's own id for the game (any string up to 60)      playerKey any stable id for the player in that engine, or an ARRAY of them (hashed here, never stored raw)
-//   Call it once per player when the game starts (or when a player joins a started game). Idempotent: a player is counted once per game per month.
+//   Call it once per player when the game starts (or when a player joins a started game). Idempotent: a player is counted ONCE PER GAME (round 4), in the month they first play it.
 //   No-op (false) for a standard account. The owner's Enterprise list shows games and players per month from this one row ('lock:entuse').
 async function recordPlay(accountKey, gameType, gameId, playerKey, title) {
   if (!accountKey || !(await isEnterprise(accountKey))) return false; const mo = new Date(D.now()).toISOString().slice(0, 7);
   const type = String(gameType || 'game').toLowerCase().replace(/[^a-z]/g, '').slice(0, 12) || 'game', gid = String(gameId || '').slice(0, 60), pks = (Array.isArray(playerKey) ? playerKey : [playerKey]).filter((p) => p != null && p !== '').map((p) => crypto.createHash('sha256').update('oddable-play|' + String(p)).digest('hex').slice(0, 12));
   if (!gid || !pks.length) return false;
   await rmw('lock:entuse', {}, (x) => { const a = (x[accountKey] = x[accountKey] || {}), m = (a[mo] = a[mo] || {}), o = (m[gid] = m[gid] || { n: 0 }); o.p = Array.isArray(o.p) ? o.p : [];
-    const add = pks.filter((pk) => !o.p.includes(pk)); if (!add.length && o.type === type) return { nochange: true }; add.forEach((pk) => { if (o.p.length < 5000) o.p.push(pk); }); o.type = type; o.n = Math.max(Number(o.n) || 0, o.p.length); if (title) o.title = String(title).slice(0, 40); });
+    // Round 4: $20 per player per GAME, once. A player already recorded for this game in ANY month is never recorded again (a season-long contest used
+    // to be counted again every month); a player who joins later is recorded in the month they first play.
+    const seen = new Set(); Object.keys(a).forEach((k) => { if (k !== mo && a[k] && a[k][gid] && Array.isArray(a[k][gid].p)) a[k][gid].p.forEach((pk) => seen.add(pk)); });
+    const add = pks.filter((pk) => !o.p.includes(pk) && !seen.has(pk)); if (!add.length) { if (!o.p.length) delete m[gid]; if (!Object.keys(m).length) delete a[mo]; return { nochange: true }; } add.forEach((pk) => { if (o.p.length < 5000) o.p.push(pk); }); o.type = type; o.n = Math.max(Number(o.n) || 0, o.p.length); if (title) o.title = String(title).slice(0, 40); });
   return true;
 }
 // ---------- routes: /groups/ent/contact (signed in), /groups/ent/admin (owner only) ----------

@@ -118,6 +118,7 @@ function cFlag(me, e) { if (!me || process.env.CALCUTTA_ENABLED !== '1') return 
 async function handle(req, res) {
   if (req.method === 'OPTIONS') return false;
   const path = req.url.split('?')[0];
+  if (path === '/acct/status' && process.env.CALCUTTA_ENABLED === '1') { send(res, 200, Object.assign({ gate: on(), guest: guestMode() }, process.env.GROUPS_ENABLED === '1' ? { groups: true } : {}, { calcutta: true })); return true; } // Calcutta (feature session): `calcutta` only while CALCUTTA_ENABLED=1 (unset = the line below, unchanged)
   if (path === '/acct/status') { send(res, 200, Object.assign({ gate: on(), guest: guestMode() }, process.env.GROUPS_ENABLED === '1' ? { groups: true } : {})); return true; } // v272: `groups` is there ONLY while GROUPS_ENABLED=1 (unset = the answer of v271, byte for byte); it says nothing about any one account // v268: guest = visitors with no account may browse scores (see guestMode)
   if (req.method !== 'POST' && !(req.method === 'GET' && path === '/acct/time/status')) return false; // v263: the time status may also be read with GET (x-token header)
   if (!on()) { send(res, 200, { gate: false }); return true; }

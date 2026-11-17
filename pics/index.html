@@ -3612,10 +3612,10 @@ if ('serviceWorker' in navigator) {
     { id: 'pickleball', icon: '🏓', title: 'Pickleball', line: 'Round robin, King of the Court and more, with points-only Calcutta, skins and pick’em.', isLive: () => true, open: go('pickleball.html') },
     { id: 'groups', icon: '👥', title: 'Groups', line: 'Make a group, invite your friends and see who comes out on top.', isLive: groupsOn, open: openGroups },
     { id: 'golfdays', icon: '🏌️', title: 'Golf days', line: 'Inside a group, tap Games, then Golf day: start a round, log your score, watch the leaderboard.', isLive: groupsOn, open: openGames },
-    // TODO wire when the Calcutta auction ships: isLive: () => true (or the switch it ships behind) and open: the Calcutta screen.
-    { id: 'calcutta', icon: '🏆', title: 'Calcuttas', line: 'Main, side and weekly Calcuttas, plus golf tournament and season Calcuttas.', isLive: () => false, open: () => {} },
-    // TODO wire when the Calcutta auction ships (football): isLive and open as above.
-    { id: 'calcutta-fb', icon: '🏈', title: 'Football Calcuttas', line: 'Main, side and weekly Calcuttas for football.', isLive: () => false, open: () => {} },
+    // v275 (calc-live merged): both Calcutta items are live where Groups is on AND groups.js registered the 'calcutta' game; they open the Games catalog
+    // (the Calcutta card is there). Their lines name only what a group can start today; PGA season, golf-day and local-event lots say Coming soon inside the Calcutta only.
+    { id: 'calcutta', icon: '🏆', title: 'Calcuttas', line: 'Inside a group, tap Games, then Calcutta: this week’s PGA Tour event, a playoff, or your own in-person event with buy back half.', isLive: () => groupsOn() && hasGame('calcutta'), open: openGames },
+    { id: 'calcutta-fb', icon: '🏈', title: 'Football Calcuttas', line: 'NFL and college football weekend games, the NFL season or the playoffs, main or side. In a group: Games, then Calcutta.', isLive: () => groupsOn() && hasGame('calcutta'), open: openGames },
     // v275: live where Groups is on AND groups.js registered the 'pickleball' game (pics/groups.js addGame); opens the Games catalog like Golf days.
     { id: 'group-pickleball', icon: '🏓', title: 'Group pickleball games', line: 'Inside a group, tap Games, then Pickleball: round robin, brackets, ladder, scores on court.', isLive: () => groupsOn() && hasGame('pickleball'), open: openGames },
   ];
@@ -3631,7 +3631,7 @@ if ('serviceWorker' in navigator) {
   const vis = (id) => { const x = el(id); return !!x && !x.hidden; };
   const busy = () => {
     if (document.hidden) return true;
-    if (el('gate') || el('gnm') || el('oddwarn') || el('kcom') || el('oglock') || el('ogrp') || el('oevt') || el('odash') || el('bnmore')) return true; // sign-in / pay / trial, name picker, sport warning, cash-out, Groups lock, Groups (its Games catalog, stats and Golf day screens draw inside #ogrp), group Pickleball (#oevt, v275), dashboard, More
+    if (el('gate') || el('gnm') || el('oddwarn') || el('kcom') || el('oglock') || el('ogrp') || el('oevt') || el('ocalc') || el('odash') || el('bnmore')) return true; // sign-in / pay / trial, name picker, sport warning, cash-out, Groups lock, Groups (its Games catalog, stats and Golf day screens draw inside #ogrp), group Pickleball (#oevt, v275), the Calcutta (#ocalc, v275; it sits on #ogrp too), dashboard, More
     if (['infosheet', 'teampage', 'mv', 'lvov', 'syncsheet', 'aisheet', 'spop'].some(vis)) return true; // info sheet, team page, game view, live overlay, sync, Ask AI, score pop-up (z 400)
     try { if (grpPend()) return true; } catch (e) {} // a group invite in progress
     try { if (typeof BF !== 'undefined' && BF && BF.step) return true; } catch (e) {} // the Add bet / prop / parlay form is open

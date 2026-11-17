@@ -18,7 +18,7 @@
   // "-4" -> -4, "E" -> 0, "+3" -> 3, "-" / "" / null -> null
   const num = (v) => { if (v == null || v === '') return null; if (typeof v === 'number') return Number.isFinite(v) ? v : null; if (typeof v === 'object') return num(v.displayValue != null ? v.displayValue : v.value); const s = String(v).trim(); if (/^E(VEN)?$/i.test(s)) return 0; if (!/^[+-]?\d+(\.\d+)?$/.test(s)) return null; return Number(s); };
   const fmtPar = (n) => (n == null ? '' : n === 0 ? 'E' : n > 0 ? '+' + n : String(n));
-  const TZ = { UTC: 0, GMT: 0, Z: 0, EST: -5, EDT: -4, CST: -6, CDT: -5, MST: -7, MDT: -6, PST: -8, PDT: -7, AKST: -9, AKDT: -8, HST: -10 };
+  const TZ = { UTC: 0, GMT: 0, Z: 0, EST: -5, EDT: -4, CST: -6, CDT: -5, MST: -7, MDT: -6, PST: -8, PDT: -7, AKST: -9, AKDT: -8, HST: -10, AST: -4, ADT: -3, JST: 9 }; // calc-live: AST / ADT = Atlantic (the Tour's Puerto Rico stop), JST = Japan
   const MON = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
   // Tee time: "Thu Nov 12 13:46:00 PST 2026" (the form seen in the feed) or an ISO string. Anything else = null (never guessed).
   function teeParse(s) {
@@ -28,6 +28,12 @@
     if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) { const t = Date.parse(s); return Number.isFinite(t) ? t : null; }
     return null;
   }
+  // calc-live (server lock only; the page's display parse above is unchanged): a REAL tee-time string that cannot be read safely: the feed's
+  // "Thu Nov 12 13:46:00 XYZ 2026" form with a zone not in TZ, or an ISO date-time with no zone (read in the reader's own zone). A bare "10:05" is not one.
+  function teeUnsafe(s) { if (typeof s !== 'string') return false; s = s.trim();
+    const m = /^[A-Za-z]{3,9},? ([A-Za-z]{3})[a-z]* (\d{1,2}),? (\d{1,2}):(\d{2})(?::(\d{2}))? ([A-Z]{1,4}) (\d{4})$/.exec(s); if (m) return MON[m[1].toLowerCase()] != null && TZ[m[6]] == null;
+    return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s) && !/(Z|[+-]\d{2}(:?\d{2})?)$/i.test(s); }
+  function teeBadOf(ls) { let bad = false; const scan = (v, d) => { if (bad || d > 8 || v == null) return; if (typeof v === 'string') { if (teeUnsafe(v)) bad = true; return; } if (Array.isArray(v)) { v.forEach((x) => scan(x, d + 1)); return; } if (typeof v === 'object') ['displayValue', 'categories', 'stats'].forEach((k) => scan(v[k], d + 1)); }; scan(ls.teeTime, 0); scan(ls.statistics, 0); return bad; }
   function teeOf(ls) { let t = null; const scan = (v, d) => { if (t != null || d > 5 || v == null) return; if (typeof v === 'string') { t = teeParse(v); return; } if (Array.isArray(v)) { for (let i = v.length - 1; i >= 0 && t == null; i--) scan(v[i], d + 1); return; } if (typeof v === 'object') { if (typeof v.displayValue === 'string') { t = teeParse(v.displayValue); if (t != null) return; } ['categories', 'stats'].forEach((k) => scan(v[k], d + 1)); } }; scan(ls.teeTime, 0); if (t == null) scan(ls.statistics, 0); return t; }
   // A feed flag for cut / withdrew / disqualified. The Nov 16 2026 response had none; kept for the day ESPN sends one.
   function flagOf(c) {
@@ -123,14 +129,14 @@
     const grp = { active: 0, cut: 1, wd: 2, dq: 2, ns: 3 };
     players.sort((x, y) => grp[x.status] - grp[y.status] || (x.status === 'active' ? posN(x) - posN(y) : y.rounds.length - x.rounds.length) || (x.toPar == null) - (y.toPar == null) || (x.toPar || 0) - (y.toPar || 0) || x.order - y.order || x.name.localeCompare(y.name));
 
-    let firstTee = null;
-    arr(comp.competitors).forEach((c) => arr(obj(c).linescores).forEach((r) => { if (r && num(r.period) === 1) { const t = teeOf(r); if (t != null && (firstTee == null || t < firstTee)) firstTee = t; } }));
+    let firstTee = null, teeBad = false; // calc-live: teeBad = a round-1 tee time is listed in a form that cannot be read safely (teeUnsafe); used only by the server's Calcutta lock
+    arr(comp.competitors).forEach((c) => arr(obj(c).linescores).forEach((r) => { if (r && num(r.period) === 1) { const t = teeOf(r); if (t != null && (firstTee == null || t < firstTee)) firstTee = t; if (!teeBad && teeBadOf(r)) teeBad = true; } }));
     const course = obj(arr(ev.courses)[0]), venue = obj(comp.venue || ev.venue), addr = obj(course.address || venue.address);
     const ms = (v) => { const t = Date.parse(v); return Number.isFinite(t) ? t : null; };
     const purse = num(ev.purse) != null ? num(ev.purse) : num(String(ev.displayPurse || tour.displayPurse || '').replace(/[$,\s]/g, ''));
     return { event: { id: txt(ev.id, 24), name: txt(ev.name || ev.shortName || 'PGA Tour event', 100), course: txt(course.name || venue.fullName || venue.name || '', 80), location: [txt(addr.city, 40), txt(addr.state || addr.country, 40)].filter(Boolean).join(', '),
       dates: { start: ms(ev.date || comp.date), end: ms(ev.endDate || comp.endDate) }, purse: purse != null && purse > 0 ? purse : null, status, statusText: txt(st.shortDetail || st.detail || st.description || '', 60), round, rounds: REG,
-      cutLine, cutLineSrc, playoff, firstTee }, players };
+      cutLine, cutLineSrc, playoff, firstTee, teeBad }, players };
   }
 
   // Season calendar: names and dates only (the feed carries no winners). state: 'done' | 'now' | 'next', by date; the event on the scoreboard is matched by id.

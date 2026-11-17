@@ -47,8 +47,8 @@
   },
   "calcutta": {
    "name": "Calcutta auction",
-   "line": "Bid on teams before it starts. Owners score by how far their team goes.",
-   "info": "Before it starts, members bid on each team (or player) in a live auction. Bids are for the standings only: no money moves through Oddable. Each team’s owner scores for every round the team wins, and the most for the champion."
+   "line": "Bid on teams before it starts. Owners are paid as their teams win; money is settled outside the app.",
+   "info": "Before it starts, members bid on each team (or golfer) in a live auction on their own phones, or the commissioner enters an auction held in person. Owners are paid from the pot as their teams win, and Oddable shows who is owed what. Money is settled outside the app: Oddable never collects, holds or pays money."
   },
   "squares": {
    "name": "Squares",
@@ -259,8 +259,14 @@
     {
      "key": "calcutta",
      "mode": "pro",
-     "status": "soon",
-     "results": "live"
+     "status": "now",
+     "results": "live",
+     "start": {
+      "kind": "tile",
+      "tile": "calcutta",
+      "label": "Open the Calcutta"
+     },
+     "note": "In a group: Games on the group page, then Calcutta."
     },
     {
      "key": "squares",
@@ -305,9 +311,15 @@
     {
      "key": "calcutta",
      "mode": "pro",
-     "status": "soon",
+     "status": "now",
      "results": "live",
-     "name": "March Madness Calcutta"
+     "name": "March Madness Calcutta",
+     "start": {
+      "kind": "tile",
+      "tile": "calcutta",
+      "label": "Open the Calcutta"
+     },
+     "note": "In a group: Games on the group page, then Calcutta."
     },
     {
      "key": "survivor",
@@ -493,9 +505,15 @@
     {
      "key": "calcutta",
      "mode": "pro",
-     "status": "soon",
-     "results": "tbc",
-     "name": "Masters / major Calcutta"
+     "status": "now",
+     "results": "live",
+     "name": "PGA Tour Calcutta (this week's event)",
+     "start": {
+      "kind": "tile",
+      "tile": "calcutta",
+      "label": "Open the Calcutta"
+     },
+     "note": "In a group: Games on the group page, then Calcutta."
     },
     {
      "key": "oad",

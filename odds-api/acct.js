@@ -106,6 +106,10 @@ async function check(req) {
 // Gate off, the owner, no account id, an account My Apps does not know, or My Apps not answering = false (never lock somebody out, or drop an alert, on a guess).
 // Uses the 2-minute entitlement cache above, so betwatch.js and groups.js can ask on every pass. An account with no end date (everything is free for now) is never expired.
 async function expired(e) { if (!on() || !e || e === 'owner') return false; try { const a = await entitlement(e, false); return !!a && !allowed(a); } catch (er) { return false; } }
+// calc-live (Calcutta fix round 2): the same question with a third answer. 'ended' / 'ok' as expired() would say, and 'unknown' when My Apps did not
+// answer (asleep, misconfigured, timed out), so a caller can keep the answer it last knew instead of letting an ended account in for the whole outage.
+// A pure addition: expired() and every caller of it are unchanged.
+async function expiredState(e) { if (!on() || !e || e === 'owner') return 'ok'; try { const a = await entitlement(e, false); return a && !allowed(a) ? 'ended' : 'ok'; } catch (er) { return 'unknown'; } }
 // v272 (Groups phase 2, owner-only on the phone): the phone shows Groups only when the `me` it already gets says `groups: true`. Added ONLY while
 // GROUPS_ENABLED=1 and only for an account the switches let in (GROUPS_OWNER_ONLY: the owner-PIN sign-in, the OWNER_PHONE accounts, GROUPS_TESTERS). Everyone
 // else, and everyone while the variable is unset, gets exactly the `me` of v271: no field, no extra read, no new route. A copy is returned: OWNER_ME and the
@@ -253,5 +257,5 @@ const phoneEmail = (id) => crypto.createHmac('sha256', KEY()).update('phoneid|' 
 function ownerOk(req) { const e = verify(req.headers['x-token']); return !!e && dashOk(e, req); }
 // Groups (groups.js): who is signed in (the account id inside a valid token, or null). Never sent to other players.
 function who(req) { if (!on()) return null; const e = verify(req.headers['x-token']); if (!e) return null; if (e === 'owner' && !OWNER_PIN()) return null; return e; }
-module.exports = { gFlag, guestMode, expired, handle, check, on, phoneEmail, ownerOk, ma, maReady: () => !!(URL_() && SECRET()), who, isOwnerPhone, namesGet, ownerName: OWNER_NAME,
+module.exports = { gFlag, guestMode, expired, expiredState, handle, check, on, phoneEmail, ownerOk, ma, maReady: () => !!(URL_() && SECRET()), who, isOwnerPhone, namesGet, ownerName: OWNER_NAME,
   tokenAcct, revoke, revLoad, mint, shape, cleanRef, uncache: (e) => CACHE.delete(e) }; // v271 (second line): for sync.js (token sync) and recover.js // ma / maReady: courts.js reads the app settings from My Apps; who / isOwnerPhone / namesGet / ownerName: groups.js

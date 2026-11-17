@@ -74,6 +74,7 @@
         + '<span class="ogmeta">' + (gr.role === 'comm' ? 'You run this group · ' : '') + gr.count + ' of ' + gr.join.max + ' members' + (P.length ? ' · ' + esc([...new Set(P.map((c) => SPORT[c.sport] || c.sportName))].join(', ')) : '') + '</span>'
         + (gr.role === 'comm' && gr.reqCount ? '<span class="ogmeta ogy">' + gr.reqCount + ' join request' + (gr.reqCount === 1 ? '' : 's') + ' waiting</span>' : '') + '<span class="oggo">Open ›</span></button>';
     }).join('') + '</div>';
+    s += '<button type="button" class="ogsec" data-a="mycalc">🏆 My Calcuttas ›</button>'; // calc-live F8
     if (H.pending.length) s += '<h3 class="ogh">Waiting for an answer</h3><div class="oggrid">' + H.pending.map((p) => '<div class="ogcard"><b class="ogname">' + esc(p.name) + '</b><div class="ogmeta">Request sent. The commissioner approves who joins.</div><button type="button" class="ogsec" data-a="cancel" data-id="' + att(p.id) + '">Cancel my request</button></div>').join('') + '</div>';
     return s;
   }
@@ -224,7 +225,7 @@
   //     title  the card's name; blurb: one line saying what the game is
   //     open   called with the group (the object the group page holds) when the card is tapped: push your own screen (GDX.push / push) so Back works
   //     state  optional: (gr) -> {k: 'none' | 'open' | 'finished', text} or a Promise of it. Shown on the card ('None yet' / 'Open' / 'Finished').
-  // Only games that exist on main are registered here: the Picks contest (v272), Golf days (v273) and, since the v275 integration, group Pickleball (pics/local.js).
+  // Only games that exist on main are registered here: the Picks contest (v272), Golf days (v273) and, since the v275 integration, group Pickleball (pics/local.js) and the Calcutta (pics/calcutta.js).
   const GAMES = [];
   function addGame(x) { if (!x || !/^[a-z][a-z0-9]{0,15}$/.test(String(x.key || '')) || !x.title || typeof x.open !== 'function') return false; const i = GAMES.findIndex((y) => y.key === x.key); if (i >= 0) GAMES[i] = x; else GAMES.push(x); return true; }
   const span = (c) => esc(SPORT[c.sport] || c.sportName || '') + ' · ' + esc(fmtDay(c.startDay) + ' to ' + fmtDay(c.endDay));
@@ -241,6 +242,15 @@
     state: (gr) => within(post('/local/list', { g: gr.id }), 12000).then((j) => { const E = Array.isArray(j.events) ? j.events : [], o = E.filter((x) => !x.fin), f = E.filter((x) => x.fin).sort((a, b) => (b.fin || 0) - (a.fin || 0));
       return o.length ? { k: 'open', text: 'Open · ' + esc(o[0].title) + ' · ' + (o[0].started ? 'under way' : 'starts ' + pbDay(o[0].start)) + (o.length > 1 ? ' · ' + o.length + ' games' : '') } : f.length ? { k: 'finished', text: 'Last one · ' + esc(f[0].title) + ' · ' + pbDay(f[0].start) } : { k: 'none', text: 'No pickleball game yet' + (gr.role === 'comm' ? ': start one' : '') }; }),
     open: (gr) => pbOpen(gr) });
+  // v275 (integration): the Calcutta (pics/calcutta.js, server odds-api/calcutta.js) as a catalog entry; its old hub tile is gone. State: ONE POST
+  // /calcutta/list for the group (the call its own first screen makes; calcutta.js is NOT fetched for it). That list knows each auction's status
+  // (not started / running / closed), not whether the event's games are over, so a Calcutta stays Open after its auction closes (owners are paid as
+  // teams win); None yet when the group has none.
+  const CST = { setup: 'auction not started', live: 'auction running', closed: 'auction closed' };
+  addGame({ key: 'calcutta', title: 'Calcutta', blurb: 'Auction the teams, own them for the whole event, get paid as they win: football weekends, playoffs and seasons, this week\'s PGA Tour event, or your own teams. Money is settled outside the app.',
+    state: (gr) => within(post('/calcutta/list', { g: gr.id }), 12000).then((j) => { const C = Array.isArray(j.calcs) ? j.calcs : [], c = C.find((x) => x.status !== 'closed') || C[0];
+      return c ? { k: 'open', text: 'Open · ' + esc(c.name) + ' · ' + esc(CST[c.status] || '') + (C.length > 1 ? ' · ' + C.length + ' Calcuttas' : '') } : { k: 'none', text: 'No Calcutta yet' + (j.comm ? ': start one' : '') }; }),
+    open: (gr) => calcOpen(gr) });
   const STN ={ none: 'None yet', open: 'Open', finished: 'Finished' };
   function games() {
     const s = cur(), gr = s.gr, st = s.st || {};
@@ -300,6 +310,17 @@
       + (k === 'picks' || k === 'record' ? 'Place and record are the contest\'s own final standings. "T" = a shared place. "–" = no settled bet in that contest.' : 'Net to par = strokes after the playing strokes, minus par, on a finished card (no strokes on a gross day). "thru N" = the card was not finished.') + '</div></div>';
   }
 
+  // Calcutta auction (a group game, calc-live): the screens live in pics/calcutta.js, fetched the first time a member opens it (since the v275
+  // integration: the Calcutta card on the Games screen, or "My Calcuttas" on the Groups home). Its own full-screen overlay (#ocalc) opens above
+  // this one, beside the tab bar; ‹ Group and Close come back here; closing Groups closes it too.
+  let CDL = null; const CDV = GDV; // F11: calcutta.js?v= moves with every app version (see HANDOFF bump list)
+  function calcOpen(gr) { // gr null: My Calcuttas (every group), so a Calcutta whose group was deleted stays reachable
+    const from = cur(); // v275: same guard as pbOpen: opened only if Groups is still open on the same screen and the account has not ended
+    const go = () => { if (el() && cur() === from && !expired()) window.oddCalc(gr ? { gr: { id: gr.id, name: gr.name, role: gr.role } } : { mine: true }); };
+    if (window.oddCalc) return go();
+    if (!CDL) CDL = new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = 'calcutta.js?v=' + CDV; sc.onload = ok; sc.onerror = () => { CDL = null; sc.remove(); no(); }; document.head.appendChild(sc); });
+    busy = true; paintBusy(true); CDL.then(() => { busy = false; paintBusy(false); go(); }, () => { busy = false; paintBusy(false); err = 'Could not load Calcutta. Check your signal and try again.'; paint(); });
+  }
   function click(ev) {
     const b = ev.target.closest && ev.target.closest('button[data-a]'); if (!b || b.disabled) return; const a = b.getAttribute('data-a'), id = b.getAttribute('data-id'), gr = curGroup();
     if (a === 'close') return close(); if (a === 'back') return back(); if (busy) return;
@@ -315,6 +336,7 @@
     if (a === 'cancel') return act('cancel', { id }, async () => { loadHome(); });
     if (a === 'mstats') { const p = b.getAttribute('data-pid'); return statsOpen(p ? gr : null, p || ''); } // v274: My stats (home) or a member's record (a name)
     if (a === 'sd') { const s = cur(); if (s.data) push({ t: 'statsd', k: b.getAttribute('data-k'), data: s.data, gr: s.gr }); return; }
+    if (a === 'mycalc') return calcOpen(null); // calc-live F8
     if (!gr) return;
     if (a === 'members') { push({ t: 'members', gr }); return act('get', { id: gr.id }, async (j) => { setGroup(j.group); paint(); }); }
     if (a === 'rules') return push({ t: 'rules', gr, cid: b.getAttribute('data-cid') });
@@ -357,9 +379,9 @@
     fit(); try { if (window.navRender) window.navRender(); } catch (x) {} fit(); if (window.OddLocal) { try { window.OddLocal.fit(); } catch (x) {} }
     if (keep) return; WANTG = false; if (window.OddLocal) { try { window.OddLocal.close(); } catch (x) {} } stack = [{ t: 'home' }]; err = ''; paint(); if (!expired()) loadHome(); // the Groups tab again = my groups, Pickleball closed
   }
-  function close() { const e = el(); if (!e) return; if (window.OddGolfDay) { try { window.OddGolfDay.stop(); } catch (x) {} } if (window.OddLocal) { try { window.OddLocal.close(); } catch (x) {} } e.remove(); window.removeEventListener('resize', fit); busy = false; try { if (window.navRender) window.navRender(); } catch (x) {} }
+  function close() { try { if (window.oddCalc && window.oddCalc.close) window.oddCalc.close(); } catch (x) {} const e = el(); if (!e) return; if (window.OddGolfDay) { try { window.OddGolfDay.stop(); } catch (x) {} } if (window.OddLocal) { try { window.OddLocal.close(); } catch (x) {} } e.remove(); window.removeEventListener('resize', fit); busy = false; try { if (window.navRender) window.navRender(); } catch (x) {} }
   // gate.js tells the page when the lock changes (paid, signed out, time ended): the open screen follows without a reload.
-  function lockChanged() { if (!el()) return; if (!g('odd-tok') || g('odd-grp') !== '1') return close(); if (window.OddLocal) { try { window.OddLocal.close(); } catch (x) {} } err = ''; paint(); if (!expired()) { if (cur().t === 'join' && cur().code && !cur().pv) lookup(cur().code); else if (!H) loadHome(); } }
+  function lockChanged() { if (!el()) return; if (!g('odd-tok') || g('odd-grp') !== '1') return close(); if (window.OddLocal) { try { window.OddLocal.close(); } catch (x) {} } if (expired()) { try { if (window.oddCalc && window.oddCalc.close) window.oddCalc.close(); } catch (x) {} } /* calc-live: an ended account sees the lock card, not a Calcutta */ err = ''; paint(); if (!expired()) { if (cur().t === 'join' && cur().code && !cur().pv) lookup(cur().code); else if (!H) loadHome(); } }
 
   // ---------- group bets: a NEW bet of a group member is saved on the server first, then it is locked ----------
   const TK = () => (g('odd-tok') || '').slice(-12);

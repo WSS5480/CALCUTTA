@@ -106,10 +106,15 @@ async function check(req) {
 // Gate off, the owner, no account id, an account My Apps does not know, or My Apps not answering = false (never lock somebody out, or drop an alert, on a guess).
 // Uses the 2-minute entitlement cache above, so betwatch.js and groups.js can ask on every pass. An account with no end date (everything is free for now) is never expired.
 async function expired(e) { if (!on() || !e || e === 'owner') return false; try { const a = await entitlement(e, false); return !!a && !allowed(a); } catch (er) { return false; } }
+// v272 (Groups phase 2, owner-only on the phone): the phone shows Groups only when the `me` it already gets says `groups: true`. Added ONLY while
+// GROUPS_ENABLED=1 and only for an account the switches let in (GROUPS_OWNER_ONLY: the owner-PIN sign-in, the OWNER_PHONE accounts, GROUPS_TESTERS). Everyone
+// else, and everyone while the variable is unset, gets exactly the `me` of v271: no field, no extra read, no new route. A copy is returned: OWNER_ME and the
+// entitlement cache are never changed.
+function gFlag(me, e) { if (!me || process.env.GROUPS_ENABLED !== '1') return me; try { return require('./groups').onFor(e) ? Object.assign({}, me, { groups: true }) : me; } catch (er) { return me; } }
 async function handle(req, res) {
   if (req.method === 'OPTIONS') return false;
   const path = req.url.split('?')[0];
-  if (path === '/acct/status') { send(res, 200, { gate: on(), guest: guestMode() }); return true; } // v268: guest = visitors with no account may browse scores (see guestMode)
+  if (path === '/acct/status') { send(res, 200, Object.assign({ gate: on(), guest: guestMode() }, process.env.GROUPS_ENABLED === '1' ? { groups: true } : {})); return true; } // v272: `groups` is there ONLY while GROUPS_ENABLED=1 (unset = the answer of v271, byte for byte); it says nothing about any one account // v268: guest = visitors with no account may browse scores (see guestMode)
   if (req.method !== 'POST' && !(req.method === 'GET' && path === '/acct/time/status')) return false; // v263: the time status may also be read with GET (x-token header)
   if (!on()) { send(res, 200, { gate: false }); return true; }
   const ip = require('./ip').clientIp(req); // third from the end of X-Forwarded-For (see ip.js)
@@ -122,7 +127,7 @@ async function handle(req, res) {
       if (throttled(ip + '|owner')) { send(res, 429, { error: 'Too many tries, wait a few minutes' }); return true; }
       const a = Buffer.from(String(b.pin || '')), w = Buffer.from(OWNER_PIN());
       if (a.length !== w.length || !crypto.timingSafeEqual(a, w)) { send(res, 401, { error: 'Wrong PIN' }); return true; }
-      send(res, 200, { token: mint('owner'), me: OWNER_ME }); return true;
+      send(res, 200, { token: mint('owner'), me: gFlag(OWNER_ME, 'owner') }); return true;
     }
     if (path === '/acct/phone') {
       // Existing Oddable users keep their cell number + PIN. It maps to a My Apps account (7-day trial, then Cash App renewal).
@@ -137,7 +142,7 @@ async function handle(req, res) {
       if (!r.ok && r.status === 409) r = await ma('/api/v1/auth/login', { email: pe, password: pw });
       if (!r.ok) { send(res, 502, { error: r.j.error || 'Could not open your account' }); return true; }
       CACHE.delete(pe);
-      const me = await shape(pe, true); if (me && isOwnerPhone(pe)) me.ownerDash = true; send(res, 200, { token: mint(pe), me }); return true;
+      const me = await shape(pe, true); if (me && isOwnerPhone(pe)) me.ownerDash = true; send(res, 200, { token: mint(pe), me: gFlag(me, pe) }); return true;
     }
     if (path === '/acct/login' || path === '/acct/register') {
       if (path === '/acct/register' && cleanName(b.name).length < 2) { send(res, 400, { error: 'Enter a name or handle to create your account' }); return true; }
@@ -153,7 +158,7 @@ async function handle(req, res) {
       const acct = ja && (ja === email || /^[0-9a-f]{20}@phone\.oddable$/.test(ja)) ? ja : email;
       CACHE.delete(acct);
       const me = await shape(acct, true); if (me && acct !== email && isOwnerPhone(acct)) me.ownerDash = true;
-      send(res, 200, { token: mint(acct), me }); return true;
+      send(res, 200, { token: mint(acct), me: gFlag(me, acct) }); return true;
     }
     await revLoad(); // v271: at most one small read a minute (the reset stamps)
     const e = verify(b.token || req.headers['x-token']);
@@ -183,8 +188,8 @@ async function handle(req, res) {
   { try { const us = await require('./sync').adminUsers(null); const nm = await namesGet().catch(() => ({})); send(res, 200, { users: us.map((u) => ({ k: String(u.id).slice(0, 8), name: (isOwnerPhone(phoneEmail(u.id)) ? OWNER_NAME() : nm[String(u.id).slice(0, 8)]) || '', tag: u.tag, updated: u.updated, bets: u.bets, w: u.w, l: u.l, p: u.p, risk: u.risk, pl: u.pl, open: u.open, placed: u.placed, list: u.list, days: u.days })) }); } catch (er) { send(res, 502, { error: 'Could not read players: ' + er.message }); } return true; }
     }
     if (e === 'owner') { if (!OWNER_PIN()) { send(res, 401, { error: 'Sign in again' }); return true; }
-      if (path === '/acct/me') { send(res, 200, { me: OWNER_ME }); return true; } send(res, 400, { error: 'Owner has full access' }); return true; }
-    if (path === '/acct/me') { const me = await shape(e, true); if (!me) { send(res, 401, { error: 'Account not found or suspended' }); return true; } if (isOwnerPhone(e)) me.ownerDash = true; send(res, 200, { me }); return true; }
+      if (path === '/acct/me') { send(res, 200, { me: gFlag(OWNER_ME, 'owner') }); return true; } send(res, 400, { error: 'Owner has full access' }); return true; }
+    if (path === '/acct/me') { const me = await shape(e, true); if (!me) { send(res, 401, { error: 'Account not found or suspended' }); return true; } if (isOwnerPhone(e)) me.ownerDash = true; send(res, 200, { me: gFlag(me, e) }); return true; }
     if (path === '/acct/push-key') {
       if (e === 'owner') { send(res, 400, { error: 'Owner has no renewals' }); return true; }
       const r = await ma('/api/v1/push/key', {}); send(res, r.ok ? 200 : (r.status || 502), r.ok ? { key: r.j.key } : { error: r.j.error || 'Reminders are not set up yet' }); return true;
@@ -222,7 +227,7 @@ async function handle(req, res) {
       if (throttled(ip + '|redeem') || throttled(e + '|redeem')) { send(res, 429, { error: 'Too many tries, wait a few minutes' }); return true; }
       const r = await ma('/api/v1/redeem', { account: e, code: String(b.code || '').trim() });
       if (!r.ok) { send(res, 400, { error: r.j.error || 'Code not valid' }); return true; }
-      CACHE.delete(e); send(res, 200, { me: await shape(e, true) }); return true;
+      CACHE.delete(e); send(res, 200, { me: gFlag(await shape(e, true), e) }); return true;
     }
   } catch (er) { send(res, 502, { error: 'Account service is waking up, try again in a moment' }); return true; }
   return false;
@@ -248,5 +253,5 @@ const phoneEmail = (id) => crypto.createHmac('sha256', KEY()).update('phoneid|' 
 function ownerOk(req) { const e = verify(req.headers['x-token']); return !!e && dashOk(e, req); }
 // Groups (groups.js): who is signed in (the account id inside a valid token, or null). Never sent to other players.
 function who(req) { if (!on()) return null; const e = verify(req.headers['x-token']); if (!e) return null; if (e === 'owner' && !OWNER_PIN()) return null; return e; }
-module.exports = { guestMode, expired, handle, check, on, phoneEmail, ownerOk, ma, maReady: () => !!(URL_() && SECRET()), who, isOwnerPhone, namesGet, ownerName: OWNER_NAME,
+module.exports = { gFlag, guestMode, expired, handle, check, on, phoneEmail, ownerOk, ma, maReady: () => !!(URL_() && SECRET()), who, isOwnerPhone, namesGet, ownerName: OWNER_NAME,
   tokenAcct, revoke, revLoad, mint, shape, cleanRef, uncache: (e) => CACHE.delete(e) }; // v271 (second line): for sync.js (token sync) and recover.js // ma / maReady: courts.js reads the app settings from My Apps; who / isOwnerPhone / namesGet / ownerName: groups.js

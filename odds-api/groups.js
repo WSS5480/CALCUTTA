@@ -1106,4 +1106,7 @@ function wire(M) {
   if (ST && fnc(ST.register)) { try { ST.register('groups', statsFor); done.push('stats'); } catch (e) {} }
   return done;
 }
-module.exports = { handle, tick, statsFor, memberStats, memberCheck, canAttach, wire, betVoid, voidable, addCheck, cleanBet, memberRules, registerGame, partners, betAdd, LOCKED_MSG, STARTED_MSG, registerInvite, attachGame, cleanCalc, limits: LIM, cleanContest, cleanTake, pots, prizes, rank, score, judge, applyObs, weekOf, chiDay, chiStart, snap, _deps: D, _reset: () => { RL.clear(); QUEUE.clear(); EXTC.clear(); CACHE.clear(); IDS.map = null; IDF.clear(); NAMES = { at: 0, v: {} }; TK.last.clear(); TK.told.clear(); USEM.clear(); GR._reset(); } };
+// v272 (Groups phase 2): what the switches say for this account id (null = signed out), WITHOUT the ended-account check: an ended account that would
+// otherwise be let in still gets the Groups tab, with the "Your time has ended" lock in it. acct.js puts this on the `me` it already sends (no new call).
+const onFor = (e) => allowed(e || null);
+module.exports = { onFor, enabled: ENABLED, handle, tick, statsFor, memberStats, memberCheck, canAttach, wire, betVoid, voidable, addCheck, cleanBet, memberRules, registerGame, partners, betAdd, LOCKED_MSG, STARTED_MSG, registerInvite, attachGame, cleanCalc, limits: LIM, cleanContest, cleanTake, pots, prizes, rank, score, judge, applyObs, weekOf, chiDay, chiStart, snap, _deps: D, _reset: () => { RL.clear(); QUEUE.clear(); EXTC.clear(); CACHE.clear(); IDS.map = null; IDF.clear(); NAMES = { at: 0, v: {} }; TK.last.clear(); TK.told.clear(); USEM.clear(); GR._reset(); } };

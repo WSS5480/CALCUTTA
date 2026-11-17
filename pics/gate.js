@@ -19,7 +19,7 @@
   // One person's data per phone. wipeData() clears everything that belongs to the signed-in person (bets, daily log, pins, locked picks, caches of them);
   // ownerSwitch(id) wipes it when a DIFFERENT person signs in on this phone, so nobody ever sees the previous user's data or uploads it into their own account.
   window.oddWipe = function () {
-    try { const ks = []; for (let i = 0; i < localStorage.length; i++) ks.push(localStorage.key(i)); ks.forEach((k) => { if (/^(bets26|betlog26|logat26|pinsat26|pinned26|kdel26|plbhtml26|surv26|sync-ids|sync-tomb|sync-last|sync-err|sync-rl|odd-ok|odd-exp|odd-dash|odd-dt|odd-push|odd-me|odd-treq|odd-stok|odd-eml|odd-myref|kal-id|kal-pem)$/.test(k) || /^(lk26-|splk-)/.test(k)) localStorage.removeItem(k); }); } catch (e) {}
+    try { const ks = []; for (let i = 0; i < localStorage.length; i++) ks.push(localStorage.key(i)); ks.forEach((k) => { if (/^(bets26|betlog26|logat26|pinsat26|pinned26|kdel26|plbhtml26|surv26|sync-ids|sync-tomb|sync-last|sync-err|sync-rl|odd-ok|odd-exp|odd-dash|odd-dt|odd-push|odd-me|odd-treq|odd-stok|odd-eml|odd-myref|odd-grp|odd-gbl|kal-id|kal-pem)$/.test(k) || /^(lk26-|splk-)/.test(k)) localStorage.removeItem(k); }); } catch (e) {}
   };
   // v271: `acct` (optional) = the account id the server answered with. The same person can now sign in two ways on one phone (cell number + PIN, or email +
   // password: two different `id`s, one account), so the sign-in is the same person when EITHER the id or the account matches the last one. Called with one
@@ -501,7 +501,9 @@
     try { const j = await call('/phone', { phone: ph, pin: pn }); s('odd-tok', j.token); setMe(j.me); return true; } catch (e) { return false; }
   }
   function setMe(m) {
-    me = m; early = null; if (!m) return; setTimeout(drawAcct, 0); setTimeout(() => { try { if (window.oddDays) window.oddDays(); } catch (e) {} }, 0);
+    me = m; early = null; if (!m) return; setTimeout(drawAcct, 0);
+    // v272 Groups phase 2: the server says, on the `me` this phone already gets, whether Groups is on for THIS account (odds-api/acct.js gFlag). Not said = no Groups: no tab, no file, no call.
+    try { const gv = m.groups === true ? '1' : null; if (g('odd-grp') !== gv) s('odd-grp', gv); if (window.oddGroupsChanged) setTimeout(() => { try { window.oddGroupsChanged(); } catch (e) {} }, 0); } catch (e) {} setTimeout(() => { try { if (window.oddDays) window.oddDays(); } catch (e) {} }, 0);
     // v267 /?pay=1 (a renewal reminder): straight to the ONE pay screen. v270: time left = the early screen; time ended in guest mode = the pay sheet (it is not up by itself any more); GUEST_MODE=0 and ended = the subscribe wall is already up.
     if (wantPay) { wantPay = false; try { history.replaceState(null, '', location.pathname); } catch (e) {} if (m.role !== 'owner' && (m.allowed ? !!m.expires_on : gmode)) setTimeout(() => { try { window.oddPay(); } catch (e) {} }, 0); }
     setTimeout(() => timeCheck(m), 0); try { const dg = document.getElementById('odiag'); if (dg) dg.textContent = (m.ownerDash || (m.role === 'owner' && m.source === 'owner')) ? ' · acct ' + (m.role || '?') + (m.ownerDash ? '+dash' : '') + ' ' + String(m.email || '').slice(-8) : ''; s('odd-dash', (m.role === 'owner' && m.source === 'owner') || m.ownerDash ? '1' : null); if (window.navRender) setTimeout(window.navRender, 0); } catch (e) {}
@@ -526,7 +528,7 @@
     if (m.role === 'owner' || !m.expires_on) return; const d = Math.ceil((new Date(m.expires_on + 'T23:59:59') - Date.now()) / 864e5);
     if (d <= 3 && d >= 0 && !document.getElementById('gtoast')) { const t = document.createElement('div'); t.id = 'gtoast'; t.textContent = (m.source === 'trial' ? 'Free trial' : 'Subscription') + ' ends ' + (d === 0 ? 'today' : 'in ' + d + ' day' + (d > 1 ? 's' : '')) + ' — tap to renew'; t.onclick = () => { if (!payOpen()) { me = Object.assign({}, m, { allowed: false }); sheet = gmode; show(); } t.remove(); }; /* v270: the one pay screen (v267 early wording, Back) */ document.body.appendChild(t); setTimeout(() => t.remove(), 9000); }
   }
-  function out() { s('odd-noauto', '1'); s('odd-tok', null); s('odd-ok', null); s('odd-exp', null); s('odd-push', null); s('sync-phone', null); s('sync-pin', null); s('sync-owner', null); s('odd-oacct', null); window.oddWipe(); me = null; mode = 'in'; location.reload(); }
+  function out() { s('odd-noauto', '1'); s('odd-grp', null); s('odd-gbl', null); s('odd-tok', null); s('odd-ok', null); s('odd-exp', null); s('odd-push', null); s('sync-phone', null); s('sync-pin', null); s('sync-owner', null); s('odd-oacct', null); window.oddWipe(); me = null; mode = 'in'; location.reload(); }
   async function refresh(force) {
     let j; try { j = await call('/me'); } catch (e) { const dg = document.getElementById('odiag'); if (dg && g('odd-dash') === '1') dg.textContent = ' · acct check failed: ' + (e.message || e.status); throw e; } setMe(j.me); return j.me;
   }
@@ -597,7 +599,7 @@
       sheet = true; show(); if (!me) { el.innerHTML = '<div class="gb">' + BACK + '<h1>Oddable</h1><p>Checking your account…</p><div class="er" id="gerr"></div></div>'; wireBack(); refresh().then(() => { if (el && me && !me.allowed) { sheet = true; draw(); } }).catch((e) => { if (e.status === 401) gone(e); else err('Could not reach the server. It may be waking up. Go back and try again.'); }); return; }
       if (m === 'time') { const t = $('gtime'); if (t && t.scrollIntoView) t.scrollIntoView({ block: 'start' }); } return;
     }
-    mode = m === 'in' ? 'in' : 'up'; scr = ''; FE = {}; sheet = true; show();
+    mode = m === 'in' ? 'in' : 'up'; scr = ''; FE = {}; sheet = true; if (/^group:/.test(String(target || ''))) notice = 'You were invited to a group on Oddable. Create your free account (or sign in) and you go straight to it.'; /* v272: only a group invite link gets here with this target */ show();
   };
   // v270: ONE "Pay now" for every entry point. An account that still has time (v267: days-left card, /?pay=1, the "ends soon" toast) -> payOpen(), the early wording.
   // An ended account in guest mode, or nobody signed in -> the sheet through oddSignUp (pay screen / sign-up).
@@ -616,6 +618,7 @@
   async function status() { // -> true / false = is the gate on; throws when the server cannot be reached
     const r = await fetch(API + '/status', { cache: 'no-store', signal: AbortSignal.timeout(12000) }), j = await r.json(); const on = j.gate === true; s('odd-gate', on ? '1' : '0');
     if (typeof j.guest === 'boolean') { gmode = j.guest; s('odd-guest', gmode ? '1' : '0'); } else { gmode = GUEST_MODE; s('odd-guest', null); } // an older server does not say: the constant decides
+    if (j.groups === true) { s('odd-gsw', '1'); try { if (window.oddGroupsSw) window.oddGroupsSw(); } catch (e) {} } else if (g('odd-gsw')) { s('odd-gsw', null); s('odd-grp', null); } // v272: Groups exists on the server at all (GROUPS_ENABLED=1). Not said = dark: nothing Groups-related is kept or run
     return on;
   }
   async function boot() {

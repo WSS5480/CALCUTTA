@@ -115,7 +115,7 @@ async function handle(req, res) {
     try { await A.revoke(acct); } catch (e) {} A.uncache(acct);
     let me = null; try { me = await A.shape(acct, true); } catch (e) {}
     if (me && A.isOwnerPhone(acct)) me.ownerDash = true;
-    send(res, 200, { ok: true, token: A.mint(acct), me }); return true;
+    send(res, 200, { ok: true, token: A.mint(acct), me: A.gFlag(me, acct) }); return true; // v272: the same Groups flag as every other sign-in answer (nothing is added while GROUPS_ENABLED is unset)
   }
 
   // ---------- signed in ----------

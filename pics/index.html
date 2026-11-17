@@ -91,6 +91,7 @@ header{position:relative}
 .rrow .sc{font-weight:800;font-size:17px;min-width:22px;text-align:right}.rpill{min-width:64px;text-align:center;border:1px solid var(--line);border-radius:999px;padding:7px 10px;font-weight:700;color:var(--green);background:#4fd18b14}.rpill.lo{color:var(--muted);background:none}
 .rft{display:flex;justify-content:space-between;color:var(--muted);font-size:12px;margin-top:8px}
 .dots{display:flex;gap:6px;justify-content:center;margin:8px 0 2px}.dots i{width:6px;height:6px;border-radius:6px;background:var(--line);transition:all .2s}.dots i.on{width:22px;background:var(--muted)}
+#bnmore{position:fixed;inset:0;z-index:60;background:rgba(5,8,16,.6);display:flex;align-items:flex-end;justify-content:center}#bnmore .bnsheet{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-bottom:0;border-radius:18px 18px 0 0;width:min(560px,100%);padding:8px 14px calc(14px + env(safe-area-inset-bottom));max-height:80vh;overflow:auto;box-sizing:border-box}#bnmore .bnhd{display:flex;justify-content:space-between;align-items:center;font-size:18px}#bnmore .bnx{background:none;border:0;color:var(--muted);font:600 15px inherit;min-height:44px;min-width:44px;padding:0 6px;cursor:pointer}#bnmore .bnrow{display:flex;align-items:center;gap:12px;width:100%;min-height:56px;margin:6px 0;padding:8px 12px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:14px;font:inherit;text-align:left;cursor:pointer;box-sizing:border-box}#bnmore .bnrow.on{border-color:var(--blue)}#bnmore .bnrow>span:first-child{font-size:22px}#bnmore .bnl{flex:1;min-width:0}#bnmore .bnl b{display:block}#bnmore .bnl small{display:block;color:var(--muted);font-size:12.5px}#bnmore .bnrow i{font-style:normal;color:var(--muted);font-size:20px}
 .bn{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:space-around;background:var(--panel);border-top:1px solid var(--line);padding:6px 4px max(8px,env(safe-area-inset-bottom));z-index:20}
 @media(max-width:600px){.bn.n7 button{padding-left:5px!important;padding-right:5px!important;font-size:10px!important}}.bn button{background:none;border:0;color:var(--muted);font:600 11px inherit;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 10px;cursor:pointer;position:relative}.bn button span{font-size:19px}.bn button.on{color:var(--ink)}.bn .dot{position:absolute;top:2px;right:10px;width:8px;height:8px;border-radius:50%;background:var(--red)}
 body{padding-bottom:84px}
@@ -268,10 +269,10 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v271 -->
+<!-- Pics v272 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v271</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v272</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
   <div id="arbbar" class="arbbar" hidden onclick="arbBarTap()" role="button" aria-label="Arbitrage alert"><span class="mq" id="arbmq"></span></div>
   <div class="mrow" id="mrow"><label><span>League</span><select id="lgsel" aria-label="League" autocomplete="off"><option value="nfl">🏈 NFL</option><option value="cfb">🎓 NCAA</option><option value="pga">⛳ PGA Tour</option><option value="golfgps">📍 Golf GPS</option><option value="pickleball">🏓 Pickleball</option><option value="nba">🏀 NBA</option><option value="mlb">⚾ MLB</option><option value="nhl">🏒 NHL</option><option value="ncaab">🏀 NCAAB</option></select></label><label id="gvlab"><span>View</span><select id="gvsel" aria-label="View" autocomplete="off" onchange="gvSet(this.value)"></select></label></div>
   <div class="srow"><input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team"><select id="conf" aria-label="Conference"><option value="">All</option></select></div>
@@ -279,7 +280,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v271 (email sign-in · lost PIN or password · share Oddable)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v272 (email sign-in · lost PIN or password · share Oddable)</div>
   <div class="sub nsw" id="nsw"></div>
   <div class="sub" id="spset"><label>Score pop-ups <select id="spsel" aria-label="Score pop-ups" autocomplete="off" onchange="spSet(this.value)"><option value="mine">My bets only</option><option value="all">All live games</option><option value="off">Off</option></select></label><div style="font-size:11px;opacity:.75;margin-top:4px">A card pops up when a live game scores or ends, with where your bets stand right now.</div></div>
   <div class="sub" id="bpset"><label>Phone alerts for my bets: every score, and the final. <select id="bpsel" aria-label="Phone alerts for my bets (app closed)" autocomplete="off" onchange="bpSet(this.value)"><option value="off">Off</option><option value="on">On</option></select></label><div class="bph">For when Oddable is closed. Needs Oddable added to your Home Screen on iPhone or iPad, and notifications allowed.</div><div id="bpbbw" hidden><label style="margin-top:6px">Basketball <select id="bpbb" aria-label="Basketball alerts" autocomplete="off" onchange="bpBB(this.value)"><option value="q">Quarter ends and final</option><option value="all">Every score</option></select></label><div class="bph">Every score in basketball can mean 150+ alerts a game.</div></div><div id="bpmsg" role="status"></div><button type="button" id="bptest" hidden onclick="bpTest()">Send me a test</button></div>
@@ -300,7 +301,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </div>
 <div id="plb" hidden></div>
 <nav class="bn" id="bn"></nav>
-<script src="trophy.js?v=271"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
+<script src="trophy.js?v=272"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
 <script>
 // ================= v268 GUEST MODE (1 of 3): the flag. The rest is in the "v268 GUEST MODE" script block near the end of this file and in gate.js. =================
 // window.__oddLock: '' = signed in and paid up, or no gate (everything shows, exactly as before v268) · 'guest' = no account · 'expired' = signed in, time has ended.
@@ -513,11 +514,67 @@ function newBoard(games) {
 function swRender() { const e = $('#nsw'); if (e) e.innerHTML = STYLE === 'new' ? '<a onclick="styleSet(\'classic\')">Use classic view</a> · <a href="classic.html">frozen classic build</a>' : '<a onclick="styleSet(\'new\')">Use new look</a>'; if (e) e.innerHTML += ' · <a onclick="themeSet(document.documentElement.classList.contains(\'cb\') ? \'violet\' : \'cowboys\')">' + (document.documentElement.classList.contains('cb') ? 'Original violet colors' : 'Cowboys colors') + '</a>'; }
 function navRender() { swRender();
   const anyLive = Object.values(ALL).some((g) => g.state === 'in');
+  if (grpOn()) return navRender5(anyLive); // v272: the five-tab bar, only for an account Groups is switched on for. Everyone else: the bar below, unchanged.
   const it = [['all', '🏠', 'Games'], ['livepg', '📡', 'Live'], ['bets', '🧾', 'My Bets'], ['surv', '🛡️', 'Survivor'], ['win', '✅', 'Winning'], ['lose', '🔻', 'Losing']];
   try { if (localStorage.getItem('odd-dash') === '1') it.push(['dash', '📊', 'Dashboard']); } catch (e) {}
   $('#bn').classList.toggle('n7', it.length > 6); $('#bn').innerHTML = it.map(([k, i, l]) => `<button class="${(k === 'livepg' ? VIEW === 'live' : k === 'bets' ? VIEW === 'bets' : k === 'surv' ? VIEW === 'surv' : VIEW === 'main' && FILT === k) ? 'on' : ''}" onclick="navGo('${k}')"><span>${i}</span>${l}${k === 'livepg' && anyLive ? '<i class="dot"></i>' : ''}</button>`).join('');
 }
+// ================= v272 GROUPS PHASE 2: the switch, the five-tab bar, invite links =================
+// grpOn(): the server said Groups is on for THIS signed-in account (gate.js keeps `me.groups` from /acct/me in 'odd-grp'; env GROUPS_ENABLED / GROUPS_OWNER_ONLY /
+// GROUPS_TESTERS on the odds server). False for everybody else and in ?mirror=1: no tab, no More sheet, pics/groups.js is never requested, no /groups call.
+const grpOn = () => { try { return !/[?&]mirror=1/.test(location.search) && localStorage.getItem('odd-grp') === '1' && !!localStorage.getItem('odd-tok'); } catch (e) { return false; } };
+const grpOpen = () => !!document.getElementById('ogrp');
+// FIVE buttons: Games, Live, My Bets, Groups, More. Survivor, Winning, Losing and the owner's Dashboard move into the More sheet; More is lit while one of them shows.
+function navRender5(anyLive) {
+  const it = [['all', '🏠', 'Games'], ['livepg', '📡', 'Live'], ['bets', '🧾', 'My Bets'], ['groups', '👥', 'Groups'], ['more', '☰', 'More']], G = grpOpen();
+  const inMore = VIEW === 'surv' || (VIEW === 'main' && (FILT === 'win' || FILT === 'lose'));
+  $('#bn').classList.remove('n7'); $('#bn').innerHTML = it.map(([k, i, l]) => `<button class="${(k === 'groups' ? G : G ? false : k === 'livepg' ? VIEW === 'live' : k === 'bets' ? VIEW === 'bets' : k === 'more' ? inMore : VIEW === 'main' && FILT === k) ? 'on' : ''}" ${k === 'more' ? 'aria-haspopup="dialog" ' : ''}onclick="navGo('${k}')"><span>${i}</span>${l}${k === 'livepg' && anyLive ? '<i class="dot"></i>' : ''}</button>`).join('');
+}
+function navMore(open) {
+  let e = document.getElementById('bnmore'); if (e) e.remove(); if (open === false) return;
+  const it = [['surv', '🛡️', 'Survivor', 'Pick one team a week'], ['win', '✅', 'Winning', 'Games going your way'], ['lose', '🔻', 'Losing', 'Games going against you']];
+  try { if (localStorage.getItem('odd-dash') === '1') it.push(['dash', '📊', 'Dashboard', 'Owner only']); } catch (x) {}
+  e = document.createElement('div'); e.id = 'bnmore'; e.setAttribute('role', 'dialog'); e.setAttribute('aria-label', 'More');
+  e.innerHTML = '<div class="bnsheet"><div class="bnhd"><b>More</b><button class="bnx" onclick="navMore(false)" aria-label="Close">Close</button></div>' + it.map(([k, i, l, d]) => `<button class="bnrow${(k === 'surv' ? VIEW === 'surv' : VIEW === 'main' && FILT === k) && !grpOpen() ? ' on' : ''}" onclick="navGo('${k}')"><span>${i}</span><span class="bnl"><b>${l}</b><small>${d}</small></span><i>›</i></button>`).join('') + '</div>';
+  e.addEventListener('click', (ev) => { if (ev.target === e) navMore(false); }); document.body.appendChild(e);
+}
+let GRPL = 0; const GRPQ = [];
+function grpLoad(then) { // pics/groups.js, fetched the first time it is needed
+  if (window.OddGroups) { if (then) then(); return; } if (then) GRPQ.push(then); if (GRPL) return; GRPL = 1;
+  const sc = document.createElement('script'); sc.src = 'groups.js?v=272'; sc.onload = () => { GRPQ.splice(0).forEach((f) => { try { f(); } catch (e) {} }); }; sc.onerror = () => { GRPL = 0; GRPQ.length = 0; sc.remove(); }; document.head.appendChild(sc);
+}
+// Invite links: https://<site>/?join=g.<code> (built with window.oddShareUrl, so they also carry ?ref=). The code is kept for this tab and taken out of the address bar.
+// Read ONLY when the server says Groups exists (/acct/status `groups`, kept in 'odd-gsw'); with Groups dark the link is left alone and opens the app as any link does.
+const grpPend = (v) => { try { if (v === undefined) return sessionStorage.getItem('odd-join') || ''; if (v) sessionStorage.setItem('odd-join', v); else sessionStorage.removeItem('odd-join'); } catch (e) {} return ''; };
+function grpCapture() { try { const u = new URL(location.href), m = /^g\.([A-Za-z0-9-]{4,40})$/.exec(u.searchParams.get('join') || ''); if (!u.searchParams.has('join')) return; if (m) grpPend(m[1]); u.searchParams.delete('join'); history.replaceState(history.state, '', u.pathname + (u.searchParams.toString() ? '?' + u.searchParams.toString() : '') + u.hash); } catch (e) {} }
+// Signed in with an invite waiting: Groups on for this account -> the join screen (an ended account gets the "Your time has ended" lock there and continues
+// after paying). Groups not on for this account (the owner-only test) -> one sheet that says so, with "Ask to be let in" (POST /groups/access/request, only on the tap).
+let GRPLAST = ''; // the invite code this page already acted on (gate.js reports a sign-in twice: the account, then afterSignIn)
+function grpJoinRun() {
+  const c = grpPend(); if (!c || !lsg('odd-tok')) return;
+  if (grpOn()) { if (!window.OddGroups) return grpLoad(grpJoinRun); grpPend(null); GRPLAST = c; navMore(false); window.OddGroups.join(c); return; }
+  grpPend(null); GRPLAST = c;
+  sheetOpen('<div style="margin:8px 0 2px"><b>👥 Groups is being tested</b></div><div class="sub" style="margin:6px 0 10px">That invite is for Groups, which is not open for this account yet. You can ask the owner to let you in.</div><div class="bbtn"><button class="pri" style="min-height:44px" onclick="grpAsk(this)">Ask to be let in</button><button style="min-height:44px" onclick="sheetClose()">Close</button></div><div class="sub" id="grpaskm" role="status" style="margin-top:8px"></div>');
+}
+async function grpAsk(btn) {
+  const m = document.getElementById('grpaskm'); if (btn) btn.disabled = true;
+  try { const r = await fetch('https://calcutta-odds.onrender.com/groups/access/request', { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': lsg('odd-tok') || '' }, body: JSON.stringify({ name: lsg('odd-name') || '' }) }), j = await r.json().catch(() => ({})); if (m) m.textContent = j.text || j.error || (r.ok ? 'Request sent.' : 'Could not send your request. Try again later.'); }
+  catch (e) { if (m) m.textContent = 'Could not reach the server. Try again in a moment.'; if (btn) btn.disabled = false; }
+}
+// gate.js calls these: oddGroupsSw() when /acct/status says Groups exists; oddGroupsChanged() each time it has the account (`me`) from the server.
+let GRPWAS = grpOn();
+window.oddGroupsSw = function () { grpCapture(); if (!grpPend()) return; setTimeout(() => { try { if (grpPend() && window.__oddLock === 'guest' && !lsg('odd-tok') && window.oddSignUp) window.oddSignUp('group:g:' + grpPend()); } catch (e) {} }, 400); }; // a guest with an invite: the sign-up sheet, then afterSignIn brings them back
+window.oddGroupsChanged = function () {
+  const on = grpOn(); if (on !== GRPWAS) { GRPWAS = on; if (!on) { navMore(false); try { if (window.OddGroups) window.OddGroups.close(); } catch (e) {} } try { navRender(); } catch (e) {} }
+  if (on) grpLoad(grpJoinRun); else if (lsg('odd-gsw') === '1') grpJoinRun();
+};
+if (GRPWAS) setTimeout(() => grpLoad(), 1500); // a known Groups account: the file is ready before the first bet (the bet step lives in it)
+// ================= end v272 Groups (switch, bar, invites) =================
 function navGo(k) {
+  if (k === 'more') { navMore(!document.getElementById('bnmore')); return; }
+  if (document.getElementById('bnmore')) navMore(false);
+  if (k === 'groups') { grpLoad(() => { if (grpOn()) window.OddGroups.open(); }); return; }
+  if (grpOpen()) { try { window.OddGroups.close(); } catch (e) {} }
   if (k === 'livepg') { setView('live'); return; }
   if (k === 'bets') { setView('bets'); return; }
   if (k === 'surv') { setView('surv'); return; }
@@ -794,7 +851,7 @@ function betsRender(force) {
     return `<div class="bcard ${['won', 'lost'].includes(r.st) ? (r.st === 'won' ? 'bw' : 'bl') : r.st === 'live' ? (r.cur === 'won' ? 'bw' : r.cur === 'lost' ? 'bl' : '') : ''}"><div class="bhd"><div><div class="bwhat">${what}${b.stake ? ` <small>· ${usd(b.stake)}</small>` : ''}${b.mult ? ` <small>· pays ${b.mult}x</small>` : (b.odds && b.odds !== -110 ? ` <small>· ${sgn(b.odds)}</small>` : '')}</div><div class="sub">${b.noApp ? '<b>Imported slip</b> · open the ' + (b.lg || '').toUpperCase() + ' page once to add the app pick' : (ag ? '<b style="color:var(--red)">Against the app</b>' : '<b style="color:var(--green)">With the app</b>') + ' · app had ' + b.appSu + (b.appConf ? ' ' + pct(b.appConf) : '')}${b.type === 'sp' && b.appAts ? ' · spread ' + b.appAts : ''}${b.type === 'sp' && b.appLine !== null && b.appLine !== undefined ? ' · app line ' + sgn(b.side === b.home ? -b.appLine : b.appLine) : ''}</div></div>${badge}</div>
       ${g && g.state !== 'pre' ? `<div class="sub" style="margin:4px 0"><b>${sc}</b></div>` : ''}${g ? (ALL[b.gid] ? gameCard(g, true) : miniGame(g) + liveBtn(b.gid)) : `<div class="sub" style="padding:8px 0">${b.away} @ ${b.home} · wk ${b.week} · game not loaded</div>`}
       ${b.cash !== undefined && b.cash !== null ? `<div class="sub" style="margin:6px 0">💵 Cashed out on Kalshi for <b>$${Number(b.cash).toFixed(2)}</b> (${b.cash >= (b.stake || 0) ? '+' : '-'}$${Math.abs(b.cash - (b.stake || 0)).toFixed(2)})${b.soldN ? ' · ' + b.soldN + ' contracts' : ''}</div>` : ''}${b.src === 'kalshi' && !b.res && b.kt && b.kn && (b.cash === undefined || b.cash === null) ? `<div class="sub" data-kco="${escH(b.id)}" style="margin:6px 0">💵 Checking cash-out value…</div>` : ''}
-      <div class="bbtn"><button onclick="betEdit('${b.id}')">Edit</button><button onclick="betDel('${b.id}')">Delete</button></div></div>`;
+      <div class="bbtn">${gLk(b) ? gLkTag : `<button onclick="betEdit('${b.id}')">Edit</button><button onclick="betDel('${b.id}')">Delete</button>`}</div></div>`;
   };
   const isPast = (x) => betDay(x.b) < today && ['won', 'lost', 'push'].includes(x.r.st);
   const pastBy = {}; done.filter(isPast).forEach((x) => { (pastBy[betDay(x.b)] = pastBy[betDay(x.b)] || []).push(x); });
@@ -1006,6 +1063,7 @@ async function slipSports(s) {
   XL[g.id] = g;
   if (BETS.some((b) => b.gid === g.id && b.side === side && b.type === (s.type || 'ml') && Math.abs((b.stake || 0) - (s.stake || 0)) < 0.01)) { setImp('That bet is already in My Bets.'); betsRender(); return; }
   const b = { id: betNewId(), gid: g.id, lg: g.lg, week: 0, away: g.away.abbr, home: g.home.abbr, day: dayKey(g.start), t: Date.now(), side, type: s.type || 'ml', line: s.type === 'sp' ? (s.line || 0) : 0, stake: s.stake || null, mult: s.mult || null, odds: s.mult ? -110 : -110, appSu: side, appConf: 0, appAts: null, appLine: null, noApp: true, note: 'Imported from slip' }; spApply(b);
+  if (gHold(b, () => { BETS.push(b); betsSave(); BF = null; betsRender(); setImp(`Saved ${g.lg.toUpperCase()}: ${side} ${b.type === 'sp' ? sgn(b.line) : 'to win'} (${g.away.abbr} @ ${g.home.abbr}).`); }, (m) => { BF = null; betsRender(); setImp(m || 'Bet not added.'); })) return; // v272: a group member's new bet goes to the group first
   BETS.push(b); betsSave(); BF = null; betsRender();
   setImp(`Saved ${g.lg.toUpperCase()}: ${side} ${b.type === 'sp' ? sgn(b.line) : 'to win'} (${g.away.abbr} @ ${g.home.abbr})${b.mult ? ' · ' + b.mult + 'x' : ''}${b.stake ? ' · ' + usd(b.stake) : ''}.` + (s.stakeGuess ? ` I couldn't read the cost reliably (saw ${usd(s.stakeGuess)}); edit the stake.` : ''));
 }
@@ -1291,6 +1349,7 @@ function sqClear(savedOnly) {
 // Save every Ready slip through the normal save functions (betSave / parlaySave), one after another. Needs-a-look, duplicates and unread slips are left for the user.
 function sqSaveAll() {
   if (SQ.cur || SQ.busy) return; if (BF) { SQ.msg = 'Finish or cancel the bet form that is open first.'; sqPaint(); return; }
+  if (window.OddGroups && window.OddGroups.active()) { SQ.msg = 'You are in a group contest, and every new bet is added to your group one at a time. Save these one by one with "Review" on each slip.'; sqPaint(); return; } // v272
   const bfEl = $('#bform'); if (bfEl) bfEl.innerHTML = ''; // the save functions read any form fields on screen; make sure there are none
   let n = 0;
   for (const d of SQ.items.slice()) {
@@ -1304,7 +1363,7 @@ function sqSaveAll() {
   setImp('');
   SQ.msg = 'Saved ' + n + (left ? ', ' + left + ' need' + (left === 1 ? 's' : '') + ' a look' : '') + '.'; betsRender(true); sqFocus();
 }
-function betFromGame(gid) { setView('bets'); betPick(gid); window.scrollTo(0, 0); }
+function betFromGame(gid) { try { if (window.OddGroups) window.OddGroups.poke(); } catch (e) {} setView('bets'); betPick(gid); window.scrollTo(0, 0); }
 (function midnight() { const n = new Date(); const ms = new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1, 0, 0, 2) - n; setTimeout(() => { if (typeof render === 'function' && VIEW === 'bets') render(); midnight(); }, ms); })();
 
 const badgeOf = (r, money, b) => r.st === 'live' ? `<span class="b ${r.cur === 'won' ? 'hit' : r.cur === 'lost' ? 'miss' : 'push'}">● LIVE ${r.cur === 'won' ? 'winning now' : r.cur === 'lost' ? (r.legs ? r.legs.filter((x) => (x.st === 'live' && x.cur === 'lost')).length + ' leg losing' : 'losing now') : 'even'}</span>` : r.st === 'pending' ? '<span class="b push">Pending</span>' : `<span class="b ${r.st === 'won' ? 'hit' : r.st === 'lost' ? 'miss' : 'push'}">${r.st === 'won' ? '✓ WON' : r.st === 'lost' ? '✗ LOST' : 'PUSH'} ${money(betPL(b, r.st))}</span>`;
@@ -1324,7 +1383,7 @@ function parlayCard(b, r, money) {
     const ld = multi ? legDay(l) : null; return `<div class="leg">${legMark(x.st, x.cur)}<div><b>${legText(l)}</b>${ld ? ` <span class="ldate ${ld !== ds[0] ? 'diff' : ''}">${dayNice(ld)}</span>` : ''}${sc ? `<small class="sub" style="display:block">${sc}</small>` : ''}${g ? liveBtn(l.gid) : ''}${man2}</div></div>`; }).join('');
   return `<div class="bcard ${r.st === 'won' ? 'bw' : r.st === 'lost' ? 'bl' : r.st === 'live' ? (r.cur === 'lost' ? 'bl' : 'bw') : ''}"><div class="bhd"><div><div class="bwhat">${b.legs.length}-leg parlay${payTxt(b)}</div><div class="sub">${hit} of ${b.legs.length} hitting${multi ? ` · <b class="ldate diff">spans ${ds.length} days</b>` : ''}</div></div>${badgeOf(r, money, b)}</div><div class="legs">${rows}</div>
     ${b.cash !== undefined && b.cash !== null ? `<div class="sub" style="margin:6px 0">💵 Cashed out on Kalshi for <b>$${Number(b.cash).toFixed(2)}</b> (${b.cash >= (b.stake || 0) ? '+' : '-'}$${Math.abs(b.cash - (b.stake || 0)).toFixed(2)})</div>` : ''}${b.src === 'kalshi' && r.st === 'pending' && b.kt && b.kn && (b.cash === undefined || b.cash === null) || (b.src === 'kalshi' && r.st === 'live' && b.kt && b.kn && (b.cash === undefined || b.cash === null)) ? `<div class="sub" data-kco="${escH(b.id)}" style="margin:6px 0">💵 Checking cash-out value…</div>` : ''}
-    ${b.src === 'kalshi' ? '<div class="sub" style="margin-top:6px">From Kalshi · each leg is set automatically when it settles</div>' : ''}<div class="bbtn">${b.src === 'kalshi' ? '' : `<button onclick="betEdit('${b.id}')">Edit</button>`}<button onclick="betDel('${b.id}')">Delete</button></div></div>`;
+    ${b.src === 'kalshi' ? '<div class="sub" style="margin-top:6px">From Kalshi · each leg is set automatically when it settles</div>' : ''}<div class="bbtn">${gLk(b) ? gLkTag : `${b.src === 'kalshi' ? '' : `<button onclick="betEdit('${b.id}')">Edit</button>`}<button onclick="betDel('${b.id}')">Delete</button>`}</div></div>`;
 }
 // --- Live player props: pick a game, a player, a stat and a line; the card tracks the stat live and grades itself ---
 const PSTATS = { rushYds: 'Rushing yards', recYds: 'Receiving yards', passYds: 'Passing yards', rec: 'Receptions', passTD: 'Passing TDs', rushTD: 'Rushing TDs', recTD: 'Receiving TDs', anyTD: 'Touchdowns (rush + rec)', comp: 'Pass completions', rushAtt: 'Rushing attempts', int: 'Interceptions thrown' };
@@ -1360,7 +1419,7 @@ function pStatHtml(b) {
 setInterval(() => { try { propTick(); } catch (e) {} }, 30000); setTimeout(() => { try { propTick(); } catch (e) {} }, 6000);
 function propCard(b, r, money) {
   return `<div class="bcard ${r.st === 'won' ? 'bw' : r.st === 'lost' ? 'bl' : ''}"><div class="bhd"><div><div class="bwhat">${b.text.replace(/</g, '&lt;')}${payTxt(b)}</div><div class="sub">Prop bet · ${b.day}${b.pp ? ' · live tracked' : ''}</div></div>${badgeOf(r, money, b)}</div>${pStatHtml(b)}
-    ${b.src === 'kalshi' ? `<div class="sub">From Kalshi · result is set automatically</div><div class="bbtn"><button onclick="betDel('${b.id}')">Hide</button></div></div>` : ''}${b.src === 'kalshi' ? '' : `<div class="bbtn"><button onclick="propSet('${b.id}','won')">✓ Won</button><button onclick="propSet('${b.id}','lost')">✗ Lost</button><button onclick="propSet('${b.id}','push')">Push</button>${b.res ? `<button onclick="propSet('${b.id}','')">Reset</button>` : ''}<button onclick="betEdit('${b.id}')">Edit</button><button onclick="betDel('${b.id}')">Delete</button></div></div>`}`;
+    ${b.src === 'kalshi' ? `<div class="sub">From Kalshi · result is set automatically</div><div class="bbtn"><button onclick="betDel('${b.id}')">Hide</button></div></div>` : ''}${b.src === 'kalshi' ? '' : `<div class="bbtn"><button onclick="propSet('${b.id}','won')">✓ Won</button><button onclick="propSet('${b.id}','lost')">✗ Lost</button><button onclick="propSet('${b.id}','push')">Push</button>${b.res ? `<button onclick="propSet('${b.id}','')">Reset</button>` : ''}${gLk(b) ? gLkTag : `<button onclick="betEdit('${b.id}')">Edit</button><button onclick="betDel('${b.id}')">Delete</button>`}</div></div>`}`;
 }
 function legSet(id, i, res) { const b = BETS.find((x) => x.id === id); if (!b) return; b.legs[i].res = res || null; delete b.fin; delete b.finPL; betsSave(); betsRender(); }
 function propSet(id, res) { const b = BETS.find((x) => x.id === id); if (!b) return; b.res = res || null; delete b.fin; delete b.finPL; betsSave(); betsRender(); }
@@ -1380,16 +1439,16 @@ function parlaySave() {
   betSync(); if (BF.legs.length < 2) { BF.note = 'A parlay needs at least 2 legs.'; betsRender(); return; }
   const old = BF.id ? BETS.find((x) => x.id === BF.id) : null; const first = BF.legs.find((l) => l.gid && gameOf(l.gid));
   const b = old || { id: betNewId(), kind: 'parlay', t: Date.now(), week: first ? gameOf(first.gid).week : CUR, day: first ? dayKey(Math.min(...BF.legs.filter((l) => l.gid && gameOf(l.gid)).map((l) => gameOf(l.gid).start))) : dayKey(Date.now()) };
-  b.legs = BF.legs.map((l) => { const c = { ...l }; delete c.flag; delete c.miss; return c; }); applyPay(b); delete b.fin; delete b.finPL; if (!old) BETS.push(b); betsSave(); BF = null; betsRender();
+  b.legs = BF.legs.map((l) => { const c = { ...l }; delete c.flag; delete c.miss; return c; }); applyPay(b); delete b.fin; delete b.finPL; if (!old && gHold(b, () => { BETS.push(b); betsSave(); BF = null; betsRender(); })) return; if (!old) BETS.push(b); betsSave(); BF = null; betsRender();
 }
 function propSave() {
   betSync(); const tr = BF.pg && (BF.pl || '').trim() && BF.pn !== undefined && BF.pn !== '' && !isNaN(parseFloat(BF.pn)); if (!(BF.text || '').trim() && !tr) { BF.note = 'Describe the bet first, or fill in the live tracking fields.'; betsRender(); return; }
   if (tr && !(BF.text || '').trim()) { const g0 = ALL[BF.pg]; BF.text = `${BF.pl.trim()} ${BF.pr === 'under' ? 'under' : 'over'} ${parseFloat(BF.pn)} ${(PSTATS[BF.ps] || 'rushing yards').toLowerCase()}${g0 ? ' (' + g0.away.abbr + '@' + g0.home.abbr + ')' : ''}`; }
   const old = BF.id ? BETS.find((x) => x.id === BF.id) : null;
   const b = old || { id: betNewId(), kind: 'prop', t: Date.now(), week: CUR };
-  b.text = BF.text.trim(); b.day = BF.day || dayKey(Date.now()); if (tr) { b.pp = { gid: BF.pg, name: BF.pl.trim(), stat: BF.ps || 'rushYds', line: parseFloat(BF.pn), dir: BF.pr === 'under' ? 'under' : 'over' }; const g1 = ALL[BF.pg]; if (g1) b.day = dayKey(g1.start); if (b.auto) { delete b.res; delete b.auto; } } else { delete b.pp; } if (!old && BF.res) b.res = BF.res; applyPay(b); delete b.fin; delete b.finPL; if (!old) BETS.push(b); betsSave(); BF = null; betsRender(); setTimeout(() => { try { propTick(); } catch (e) {} }, 400);
+  b.text = BF.text.trim(); b.day = BF.day || dayKey(Date.now()); if (tr) { b.pp = { gid: BF.pg, name: BF.pl.trim(), stat: BF.ps || 'rushYds', line: parseFloat(BF.pn), dir: BF.pr === 'under' ? 'under' : 'over' }; const g1 = ALL[BF.pg]; if (g1) b.day = dayKey(g1.start); if (b.auto) { delete b.res; delete b.auto; } } else { delete b.pp; } if (!old && BF.res) b.res = BF.res; applyPay(b); delete b.fin; delete b.finPL; if (!old && gHold(b, () => { BETS.push(b); betsSave(); BF = null; betsRender(); setTimeout(() => { try { propTick(); } catch (e) {} }, 400); })) return; if (!old) BETS.push(b); betsSave(); BF = null; betsRender(); setTimeout(() => { try { propTick(); } catch (e) {} }, 400);
 }
-function addMenu(v) { window.__addm = v === undefined ? !window.__addm : !!v; const m = $('#addmenu'); if (m) m.hidden = !window.__addm; }
+function addMenu(v) { try { if (window.OddGroups) window.OddGroups.poke(); } catch (e) {} window.__addm = v === undefined ? !window.__addm : !!v; const m = $('#addmenu'); if (m) m.hidden = !window.__addm; }
 document.addEventListener('click', (e) => { if (window.__addm && !e.target.closest('.pillw')) addMenu(0); });
 function betNew() { BF = { step: 'kind' }; betsRender(); }
 function betPick(gid) {
@@ -1441,10 +1500,25 @@ function betSave() {
   const old = BF.id ? BETS.find((x) => x.id === BF.id) : null;
   const b = old || { id: betNewId(), gid: g.id, week: g.week, away: g.away.abbr, home: g.home.abbr, day: dayKey(g.start), t: Date.now(), appSu: p.su.abbr, appConf: +p.conf.toFixed(3), appAts: p.ats ? p.ats.side.abbr : null, appLine: g.line };
   b.side = BF.side; b.type = BF.type; b.line = BF.type === 'sp' ? BF.line : 0; b.stake = parseFloat(BF.stake) || null; if (BF.pt === 'x' && parseFloat(BF.odds) > 1) { b.mult = parseFloat(BF.odds); b.odds = -110; } else { b.mult = null; b.odds = Math.abs(parseFloat(BF.odds)) >= 100 ? parseFloat(BF.odds) : -110; }
+  if (!old && gHold(b, () => { BETS.push(b); betsSave(); BF = null; betsRender(); })) return;
   if (!old) BETS.push(b);
   betsSave(); BF = null; betsRender();
 }
-function betEdit(id) { const b = BETS.find((x) => x.id === id); if (!b) return;
+// ================= v272 GROUPS PHASE 2: group bets =================
+// pics/groups.js is loaded ONLY for an account the server switched Groups on for (see grpOn below). Without it window.OddGroups does not exist and every line
+// here does nothing: gHold answers false and the bet is saved exactly as in v271. With it, and only while this phone last knew the player is in a group
+// contest (OddGroups.active()), a NEW bet goes to the group first (confirm "Bets lock when you add them", upload, lock). Not uploaded = not kept; the form
+// stays open with the reason. A bet no contest can count comes back as a personal bet and is kept. A group bet (b.gl) cannot be edited or deleted.
+let GBUSY = false;
+function gHold(b, keep, fail) {
+  const G = window.OddGroups; if (!G || !G.gate || !G.active()) return false; if (GBUSY) return true; GBUSY = true;
+  const no = (m) => { if (fail) return fail(m); if (BF) { BF.note = m; betsRender(); } else alert(m); };
+  G.gate(b).then((r) => { GBUSY = false; if (r === true) keep(); else if (typeof r === 'string') no(r); }, () => { GBUSY = false; no('Not saved. Try again.'); });
+  return true;
+}
+const gLk = (b) => !!(b && Number(b.gl) > 0), gLkTag = '<span class="sub" style="align-self:center">🔒 Group bet · locked when added</span>';
+// ================= end v272 group bets =================
+function betEdit(id) { const b = BETS.find((x) => x.id === id); if (!b) return; if (gLk(b)) { alert('Group bets lock when you add them. This bet cannot be edited.'); return; }
   const pay = { stake: b.stake || '', odds: b.mult ? b.mult : (b.odds && b.odds !== -110 ? b.odds : ''), pt: b.mult ? 'x' : 'am' };
   if (b.kind === 'parlay') { BF = { step: 'parlay', id, legs: JSON.parse(JSON.stringify(b.legs)), ...pay }; betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
   if (b.kind === 'prop') { BF = { step: 'prop', id, text: b.text, day: b.day, ...pay, ...(b.pp ? { pg: b.pp.gid, pl: b.pp.name, ps: b.pp.stat, pn: b.pp.line, pr: b.pp.dir } : {}) }; betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
@@ -1629,7 +1703,7 @@ const kalshiFormHtml = () => `<div class="card kf"><div class="gh" style="margin
   ${KERR ? `<div class="note" style="margin:8px 0;color:var(--red,#ff5a4d)">${escH(KERR)}</div>` : ''}<div class="bbtn"><button class="pri" onclick="kalshiSave()">Connect</button><button onclick="kFormClose()">Cancel</button></div></details></div>`}`;
 setInterval(() => { if (VIEW === 'bets' && !document.hidden && !BF && !KFORM) kalshiSync(false); }, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && VIEW === 'bets' && !KFORM && !BF) kalshiSync(false); });
-function betDel(id) { if (!confirm('Delete this bet?')) return; const d = BETS.find((x) => x.id === id); if (d && d.src === 'kalshi') { let g = []; try { g = JSON.parse(lsg('kdel26')) || []; } catch (e) {} g.push(id); lss('kdel26', JSON.stringify(g)); } BETS = BETS.filter((x) => x.id !== id); if (d && d.fin) { try { const sn = JSON.parse(lsg('betlog26')) || {}, k = betDay(d), e = sn[k]; if (e) { e.n = Math.max(0, (e.n || 0) - 1); e.risk = Math.max(0, (e.risk || 0) - (d.stake || 0)); if (d.fin === 'won') { e.w = Math.max(0, (e.w || 0) - 1); e.settled = (e.settled || 0) - (d.finPL || 0); } else if (d.fin === 'lost') { e.l = Math.max(0, (e.l || 0) - 1); e.settled = (e.settled || 0) - (d.finPL || 0); } else if (d.fin === 'push') e.p = Math.max(0, (e.p || 0) - 1); if (!e.n) delete sn[k]; lss('betlog26', JSON.stringify(sn)); lss('logat26', String(Date.now())); } } catch (e) {} } /* a deleted settled bet is taken out of that day's frozen record, never the whole day */ betsSave(); betsRender(); }
+function betDel(id) { if (gLk(BETS.find((x) => x.id === id))) { alert('Group bets lock when you add them. This bet cannot be deleted.'); return; } if (!confirm('Delete this bet?')) return; const d = BETS.find((x) => x.id === id); if (d && d.src === 'kalshi') { let g = []; try { g = JSON.parse(lsg('kdel26')) || []; } catch (e) {} g.push(id); lss('kdel26', JSON.stringify(g)); } BETS = BETS.filter((x) => x.id !== id); if (d && d.fin) { try { const sn = JSON.parse(lsg('betlog26')) || {}, k = betDay(d), e = sn[k]; if (e) { e.n = Math.max(0, (e.n || 0) - 1); e.risk = Math.max(0, (e.risk || 0) - (d.stake || 0)); if (d.fin === 'won') { e.w = Math.max(0, (e.w || 0) - 1); e.settled = (e.settled || 0) - (d.finPL || 0); } else if (d.fin === 'lost') { e.l = Math.max(0, (e.l || 0) - 1); e.settled = (e.settled || 0) - (d.finPL || 0); } else if (d.fin === 'push') e.p = Math.max(0, (e.p || 0) - 1); if (!e.n) delete sn[k]; lss('betlog26', JSON.stringify(sn)); lss('logat26', String(Date.now())); } } catch (e) {} } /* a deleted settled bet is taken out of that day's frozen record, never the whole day */ betsSave(); betsRender(); }
 function liveSt(g) {
   if (g.state !== 'in') return '';
   const su = pred(g).su, d = (su === g.home ? 1 : -1) * (g.home.score - g.away.score);
@@ -1847,7 +1921,7 @@ async function alertPush() {
   ASQ = Date.now();
   try { const r = await fetch(ALU, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': alertTok() }, body: JSON.stringify({ week: CUR, rec: { lock: a.lock, dogs: a.dogs, helper: { id: h.g.id, abbr: h.abbr, conf: h.conf } } }) }); if (!r.ok) return; const j = await r.json(); if (j && j.rec && j.week === CUR && alertTake(Object.assign({}, ASV, { [CUR]: j.rec }))) render(); } catch (e) {}
 }
-async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=271')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
+async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=272')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
 const trGrade = (p) => { const g = ALL[p.id]; if (!g || g.state !== 'post') return null; const m = (g.home.abbr === p.abbr ? 1 : -1) * (g.home.score - g.away.score) + p.line; return m === 0 ? 'push' : m > 0 ? 'hit' : 'miss'; };
 function trophyData() {
   if (CFB || !window.Trophy || !Trophy.ready()) return null;
@@ -3127,7 +3201,7 @@ function spPump() {
 }
 function spGo() {
   const ev = SP.cur; if (!ev) return; spHide();
-  try { tpClose(); sheetClose(); mvClose(); if (window.liveClose) liveClose(); const d = document.getElementById('odash'); if (d) d.remove(); } catch (e) {}
+  try { tpClose(); sheetClose(); mvClose(); if (window.liveClose) liveClose(); const d = document.getElementById('odash'); if (d) d.remove(); if (grpOpen()) window.OddGroups.close(); } catch (e) {}
   if (ev.kind === 'more') return setView('live');
   const g = ALL[ev.id]; if (scBets(ev.id).length || !g) return setView('bets');
   if (g.state === 'in' && !CFB) return fvOpen(ev.id);
@@ -3221,7 +3295,7 @@ loadAll();
 // Auto-update: when the app comes back to the front (or every 10 minutes) check for a newer version and reload into it
 const vnum = (x) => +((/(?:Pics|Oddable) v(\d+)/.exec(x) || [])[1] || 0);
 async function checkUpdate() {
-  if (document.getElementById('odash')) return; // never reload under the owner dashboard
+  if (document.querySelector('#odash,#ogrp')) return; // never reload under the owner dashboard or Groups
   try {
     const t = await (await fetch('index.html?c=' + Date.now(), { cache: 'no-store' })).text();
     const mine = vnum(document.querySelector('header').textContent) || vnum(document.documentElement.innerHTML), theirs = vnum(t);
@@ -3239,7 +3313,7 @@ setTimeout(() => { if (lsg('kal-id')) kalshiSync(false); }, 3000); setTimeout(lo
 if ('serviceWorker' in navigator) {
   const had = !!navigator.serviceWorker.controller; let rl = false;
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((r) => { r.update().catch(() => {}); const up = () => { if (!document.hidden) r.update().catch(() => {}); }; document.addEventListener('visibilitychange', up); setInterval(up, 300000); }).catch(() => {});
-  navigator.serviceWorker.addEventListener('controllerchange', () => { if (had && !rl && !document.getElementById('odash')) { rl = true; location.reload(); } });
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (had && !rl && !document.querySelector('#odash,#ogrp')) { rl = true; location.reload(); } });
 }
 
 // Pull down to refresh: wipes the saved app copy and reloads fresh code and data
@@ -3247,7 +3321,7 @@ if ('serviceWorker' in navigator) {
   const bar = document.createElement('div'); bar.id = 'ptr'; document.body.appendChild(bar);
   let y0 = null, d = 0, busy = false;
   const set = (h, t) => { bar.style.height = h + 'px'; bar.textContent = t || ''; };
-  window.addEventListener('touchstart', (e) => { y0 = window.scrollY <= 0 && !busy && !document.getElementById('odash') ? e.touches[0].clientY : null; d = 0; }, { passive: true });
+  window.addEventListener('touchstart', (e) => { y0 = window.scrollY <= 0 && !busy && !document.querySelector('#odash,#ogrp') ? e.touches[0].clientY : null; d = 0; }, { passive: true });
   window.addEventListener('touchmove', (e) => {
     if (y0 === null) return;
     d = e.touches[0].clientY - y0;
@@ -3340,7 +3414,7 @@ if ('serviceWorker' in navigator) {
   document.addEventListener('visibilitychange', () => { if (hb) here(); });
   // ---- the invitation: a card in the page flow (never fixed, never a modal), at most once per app open ----
   const inv = () => { try { const o = JSON.parse(ls(IK) || '{}'); return { n: Number(o.n) || 0, t: Number(o.t) || 0 }; } catch (e) { return { n: 0, t: 0 }; } };
-  const overlay = () => !!(el('gate') || el('oddwarn') || el('gnm') || el('odash') || ['infosheet', 'teampage', 'mv', 'lvov'].some((id) => { const x = el(id); return x && !x.hidden; }));
+  const overlay = () => !!(el('gate') || el('oddwarn') || el('gnm') || el('odash') || el('ogrp') || el('bnmore') || ['infosheet', 'teampage', 'mv', 'lvov'].some((id) => { const x = el(id); return x && !x.hidden; }));
   function openToday() { try { const d = dayKey(Date.now()); return BETS.some((b) => !b.fin && !b.res && betDay(b) === d); } catch (e) { return false; } }
   function hide(forGood) { const c = el('bpinv'); if (c) { c.hidden = true; c.innerHTML = ''; } if (forGood) { BP.gone = true; clearInterval(BP.t); } }
   function invite() {
@@ -3501,13 +3575,15 @@ if ('serviceWorker' in navigator) {
       else if (k === 'ai' && window.aiOpen) window.aiOpen(id || undefined);
       else if (k === 'bets') { if (VIEW !== 'bets') setView('bets'); }
       else if (k === 'surv') { if (VIEW !== 'surv') setView('surv'); }
-      // GROUPS PHASE 2: k === 'group' -> open the invite (id = '<type>:<code>') here. Everything else ('pick:<id>', 'alert', 'props', 'view:<name>', 'team:<abbr>', 'fv:<id>'): nothing to do, it unlocked in place.
+      else if (k === 'group') { const m = /^g:([A-Za-z0-9-]{4,40})$/.exec(id); if (m && m[1] !== GRPLAST) { grpPend(m[1]); if (grpOn()) grpLoad(grpJoinRun); else setTimeout(grpJoinRun, 50); } } // v272: back to the group invite after the sign-up / payment (id = 'g:<code>')
+      else if (k === 'groups') { if (grpOn()) grpLoad(() => window.OddGroups.open()); }
+      // Everything else ('pick:<id>', 'alert', 'props', 'view:<name>', 'team:<abbr>', 'fv:<id>'): nothing to do, it unlocked in place.
     } catch (e) {}
   };
   if (locked()) STYLE = 'new';
 })();
 // ================= end v268 GUEST MODE (3 of 3) =================
 </script>
-<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=271"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="announce.js?v=271"><\/script><script src="dash.js?v=271"><\/script>')</script>
+<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=272"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="announce.js?v=272"><\/script><script src="dash.js?v=272"><\/script>')</script>
 </body>
 </html>

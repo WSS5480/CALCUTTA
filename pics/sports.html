@@ -383,7 +383,12 @@ function betSave(id) {
   const stake = parseFloat(($('#bk') || {}).value) || null, od = parseFloat(($('#bo') || {}).value);
   let bets = []; try { bets = JSON.parse(lsg('bets26')) || []; } catch (e) {}
   const p = pred(g), past = g.state === 'post'; let lk = null; try { lk = (JSON.parse(lsg('spm-' + LG)) || {})[g.id] || null; } catch (e) {}
-  bets.push({ id: 'b' + Date.now(), gid: g.id, lg: LG, week: 0, away: g.away.abbr, home: g.home.abbr, day: dashed(new Date(g.start)), t: Date.now(), side, type, line: type === 'sp' ? parseFloat(ln) : 0, stake, mult: null, odds: Math.abs(od) >= 100 ? od : -110, appSu: past ? (lk ? lk.su : null) : (p.ph >= 0.5 ? g.home.abbr : g.away.abbr), appConf: past ? (lk ? lk.c : null) : +Math.max(p.ph, p.pa).toFixed(3), noApp: past && !lk ? true : undefined, appAts: null, appLine: g.line });
+  const nb = { id: 'b' + Date.now(), gid: g.id, lg: LG, week: 0, away: g.away.abbr, home: g.home.abbr, day: dashed(new Date(g.start)), t: Date.now(), side, type, line: type === 'sp' ? parseFloat(ln) : 0, stake, mult: null, odds: Math.abs(od) >= 100 ? od : -110, appSu: past ? (lk ? lk.su : null) : (p.ph >= 0.5 ? g.home.abbr : g.away.abbr), appConf: past ? (lk ? lk.c : null) : +Math.max(p.ph, p.pa).toFixed(3), noApp: past && !lk ? true : undefined, appAts: null, appLine: g.line };
+  const keep = () => { try { bets = JSON.parse(lsg('bets26')) || []; } catch (e) {} bets.push(nb); lss('bets26', JSON.stringify(bets)); OPEN = null; draw(); alert_('Saved to My Bets'); };
+  // v272 Groups phase 2: groups.js is on this page only for an account Groups is switched on for (see the loader at the end). While this phone last knew the
+  // player is in a group contest, a NEW bet goes to the group first (confirm, upload, lock); not uploaded = not kept. Everyone else: saved at once, as before.
+  const G = window.OddGroups; if (G && G.gate && G.active()) { if (window.__gbusy) return; window.__gbusy = true; G.gate(nb).then((r) => { window.__gbusy = false; if (r === true) keep(); else if (typeof r === 'string') alert(r); }, () => { window.__gbusy = false; alert('Not saved. Try again.'); }); return; }
+  bets.push(nb);
   lss('bets26', JSON.stringify(bets)); OPEN = null; draw(); alert_('Saved to My Bets');
 }
 function alert_(t) { $('#upd').textContent = t; setTimeout(() => ($('#upd').textContent = upText()), 2500); }
@@ -511,7 +516,7 @@ window.oddGuestChanged = function (isLocked) {
 window.afterSignIn = function () {}; // nothing to continue here: the page unlocks in place (Add bet lives on the card that is now drawn)
 // ================= end v268 GUEST MODE (2 of 2) =================
 </script>
-<script src="gate.js?v=271"></script><script src="ai.js"></script><script src="live.js"></script>
+<script src="gate.js?v=272"></script><script src="ai.js"></script><script src="live.js"></script>
 <script>
 function aiCtx(gid) {
   const pc = (v) => Math.round((v || 0) * 100) + '%';
@@ -522,6 +527,6 @@ function aiCtx(gid) {
   return LG.toUpperCase() + ' GAMES:\n' + (L.join('\n') || 'none loaded') + (gid ? '' : '\n\nMY BETS:\n' + (B.join('\n') || 'none'));
 }
 </script>
-<script src="sync.js"></script>
+<script src="sync.js"></script><script>/* v272 Groups phase 2: the bet step (pics/groups.js) is fetched ONLY when the server switched Groups on for this signed-in account ('odd-grp', kept by gate.js from /acct/me). Nobody else gets the file or makes a /groups call. */window.oddGroupsChanged=function(){try{if(!window.OddGroups&&!window.__grpl&&localStorage.getItem('odd-grp')==='1'&&localStorage.getItem('odd-tok')){window.__grpl=1;var gs=document.createElement('script');gs.src='groups.js?v=272';document.head.appendChild(gs)}}catch(e){}};window.oddGroupsChanged();/* gate.js calls it again once it has the account */</script>
 </body>
 </html>

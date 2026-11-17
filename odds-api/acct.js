@@ -184,4 +184,4 @@ const phoneEmail = (id) => crypto.createHmac('sha256', KEY()).update('phoneid|' 
 function ownerOk(req) { const e = verify(req.headers['x-token']); return !!e && dashOk(e, req); }
 // Groups (groups.js): who is signed in (the account id inside a valid token, or null). Never sent to other players.
 function who(req) { if (!on()) return null; const e = verify(req.headers['x-token']); if (!e) return null; if (e === 'owner' && !OWNER_PIN()) return null; return e; }
-module.exports = { handle, check, on, phoneEmail, ownerOk, who, isOwnerPhone, namesGet, ownerName: OWNER_NAME, since, sinceSet };
+module.exports = { handle, check, on, phoneEmail, ownerOk, who, isOwnerPhone, namesGet, ownerName: OWNER_NAME, since, sinceSet, sinceKey, SINCE };

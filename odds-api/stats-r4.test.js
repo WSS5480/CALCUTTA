@@ -37,7 +37,7 @@ const holesFor = (total) => { const st = PARS.slice(); let d = total - 72, i = 0
 const cardRound = (id, date, score, by, o) => ({ src: 'golf', id, date, sport: 'golf', kind: 'golf-round', title: 'Golf day', result: null, score, toPar: score - 72, verified: true, extra: Object.assign({ course: 'Palm View', rating: 71.2, slope: 128, par: 72, holes: 18, of: 18, format: 'stroke', solo: false, at: Z(date + 'T20:00:00Z'), holeScores: holesFor(score), pars: PARS, hcpIdx: SI, card: by ? { others: 3, by, byName: 'Card Marker' } : undefined }, o || {}) });
 // People. old(n): signed up 400 days ago. active(n): also has 3 rounds of their own scored in Oddable games. newbie(n): signed up right now.
 const old = (...ns) => ns.forEach((n) => { STAMP[K(n)] = T0 - 400 * DAY; });
-const active = (...ns) => ns.forEach((n) => { old(n); GAMES[K(n)] = (GAMES[K(n)] || []).concat([0, 1, 2].map((i) => cardRound('own' + n + i, S.chiDay(T0 - (200 + i) * DAY), 88, null))); });
+const active = (...ns) => ns.forEach((n) => { old(n); GAMES[K(n)] = (GAMES[K(n)] || []).concat([0, 1, 2].map((i) => cardRound('own' + n + i, S.chiDay(T0 - (200 + i) * DAY), 88, 'a:0000000000ff', { rating: null, slope: null }))); });
 const newbie = (...ns) => ns.forEach((n) => { STAMP[K(n)] = NOW; });
 const fresh = () => { db = {}; NOW = T0; S._reset(); NAMES = {}; STAMP = {}; GAMES = {}; PEOPLE.forEach((n) => { NAMES[SID[n].slice(0, 8)] = n[0].toUpperCase() + n.slice(1) + ' Real'; }); ['calcutta', 'events'].forEach((s) => S.register(s, async () => [])); S.register('golf', async (k) => GAMES[k] || []);
   Object.values(SID).forEach((sid) => { db[sid] = { id: sid, salt: 's', pinhash: 'h', data: { bets: [] }, updated: 1 }; }); };
@@ -48,6 +48,7 @@ const confirm = async (logger, id, friend) => { const l = ok(await call(logger, 
 // One round on its own day (a new day for every round: one link-confirmed round counts per date, three logged per day), confirmed by `friend` through the link.
 const linkDay = async (logger, total, gid, friend, o) => { NOW += DAY; const id = await logRound(logger, day(0), total, [gid], o); ok(await confirm(logger, id, friend), friend + ' confirms'); return id; };
 const setGames = (n, list) => { GAMES[K(n)] = (GAMES[K(n)] || []).filter((r) => /^own/.test(r.id)).concat(list); S._reset(); };
+const cv = (x) => (x.suggested && x.suggested.confirmed ? x.suggested.value : null); // review 5: the CONFIRMED suggested number (what `use` was before; nothing is used without the organizer now)
 const mustHave = (fn) => { assert.strictEqual(typeof S[fn], 'function', 'stats.' + fn + ' is exported'); return S[fn]; };
 let pass = 0; const fails = [], OUT = [];
 const say = (t) => OUT.push(t);
@@ -60,8 +61,8 @@ srv.listen(0, async () => {
     newbie('ann', 'tia', 'tom', 'ted'); const g = {}; for (const f of ['tia', 'tom', 'ted']) g[f] = await pal('ann', f);
     for (const f of ['tia', 'tom', 'ted']) { const id = await logRound('ann', day(0), 200, [g[f]]); ok(await confirm('ann', id, f), f + ' confirms'); }
     h = await S.handicapFor(K('ann'));
-    assert.deepStrictEqual([h.use, h.needsSet, h.confirmedRounds, h.provisional], [null, true, 0, undefined], 'no number and nothing provisional: ' + JSON.stringify([h.use, h.confirmedRounds, h.provisional]));
-    assert.ok(/needs 3 confirmed rounds \(0 so far\)/.test(h.why), h.why); assert.strictEqual(h.reason, h.why, '`reason` says why');
+    assert.deepStrictEqual([cv(h), (cv(h) == null), h.confirmedRounds, h.provisional], [null, true, 0, undefined], 'no number and nothing provisional: ' + JSON.stringify([cv(h), h.confirmedRounds, h.provisional]));
+    assert.ok(/needs 3 confirmed rounds \(0 so far\)/.test(h.unconfirmedWhy), h.unconfirmedWhy); assert.ok(h.reason && h.unconfirmedWhy, '`reason` says why');
     assert.strictEqual((await S.courseHandicapFor(K('ann'), { slope: 128, cr: 71.2, par: 72 })).courseHandicap, null, 'no 60 strokes');
     j = ok(await call('ann', 'me')); const rs = j.records.filter((x) => x.kind === 'golf-round'); assert.strictEqual(rs.length, 3);
     assert.ok(rs.every((x) => x.extra.confirmed === false && /Recorded, not counted \(confirmer too new: .* joined Oddable less than 30 days before confirming\)/.test(x.extra.confirmWhy)), 'each round says the confirmation is recorded and why it does not count: ' + rs[0].extra.confirmWhy);
@@ -70,16 +71,16 @@ srv.listen(0, async () => {
     assert.ok(mk.who.every((w) => w.counts === false && w.n === 0 && w.recorded === 1 && w.joined === day(0) && w.flags.includes('joined today') && /too new/.test(w.why)), JSON.stringify(mk.who));
     assert.ok(mk.flags.includes('all rounds on one date') && mk.flags.includes('all logged on one day') && /Check before approving/.test(mk.warn), JSON.stringify(mk.flags));
     assert.ok(!/a:[0-9a-f]{12}|@phone/.test(JSON.stringify(h)) && !/a:[0-9a-f]{12}|@phone/.test(JSON.stringify(j.golfHcp)), 'names, dates and counts only: no reference or account id leaves');
-    NOW += 45 * DAY; S._reset(); h = await S.handicapFor(K('ann')); assert.deepStrictEqual([h.use, h.confirmedRounds, h.provisional], [null, 0, undefined], 'waiting does not help: the confirmer was too new WHEN IT CONFIRMED');
+    NOW += 45 * DAY; S._reset(); h = await S.handicapFor(K('ann')); assert.deepStrictEqual([cv(h), h.confirmedRounds, h.provisional], [null, 0, undefined], 'waiting does not help: the confirmer was too new WHEN IT CONFIRMED');
     // the same three, 60 days old, but with no game of their own
     fresh(); old('ann'); ['tia', 'tom', 'ted'].forEach((n) => { STAMP[K(n)] = T0 - 60 * DAY; }); for (const f of ['tia', 'tom', 'ted']) g[f] = await pal('ann', f);
     for (const f of ['tia', 'tom', 'ted']) await linkDay('ann', 200, g[f], f);
-    h = await S.handicapFor(K('ann')); assert.deepStrictEqual([h.use, h.confirmedRounds, h.provisional], [null, 0, undefined], 'old enough but never played a scored game: not counted');
+    h = await S.handicapFor(K('ann')); assert.deepStrictEqual([cv(h), h.confirmedRounds, h.provisional], [null, 0, undefined], 'old enough but never played a scored game: not counted');
     j = ok(await call('ann', 'me')); assert.ok(j.records.some((x) => /fewer than 3 rounds or matches scored in Oddable games/.test(x.extra.confirmWhy || '')), 'and the round says so');
     // the pickleball rating: three throwaways, two wins each
     fresh(); newbie('ann', 'tia', 'tom', 'ted'); for (const f of ['tia', 'tom', 'ted']) g[f] = await pal('ann', f);
     for (const f of ['tia', 'tom', 'ted']) for (let i = 0; i < 2; i++) { NOW += 3600e3; const id = ok(await call('ann', 'self/save', { item: { type: 'pickleball', date: day(0), fmt: 'singles', opp: [f], oppGuest: [g[f]], games: [[11, 2]] } })).record.id; ok(await confirm('ann', id, f)); }
-    r = await S.ratingFor(K('ann'), 'pickleball'); assert.deepStrictEqual([r.use, r.seed, r.needsSet, r.provisional, r.confirmedGames], [null, 1500, true, undefined, 0], 'no seeding off made-up accounts: ' + JSON.stringify([r.use, r.seed, r.confirmedGames]));
+    r = await S.ratingFor(K('ann'), 'pickleball'); assert.deepStrictEqual([cv(r), r.seed, (cv(r) == null), r.provisional, r.confirmedGames], [null, 1500, true, undefined, 0], 'no seeding off made-up accounts: ' + JSON.stringify([cv(r), r.seed, r.confirmedGames]));
     say('Three throwaways: use null, nothing provisional, course handicap null. Each round shows "Recorded, not counted (confirmer too new ...)". Make-up lists the three with "joined today", "all rounds on one date", "all logged on one day". Still nothing after 45 days. Rating: use null, seed 1500.');
   });
 
@@ -87,39 +88,33 @@ srv.listen(0, async () => {
     active('ann', 'bob', 'cat', 'dir'); const A = K('ann'), ref = (n) => S.acctRef(K(n));
     const eight = (who3) => Array.from({ length: 8 }, (_, i) => cardRound('g' + i, day(60 - i), 90, ref(who3[i % 3])));
     setGames('ann', eight(['bob', 'cat', 'dir'])); h = await S.handicapFor(A);
-    assert.deepStrictEqual([h.confirmedRounds, h.needsSet, h.makeup.confirmers], [8, false, 3]); assert.ok(h.use != null && h.use === h.confirmedIndex, 'three established markers, 8 rounds: used');
+    assert.deepStrictEqual([h.confirmedRounds, (cv(h) == null), h.makeup.confirmers], [8, false, 3]); assert.ok(cv(h) != null && cv(h) === h.confirmedIndex, 'three established markers, 8 rounds: used');
     assert.ok(h.makeup.who.every((w) => w.counts && w.joined === S.chiDay(T0 - 400 * DAY) && !w.flags.length), 'each confirmer comes with the day they joined and no flag: ' + JSON.stringify(h.makeup.who));
     STAMP[K('dir')] = T0 - 70 * DAY; S._reset(); h = await S.handicapFor(A); // Dir joined 70 days ago: the cards he marked 60 to 53 days ago were marked in his first 30 days
-    assert.deepStrictEqual([h.use, h.makeup.confirmers], [null, 2], 'cards marked inside the marker\'s first 30 days never count'); assert.ok(h.confirmedRounds < 8);
+    assert.deepStrictEqual([cv(h), h.makeup.confirmers], [null, 2], 'cards marked inside the marker\'s first 30 days never count'); assert.ok(h.confirmedRounds < 8);
     setGames('ann', Array.from({ length: 8 }, (_, i) => cardRound('g' + i, day(30 - i), 90, ref(['bob', 'cat', 'dir'][i % 3])))); h = await S.handicapFor(A);
-    assert.deepStrictEqual([h.confirmedRounds, h.makeup.confirmers, h.needsSet], [8, 3, false], 'the same marker, once his account is 30 days old, counts');
-    GAMES[K('cat')] = []; S._reset(); h = await S.handicapFor(A); assert.deepStrictEqual([h.use, h.makeup.confirmers], [null, 2], 'a marker with no scored game of her own does not count');
+    assert.deepStrictEqual([h.confirmedRounds, h.makeup.confirmers, (cv(h) == null)], [8, 3, false], 'the same marker, once his account is 30 days old, counts');
+    GAMES[K('cat')] = []; S._reset(); h = await S.handicapFor(A); assert.deepStrictEqual([cv(h), h.makeup.confirmers], [null, 2], 'a marker with no scored game of her own does not count');
     j = ok(await call('ann', 'me')); assert.ok(j.records.some((x) => /confirmer too new: Cat Real has fewer than 3 rounds or matches scored in Oddable games/.test(x.extra.confirmWhy || '')));
     setGames('ann', Array.from({ length: 8 }, (_, i) => cardRound('g' + i, day(30 - i), 90, 'a:000000000000'))); h = await S.handicapFor(A);
-    assert.deepStrictEqual([h.use, h.confirmedRounds], [null, 0], 'a reference with no account behind it cannot be checked and never counts');
+    assert.deepStrictEqual([cv(h), h.confirmedRounds], [null, 0], 'a reference with no account behind it cannot be checked and never counts');
     assert.deepStrictEqual([S.CONF.byAgeDays, S.CONF.byActs, S.CONF.fullRounds], [30, 3, 8]);
   });
 
-  await check('H1. PROVISIONAL: a number built on 3 to 7 counting rounds is never used on its own; the organizer approves it (or types another); 8 rounds make it the number', async () => {
+  await check('H1. (review 5: PROVISIONAL is gone) 3 or more counting rounds from 3 confirmers make the SUGGESTED number confirmed; nothing is played until the organizer approves it; engine-passed `approved` / `typed` are ignored', async () => {
     active('ann', 'bob', 'cat', 'dir'); const A = K('ann'), ref = (n) => S.acctRef(K(n)), rounds = (n) => Array.from({ length: n }, (_, i) => cardRound('g' + i, day(60 - i), 90 + (i % 3), ref(['bob', 'cat', 'dir'][i % 3])));
-    for (const n of [3, 5, 7]) { setGames('ann', rounds(n)); h = await S.handicapFor(A);
-      assert.deepStrictEqual([h.use, h.needsSet, h.confirmedRounds, h.makeup.provisional], [null, true, n, true], n + ' rounds: not used');
-      assert.ok(typeof h.provisional === 'number' && h.provisional === h.makeup.rounds.length * 0 + h.provisional, 'the provisional number is returned'); assert.ok(new RegExp('provisional: built on ' + n + ' confirmed rounds \\(8 needed\\)').test(h.reason), h.reason);
-      assert.ok(/Provisional handicap/.test(h.ask) && /approves it/.test(h.ask), h.ask);
-      assert.strictEqual((await S.courseHandicapFor(A, { slope: 128, cr: 71.2, par: 72 })).courseHandicap, null, 'a provisional number gives no strokes until it is approved');
-      const ap = await S.handicapFor(A, { approved: true }); assert.deepStrictEqual([ap.use, ap.setBy, ap.approved, ap.needsSet], [h.provisional, 'organizer', true, false], 'approved on the make-up screen: used, marked as set by the organizer');
-      const ty = await S.handicapFor(A, { typed: 20 }); assert.deepStrictEqual([ty.use, ty.setBy], [20, 'organizer'], 'or the organizer types another number'); }
-    j = ok(await call('ann', 'me')); assert.deepStrictEqual([j.golfHcp.moneyIndex, typeof j.golfHcp.provisional], [null, 'number'], 'My handicap gets the same'); assert.strictEqual(j.confirmRules.fullRounds, 8);
-    setGames('ann', rounds(8)); h = await S.handicapFor(A); assert.deepStrictEqual([h.needsSet, h.provisional, h.confirmedRounds, h.makeup.provisional], [false, undefined, 8, false]); assert.ok(h.use != null && h.use === h.confirmedIndex, '8 counting rounds: the number is used');
-    assert.strictEqual((await S.handicapFor(A, { approved: true })).setBy, null, 'nothing to approve once it is a full number');
-    const pp = await S.pairingProfile(A, 'golf'); assert.strictEqual(pp.pairOn, h.use);
-    setGames('ann', rounds(5)); assert.strictEqual((await S.pairingProfile(A, 'golf')).pairOn, null, 'pairing never plays a provisional number either');
+    for (const n of [3, 5, 8]) { setGames('ann', rounds(n)); h = await S.handicapFor(A);
+      assert.deepStrictEqual([h.use, h.needsSet, h.confirmedRounds, h.suggested.confirmed, h.suggested.value, 'provisional' in h], [null, true, n, true, h.confirmedIndex, false], n + ' rounds: suggested (confirmed), not used');
+      assert.ok(/organizer approves a number/.test(h.ask), h.ask); assert.strictEqual((await S.courseHandicapFor(A, { slope: 128, cr: 71.2, par: 72 })).courseHandicap, null, 'no strokes until it is approved');
+      for (const o of [{ approved: true }, { typed: 20 }]) { const x = await S.handicapFor(A, o); assert.deepStrictEqual([x.use, x.setBy], [null, null], 'an engine flag never plays a number: ' + JSON.stringify(o)); } }
+    j = ok(await call('ann', 'me')); assert.deepStrictEqual([j.golfHcp.moneyIndex, j.golfHcp.suggested.confirmed], [h.confirmedIndex, true], 'My handicap gets the same');
+    const pp = await S.pairingProfile(A, 'golf'); assert.strictEqual(pp.pairOn, h.suggested.value, 'pairing (no money) uses the suggested number');
   });
 
   await check('H1. at most ONE link-confirmed round counts per date played, and at most 3 rounds logged on one day count', async () => {
     active('ann', 'bob', 'cat', 'dir', 'dan'); const g = {}; for (const f of ['bob', 'cat', 'dir', 'dan']) g[f] = await pal('ann', f);
     NOW += DAY; for (const f of ['bob', 'cat', 'dir']) { const id = await logRound('ann', day(0), 95, [g[f]]); ok(await confirm('ann', id, f)); } // three rounds "played" on one date, three different confirmers
-    h = await S.handicapFor(K('ann')); assert.deepStrictEqual([h.confirmedRounds, h.use, h.provisional], [1, null, undefined], 'one of the three counts');
+    h = await S.handicapFor(K('ann')); assert.deepStrictEqual([h.confirmedRounds, cv(h), h.provisional], [1, null, undefined], 'one of the three counts');
     j = ok(await call('ann', 'me')); assert.strictEqual(j.records.filter((x) => /only one link-confirmed round counts per day played/.test(x.extra.confirmWhy || '')).length, 2, 'the other two say why');
     // five rounds logged on ONE day for five different dates: the first three logged count
     fresh(); active('ann', 'bob', 'cat', 'dir', 'dan'); for (const f of ['bob', 'cat', 'dir', 'dan']) g[f] = await pal('ann', f);
@@ -132,17 +127,17 @@ srv.listen(0, async () => {
   await check('H3 / SCENARIO one friend. Filler entries never fill the 20-round window: an established player\'s number does not move, a new player gets none', async () => {
     active('ann', 'bob', 'cat', 'dir', 'dan'); const A = K('ann'), ref = (n) => S.acctRef(K(n));
     setGames('ann', Array.from({ length: 20 }, (_, i) => cardRound('h' + i, day(150 - i * 7), 84 + (i % 4), ref(['cat', 'dir', 'dan'][i % 3])))); // 20 honest game rounds, three markers
-    const before = await S.handicapFor(A); assert.ok(before.use != null && before.confirmedRounds === 20, 'an established number: ' + before.use);
+    const before = await S.handicapFor(A); assert.ok(cv(before) != null && before.confirmedRounds === 20, 'an established number: ' + cv(before));
     const gB = await pal('ann', 'bob'); for (let i = 0; i < 100; i++) await linkDay('ann', 130, gB, 'bob'); // the friend confirms a hundred 130s, one a day (review 4: 9.5 -> 11.2 on a07ab04)
     h = await S.handicapFor(A); const bob = h.makeup.who.find((w) => w.name === 'Bob Real');
     assert.deepStrictEqual([bob.n, bob.recorded, bob.of], [2, 20, 20], 'Bob: 2 of the 20 counting rounds, whatever he sends: ' + JSON.stringify(bob)); assert.ok(bob.flags.includes('confirmed 20 of 20'), 'and the make-up flags it: ' + JSON.stringify(bob.flags));
     assert.strictEqual(h.makeup.rounds.filter((x) => x.how === 'Scored in a game').length, 18, '18 honest game rounds are still in the last 20');
-    assert.ok(h.use != null && Math.abs(h.use - before.use) <= 0.5, 'the money-game number moves by no more than his two counting rounds can move it: ' + before.use + ' -> ' + h.use);
+    assert.ok(cv(h) != null && Math.abs(cv(h) - cv(before)) <= 0.5, 'the money-game number moves by no more than his two counting rounds can move it: ' + cv(before) + ' -> ' + cv(h));
     j = ok(await call('ann', 'me')); assert.strictEqual(j.records.filter((x) => /Bob Real already confirmed 2 of your last 20 counting rounds by link/.test(x.extra.confirmWhy || '')).length, 98, 'the other 98 say why');
     // a new player and one friend
     fresh(); active('bob'); old('eve'); const gE = await pal('eve', 'bob'); for (let i = 0; i < 6; i++) await linkDay('eve', 130, gE, 'bob');
-    const e = await S.handicapFor(K('eve')); assert.deepStrictEqual([e.use, e.needsSet, e.confirmedRounds, e.provisional, e.makeup.confirmers], [null, true, 2, undefined, 1]);
-    say('One friend, new player (6 rounds): 2 count, 1 confirmer, use null, nothing provisional. One friend, established player (20 honest game rounds, then a hundred 130s by link): ' + before.use + ' -> ' + h.use + ', the friend holds 2 of 20, make-up flags "confirmed 20 of 20".');
+    const e = await S.handicapFor(K('eve')); assert.deepStrictEqual([cv(e), (cv(e) == null), e.confirmedRounds, e.provisional, e.makeup.confirmers], [null, true, 2, undefined, 1]);
+    say('One friend, new player (6 rounds): 2 count, 1 confirmer, use null, nothing provisional. One friend, established player (20 honest game rounds, then a hundred 130s by link): ' + cv(before) + ' -> ' + cv(h) + ', the friend holds 2 of 20, make-up flags "confirmed 20 of 20".');
   });
 
   await check('H3. combined limit: one person accounts for at most 8 of any 20 COUNTING rounds, link and game together; typed totals 5; rejected entries take no place', async () => {
@@ -156,7 +151,7 @@ srv.listen(0, async () => {
     assert.strictEqual(j.records.filter((x) => /Bob Real already confirmed 8 of your last 20 counting rounds/.test(x.extra.confirmWhy || '')).length, 2, 'the two oldest of his ten say why');
     // 30 cards from ONE marker and nothing else: 8 count and the window does not fill with the other 22
     setGames('ann', Array.from({ length: 30 }, (_, i) => cardRound('m' + i, day(300 - i * 7), 90, ref('bob')))); h = await S.handicapFor(A);
-    assert.deepStrictEqual([h.confirmedRounds, h.use, h.why], [8, null, 'needs rounds confirmed by 3 different players']);
+    assert.deepStrictEqual([h.confirmedRounds, cv(h), h.unconfirmedWhy], [8, null, 'needs rounds confirmed by 3 different players']);
     setGames('ann', Array.from({ length: 30 }, (_, i) => cardRound('m' + i, day(300 - i * 7), 90, ref('bob'))).concat(honest.map((x, i) => Object.assign({}, x, { id: 'old' + i, date: day(400 + i) })))); h = await S.handicapFor(A);
     assert.strictEqual(h.makeup.rounds.filter((x) => x.byName !== 'Bob Real').length, 12, 'the 12 older honest rounds are still in the 20 behind his 8: his 22 filler cards pushed none of them out');
     const bobG = h.makeup.rounds.filter((x) => x.byName === 'Bob Real' && x.how === 'Scored in a game').map((x) => x.date), bobL = h.makeup.rounds.filter((x) => x.byName === 'Bob Real' && x.how !== 'Scored in a game').length;
@@ -183,46 +178,46 @@ srv.listen(0, async () => {
     const m = (i, opp, o) => ({ src: 'events', id: 'ev:m' + i, date: day(40 - i), sport: 'pickleball', kind: 'match', title: 'Ladder vs ' + opp, result: 'W', opponent: opp, verified: false, extra: Object.assign({ fmt: 'singles', at: NOW - (40 - i) * DAY, opp: [{ id: 'p' + opp, name: opp, account: true }], confirmed: true, confirmedBy: { name: opp, at: NOW - (40 - i) * DAY }, oppKey: 'e:' + opp + '00000000000' }, o || {}) });
     const set = (list) => { S.register('events', async (k) => (k === A ? list : [])); S._reset(); };
     set([m(0, 'bob'), m(1, 'cat'), m(2, 'dir')]);
-    r = await S.ratingFor(A, 'pickleball'); assert.deepStrictEqual([r.use, r.confirmedGames, r.seed], [null, 0, 1500], 'an event key with no account behind it cannot be checked: nothing seeds');
+    r = await S.ratingFor(A, 'pickleball'); assert.deepStrictEqual([cv(r), r.confirmedGames, r.seed], [null, 0, 1500], 'an event key with no account behind it cannot be checked: nothing seeds');
     for (const n of ['bob', 'cat', 'dir']) assert.strictEqual(await linkRef('e:' + n + '00000000000', K(n)), true);
     assert.strictEqual(await linkRef(S.acctRef(K('bob')), K('cat')), false, 'an account reference cannot be pointed at another account');
-    S._reset(); r = await S.ratingFor(A, 'pickleball'); assert.deepStrictEqual([r.use, r.needsSet, r.confirmedGames, r.makeup.confirmers, r.makeup.provisional], [null, true, 3, 3, true], 'three games by three checked opponents: provisional');
-    assert.ok(typeof r.provisional === 'number' && r.provisional > 1500 && r.seed === 1500 && /provisional: built on 3 confirmed games \(8 needed\)/.test(r.reason), JSON.stringify([r.provisional, r.seed, r.reason]));
-    const ap = await S.ratingFor(A, 'pickleball', { approved: true }); assert.deepStrictEqual([ap.use, ap.setBy, ap.seed], [r.provisional, 'organizer', r.provisional], 'approved by the organizer: used');
+    S._reset(); r = await S.ratingFor(A, 'pickleball'); assert.deepStrictEqual([r.use, r.needsSet, r.confirmedGames, r.makeup.confirmers, r.suggested.confirmed], [null, true, 3, 3, true], 'three games by three checked opponents: the confirmed rating is suggested (review 5), not used');
+    assert.ok(r.suggested.value > 1500 && r.seed === r.confirmedRating, JSON.stringify([r.suggested, r.seed]));
+    const ap = await S.ratingFor(A, 'pickleball', { approved: true }); assert.deepStrictEqual([ap.use, ap.setBy], [null, null], 'an engine flag is ignored: only eventApprove plays it');
     // M2: Bob played Ann in an event AND confirmed a logged match by link: one confirmer, not two
     set([m(0, 'bob'), m(1, 'bob'), m(2, 'cat')]); for (const n of ['bob', 'cat']) await linkRef('e:' + n + '00000000000', K(n));
     const gB = await pal('ann', 'bob'); NOW += DAY; const id = ok(await call('ann', 'self/save', { item: { type: 'pickleball', date: day(0), fmt: 'singles', opp: ['Bob'], oppGuest: [gB], games: [[11, 4]] } })).record.id; ok(await confirm('ann', id, 'bob'));
-    r = await S.ratingFor(A, 'pickleball'); assert.strictEqual(r.makeup.confirmers, 2, 'Bob (event) + Bob (link) + Cat = 2 confirmers, not 3: ' + JSON.stringify(r.makeup.who)); assert.deepStrictEqual([r.use, r.provisional], [null, undefined]);
+    r = await S.ratingFor(A, 'pickleball'); assert.strictEqual(r.makeup.confirmers, 2, 'Bob (event) + Bob (link) + Cat = 2 confirmers, not 3: ' + JSON.stringify(r.makeup.who)); assert.deepStrictEqual([cv(r), r.suggested.confirmed], [null, false]);
     assert.strictEqual(r.makeup.who.find((w) => w.name === 'Bob Real').n >= 2, true);
     // 8 games by three opponents: the rating seeds
     set(Array.from({ length: 9 }, (_, i) => m(i, ['bob', 'cat', 'dir'][i % 3], { at: NOW - (40 - i) * DAY, confirmedBy: { name: 'x', at: NOW - (40 - i) * DAY } }))); for (const n of ['bob', 'cat', 'dir']) await linkRef('e:' + n + '00000000000', K(n));
-    r = await S.ratingFor(A, 'pickleball'); assert.ok(r.use != null && r.use === r.seed && !r.needsSet && r.provisional === undefined && r.makeup.n >= 8, 'eight or more counting games: ' + JSON.stringify([r.use, r.makeup.n]));
+    r = await S.ratingFor(A, 'pickleball'); assert.ok(cv(r) != null && cv(r) === r.seed && r.makeup.n >= 8, 'eight or more counting games: ' + JSON.stringify([cv(r), r.makeup.n]));
     GAMES[K('cat')] = []; S._reset(); r = await S.ratingFor(A, 'pickleball'); assert.strictEqual(r.makeup.confirmers, 2, 'an opponent with no scored game of her own is not a confirmer');
   });
 
-  await check('SCENARIO honest regular foursome, markers rotate: provisional at first, a full number from the 8th round, all 30 count, no flags', async () => {
+  await check('SCENARIO honest regular foursome, markers rotate: (review 5) suggested as confirmed from the 3rd round, all 30 count, no flags; the organizer approves it in one tap', async () => {
     active('ann', 'bob', 'cat', 'dir'); const A = K('ann'), ref = (n) => S.acctRef(K(n)), wk = (n) => Array.from({ length: n }, (_, i) => cardRound('w' + i, day(7 * (n - i)), 84 + ((i * 5) % 9), ref(['bob', 'cat', 'dir'][i % 3])));
-    setGames('ann', wk(5)); h = await S.handicapFor(A); assert.deepStrictEqual([h.use, h.needsSet, h.confirmedRounds], [null, true, 5]); assert.ok(typeof h.provisional === 'number'); const p5 = h.provisional;
-    setGames('ann', wk(8)); h = await S.handicapFor(A); assert.ok(h.use != null && !h.needsSet && h.confirmedRounds === 8); const u8 = h.use;
-    setGames('ann', wk(30)); h = await S.handicapFor(A); assert.deepStrictEqual([h.confirmedRounds, h.makeup.n, h.makeup.confirmers, h.makeup.flags.length, h.makeup.warn], [30, 20, 3, 0, '']); assert.strictEqual(h.use, h.oddable.index, 'the money-game number is the full index');
+    setGames('ann', wk(5)); h = await S.handicapFor(A); assert.deepStrictEqual([h.use, h.suggested.confirmed, h.confirmedRounds], [null, true, 5]); const p5 = cv(h);
+    setGames('ann', wk(8)); h = await S.handicapFor(A); assert.ok(cv(h) != null && !(cv(h) == null) && h.confirmedRounds === 8); const u8 = cv(h);
+    setGames('ann', wk(30)); h = await S.handicapFor(A); assert.deepStrictEqual([h.confirmedRounds, h.makeup.n, h.makeup.confirmers, h.makeup.flags.length, h.makeup.warn], [30, 20, 3, 0, '']); assert.strictEqual(cv(h), h.oddable.index, 'the money-game number is the full index');
     assert.ok(h.makeup.who.every((w) => w.n >= 6 && w.n <= 7 && w.counts && !w.flags.length), JSON.stringify(h.makeup.who));
     // the same marker every week / two markers
     setGames('ann', Array.from({ length: 30 }, (_, i) => cardRound('s' + i, day(7 * (30 - i)), 88, ref('bob')))); const one = await S.handicapFor(A);
     setGames('ann', Array.from({ length: 30 }, (_, i) => cardRound('s' + i, day(7 * (30 - i)), 88, ref(['bob', 'cat'][i % 2])))); const two = await S.handicapFor(A);
-    assert.deepStrictEqual([one.use, one.provisional, one.why, two.use, two.provisional], [null, undefined, 'needs rounds confirmed by 3 different players', null, undefined]);
+    assert.deepStrictEqual([cv(one), one.provisional, one.unconfirmedWhy, cv(two), two.provisional], [null, undefined, 'needs rounds confirmed by 3 different players', null, undefined]);
     // by link only, 30 weekly rounds, three friends in turn
     fresh(); active('ann', 'bob', 'cat', 'dir'); const g = {}; for (const f of ['bob', 'cat', 'dir']) g[f] = await pal('ann', f);
     for (let i = 0; i < 30; i++) { NOW += 6 * DAY; await linkDay('ann', 84 + ((i * 5) % 9), g[['bob', 'cat', 'dir'][i % 3]], ['bob', 'cat', 'dir'][i % 3]); }
-    const lk = await S.handicapFor(K('ann')); assert.deepStrictEqual([lk.use, lk.confirmedRounds, lk.makeup.confirmers], [null, 5, 3]); assert.ok(typeof lk.provisional === 'number', 'by link only, typed totals: the 5 newest count (5 typed totals of any 20; 6 when scored hole by hole, 2 a friend), provisional');
+    const lk = await S.handicapFor(K('ann')); assert.deepStrictEqual([lk.confirmedRounds, lk.makeup.confirmers, lk.suggested.confirmed, lk.use], [5, 3, true, null], 'by link only, typed totals: the 5 newest count (5 typed totals of any 20; 6 when scored hole by hole, 2 a friend): confirmed, suggested; review 4 M2 (provisional for ever) is gone');
     assert.strictEqual(lk.makeup.rounds[0].date, day(0), 'the newest round is in it (nothing freezes)');
-    say('Honest foursome, hole by hole in games, markers rotate: 5 rounds = provisional ' + p5 + ' (organizer approves), 8 rounds = ' + u8 + ' used, 30 rounds = all 30 count, number ' + h.use + ' = full index, no flags. Same marker every week or two markers: use null ("needs rounds confirmed by 3 different players"). By link only, 30 weekly typed totals: the newest 5 count (5 typed totals of 20; hole by hole it is 6, 2 per friend), provisional ' + lk.provisional + ' for the organizer to approve every time.');
+    say('Honest foursome, hole by hole in games, markers rotate: 5 rounds = suggested ' + p5 + ' (confirmed; the organizer approves), 8 rounds = ' + u8 + ' suggested, 30 rounds = all 30 count, number ' + cv(h) + ' = full index, no flags. Same marker every week or two markers: use null ("needs rounds confirmed by 3 different players"). By link only, 30 weekly typed totals: the newest 5 count (5 typed totals of 20; hole by hole it is 6, 2 per friend), provisional ' + lk.provisional + ' for the organizer to approve every time.');
   });
 
   await check('SCENARIO a couple who only play together: never a number by link or in games; the organizer sets it and the screen says why', async () => {
     active('ann', 'bob'); const A = K('ann'), gB = await pal('ann', 'bob'); for (let i = 0; i < 10; i++) await linkDay('ann', 92, gB, 'bob');
-    const lk = await S.handicapFor(A); assert.deepStrictEqual([lk.use, lk.needsSet, lk.provisional, lk.confirmedRounds, lk.makeup.confirmers], [null, true, undefined, 2, 1]);
+    const lk = await S.handicapFor(A); assert.deepStrictEqual([cv(lk), (cv(lk) == null), lk.provisional, lk.confirmedRounds, lk.makeup.confirmers], [null, true, undefined, 2, 1]);
     setGames('ann', Array.from({ length: 30 }, (_, i) => cardRound('c' + i, day(7 * (40 - i)), 92, S.acctRef(K('bob'))))); h = await S.handicapFor(A);
-    assert.deepStrictEqual([h.use, h.needsSet, h.provisional, h.confirmedRounds, h.why], [null, true, undefined, 8, 'needs rounds confirmed by 3 different players']); assert.ok(/organizer or tournament director sets a handicap/.test(h.ask));
+    assert.deepStrictEqual([cv(h), (cv(h) == null), h.provisional, h.confirmedRounds, h.unconfirmedWhy], [null, true, undefined, 8, 'needs rounds confirmed by 3 different players']); assert.ok(/UNCONFIRMED: needs rounds confirmed by 3 different players/.test(h.ask), h.ask);
     assert.ok(h.oddable.index != null && (await S.handicapFor(A, { casual: true })).use === h.oddable.index, 'casual play still uses the full index');
     assert.ok(h.makeup.who[0].flags.some((f) => /^confirmed \d+ of \d+$/.test(f)), 'and the make-up flags the one confirmer: ' + JSON.stringify(h.makeup.who[0]));
     say('Couple: by link 2 of 10 count, in games 8 of 30 count, 1 confirmer either way: use null, nothing provisional, "needs rounds confirmed by 3 different players". Casual play uses the full index ' + h.oddable.index + '.');
@@ -230,7 +225,7 @@ srv.listen(0, async () => {
 
   await check('SCENARIO a new member with 20 solo rounds: full index for casual play, no money-game number, nothing provisional', async () => {
     newbie('eve'); for (let i = 0; i < 20; i++) { if (i % 3 === 0) NOW += DAY; await logRound('eve', day(0), 88 + (i % 5), []); }
-    h = await S.handicapFor(K('eve')); assert.deepStrictEqual([h.use, h.needsSet, h.provisional, h.confirmedRounds], [null, true, undefined, 0]); assert.ok(/needs 3 confirmed rounds \(0 so far\)/.test(h.why));
+    h = await S.handicapFor(K('eve')); assert.deepStrictEqual([cv(h), (cv(h) == null), h.provisional, h.confirmedRounds], [null, true, undefined, 0]); assert.ok(/needs 3 confirmed rounds \(0 so far\)/.test(h.unconfirmedWhy));
     const c = await S.handicapFor(K('eve'), { casual: true }); assert.ok(c.use != null && c.use === h.oddable.index && h.oddable.rounds === 20);
     say('New member, 20 solo rounds: use null, nothing provisional ("needs 3 confirmed rounds (0 so far)"); casual index ' + c.use + ' from all 20.');
   });
@@ -265,15 +260,12 @@ srv.listen(0, async () => {
     j = ok(await call('ann', 'me')); const rec = j.records.find((x) => x.id === id); assert.deepStrictEqual([rec.extra.canLink, /30 days ago/.test(rec.extra.linkWhy)], [false, true]); assert.strictEqual(j.confirmRules.linkOpenDays, 30);
   });
 
-  await check('M4. an account with no sign-up stamp starts at its earliest server-stamped record, not "today": it can log, confirm and be confirmed from then on', async () => {
-    active('cat', 'dir'); const tenAgo = T0 - 40 * DAY; db[SID.ann].updated = tenAgo; db[SID.bob].updated = tenAgo; // Ann and Bob: accounts from before the stamp existed, last synced 40 days ago
-    GAMES[K('bob')] = [0, 1, 2].map((i) => cardRound('ownbob' + i, S.chiDay(T0 - (30 + i) * DAY), 88, null)); S._reset();
-    j = ok(await call('ann', 'me')); assert.strictEqual(j.since, S.chiDay(tenAgo), 'since = the server time on the sync row, not today');
-    assert.strictEqual(STAMP[K('ann')], tenAgo, 'and it is stamped once, from that record'); db[SID.ann].updated = T0; j = ok(await call('ann', 'me')); assert.strictEqual(j.since, S.chiDay(tenAgo), 'a later sync does not move it');
-    const gB = await pal('ann', 'bob'), id = await logRound('ann', day(5), 93, [gB]); j = ok(await call('ann', 'me')); const rec = j.records.find((x) => x.id === id);
-    assert.deepStrictEqual([!!rec.extra.preAcct, rec.extra.canLink], [false, true], 'a round dated 5 days back is an ordinary round that can be confirmed');
-    ok(await confirm('ann', id, 'bob')); j = ok(await call('ann', 'me')); assert.strictEqual(j.records.find((x) => x.id === id).extra.confirmed, true, 'Bob (no stamp either, on file for 40 days, 3 games of his own) counts as a confirmer');
-    fresh(); old('bob'); j = ok(await call('ann', 'me')); assert.strictEqual(j.since, day(0), 'an account with no server record at all starts when the server first sees it'); assert.strictEqual(STAMP[K('ann')], NOW);
+  await check('M4 (replaced in review 5, H1 / H2). An account with no sign-up stamp: before the backfill nothing is stamped on first look and its join date reads "not on file"; after the backfill it is stamped once', async () => {
+    active('cat', 'dir'); db[SID.ann].updated = T0 - 40 * DAY;
+    j = ok(await call('ann', 'me')); assert.deepStrictEqual([j.since, j.logFrom, STAMP[K('ann')]], [null, null, undefined], 'no stamp and no backfill: not stamped, not guessed from the sync row');
+    const id = await logRound('ann', day(5), 93, []); j = ok(await call('ann', 'me')); assert.strictEqual(!!j.records.find((x) => x.id === id).extra.preAcct, false, 'and nothing is marked as dated before joining');
+    db['lock:acctsince:done'] = { id: 'lock:acctsince:done', updated: 1, data: { at: T0 - DAY, n: 0 } }; S._reset();
+    j = ok(await call('ann', 'me')); assert.deepStrictEqual([j.since, STAMP[K('ann')]], [day(0), NOW], 'after the backfill an account still without a stamp is new to Oddable: stamped now, once');
   });
 
   await check('L6 (measured, not a fix: it also passes on a07ab04). What a throwaway account costs: nothing. Any 10-digit number and a 6-digit PIN, no text-message check, 6 new accounts per address per 15 minutes', async () => {

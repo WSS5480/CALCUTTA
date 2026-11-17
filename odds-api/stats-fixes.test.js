@@ -26,7 +26,7 @@ const SID = {}; ['ann', 'bob', 'cat', 'dir', 'dir2', 'eve'].forEach((n, i) => { 
 const pe = (id) => 'pe' + id.slice(0, 18) + '@phone.oddable', K = (n) => pe(SID[n]);
 const NAMES = {}; Object.keys(SID).forEach((n) => { NAMES[SID[n].slice(0, 8)] = n[0].toUpperCase() + n.slice(1) + ' Real'; });
 const who = (req) => { const w = String(req.headers['x-token'] || '').replace(/^t-/, ''); return SID[w] ? pe(SID[w]) : w === 'owner' ? 'owner' : null; };
-const ACCT = { who, phoneEmail: pe, isOwnerPhone: () => false, namesGet: async () => NAMES, ownerName: () => 'Sir Oddable', ownerOk: (req) => who(req) === 'owner', check: async (req) => !!who(req) };
+let STAMP = {}; const ACCT = { who, phoneEmail: pe, isOwnerPhone: () => false, namesGet: async () => NAMES, ownerName: () => 'Sir Oddable', ownerOk: (req) => who(req) === 'owner', check: async (req) => !!who(req), since: async (e) => STAMP[e] || null, sinceSet: async (e, at) => STAMP[e] || (STAMP[e] = at) }; // review 5: the sign-up stamp (acct.js)
 D.S = FDB; D.acct = () => ACCT; D.groups = () => ({});
 const Z = (s) => Date.parse(s), T0 = Z('2026-11-16T18:00:00Z'); let NOW = T0; D.now = () => NOW; D.ip = (req) => String(req.headers['x-ip'] || '1.1.1.1');
 const srv = http.createServer(async (req, res) => { if (await S.handle(req, res)) return; res.statusCode = 404; res.end('{}'); });
@@ -35,7 +35,7 @@ const call = async (w, p, b) => { const r = await fetch('http://127.0.0.1:' + P 
 const ok = (r, m) => { assert.strictEqual(r.s, 200, (m || '') + ' -> ' + r.s + ' ' + JSON.stringify(r.j)); return r.j; };
 const no = (r, code, re, m) => { assert.strictEqual(r.s, code, (m || '') + ' -> ' + r.s + ' ' + JSON.stringify(r.j)); if (re) assert.ok(re.test(r.j.error || ''), (m || '') + ': "' + r.j.error + '" should match ' + re); };
 const near = (a, b, m) => assert.ok(Math.abs(a - b) < 1e-6, m + ': ' + a + ' vs ' + b);
-const fresh = () => { db = {}; NOW = T0; slow = false; S._reset(); ['bets', 'groups', 'self'].forEach(() => {}); ['calcutta', 'golf', 'events'].forEach((s) => S.register(s, async () => [])); Object.values(SID).forEach((sid) => { db[sid] = { id: sid, salt: 's', pinhash: 'h', data: { bets: [] }, updated: 1, created_at: '2025-01-01T12:00:00Z' }; }); };
+const fresh = () => { db = {}; STAMP = {}; NOW = T0; slow = false; S._reset(); ['bets', 'groups', 'self'].forEach(() => {}); ['calcutta', 'golf', 'events'].forEach((s) => S.register(s, async () => [])); Object.values(SID).forEach((sid) => { db[sid] = { id: sid, salt: 's', pinhash: 'h', data: { bets: [] }, updated: 1, created_at: '2025-01-01T12:00:00Z' }; }); };
 const ent = (n) => { db['lock:ent'] = db['lock:ent'] || { id: 'lock:ent', updated: 1, data: { acct: {} } }; db['lock:ent'].data.acct = db['lock:ent'].data.acct || {}; db['lock:ent'].data.acct[crypto.createHash('sha256').update('oddable-acct|' + K(n)).digest('hex').slice(0, 24)] = { on: true }; };
 const entOff = (n) => { db['lock:ent'].data.acct[crypto.createHash('sha256').update('oddable-acct|' + K(n)).digest('hex').slice(0, 24)] = { on: false }; };
 const golfItem = (date, total, o) => Object.assign({ type: 'golf', date, course: 'Palm View', tees: 'Blue', holes: 18, par: 72, cr: 71.2, slope: 128, total }, o || {});
@@ -86,13 +86,13 @@ srv.listen(0, async () => {
     assert.ok(h.oddable.index != null, 'self-logged rounds still make the Oddable index (H1)'); assert.deepStrictEqual([h.rounds, h.confirmedRounds, h.confirmedIndex, h.use, h.needsSet, h.oddable.selfLogged], [5, 0, null, null, true, 5], 'five self-logged rounds: nothing to play a money game off; the organizer / director sets a number');
     assert.strictEqual(h.text, h.oddable.index.toFixed(1) + ' · 0 of 5 rounds confirmed');
     assert.strictEqual((await S.handicapFor(K('ann'), { casual: true })).use, h.oddable.index, 'solo and casual play use the full index');
-    assert.deepStrictEqual((({ use, setBy }) => [use, setBy])(await S.handicapFor(K('ann'), { typed: 14 })), [14, 'organizer'], 'standard game: the typed number');
+    assert.deepStrictEqual((({ use, setBy }) => [use, setBy])(await S.handicapFor(K('ann'), { typed: 14 })), [null, null], 'review 5: a number passed in by an engine is ignored; only eventApprove / eventOverride give a money game its number');
     S.register('golf', async (k) => (k === K('ann') ? [engineRound('golf:G1:round:p', '2026-10-10', 90), engineRound('golf:G2:round:p', '2026-10-11', 91), engineRound('golf:G3:round:p', '2026-10-12', 92, { solo: true })] : [])); S._reset();
     h = await S.handicapFor(K('ann')); assert.deepStrictEqual([h.rounds, h.confirmedRounds, h.use], [8, 2, null], 'a one-player engine round is not confirmed; 2 confirmed is still fewer than 3');
     S.register('golf', async (k) => (k === K('ann') ? [1, 2, 3].map((i) => engineRound('golf:G' + i + ':round:p', '2026-10-1' + i, 89 + i)) : [])); S._reset();
     h = await S.handicapFor(K('ann')); const want = Math.round((R.differential(90, 71.2, 128) - 2) * 10) / 10;
-    assert.deepStrictEqual([h.rounds, h.confirmedRounds, h.confirmedIndex, h.use, h.needsSet, h.setBy], [8, 3, want, want, false, null], 'three rounds scored in the app with other players: the confirmed index is used');
-    assert.notStrictEqual(h.oddable.index, h.use, 'the full Oddable index is still returned next to it'); assert.strictEqual(h.text, h.oddable.index.toFixed(1) + ' · 3 of 8 rounds confirmed');
+    assert.deepStrictEqual([h.rounds, h.confirmedRounds, h.confirmedIndex, h.suggested.value, h.suggested.confirmed, h.use, h.needsSet, h.setBy], [8, 3, want, want, true, null, true, null], 'three rounds scored in the app with other players: the confirmed index is SUGGESTED (review 5: the organizer approves it)');
+    assert.notStrictEqual(h.oddable.index, h.suggested.value, 'the full Oddable index is still returned next to it'); assert.strictEqual(h.text, h.oddable.index.toFixed(1) + ' · 3 of 8 rounds confirmed');
     j = ok(await call('ann', 'me')); assert.deepStrictEqual([j.golfHcp.index, j.golfHcp.confirmedIndex, j.golfHcp.confirmedRounds], [h.oddable.index, want, 3], 'My stats shows the same numbers (one calculation)');
     assert.ok(j.records.filter((x) => x.src === 'self' && x.kind === 'golf-round').every((x) => x.extra.selfLogged === true && x.extra.confirmed === false), 'self-logged rounds are marked');
   });
@@ -105,10 +105,10 @@ srv.listen(0, async () => {
     j = ok(await call('bob', 'confirm/get', { code: L.code })); assert.deepStrictEqual([j.loggedBy, j.entry.score, j.entry.date, j.mine, j.confirmed], ['Ann Real', 85, '2026-11-11', false, false]);
     ok(await call('bob', 'confirm/do', { code: L.code })); no(await call('cat', 'confirm/do', { code: L.code }), 409, /already/, 'one confirmer');
     ok(await call('cat', 'confirm/do', { code: ok(await call('ann', 'confirm/link', { id: ids[1] })).code })); ok(await call('dir', 'confirm/do', { code: ok(await call('ann', 'confirm/link', { id: ids[2] })).code })); // three different players who were there
-    let h = await S.handicapFor(K('ann')); assert.deepStrictEqual([h.confirmedRounds, h.use != null, h.use], [3, true, h.oddable.index]);
+    let h = await S.handicapFor(K('ann')); assert.deepStrictEqual([h.confirmedRounds, h.suggested.confirmed, h.suggested.value], [3, true, h.oddable.index]);
     j = ok(await call('ann', 'me')); assert.strictEqual(j.records.find((x) => x.id === ids[0]).extra.confirmedBy.name, 'Bob Real', 'the confirmer is named from their own account');
     ok(await call('ann', 'self/save', { id: ids[0], item: golfItem('2026-11-11', 70) }), 'edit inside 48 hours'); S._reset();
-    h = await S.handicapFor(K('ann')); assert.deepStrictEqual([h.confirmedRounds, h.use], [2, null], 'the edited round is no longer confirmed'); no(await call('bob', 'confirm/get', { code: L.code }), 409, /changed/, 'the old link is dead'); assert.ok(/3 confirmed rounds/.test(h.why));
+    h = await S.handicapFor(K('ann')); assert.deepStrictEqual([h.confirmedRounds, h.suggested.confirmed], [2, false], 'the edited round is no longer confirmed'); no(await call('bob', 'confirm/get', { code: L.code }), 409, /changed/, 'the old link is dead'); assert.ok(/3 confirmed rounds/.test(h.unconfirmedWhy));
   });
 
   await check('2e. sanity limits on typed rounds: Rating 55-85, Slope 55-155, not more than 15 under the Rating, index floor +10', async () => {
@@ -121,7 +121,7 @@ srv.listen(0, async () => {
   });
 
   await check('2f. no dates before the account existed or in the future; edits and deletes lock 48 hours after entry; edit history kept', async () => {
-    db[SID.eve].created_at = '2026-11-01T15:00:00Z';
+    STAMP[K('eve')] = Date.parse('2026-11-01T15:00:00Z'); db['lock:acctsince:done'] = { id: 'lock:acctsince:done', updated: 1, data: { at: T0 - 864e5 } }; // review 5: the sign-up stamp, and the backfill has run
     j = ok(await call('eve', 'self/save', { item: golfItem('2026-10-31', 88) }), 'up to 30 days before joining is allowed'); assert.strictEqual(j.record.extra.preAcct, true, 'and marked'); no(await call('eve', 'self/save', { item: golfItem('2019-01-01', 70) }), 400, /30 days before you joined/); no(await call('eve', 'self/save', { item: golfItem('2026-10-01', 70) }), 400, /30 days before you joined/);
     no(await call('eve', 'self/save', { item: golfItem('2026-11-17', 88) }), 400, /future/); ok(await call('eve', 'self/save', { item: golfItem('2026-11-01', 88) }), 'the day the account began');
     delete db[SID.dir2].created_at; ok(await call('dir2', 'self/save', { item: golfItem('2026-11-15', 88) }), 'a brand-new account can log yesterday'); no(await call('dir2', 'self/save', { item: golfItem('2026-10-10', 88) }), 400, /30 days before you joined/);
@@ -161,7 +161,7 @@ srv.listen(0, async () => {
     assert.strictEqual(rt.text, rt.oddable.rating + ' · 0 of 10 games confirmed'); assert.strictEqual((await S.ratingFor(K('ann'), 'pickleball', { casual: true })).use, rt.oddable.rating);
     const gB = await pal('ann', 'bob'), id = ok(await call('ann', 'self/save', { item: { type: 'pickleball', date: '2026-11-15', fmt: 'singles', opp: ['x'], oppGuest: [gB], games: [[11, 7], [11, 9]] } })).record.id;
     ok(await call('bob', 'confirm/do', { code: ok(await call('ann', 'confirm/link', { id })).code }));
-    rt = await S.ratingFor(K('ann')); j = ok(await call('ann', 'me')); assert.deepStrictEqual([rt.confirmedGames, j.ratings.pickleball.confirmedRating, rt.use, rt.why], [1, 1516, null, 'needs 3 confirmed games (1 so far)'], 'the confirmed win counts (1500 + 16); seeding waits for three different confirmers');
+    rt = await S.ratingFor(K('ann')); j = ok(await call('ann', 'me')); assert.deepStrictEqual([rt.confirmedGames, j.ratings.pickleball.confirmedRating, rt.use, rt.unconfirmedWhy], [1, 1516, null, 'needs 3 confirmed games (1 so far)'], 'the confirmed win counts (1500 + 16); seeding waits for three different confirmers');
     const rb = await S.ratingFor(K('bob')); j = ok(await call('bob', 'me')); assert.deepStrictEqual([rb.confirmedGames, j.ratings.pickleball.confirmedRating], [1, 1484], 'the opponent who confirmed gets the same match from their side');
     j = ok(await call('bob', 'me')); const mr = j.records.find((x) => x.kind === 'match'); assert.deepStrictEqual([mr.result, mr.extra.scoreText, mr.extra.loggedBy, mr.opponent], ['L', '7-11, 9-11', 'Ann Real', 'Ann Real']);
   });
@@ -207,7 +207,7 @@ srv.listen(0, async () => {
 
   await check('5b. ONE tournament override store and log: the "Set by tournament" card is filled as soon as a director sets a number; /stats/event/log answers for the director and the player', async () => {
     ent('dir'); const dir = K('dir'); for (let i = 1; i <= 3; i++) ok(await call('ann', 'self/save', { item: golfItem('2026-11-0' + i, 88) }));
-    await S.eventSetup(dir, 'MG26', { title: 'Member-Guest', sport: 'golf', lockAt: NOW + 864e5 }); ok(await call('dir', 'event/setup', { eventId: 'MG26', title: 'Member-Guest', sport: 'golf' }), 'the director reaches the tournament the engine registered, over HTTP'); no(await call('bob', 'event/setup', { eventId: 'X1', title: 'x', lockAt: NOW + 864e5 }), 403, /Enterprise/);
+    await S.eventSetup(dir, 'MG26', { title: 'Member-Guest', sport: 'golf', lockAt: NOW + 864e5 }); ok(await call('dir', 'event/setup', { eventId: 'MG26', title: 'Member-Guest', sport: 'golf' }), 'the director reaches the tournament the engine registered, over HTTP'); no(await call('bob', 'event/setup', { eventId: 'X1', title: 'x', lockAt: NOW + 864e5 }), 404, /not found/, 'the phone route never creates an event');
     await S.eventOverride(dir, 'MG26', K('ann'), { hcp: 9, reason: 'Club handicap' });
     j = ok(await call('ann', 'me')); assert.deepStrictEqual(j.tournaments.map((x) => [x.eventId, x.title, x.hcp, x.oddableHcp, x.reason, x.log.length, x.log[0].by]), [['MG26', 'Member-Guest', 9, j.golfHcp.index, 'Club handicap', 1, 'Dir Real']], 'the card has the tournament number, the real Oddable number and the log line, with no round played in it yet');
     j = ok(await call('ann', 'event/log', { eventId: 'MG26' })); assert.deepStrictEqual([j.director, j.mine.hcp, j.log.length], [false, 9, 1]); j = ok(await call('dir', 'event/log', { eventId: 'MG26' })); assert.deepStrictEqual([j.director, j.set.length, j.log.length], [true, 1, 2]);

@@ -1,5 +1,5 @@
 # Phone / desktop screenshots + layout checks for My stats. Needs: node scripts/stats-shots/harness.js running (ports 8896 / 8897).
-# Usage: python3 scripts/stats-shots/play.py [out dir] [themes] [widths]     defaults: /tmp/stats-shots4  navy,violet,violet-dark  360,430,1280
+# Usage: python3 scripts/stats-shots/play.py [out dir] [themes] [widths]     defaults: $STATS_SHOTS_DIR or /tmp/stats-shots5  navy,violet,violet-dark  360,430,1280
 # Runs the FULL app (pics/index.html with gate.js, sync.js, groups.js, dash.js, voicelog.js, stats.js loaded by the page itself, never ?mirror=1), once per
 # theme and width, into <out>/<theme>_<width>/. Every screenshot is checked: no sideways scroll, every tap target at least 44 x 44 px (hole-grid inputs
 # INCLUDED), nothing wider than the screen, the floating My Bets banner covered by the overlay, no "USGA / GHIN / unofficial / DUPR" wording, no
@@ -9,7 +9,7 @@
 # course list paging + sample list, owner dashboard "not known".
 import asyncio, json, sys, os
 from playwright.async_api import async_playwright
-ROOT = (sys.argv[1] if len(sys.argv) > 1 else '/tmp/stats-shots4').rstrip('/') + '/'
+ROOT = (sys.argv[1] if len(sys.argv) > 1 else os.environ.get('STATS_SHOTS_DIR', '/tmp/stats-shots5')).rstrip('/') + '/'  # review 5, L3: never another run's folder
 THEMES = (sys.argv[2] if len(sys.argv) > 2 else 'navy,violet,violet-dark').split(',')
 WIDTHS = [int(x) for x in (sys.argv[3] if len(sys.argv) > 3 else '360,430,1280').split(',')]
 API, WEB = 'http://127.0.0.1:8896', 'http://localhost:8897'
@@ -81,7 +81,7 @@ async def run(b, theme, W):
     await pg.click('#ostat .srowc[data-a=sport] >> text=NFL'); await shot('12_sport_nfl'); await back()
     # ---- handicap: the money-game number and what it is made of
     await pg.click('#ostat [data-a=hcp]'); await pg.wait_for_selector('#ostat .sbigc'); await pg.evaluate("document.querySelector('#ostat details.smore').open = true"); await shot('13_my_handicap_make_up'); t = await txt()
-    ok('My handicap: money-game index with its make-up (who confirmed, scored / typed), and the 9-hole estimate line', 'In money games, flights and tournaments' in t and 'Made of:' in t and 'scored in games' in t and 'DanTheDriver' in t and 'Joined Oddable' in t and 'Scored in a game' in t and 'an estimate of the official method' in t and 'sees this make-up before approving' in t, t[:900])
+    ok('My handicap: suggested money-game index (review 5: the organizer approves it) with its make-up (who confirmed, scored / typed), and the 9-hole estimate line', 'Suggested for money games, flights and tournaments' in t and 'Made of:' in t and 'scored in games' in t and 'DanTheDriver' in t and 'Joined Oddable' in t and 'Scored in a game' in t and 'an estimate of the official method' in t and 'approves the number you play off before the start' in t, t[:900])
     ok('review 4: the make-up lists each confirmer with the day they joined and how many they confirmed, flags the one who joined today and says his confirmation does not count', 'NewGuy27' in t and 'joined today' in t and 'Does not count: confirmer too new' in t and 'Check before approving' in t and '2 of 10' in t and 'rounds counting' in t, t[300:1500])
     ok('every round says how it was confirmed, or why not', 'scored in a game, confirmed by' in t and 'self-logged · not confirmed yet' in t and 'Member-Guest (next week)' in t, t[900:1900])
     ok('chart has no tap strips; the rounds list under it is the way in', await pg.evaluate("document.querySelectorAll('#ostat svg [data-a]').length === 0 && document.querySelectorAll('#ostat .strow[data-a=round]').length >= 10"))
@@ -128,11 +128,11 @@ async def run(b, theme, W):
     await pg.evaluate("window.OddStats.open({t:'rec', id:'%s'})" % seed['lateId']); await pg.wait_for_timeout(800); await shot('24b_record_logged_too_late'); ok('logged more than 7 days after it was played: no link, and it says why', 'more than 7 days after it was played' in await txt() and not await pg.locator('#ostat [data-a=cfask]').count())
     await pg.evaluate("window.OddStats.open({t:'rec', id:'%s'})" % seed['lockId']); await pg.wait_for_timeout(800); await shot('23_record_locked_after_48_hours'); t = await txt(); ok('an entry older than 48 hours is locked: no Edit, no Delete', 'Locked' in t and not await pg.locator('#ostat [data-a=del]').count(), t[-300:])
     await pg.evaluate("window.OddStats.open()"); await pg.wait_for_selector('#ostat .stile'); await pg.click('#ostat [data-a=gone]'); await shot('24c_deleted_entries'); t = await txt(); ok('deleted entries are listed', 'Deleted entries' in t and 'Bowling' in t and '142' in t, t); await back()
-    await pg.click('#ostat [data-a=rating][data-s=pickleball]'); await shot('25_pickleball_rating'); t = await txt(); ok('rating page: seeding waits for confirmed games and says so; the make-up names who confirmed; no DUPR', 'games confirmed' in t and 'For seeding in events and tournaments' in t and 'needs 3 confirmed games (2 so far)' in t and 'BobBirdie' in t and 'Joined Oddable' in t and 'DUPR' not in t, t[:700]); await back()
-    await pg.click('#ostat [data-a=rating][data-s="other:cornhole"]'); await shot('25b_cornhole_rating'); t = await txt(); ok('Cornhole has its own rating; on 3 confirmed games it is PROVISIONAL (8 needed) and says the organizer approves it', 'Cornhole rating' in t and '1546' in t and 'PROVISIONAL' in t and 'built on 3 confirmed games (8 needed)' in t and 'confirmed by 3 players' in t and 'Darts' not in t, t[:700]); await back()
+    await pg.click('#ostat [data-a=rating][data-s=pickleball]'); await shot('25_pickleball_rating'); t = await txt(); ok('rating page: seeding waits for confirmed games and says so; the make-up names who confirmed; no DUPR', 'games confirmed' in t and 'Suggested for events and tournaments' in t and 'needs 3 confirmed games (2 so far)' in t and 'BobBirdie' in t and 'Joined Oddable' in t and 'DUPR' not in t, t[:700]); await back()
+    await pg.click('#ostat [data-a=rating][data-s="other:cornhole"]'); await shot('25b_cornhole_rating'); t = await txt(); ok('Cornhole has its own rating; on 3 confirmed games from 3 players it is suggested as CONFIRMED and the organizer approves it (review 5)', 'Cornhole rating' in t and '1546' in t and 'CONFIRMED' in t and 'UNCONFIRMED' not in t and 'approves the rating you play off' in t and 'confirmed by 3 players' in t and 'Darts' not in t, t[:700]); await back()
     await pg.click('#ostat [data-a=guests]'); await pg.wait_for_selector('#ostat [data-a=guest]'); await shot('26_players_list'); await pg.click('#ostat [data-a=guest] >> text=Gary'); await pg.wait_for_timeout(600); await shot('26b_guest_player'); await back(); await back()
     await pg.click('#ostat [data-a=courses]'); await pg.wait_for_timeout(500); await pg.click('#ostat .srowc >> text=Cedar Ridge'); await pg.wait_for_selector('#ostat .strow'); await shot('27_course_view_money_index_and_why'); t = await txt()
-    ok('course view: own account names, "n of m rounds confirmed", the money-game index or why there is none', 'BobBirdie' in t and 'Somebody Else' not in t and 'rounds confirmed' in t and 'No money-game index: needs 3 confirmed rounds' in t, t[:500])
+    ok('course view: own account names, "n of m rounds confirmed", the money-game index or why there is none', 'BobBirdie' in t and 'Somebody Else' not in t and 'rounds confirmed' in t and 'No money-game index: needs' in t, t[:1500])
     await pg.click('#ostat [data-a=ctab][data-k=rounds]'); await pg.wait_for_timeout(700); await shot('28_course_rounds_how_confirmed'); ok('course rounds say typed vs scored and who confirmed', 'Self-logged (typed total), not confirmed' in await txt())
     await pg.click('#ostat [data-a=ctab][data-k=flights]'); await shot('29_course_flights')
     await pg.click('#ostat [data-a=ctab][data-k=prefill]'); await pg.wait_for_selector('#sv_cr')

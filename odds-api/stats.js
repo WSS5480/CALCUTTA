@@ -225,7 +225,7 @@ const ownRound = (r) => r.kind === 'golf-round' && r.score != null && !teamFmt(r
 //   - fewer than 8 counting confirmed rounds (fullRounds) = a PROVISIONAL number: never used on its own, the organizer approves it on the make-up screen;
 //   - at most 1 link-confirmed round counts per date played (linkPerDate); at most 3 rounds logged on one day count (perDay);
 //   - the per-confirmer limits run over the COUNTING set only: 2 of any 20 by link (perBy), 8 of any 20 in all, link and game together (allPerBy).
-const CONF = { perBy: 2, gamePerBy: 8, allPerBy: 8, win: 20, typedMax: 5, needBy: 3, minRounds: 3, fullRounds: 8, byAgeDays: 30, byActs: 3, perDay: 3, linkPerDate: 1, linkDays: 7, linkLife: 7 * DAY, linkOpen: 30 * DAY, backDays: 30 }; // perBy = by LINK; allPerBy = link + game together (gamePerBy kept as the old name)
+const CONF = { perBy: 2, gamePerBy: 8, allPerBy: 8, win: 20, typedMax: 5, needBy: 3, minRounds: 3, fullRounds: 8, byAgeDays: 30, byActs: 3, perDay: 3, linkPerDate: 1, joinWeek: 7, joinRecentDays: 180, seasonMove: 1.0, seasonMoveRating: 25, linkDays: 7, linkLife: 7 * DAY, linkOpen: 30 * DAY, backDays: 30 }; // perBy = by LINK; allPerBy = link + game together (gamePerBy kept as the old name)
 const isSelfLogged = (r) => r.src === 'self';
 const holeScored = (r) => { const x = r.extra || {}, hs = x.holeScores || x.strokes, n = Number(x.of) === 9 || (!x.of && Number(x.holes) === 9) ? 9 : 18; return Array.isArray(hs) && hs.filter((v) => Number.isFinite(Number(v)) && Number(v) > 0 && v !== null && v !== '').length >= n; };
 const refList = (v) => (Array.isArray(v) ? v : [v]).map((x) => (typeof x === 'string' ? x : '')).filter((x) => /^[\w:.-]{6,40}$/.test(x)).slice(0, 8);
@@ -271,18 +271,22 @@ async function linkRef(ref, accountId) {
 }
 // A game that counts as the confirmer's own activity: a round or match SCORED IN AN ODDABLE GAME (an engine record, not a one-player game, not self-logged).
 const gameScored = (r) => (r.src === 'golf' || r.src === 'events') && (r.kind === 'golf-round' || r.kind === 'match') && !(r.extra && (r.extra.solo || r.extra.confirmed === false));
+// Review 5, H3: a confirmer's OWN play counts only as a FINISHED game (a complete 9 or 18 holes scored hole by hole, or a match with a final result)
+// that was itself confirmed by ANOTHER account. A one-hole golf day with typed-in guests, or a game nobody else confirmed, is not their own play.
+const finished = (r) => (r.kind === 'golf-round' ? complete(r) && holeScored(r) : !!r.result && !running(r));
+const ownPlay = (r, ownRef) => gameScored(r) && finished(r) && confInfo(r, ownRef).ok;
 const BYC = new Map();
 // Everything the rule needs to know about the confirmers of a set of records: Map(ref -> { key (one per account), name, since (ms), acts }).
 async function confCtx(recs, meRef, now) {
-  const t = now || D.now(), refs = new Set(), by = new Map(), keys = new Map();
+  const t = now || D.now(), refs = new Set(), by = new Map(), keys = new Map(), VO = await vouchRow();
   (recs || []).forEach((r) => { if (r.kind !== 'golf-round' && !(r.kind === 'match' && r.sport !== 'golf')) return; const c = confInfo(r, meRef); if (c.ok) c.by.forEach((b) => refs.add(b)); });
   for (const ref of [...refs].slice(0, 80)) {
     try {
       if (typeof D.confirmer === 'function') { const v = await D.confirmer(ref); if (v) { by.set(ref, v); keys.set(v.key, v); } continue; } // TEST SWITCH (like D.auto): the older suites treat every confirmer as an established account. Never set in the app.
       const e = await refAcct(ref); if (!e) continue;
       let c = BYC.get(e); if (!c || t - c.at > 60e3 || c.at > t) {
-        const row = await selfRow(e).catch(() => null), since = await acctSince(e, (row && row.data) || {}, t), v = await cached(e);
-        c = { at: t, v: { key: oppKeyFor(mkOf(e)), name: (await nameOf(e).catch(() => '')) || '', since, acts: v.recs.filter(gameScored).length } }; BYC.set(e, c); if (BYC.size > 2000) BYC.delete(BYC.keys().next().value);
+        const si = await sinceOf(e, t), v = await cached(e), own = oppKeyFor(mkOf(e));
+        c = { at: t, v: { key: own, name: (await nameOf(e).catch(() => '')) || '', since: si.known ? si.t : null, sinceKnown: si.known, acts: v.recs.filter((r) => ownPlay(r, own)).length, vouched: vouchedBy(VO, mkOf(e)) } }; BYC.set(e, c); if (BYC.size > 2000) BYC.delete(BYC.keys().next().value);
       }
       by.set(ref, c.v); keys.set(c.v.key, c.v);
     } catch (er) { /* a confirmer that cannot be read does not count */ }
@@ -293,8 +297,10 @@ async function confCtx(recs, meRef, now) {
 function byCheck(ctx, ref, at, name) {
   const c = ctx && ctx.by && ctx.by.get(ref), nm = (c && c.name) || name || 'The confirmer';
   if (!c) return { ok: false, known: false, key: ref, name: name || '', why: 'confirmer not checked: ' + nm + ' has no Oddable account on file for this confirmation' };
-  if (at - c.since < CONF.byAgeDays * DAY) return { ok: false, known: true, key: c.key, name: nm, why: 'confirmer too new: ' + nm + ' joined Oddable less than ' + CONF.byAgeDays + ' days before confirming' };
-  if (c.acts < CONF.byActs) return { ok: false, known: true, key: c.key, name: nm, why: 'confirmer too new: ' + nm + ' has fewer than ' + CONF.byActs + ' rounds or matches scored in Oddable games' };
+  const vouched = c.vouched && c.vouched.length; // review 5 (E): a member a club director vouched for counts whatever the account's age
+  if (!vouched && c.since == null) return { ok: false, known: true, key: c.key, name: nm, why: 'confirmer not checked: ' + nm + '\'s join date is not on file yet' };
+  if (!vouched && at - c.since < CONF.byAgeDays * DAY) return { ok: false, known: true, key: c.key, name: nm, why: 'confirmer too new: ' + nm + ' joined Oddable less than ' + CONF.byAgeDays + ' days before confirming' };
+  if (c.acts < CONF.byActs) return { ok: false, known: true, key: c.key, name: nm, why: 'confirmer too new: ' + nm + ' has fewer than ' + CONF.byActs + ' rounds or matches scored in Oddable games (finished, confirmed by another account)' };
   return { ok: true, known: true, key: c.key, name: nm, why: '' };
 }
 const entryOf = (r) => N(r.extra && r.extra.at) || Date.parse(r.date + 'T18:00:00Z') || 0;
@@ -341,7 +347,7 @@ const hasRating = (r) => !!(r.extra && Number.isFinite(crOf(r.extra)) && Number.
 // ("all rounds on one date", "all logged on one day"). marks = the family's confirmMarks (for the recorded-but-not-counting confirmations).
 function makeupOf(items, unit, ctx, marks) {
   const U = unit || 'round', now = (ctx && ctx.now) || D.now(), info = (k) => (ctx && ctx.keys && ctx.keys.get(k)) || null, byRef = new Map();
-  const seat = (k, name) => { let e = byRef.get(k); if (!e) { const c = info(k); e = { name: (c && c.name) || name || 'Another player', n: 0, recorded: 0, since: c ? c.since : null, acts: c ? c.acts : null, why: '' }; byRef.set(k, e); } return e; };
+  const seat = (k, name) => { let e = byRef.get(k); if (!e) { const c = info(k); e = { name: (c && c.name) || name || 'Another player', n: 0, recorded: 0, since: c ? c.since : null, acct: !!c, acts: c ? c.acts : null, vouched: (c && c.vouched) || [], why: '' }; byRef.set(k, e); } return e; };
   items.forEach((d) => { const m = d.meta || {}; if (m.by) seat(m.by, m.name).n++; });
   const recent = marks ? [...marks.values()].filter((m) => m.cand && m.recBy).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.ent - a.ent)).slice(0, CONF.win) : [];
   recent.forEach((m) => { const e = seat(m.by || m.recBy, m.name); e.recorded++; if (!m.confirmed && m.why && (!e.why || (/^Recorded, not counted \(/.test(m.why) && !e.tooNew))) { e.tooNew = /^Recorded, not counted \(/.test(m.why); e.why = m.why.replace(/^Recorded, not counted \(/, '').replace(/\)$/, '').replace(/^Not counted: /, ''); } });
@@ -353,24 +359,31 @@ function makeupOf(items, unit, ctx, marks) {
     if (days != null && days < 1) flags.push('joined today'); else if (days != null && days < 7) flags.push('joined this week'); else if (days != null && days < CONF.byAgeDays) flags.push('joined less than ' + CONF.byAgeDays + ' days ago');
     if (e.acts != null && e.acts < CONF.byActs) flags.push('fewer than ' + CONF.byActs + ' rounds or matches of their own scored in games');
     if (tot >= 4 && rec * 2 >= tot) flags.push('confirmed ' + rec + ' of ' + tot);
-    if (e.since == null) flags.push('no Oddable account on file');
-    return { name: e.name, n: e.n, recorded: rec, of: tot, joined: e.since == null ? null : chiDay(e.since), counts: e.n > 0, why: e.n > 0 ? '' : e.why || 'none of their confirmations count', flags };
+    if (!e.acct) flags.push('no Oddable account on file'); else if (e.since == null) flags.push('join date not on file yet');
+    if (e.vouched.length) flags.push('vouched by ' + e.vouched.join(', '));
+    return { name: e.name, n: e.n, recorded: rec, of: tot, joined: e.since == null ? null : chiDay(e.since), since: e.since, vouched: e.vouched, counts: e.n > 0, why: e.n > 0 ? '' : e.why || 'none of their confirmations count', flags };
   });
+  // Review 5 (F): 3 or more confirmers who joined within a week of each other (and recently: within CONF.joinRecentDays) is worth a look.
+  const js = who.filter((w) => w.since != null && now - w.since < CONF.joinRecentDays * DAY).map((w) => w.since).sort((a, b) => a - b); let near = 0;
+  for (let i = 0; i < js.length; i++) { let j = i; while (j + 1 < js.length && js[j + 1] - js[i] <= CONF.joinWeek * DAY) j++; near = Math.max(near, j - i + 1); }
+  who.forEach((w) => { delete w.since; });
   const flags = [], dates = new Set((items.length ? items : recent).map((d) => d.date)), entDays = new Set(recent.map((m) => chiDay(m.ent)));
   if ((items.length || recent.length) >= 2 && dates.size === 1) flags.push('all ' + U + 's on one date');
   if (recent.length >= 2 && entDays.size === 1 && recent.some((m) => m.how === 'link')) flags.push('all logged on one day');
-  who.forEach((w) => w.flags.forEach((f) => { if (/^joined|^confirmed|^no Oddable/.test(f)) flags.push(w.name + ': ' + f); }));
+  if (near >= 3) flags.push(near + ' confirmers joined within a week of each other');
+  who.forEach((w) => w.flags.forEach((f) => { if (/^joined|^confirmed|^no Oddable|^join date/.test(f)) flags.push(w.name + ': ' + f); }));
   return { n: items.length, scored, linked, typed, confirmers: nby, need: CONF.needBy, ok: nby >= CONF.needBy, full: CONF.fullRounds, who, flags, warn: flags.length ? 'Check before approving: ' + flags.join('; ') + '.' : '',
     why: nby >= CONF.needBy ? '' : 'needs ' + U + 's confirmed by ' + CONF.needBy + ' different players',
     text: items.length ? parts.join(', ') + ' · confirmed by ' + nby + ' player' + (nby === 1 ? '' : 's') : 'no confirmed ' + U + 's yet',
     rounds: items.map((d) => ({ date: d.date, what: d.what || '', score: d.score != null ? d.score : null, diff: d.diff != null ? d.diff : null, used: !!d.used, how: d.meta && d.meta.how === 'game' ? 'Scored in a game' : d.meta && d.meta.typed ? 'Typed total, confirmed by link' : 'Hole by hole, confirmed by link', typed: !!(d.meta && d.meta.typed), byName: (d.meta && d.meta.name) || '' })) };
 }
-// PROVISIONAL (review 4): a number built on fewer than 8 counting confirmed entries is never used on its own. -> { use, provisional, why }
-function moneyNumber(value, n, mk, unit, soFar) {
-  const enough = value != null && n >= CONF.minRounds && mk.ok, U = unit || 'round';
-  if (enough && n >= CONF.fullRounds) return { use: value, provisional: null, why: '' };
-  if (enough) return { use: null, provisional: value, why: 'provisional: built on ' + n + ' confirmed ' + U + 's (' + CONF.fullRounds + ' needed). The organizer approves it on the make-up screen' };
-  return { use: null, provisional: null, why: value == null || n < CONF.minRounds ? 'needs ' + CONF.minRounds + ' confirmed ' + U + 's (' + soFar + ' so far)' : mk.why };
+// THE SUGGESTED NUMBER (review 5, manager B). Nothing is used automatically in a money game any more: the organizer approves every number. What he is
+// offered: the CONFIRMED index / rating when the confirmed rule is met (3 or more counting confirmed entries from 3 or more different confirmers, after
+// the age, activity and per-confirmer checks), else the full Oddable number marked "unconfirmed". -> { value, confirmed, label, why }
+function suggestOf(confVal, n, mk, unit, soFar, full) {
+  const U = unit || 'round', met = confVal != null && n >= CONF.minRounds && mk.ok;
+  if (met) return { value: confVal, confirmed: true, label: 'confirmed', why: '' };
+  return { value: full == null ? null : full, confirmed: false, label: 'unconfirmed', why: confVal == null || n < CONF.minRounds ? 'needs ' + CONF.minRounds + ' confirmed ' + U + 's (' + soFar + ' so far)' : mk.why };
 }
 // THE handicap calculation (one copy of the maths: ratings.js handicapSet). Used by /stats/me, handicapFor, the course view, guests and pairingProfile alike.
 // ctx = confCtx(recs, meRef): who the confirmers are. Without it no confirmer can be checked, so nothing counts as confirmed (the safe direction).
@@ -381,9 +394,9 @@ function golfHcp(recs, meRef, ctx) { // own, complete 9- or 18-hole rounds with 
   const h = R.handicapSet(rounds); h.label = HCP_LABEL; h.method = HCP_METHOD; h.official = false;
   // The make-up of the money-game number + the diversity rule. Confirmer refs stay here: only names, join dates and counts go out.
   h.makeup = makeupOf(h.confirmedDiffs.map((d) => ({ date: d.date, what: (d.course || 'Round') + (d.nHoles === 9 ? ' (9 holes)' : ''), score: d.total, diff: d.eff, used: d.used, meta: d.meta })), 'round', ctx, marks);
-  const mn = moneyNumber(h.confirmedIndex, h.makeup.n, h.makeup, 'round', h.confirmedRounds);
-  h.moneyIndex = mn.use; // THE number for money games, flights and tournaments (null = the organizer sets it, or approves the provisional one)
-  h.provisional = mn.provisional; h.moneyWhy = mn.why; h.makeup.provisional = mn.provisional != null;
+  h.suggested = suggestOf(h.confirmedIndex, h.makeup.n, h.makeup, 'round', h.confirmedRounds, h.index);
+  h.moneyIndex = h.suggested.confirmed ? h.suggested.value : null; // the CONFIRMED number (flights by confirmed handicap); null = only the unconfirmed full index to suggest
+  h.moneyWhy = h.suggested.why; h.makeup.suggested = h.suggested.value; h.makeup.confirmed = h.suggested.confirmed;
   const strip = (d) => { if (d.meta) { d.meta = { name: d.meta.name, typed: d.meta.typed, how: d.meta.how, why: d.meta.why }; } return d; }; h.diffs.forEach(strip); delete h.confirmedDiffs;
   h.conf = {}; marks.forEach((m, id) => { h.conf[id] = { confirmed: m.confirmed, name: m.confirmed || m.recBy ? m.name : '', typed: m.typed, how: m.how, why: m.confirmed ? '' : m.why }; }); // per round, for the notes on each record
   h.missing = recs.filter((r) => ownRound(r) && !hasRating(r)).length; // rounds without rating/slope cannot count (each one says so: hcpNote)
@@ -415,8 +428,8 @@ function eloAll(recs, meRef, ctx) {
     const E = Object.assign(R.eloSet(list), { label: RATING_LABEL, key: k, name: rateName(k, by[k]), sport: by[k][0].sport }), cset = new Set((E.confirmedHistory || []).filter((h) => h.w > 0).map((h) => h.id));
     const counted = list.filter((r) => cset.has(r.id)).sort((a, c) => -order(a, c)).slice(0, CONF.win);
     E.makeup = makeupOf(counted.map((r) => ({ date: r.date, what: clean(r.title, 60), used: true, meta: marks.get(r.id) })), 'game', ctx, marks);
-    const mn = moneyNumber(E.confirmedGames ? E.confirmedRating : null, E.makeup.n, E.makeup, 'game', E.makeup.n); // review 4: under 8 counting games the rating is provisional
-    E.seedRating = mn.use; E.provisional = mn.provisional; E.seedWhy = mn.use != null ? '' : E.confirmedGames ? mn.why : 'no confirmed games yet'; E.makeup.provisional = mn.provisional != null;
+    E.suggested = suggestOf(E.confirmedGames ? E.confirmedRating : null, E.makeup.n, E.makeup, 'game', E.makeup.n, E.rating != null ? E.rating : R.ELO.start);
+    E.seedRating = E.suggested.confirmed ? E.suggested.value : null; E.seedWhy = E.seedRating != null ? '' : E.confirmedGames ? E.suggested.why : 'no confirmed games yet'; if (!E.confirmedGames) E.suggested.why = 'no confirmed games yet'; E.makeup.suggested = E.suggested.value; E.makeup.confirmed = E.suggested.confirmed;
     E.conf = {}; marks.forEach((m, id) => { E.conf[id] = { confirmed: m.confirmed, name: m.confirmed || m.recBy ? m.name : '', how: m.how, why: m.confirmed ? '' : m.why }; }); delete E.confirmedHistory;
     o[k] = E;
   });
@@ -703,24 +716,31 @@ async function nameOf(e) {
   if (D.now() - NMC.at > 60e3) { NMC = { at: D.now(), v: (await A.namesGet().catch(() => ({}))) || {} }; }
   return clean(NMC.v[String(sid).slice(0, 8)], 30);
 }
-// WHEN THE ACCOUNT STARTED (review 3, M2). Only stamps the SERVER wrote count; nothing the phone can write (bet ids, daily-log days, anything inside the
-// synced data) is ever read:
-//   1. the sign-up stamp acct.js writes for every new account (acct.since: row 'lock:acctsince');
-//   2. for accounts older than that stamp: the sync row's own created column when the table has one, `since` in the player's stats row (the first time
-//      stats saw the account) and the entry times the server put on their own logged entries (extra.at).
-// The earliest of those, else now. A new account may log up to 30 days back from that day (CONF.backDays); such entries are marked extra.preAcct and
-// never count as confirmed.
-async function acctSince(e, sd, now) {
-  let t = now; const see = (v) => { const x = typeof v === 'number' ? v : Date.parse(v || ''); if (Number.isFinite(x) && x > 1.4e12 && x < t) t = x; };
-  let stamp = null; const A = D.acct(); try { if (typeof A.since === 'function') { stamp = await A.since(e); see(stamp); } } catch (er) {}
-  see(Number(sd && sd.since)); ((sd && sd.items) || []).forEach((it) => see(Number(it && it.extra && it.extra.at)));
-  const sid = await sidOf(e).catch(() => null);
-  if (sid) { const row = await D.S.dbGet(sid).catch(() => null); if (row) { see(row.created_at); see(row.created); see(Number(row.updated)); } } // table columns the database / this server fill in (`updated` = the server time of the last sync write: the account existed by then); never row.data
-  // Review 4, M4: an account with no sign-up stamp gets ONE now, from its earliest server-stamped record (set once, never moved), so it can log, confirm
-  // and be confirmed from that day on instead of from "today" each time it is looked at.
-  if (!stamp && typeof A.sinceSet === 'function' && !/^guest:/.test(String(e))) { try { const got = await A.sinceSet(e, t); if (Number(got) > 1.4e12 && Number(got) < t) t = Number(got); } catch (er) {} }
-  return t;
+// WHEN THE ACCOUNT STARTED. Review 5 (H1, H2), manager Nov 17 2026:
+//   1. The sign-up stamp acct.js writes for every new account (row 'lock:acctsince'). WHEN A STAMP EXISTS IT IS THE ONLY ANSWER: no confirmation copy,
+//      no entry time, nothing the phone or another player can write ever moves it (H2: a mirror of a match logged 29 days ahead used to age a new account).
+//   2. Accounts older than the stamp get theirs from the ONE-TIME BACKFILL (odds-api/backfill-acctsince.js, run before the new code serves anything):
+//      the earliest of the first bet id time and the first daily-log day, else deploy minus 30 days. It writes the marker row 'lock:acctsince:done'.
+//   3. BOOT GUARD: until that marker row exists nothing is stamped "on first look". An account with no stamp then reads as known: false ("join date not on
+//      file yet"); its age is not checked and its entries are never marked as dated before it joined. After the backfill, an account with no stamp is one
+//      that first reached Oddable after it (every new account is stamped at sign-up), so it is stamped now, once.
+const BFROW = 'lock:acctsince:done'; let BF = { at: 0, v: null }, BFWARN = false;
+async function backfilled() {
+  if (BF.v && BF.v.at) return BF.v; if (D.now() - BF.at < 30e3 && BF.at <= D.now()) return null;
+  const r = await D.S.dbGet(BFROW).catch(() => null); BF = { at: D.now(), v: (r && r.data && r.data.at) ? r.data : null };
+  if (!BF.v && !BFWARN) { BFWARN = true; console.error('stats: ACCOUNT START BACKFILL NOT RUN (row ' + BFROW + ' missing). Run: node odds-api/backfill-acctsince.js --write. Until then no account is stamped on first look.'); }
+  return BF.v;
 }
+// -> { t: ms, known: bool }
+async function sinceOf(e, now) {
+  const t = now || D.now(); if (/^guest:/.test(String(e || ''))) return { t, known: false };
+  const A = D.acct(); let stamp = null; try { if (typeof A.since === 'function') stamp = Number(await A.since(e)) || null; } catch (er) {}
+  if (stamp && stamp > 1.4e12) return { t: Math.min(stamp, t), known: true };
+  if (!(await backfilled())) return { t, known: false };
+  if (typeof A.sinceSet === 'function') { try { const got = Number(await A.sinceSet(e, t)); if (got > 1.4e12) return { t: Math.min(got, t), known: true }; } catch (er) {} }
+  return { t, known: false };
+}
+async function acctSince(e, sd, now) { return (await sinceOf(e, now)).t; } // kept for callers that only want a time; sd is no longer read (H2)
 
 // ---------- golf COURSES (enterprise accounts) see consenting players' handicaps and rounds (owner decision, Nov 16 2026) ----------
 // A player is asked "Share my handicap and rounds with <Course>?" when joining that course's league / event (default ON for that join), and can revoke in
@@ -754,6 +774,24 @@ async function entLinks(e) { // -> { ent: bool, courses: [{id, name}] } for one 
   if (ids.length) { const cr = await D.S.dbGet('lock:golf:courses').catch(() => null), all = (cr && cr.data && cr.data.courses) || {}; ids.forEach((id) => out.set(id, clean(all[id] && all[id].name, 60) || 'Course')); }
   return { ent: true, courses: [...out].slice(0, 50).map(([id, name]) => ({ id, name })) };
 }
+// VOUCH (review 5, manager E). A club / Enterprise director vouches for a member: the member shows "vouched by <club>" in every make-up, and their
+// confirmations count whatever the account's age (the activity check still applies). Logged in the row and revocable.
+// Row 'lock:vouch' { c: { <courseId>: { name, m: { <member key>: { at, by } } } }, log: [{ at, club, by, player, on }] }. Server only.
+const VOUCH = 'lock:vouch'; let VOC = { at: 0, v: null };
+async function vouchRow() { if (VOC.v && D.now() - VOC.at < 30e3 && VOC.at <= D.now()) return VOC.v; const r = await D.S.dbGet(VOUCH).catch(() => null); VOC = { at: D.now(), v: (r && r.data) || { c: {} } }; return VOC.v; }
+const vouchedBy = (VO, mk) => Object.keys((VO && VO.c) || {}).filter((cid) => VO.c[cid].m && VO.c[cid].m[mk]).map((cid) => clean(VO.c[cid].name, 60) || 'Club').slice(0, 5);
+async function vouch(courseOrClubId, playerRef, directorE, on) {
+  const cid = okCid(courseOrClubId); if (!cid) throw bad(400, 'Pick a club');
+  const club = (await ownedCourses(directorE)).find((c) => c.id === cid); if (!club) throw bad(403, 'Only that club\'s Enterprise director can vouch for its members');
+  if (/^guest:/.test(String(playerRef || '')) || !playerRef) throw bad(400, 'Only an Oddable account can be vouched for');
+  const mk = mkOf(playerRef), by = (await nameOf(directorE)) || 'Club director', player = (await nameOf(playerRef)) || 'Player', yes = on !== false;
+  await rowMutate(VOUCH, () => ({ c: {}, log: [] }), (d) => { d.c = d.c || {}; d.log = d.log || []; const c = d.c[cid] = d.c[cid] || { name: club.name, m: {} }; c.name = club.name || c.name; c.m = c.m || {};
+    if (yes === !!c.m[mk]) return { nochange: true }; if (yes) c.m[mk] = { at: D.now(), by }; else delete c.m[mk];
+    d.log.push({ at: D.now(), club: c.name, by, player, on: yes }); if (d.log.length > 2000) d.log = d.log.slice(-2000); return {}; });
+  VOC = { at: 0, v: null }; BYC.clear(); CACHE.clear(); return { ok: true, club: club.name, player, vouched: yes };
+}
+const unvouch = (courseOrClubId, playerRef, directorE) => vouch(courseOrClubId, playerRef, directorE, false);
+async function vouchLog(directorE, courseOrClubId) { const cid = okCid(courseOrClubId); if (!(await ownedCourses(directorE)).some((c) => c.id === cid)) throw bad(403, 'Not your club'); const v = await vouchRow(), club = v.c && v.c[cid]; return { ok: true, log: ((v.log) || []).filter((l) => club && l.club === club.name).slice(-200) }; }
 async function ownedCourses(e) { return (await entLinks(e)).courses; }
 async function courseOwner(cid) { // does any enterprise account run this course? -> { name } | null (the consent prompt asks only then)
   if (typeof D.golf().courseOwner === 'function') { const o = await D.golf().courseOwner(cid); if (o) return o; }
@@ -793,7 +831,7 @@ async function courseView(e, op, b, today) {
   const events = []; members.forEach(([, m]) => (m.via || []).forEach((v) => { if (!events.some((x) => x.id === v.id)) events.push(v); }));
   const pick = members.filter(([, m]) => !via || (m.via || []).some((v) => v.id === via)), mo = today.slice(0, 7) + '-01', cname = normCourse(course.name);
   const rows = []; for (const [mk, m] of pick) { let v; try { v = await cached(m.e); } catch (er) { continue; } const golfRecs = v.recs.filter((r) => r.sport === 'golf'), h = golfHcp(golfRecs, oppKeyFor(mk), await confCtx(golfRecs, oppKeyFor(mk))), t = hcpTrend(h, today);
-    rows.push({ pid: cpid(cid, mk), name: (await nameOf(m.e).catch(() => '')) || 'Player', index: h.index, confirmedIndex: h.moneyIndex, provisional: h.provisional, confirmedRounds: h.confirmedRounds, confirmedOf: h.confirmedOf, of: h.of, selfLogged: h.selfLogged, text: h.text, why: h.moneyWhy, makeup: { n: h.makeup.n, text: h.makeup.text, who: h.makeup.who, flags: h.makeup.flags, warn: h.makeup.warn, provisional: h.makeup.provisional, scored: h.makeup.scored, linked: h.makeup.linked, typed: h.makeup.typed, confirmers: h.makeup.confirmers }, trend: t.dir, change: t.change, rounds: h.rounds, need: h.need, roundsMonth: golfRecs.filter((r) => ownRound(r) && r.date >= mo).length, _h: h, _recs: golfRecs }); }
+    rows.push({ pid: cpid(cid, mk), name: (await nameOf(m.e).catch(() => '')) || 'Player', index: h.index, confirmedIndex: h.moneyIndex, suggested: h.suggested, confirmedRounds: h.confirmedRounds, confirmedOf: h.confirmedOf, of: h.of, selfLogged: h.selfLogged, text: h.text, why: h.moneyWhy, makeup: { n: h.makeup.n, text: h.makeup.text, who: h.makeup.who, flags: h.makeup.flags, warn: h.makeup.warn, provisional: h.makeup.provisional, scored: h.makeup.scored, linked: h.makeup.linked, typed: h.makeup.typed, confirmers: h.makeup.confirmers }, trend: t.dir, change: t.change, rounds: h.rounds, need: h.need, roundsMonth: golfRecs.filter((r) => ownRound(r) && r.date >= mo).length, _h: h, _recs: golfRecs }); }
   if (op === 'course/players') return { ok: true, course, events, via: via || null, label: HCP_LABEL, method: HCP_METHOD, players: rows.map(({ _h, _recs, ...x }) => x).sort((a, c) => (a.index == null) - (c.index == null) || (a.index || 0) - (c.index || 0) || a.name.localeCompare(c.name)) };
   if (op === 'course/player') { const r0 = rows.find((x) => x.pid === String(b.pid || '')); if (!r0) throw bad(404, 'Player not found'); return { ok: true, course, name: r0.name, readOnly: true, golfHcp: shareHcp(r0._h) }; }
   if (op === 'course/rounds') { const out = []; rows.forEach((x) => x._recs.filter((r) => r.kind === 'golf-round' && !(r.extra && r.extra.side) && ((r.extra && okCid(r.extra.courseId) === cid) || normCourse(r.extra && r.extra.course) === cname)).forEach((r) => { const d = x._h.diffs.find((y) => y.id === r.id); out.push({ date: r.date, pid: x.pid, name: x.name, score: r.score, toPar: r.toPar == null ? null : r.toPar, tees: clean(r.extra.tees, 20), holes: holesOf(r), team: teamFmt(r), diff: d ? d.diff : null, self: isSelfLogged(r), confirmed: !!(x._h.conf[r.id] && x._h.conf[r.id].confirmed), how: (() => { const c = x._h.conf[r.id] || {}, typed = c.typed ? 'typed total' : 'hole by hole'; return isSelfLogged(r) ? (c.confirmed ? 'Self-logged (' + typed + '), confirmed by ' + (c.name || 'a player who was there') : 'Self-logged (' + typed + '), not confirmed') : c.confirmed ? 'Scored in a game, card confirmed by ' + (c.name || 'another team') : 'Scored in the app, not confirmed'; })() }); }));
@@ -801,7 +839,7 @@ async function courseView(e, op, b, today) {
   if (op === 'course/prefill') { const cr = numOpt(b.cr, 55, 85, 'Course Rating: 55 to 85'), slope = int(b.slope, 55, 155, 'Slope Rating: 55 to 155'), par = int(b.par, 54, 80, 'Par: 54 to 80');
     if (cr == null) throw bad(400, 'Enter the Course Rating');
     return { ok: true, course, tee: { cr, slope, par }, note: 'Course handicaps come from confirmed rounds only. A player needs 3 confirmed rounds, confirmed by 3 different players; until then they have none: set a number for them.',
-      players: rows.map((x) => ({ pid: x.pid, name: x.name, index: x.index, confirmedIndex: x.confirmedIndex, provisional: x.provisional, confirmedRounds: x.confirmedRounds, text: x.text, why: x.why, makeup: x.makeup, needsSet: x.confirmedIndex == null, ch: x.confirmedIndex == null ? null : R.courseHandicap(x.confirmedIndex, slope, cr, par) })).sort((a, c) => (a.ch == null) - (c.ch == null) || (a.ch || 0) - (c.ch || 0)) }; }
+      players: rows.map((x) => ({ pid: x.pid, name: x.name, index: x.index, confirmedIndex: x.confirmedIndex, suggested: x.suggested, confirmedRounds: x.confirmedRounds, text: x.text, why: x.why, makeup: x.makeup, needsSet: x.confirmedIndex == null, ch: x.confirmedIndex == null ? null : R.courseHandicap(x.confirmedIndex, slope, cr, par) })).sort((a, c) => (a.ch == null) - (c.ch == null) || (a.ch || 0) - (c.ch || 0)) }; }
   throw bad(404, 'not found');
 }
 // Exported for the golf engine's director screens: the consenting members of one of the director's courses, each with the Oddable index, the CONFIRMED
@@ -825,9 +863,19 @@ async function courseAdmin(b) {
 // tournament only, until it starts (lockAt); every add/change is logged (who, when, old, new, reason) and shows "Set by tournament". A director's edit
 // never touches the player's lifetime Oddable index. Addendum: "But Oddable is there as real results": the real Oddable value is always returned next
 // to the tournament one ({oddable, event, setBy}), and My handicap always shows the real one.
-// Storage: 'lock:evr:<eventId>' { dir: <limits key of the director>, title, sport, lockAt, set: { <player key>: { hcp?, rating?, at, reason, name } }, log: [..] }
-//   player key = groups member key (mkOf) for an account, 'g:<gid>' for a guest player (userKey 'guest:<gid>', the golf engine's convention).
-// Engines call: eventSetup (once, when an Enterprise tournament is created), eventOverride (director edits), handicapFor / ratingFor (every use).
+// EVENTS: who plays off what (review 5, manager Nov 17 2026: "stop the arms race, simplify").
+//   A. The Oddable number is always worked out from all app play and shown with its make-up.
+//   B. In ANY money game, flight or tournament the number a player plays off is APPROVED (or set) by the organizer / director before the start. Nothing is
+//      used automatically. handicapFor / ratingFor give `use` only when the event has an approval or a set value for that player.
+//   C. One tap: eventApproveAll ("Use everyone's Oddable index") approves each player's suggested number. An approval stands for that event; in a group or
+//      league SEASON (kind 'season') it stands until the suggested number moves by CONF.seasonMove (1.0) or more (ratings: CONF.seasonMoveRating points).
+//   D. WHO MAY APPROVE is checked HERE: the organizer, a co-organizer or an Enterprise director registered by eventSetup. Nobody approves or sets his OWN
+//      number: that needs a co-sign from a different organizer / director or from a player on another team (both names are kept). Every approval and set
+//      value goes in the event log, which every player in the event can read ("12.6 approved by Coach Mo"), next to the real Oddable number.
+// Row 'lock:evr:<eventId>' { org, co: [keys], dirs: [keys], dir (legacy: the Enterprise creator), kind, money, title, sport, lockAt, lockAt0, moves,
+//   pl: { <player key>: { u (userKey, server only), name, team } }, set: { <player key>: { hcp?, rating?, at, reason, name, by, cosign } },
+//   ap: { <player key>: { hcp?, rating?, base, confirmed, at, name, by, cosign } }, log: [..] }
+//   role keys = limits keyOf(account); player key = groups member key (mkOf) for an account, 'g:<gid>' for a guest player (userKey 'guest:<gid>').
 const EVR = (id) => 'lock:evr:' + id;
 const okEid = (v) => { const x = String(v || ''); return /^[\w.:-]{1,60}$/.test(x) ? x : ''; };
 const pkeyOf = (userKey) => { const m = /^guest:([a-z0-9]{6,24})$/.exec(String(userKey || '')); return m ? 'g:' + m[1] : mkOf(userKey); };
@@ -838,106 +886,195 @@ async function recsOf(userKey) { // a player's validated records (an account thr
 }
 async function evRow(eventId) { const id = okEid(eventId); if (!id) return null; const r = await D.S.dbGet(EVR(id)).catch(() => null); return (r && r.data) || null; }
 const evLocked = (ev) => !!(ev && ev.lockAt && D.now() >= ev.lockAt);
-// The engine creating an Enterprise tournament registers it here (director = the creating account; must be an Enterprise account NOW: checked on every call).
-// lockAt (the first tee time) rules, review fix 5: it must be set before any override is accepted; it can be moved LATER only, only before it passes, and
-// every set / move is logged; after it passes nothing in the row changes any more.
-// Review 3, L4: (1) only the ENGINE that created the tournament registers it (this function called server-side). The phone route /stats/event/setup can
-// change a tournament its caller already directs, never create one, so nobody can take an unused event id and become its director. (2) The start must be
-// within a year. (3) It can be moved later at most EVT.moves times and never more than EVT.slipDays days past the first start that was set.
+const KINDS_EV = ['game', 'flight', 'tournament', 'season'];
+const evSport = (v) => { const x = String(v == null ? '' : v).toLowerCase().trim(); if (!x || x === 'golf') return 'golf'; try { return normSport(x); } catch (er) { return 'golf'; } };
+const fieldOf = (ev) => ((ev && ev.sport) && ev.sport !== 'golf' ? 'rating' : 'hcp');
+async function pname(userKey, fallback) { const gm = /^guest:([a-z0-9]{6,24})$/.exec(String(userKey || '')); if (gm) { const gr = await D.S.dbGet(GROW(gm[1])).catch(() => null); return clean(gr && gr.data && gr.data.name, 30) || clean(fallback, 30) || 'Guest'; } return (await nameOf(userKey).catch(() => '')) || clean(fallback, 30) || 'Player'; }
+// The caller's role in an event: 'org' | 'co' | 'dir' | null. A director (and the creator of an Enterprise TOURNAMENT) must still be Enterprise.
+async function roleOf(ev, e) {
+  if (!ev || !e || /^guest:/.test(String(e))) return null; const k = D.limits().keyOf(e), entNow = async () => (await entLinks(e)).ent;
+  if (ev.org === k || (!ev.org && ev.dir === k)) { if ((ev.kind === 'tournament' || !ev.org) && !(await entNow())) return null; return 'org'; }
+  if ((ev.co || []).includes(k)) return 'co';
+  if ((ev.dirs || []).includes(k) && (await entNow())) return 'dir';
+  return null;
+}
+const NOROLE = 'Only this event\'s organizer, a co-organizer or its Enterprise director can approve or set numbers';
+// Registers a money game / flight / tournament / season (the ENGINE, server-side, when it is created; the phone route can only change the start time and
+// title of an event its caller organizes, never create one or add people).
+//   o = { title, sport ('golf' | a rating sport | a game's name), kind ('game' | 'flight' | 'tournament' | 'season'), lockAt, money,
+//         coOrganizers: [accountId], directors: [accountId] (Enterprise accounts), players: [userKey | { key, team, name }], reason }
+// lockAt (the first tee time / start) rules, review fix 5 + review 3, L4: it can be moved LATER only, only before it passes, at most EVT.moves times and
+// never more than EVT.slipDays days past the first start; it must be within a year; every set / move is logged; after it passes nothing changes.
+// A TOURNAMENT (E-H) needs an Enterprise creator and a start time before any number is set.
 const EVT = { aheadDays: 366, moves: 5, slipDays: 14 };
-async function eventSetup(directorE, eventId, o, from) {
+async function eventSetup(organizerE, eventId, o, from) {
   const fromRoute = from === ROUTE;
-  const id = okEid(eventId); if (!id) throw bad(400, 'Bad event'); const L = D.limits(), dk = L.keyOf(directorE); if (!(await entLinks(directorE)).ent) throw bad(403, 'Only Enterprise tournaments can set handicaps');
-  const x = o || {}, lockAt = Number(x.lockAt) > 0 ? Math.round(Number(x.lockAt)) : null, by = (await nameOf(directorE)) || 'Tournament director';
-  await rowMutate(EVR(id), fromRoute ? null : () => ({ dir: dk, set: {}, log: [] }), (d) => { if (d.dir !== dk) throw bad(403, 'Not your tournament'); if (evLocked(d)) throw bad(409, 'The tournament has started; handicaps and the start time are locked');
-    const now = D.now(); d.log = d.log || [];
+  const id = okEid(eventId); if (!id) throw bad(400, 'Bad event'); const L = D.limits(), dk = L.keyOf(organizerE), x = o || {};
+  if (!organizerE || /^guest:/.test(String(organizerE))) throw bad(403, 'Sign in first');
+  const ent = (await entLinks(organizerE)).ent, cur = await evRow(id);
+  if (!cur) { if (fromRoute) throw bad(404, 'Event not found'); const kind = KINDS_EV.includes(x.kind) ? x.kind : ent ? 'tournament' : 'game'; if (kind === 'tournament' && !ent) throw bad(403, 'Only Enterprise tournaments can set handicaps (an Enterprise account creates a tournament)'); }
+  const lockAt = Number(x.lockAt) > 0 ? Math.round(Number(x.lockAt)) : null, by = (await nameOf(organizerE)) || 'Organizer';
+  const keysOf = (list, max) => (Array.isArray(list) ? list : []).filter((v) => v && !/^guest:/.test(String(v))).slice(0, max).map((v) => L.keyOf(v));
+  const dirsOk = []; if (!fromRoute) for (const de of (Array.isArray(x.directors) ? x.directors : []).slice(0, 5)) { if (de && (await entLinks(de)).ent) dirsOk.push(L.keyOf(de)); else throw bad(403, 'A director must be an Enterprise account'); }
+  const pls = []; if (!fromRoute) for (const p of (Array.isArray(x.players) ? x.players : []).slice(0, 400)) { const u = typeof p === 'string' ? p : p && p.key; if (!u) continue; pls.push({ pk: pkeyOf(u), u: String(u), team: clean(p && p.team, 30), name: await pname(u, p && p.name) }); }
+  if (cur && (!(await roleOf(cur, organizerE)) || (fromRoute && (cur.org || cur.dir) !== dk))) throw bad(403, 'Not your event (only its organizer or Enterprise director)');
+  await rowMutate(EVR(id), fromRoute ? null : () => ({ org: dk, dir: ent ? dk : undefined, co: [], dirs: [], kind: KINDS_EV.includes(x.kind) ? x.kind : ent ? 'tournament' : 'game', set: {}, ap: {}, pl: {}, log: [] }), (d) => {
+    if (!d.org && d.dir) d.org = d.dir; // rows written before review 5
+    if (d.org !== dk && !(d.co || []).includes(dk) && !(d.dirs || []).includes(dk)) throw bad(403, 'Not your event (only its organizer or Enterprise director)');
+    if (evLocked(d)) throw bad(409, 'The event has started; numbers and the start time are locked');
+    const now = D.now(); d.log = d.log || []; d.pl = d.pl || {}; d.ap = d.ap || {}; d.set = d.set || {};
     if (lockAt != null && lockAt !== d.lockAt) {
       if (d.lockAt && lockAt < d.lockAt) throw bad(400, 'The start can only be moved later, not earlier'); if (lockAt <= now) throw bad(400, 'The tournament start must be in the future');
       if (lockAt > now + EVT.aheadDays * DAY) throw bad(400, 'The tournament start must be within a year');
       if (d.lockAt) { const first = d.lockAt0 || d.lockAt; if (N(d.moves) >= EVT.moves) throw bad(409, 'The start has already been moved ' + EVT.moves + ' times. It cannot be moved again.'); if (lockAt > first + EVT.slipDays * DAY) throw bad(400, 'The start cannot be moved more than ' + EVT.slipDays + ' days past the first start that was set'); d.moves = N(d.moves) + 1; } else d.lockAt0 = lockAt;
       d.log.push({ at: now, by, player: '', field: 'lockAt', old: d.lockAt || null, new: lockAt, oddable: null, reason: clean(x.reason, 120) || (d.lockAt ? 'Start moved later' : 'Start set') }); d.lockAt = lockAt;
     }
-    d.title = clean(x.title, 60) || d.title || 'Tournament'; d.sport = SPORTS.includes(x.sport) ? x.sport : d.sport || 'golf'; d.lockAt = d.lockAt || null; return {}; });
+    if (!fromRoute && d.org === dk) {
+      d.co = [...new Set((d.co || []).concat(keysOf(x.coOrganizers, 10)))].filter((k) => k !== d.org).slice(0, 10); d.dirs = [...new Set((d.dirs || []).concat(dirsOk))].slice(0, 5);
+      pls.forEach((p) => { d.pl[p.pk] = { u: p.u, name: p.name, team: p.team || (d.pl[p.pk] && d.pl[p.pk].team) || '' }; });
+      if (Object.keys(d.pl).length > 400) throw bad(400, 'At most 400 players in one event');
+      if (x.money != null) d.money = !!x.money;
+    }
+    d.title = clean(x.title, 60) || d.title || 'Tournament'; if (x.sport != null && !fromRoute) d.sport = evSport(x.sport); d.sport = d.sport || 'golf'; d.lockAt = d.lockAt || null; return {}; });
   return { ok: true };
 }
-// Director adds / changes / clears (value null) one player's handicap (golf) or rating (pickleball and other Elo sports) for this tournament only.
-// Every edit: the caller must be this tournament's director AND still an Enterprise account; a reason is required; the tournament must have a start time
-// that has not passed. The log's "by" and the player's name come from the accounts themselves (nameOf), never from text the caller sent.
+// Who may co-sign when the approver is the player himself: a different organizer / co-organizer / director, or a player on ANOTHER team in this event.
+async function cosignOk(ev, approverE, playerKey, cosignE) {
+  if (!cosignE || pkeyOf(cosignE) === playerKey || pkeyOf(cosignE) === pkeyOf(approverE)) return null;
+  if (await roleOf(ev, cosignE)) return (await nameOf(cosignE)) || 'Organizer';
+  const me = ev.pl && ev.pl[pkeyOf(approverE)], them = ev.pl && ev.pl[pkeyOf(cosignE)];
+  if (me && them && me.team && them.team && me.team !== them.team) return (await nameOf(cosignE)) || them.name || 'Player';
+  return null;
+}
+const SELF = 'You cannot approve or set your own number. A different organizer or director, or a player on another team, has to co-sign it';
+const nowNumber = async (userKey, ev) => (fieldOf(ev) === 'hcp' ? await handicapFor(userKey) : await ratingFor(userKey, ev.sport));
+// eventApprove(eventId, playerRef, value, approverAccount, {cosign, reason}): the organizer approves the number he was shown (`value`, or null = the
+// player's suggested number now). If the suggested number changed since the screen was drawn, nothing is approved (409: look again).
+async function eventApprove(eventId, playerRef, value, approverE, opts) {
+  const id = okEid(eventId); if (!id) throw bad(400, 'Bad event'); const ev0 = await evRow(id); if (!ev0) throw bad(404, 'Event not found'); const o = opts || {};
+  const role = await roleOf(ev0, approverE); if (!role) throw bad(403, NOROLE); if (evLocked(ev0)) throw bad(409, 'The event has started; numbers are locked');
+  const field = fieldOf(ev0), pk = pkeyOf(playerRef); let cosign = null;
+  if (pk === pkeyOf(approverE)) { cosign = await cosignOk(ev0, approverE, pk, o.cosign); if (!cosign) throw bad(403, SELF); }
+  const f = await nowNumber(playerRef, ev0), sug = f.suggested || {}, real = field === 'hcp' ? f.oddable.index : f.oddable.rating;
+  if (sug.value == null) throw bad(409, 'No Oddable number for this player yet. Set one for this event.');
+  const want = value == null || value === '' ? sug.value : Number(value); if (!Number.isFinite(want) || Math.abs(want - sug.value) > 1e-9) throw bad(409, 'The number changed (now ' + (field === 'hcp' ? R.fmtIdx(sug.value) : sug.value) + '). Look at it again before approving.');
+  const by = (await nameOf(approverE)) || 'Organizer', name = await pname(playerRef);
+  await rowMutate(EVR(id), null, (d) => { if (evLocked(d)) throw bad(409, 'The event has started; numbers are locked'); d.ap = d.ap || {}; d.pl = d.pl || {}; d.log = d.log || [];
+    const old = d.ap[pk] && d.ap[pk][field] != null ? d.ap[pk][field] : null;
+    d.ap[pk] = Object.assign({}, d.ap[pk], { [field]: want, base: sug.value, confirmed: !!sug.confirmed, at: D.now(), name, by, cosign: cosign || undefined });
+    if (!d.pl[pk]) d.pl[pk] = { u: String(playerRef), name, team: '' };
+    d.log.push({ at: D.now(), by, cosign: cosign || undefined, player: name, pk, field, kind: 'approve', old, new: want, oddable: real == null ? null : real, reason: clean(o.reason, 120) || (sug.confirmed ? 'Oddable number approved (confirmed)' : 'Oddable number approved (UNCONFIRMED)') }); if (d.log.length > 2000) d.log = d.log.slice(-2000);
+    return {}; });
+  await evIndexAdd(pk, id); CACHE.clear();
+  return { ok: true, player: name, value: want, confirmed: !!sug.confirmed, by, cosign: cosign || undefined };
+}
+// "Use everyone's Oddable index": approves the suggested number of every registered player who has no number yet. The approver's own number is left for
+// a co-sign; a player with no Oddable number is left for a typed one. -> { ok, approved: [{name, value, confirmed}], skipped: [{name, why}] }
+async function eventApproveAll(eventId, approverE, opts) {
+  const ev = await evRow(eventId); if (!ev) throw bad(404, 'Event not found'); if (!(await roleOf(ev, approverE))) throw bad(403, NOROLE);
+  const field = fieldOf(ev), out = { ok: true, approved: [], skipped: [] };
+  for (const pk of Object.keys(ev.pl || {})) {
+    const p = ev.pl[pk], cur = await nowNumber(p.u, ev);
+    if (ev.set && ev.set[pk] && ev.set[pk][field] != null) { out.skipped.push({ name: p.name, why: 'set by the organizer' }); continue; }
+    if (pk === pkeyOf(approverE)) { out.skipped.push({ name: p.name, why: 'your own number: another organizer or director, or a player on another team, co-signs it' }); continue; }
+    if (!cur.suggested || cur.suggested.value == null) { out.skipped.push({ name: p.name, why: 'no Oddable number yet: set one' }); continue; }
+    try { const r = await eventApprove(eventId, p.u, cur.suggested.value, approverE, opts); out.approved.push({ name: r.player, value: r.value, confirmed: r.confirmed }); } catch (er) { out.skipped.push({ name: p.name, why: er.message }); }
+  }
+  return out;
+}
+// Director / organizer adds, changes or clears (value null) one player's number for this event only. A reason is required. A tournament (E-H) needs its
+// start time first. The log's "by" and the player's name come from the accounts themselves (nameOf), never from text the caller sent.
 async function eventOverride(directorE, eventId, userKey, o) {
-  const id = okEid(eventId); if (!id) throw bad(400, 'Bad event'); const x = o || {}, field = x.rating !== undefined ? 'rating' : 'hcp', raw = x[field];
+  const id = okEid(eventId); if (!id) throw bad(400, 'Bad event'); const x = o || {}, ev0 = await evRow(id);
+  if (!ev0) throw bad(404, 'Event not found'); if (!(await roleOf(ev0, directorE))) throw bad(403, NOROLE);
+  const field = x.rating !== undefined ? 'rating' : 'hcp', raw = x[field];
   const val = raw == null || raw === '' ? null : field === 'hcp' ? numOpt(raw, -10, 54, 'Handicap must be +10 to 54.0', 1) : numOpt(raw, 100, 3500, 'Rating must be 100 to 3500', 0);
   const reason = clean(x.reason, 120); if (!reason) throw bad(400, 'Enter a reason for the change');
-  const L = D.limits(), dk = L.keyOf(directorE); if (!(await entLinks(directorE)).ent) throw bad(403, 'Only an Enterprise account can set tournament handicaps');
-  const pk = pkeyOf(userKey), gm = /^guest:([a-z0-9]{6,24})$/.exec(String(userKey || '')), real = field === 'hcp' ? (await handicapFor(userKey, { casual: true })).oddable.index : (await ratingFor(userKey, x.sport == null || x.sport === 'golf' ? (await evRow(id).then((v) => (v && v.sport && v.sport !== 'golf' ? v.sport : 'pickleball'))) : x.sport, { casual: true })).oddable.rating;
-  const by = (await nameOf(directorE)) || 'Tournament director', gr = gm ? await D.S.dbGet(GROW(gm[1])).catch(() => null) : null, pname = (gm ? clean(gr && gr.data && gr.data.name, 30) : await nameOf(userKey)) || clean(x.name, 30);
+  const pk = pkeyOf(userKey); let cosign = null; if (pk === pkeyOf(directorE)) { cosign = await cosignOk(ev0, directorE, pk, x.cosign); if (!cosign) throw bad(403, SELF); }
+  const real = field === 'hcp' ? (await handicapFor(userKey, { casual: true })).oddable.index : (await ratingFor(userKey, x.sport == null || x.sport === 'golf' ? (ev0.sport && ev0.sport !== 'golf' ? ev0.sport : 'pickleball') : x.sport, { casual: true })).oddable.rating;
+  const by = (await nameOf(directorE)) || 'Tournament director', name = await pname(userKey, x.name || (ev0.pl && ev0.pl[pk] && ev0.pl[pk].name));
   const res = await rowMutate(EVR(id), null, (d) => {
-    if (d.dir !== dk) throw bad(403, 'Only this tournament\'s director can change handicaps'); if (!d.lockAt) throw bad(409, 'Set the tournament start time first. Handicaps can be set until the start.'); if (evLocked(d)) throw bad(409, 'The tournament has started; handicaps are locked');
-    d.set = d.set || {}; d.log = d.log || []; const cur = d.set[pk] || {}, old = cur[field] != null ? cur[field] : real;
+    if (ev0.kind === 'tournament' && !d.lockAt) throw bad(409, 'Set the tournament start time first. Handicaps can be set until the start.'); if (evLocked(d)) throw bad(409, 'The tournament has started; handicaps are locked');
+    d.set = d.set || {}; d.log = d.log || []; d.pl = d.pl || {}; const cur = d.set[pk] || {}, old = cur[field] != null ? cur[field] : real;
     if ((cur[field] == null && val == null) || cur[field] === val) return { nochange: true, v: { ok: true, changed: false } };
-    const nx = Object.assign({}, cur, { at: D.now(), reason, name: pname || cur.name || '' }); if (val == null) delete nx[field]; else nx[field] = val;
+    const nx = Object.assign({}, cur, { at: D.now(), reason, name: name || cur.name || '', by, cosign: cosign || undefined }); if (val == null) delete nx[field]; else nx[field] = val;
     if (nx.hcp == null && nx.rating == null) delete d.set[pk]; else d.set[pk] = nx;
-    d.log.push({ at: D.now(), by, player: nx.name || 'Player', pk, field, old: old == null ? null : old, new: val, oddable: real == null ? null : real, reason }); if (d.log.length > 2000) d.log = d.log.slice(-2000); // pk = the player's key: who a line belongs to (review 3, M4). Server only, stripped by logOut.
+    if (!d.pl[pk]) d.pl[pk] = { u: String(userKey), name: nx.name, team: '' };
+    d.log.push({ at: D.now(), by, cosign: cosign || undefined, player: nx.name || 'Player', pk, field, kind: 'set', old: old == null ? null : old, new: val, oddable: real == null ? null : real, reason }); if (d.log.length > 2000) d.log = d.log.slice(-2000); // pk = the player's key (server only, stripped by logOut)
     return { ok: true, changed: true, old: old == null ? null : old, new: val };
   });
   if (res && res.changed) await evIndexAdd(pk, id);
   CACHE.clear(); return res;
 }
-// Director's view of the tournament's edits and their log (names only; never player keys).
-// ONE override store and ONE log for every engine (golf, events, Calcutta golf): row 'lock:evr:<eventId>', written only by eventSetup / eventOverride above.
-// The director reads the whole log; a player the director set a number for reads their own lines (that is what the "Set by tournament" card shows);
-// anyone else gets 404.
-const logOut = (l) => ({ at: l.at, by: l.by, player: l.player, field: l.field, old: l.old, new: l.new, oddable: l.oddable, reason: l.reason }); // never the player key
-const logMine = (ev, pk) => (ev.log || []).filter((l) => l.field !== 'lockAt' && l.pk === pk); // by ACCOUNT KEY, never by name: two players with the same name never see each other's lines
+// The event log. Organizers / directors read all of it; EVERY PLAYER IN THE EVENT reads every approval and set value too (manager D: "12.6 approved by
+// Coach Mo" is visible to all the players), next to the real Oddable number. Anyone else gets 404. Player keys never leave.
+const logOut = (l) => ({ at: l.at, by: l.by, cosign: l.cosign || undefined, player: l.player, field: l.field, kind: l.kind || (l.field === 'lockAt' ? 'start' : 'set'), old: l.old, new: l.new, oddable: l.oddable, reason: l.reason });
+const logMine = (ev, pk) => (ev.log || []).filter((l) => l.field !== 'lockAt' && l.pk === pk); // a player's own lines (the "Set by tournament" card)
+const inEvent = (ev, pk) => !!((ev.pl && ev.pl[pk]) || (ev.set && ev.set[pk]) || (ev.ap && ev.ap[pk]));
 async function eventLog(callerE, eventId) {
-  const ev = await evRow(eventId); if (!ev) throw bad(404, 'Tournament not found'); const base = { ok: true, title: clean(ev.title, 60) || 'Tournament', sport: ev.sport || 'golf', locked: evLocked(ev), lockAt: ev.lockAt || null };
-  if (ev.dir === D.limits().keyOf(callerE)) return Object.assign(base, { director: true, set: Object.values(ev.set || {}).map((x) => ({ name: x.name || 'Player', hcp: x.hcp != null ? x.hcp : null, rating: x.rating != null ? x.rating : null, reason: x.reason || '', at: x.at })), log: (ev.log || []).slice(-500).map(logOut) });
-  const s = ev.set && ev.set[pkeyOf(callerE)]; if (!s) throw bad(404, 'Tournament not found');
-  return Object.assign(base, { director: false, mine: { hcp: s.hcp != null ? s.hcp : null, rating: s.rating != null ? s.rating : null, reason: s.reason || '', at: s.at }, log: logMine(ev, pkeyOf(callerE)).slice(-50).map(logOut) });
+  const ev = await evRow(eventId); if (!ev) throw bad(404, 'Tournament not found'); const base = { ok: true, title: clean(ev.title, 60) || 'Tournament', sport: ev.sport || 'golf', kind: ev.kind || 'tournament', locked: evLocked(ev), lockAt: ev.lockAt || null };
+  const field = fieldOf(ev), shown = (pk, x) => ({ name: x.name || 'Player', hcp: x.hcp != null ? x.hcp : null, rating: x.rating != null ? x.rating : null, reason: x.reason || '', by: x.by || '', cosign: x.cosign || undefined, at: x.at });
+  const lines = (ev.log || []).slice(-500).map(logOut), approvals = Object.keys(ev.ap || {}).filter((pk) => ev.ap[pk][field] != null).map((pk) => Object.assign(shown(pk, ev.ap[pk]), { confirmed: !!ev.ap[pk].confirmed }));
+  const set = Object.keys(ev.set || {}).map((pk) => shown(pk, ev.set[pk]));
+  if (await roleOf(ev, callerE)) return Object.assign(base, { director: true, set, approvals, log: lines });
+  const pk = pkeyOf(callerE); if (!inEvent(ev, pk)) throw bad(404, 'Tournament not found');
+  const s = ev.set && ev.set[pk];
+  return Object.assign(base, { director: false, mine: s ? { hcp: s.hcp != null ? s.hcp : null, rating: s.rating != null ? s.rating : null, reason: s.reason || '', at: s.at } : null, set, approvals, log: lines.filter((l) => l.field !== 'lockAt') });
 }
-const evOver = (ev, userKey, field) => { const s = ev && ev.set && ev.set[pkeyOf(userKey)]; return s && s[field] != null ? s : null; };
-// handicapFor(userKey, {eventId, casual, typed}) ->
-//   { oddable: {index, rounds, need, selfLogged, confirmedOf, of, text, label, method}, confirmedIndex, rounds, confirmedRounds, event, setBy, use, needsSet, text, ... }
-//   oddable.index    = the Oddable Handicap Index from EVERY round played or logged in the app (H1). Always returned, never hidden.
-//   confirmedIndex   = the same calculation over confirmed rounds only (isConfirmed); null with fewer than 3 confirmed rounds.
-//   use = the number to play off:
-//     1. the tournament's value when its director set one (E-H)                          setBy 'tournament'
-//     2. {casual: true} (solo play, a casual round, no money shown): the full index
-//     3. otherwise (ANY game with money shown, a flight, or a tournament: the default): the confirmed index
-//     4. fewer than 3 confirmed rounds: `typed` (the number the organizer typed in a standard game) when given, setBy 'organizer'; else use = null and
-//        needsSet = true: the game asks the organizer / director to set a number (E-H path).
-//   text = what another person sees next to the handicap: "12.6 · 4 of 20 rounds confirmed".
-//   REVIEW 3 (manager rule): the confirmed index is used only when it has at least 3 confirmed rounds AND those rounds were confirmed by at least 3
-//   different accounts (golfHcp: moneyIndex). Otherwise use = null / needsSet with `why` ("needs rounds confirmed by 3 different players").
-//   makeup = what the number is made of, for the organizer to read BEFORE approving a money game, and for the player on My handicap:
-//     { n, scored, linked, typed, confirmers, need, ok, why, text, who: [{name, n}], rounds: [{date, what, score, diff, used, how, typed, byName}] }
-//   A NULL `use` IS NEVER 0: ratings.strokesOnHole / courseHandicap throw on it. The engine must stop and ask for a number.
+// The organizer's approval screen, one row per registered player: the real Oddable number, the suggested one (confirmed or UNCONFIRMED), the make-up and
+// its flags, and what is approved or set. `ready` = every player has a number to play off (engines block Start in a money game until it is true).
+async function eventReview(eventId, callerE) {
+  const ev = await evRow(eventId); if (!ev) throw bad(404, 'Event not found'); if (!(await roleOf(ev, callerE))) throw bad(403, NOROLE);
+  const rows = []; for (const pk of Object.keys(ev.pl || {})) { const p = ev.pl[pk], f = fieldOf(ev) === 'hcp' ? await handicapFor(p.u, { eventId }) : await ratingFor(p.u, ev.sport, { eventId });
+    rows.push({ name: p.name, team: p.team || '', you: pk === pkeyOf(callerE), oddable: fieldOf(ev) === 'hcp' ? f.oddable.index : f.oddable.rating, suggested: f.suggested, makeup: f.makeup, flags: f.flags, vouched: f.vouched, use: f.use, setBy: f.setBy, by: f.by, cosign: f.cosign, shown: f.shown, why: f.why }); }
+  return { ok: true, title: clean(ev.title, 60), kind: ev.kind || 'game', sport: ev.sport || 'golf', field: fieldOf(ev), locked: evLocked(ev), players: rows, ready: rows.length > 0 && rows.every((r) => r.use != null), unconfirmed: rows.filter((r) => r.suggested && r.suggested.value != null && !r.suggested.confirmed).map((r) => r.name), noNumber: rows.filter((r) => !r.suggested || r.suggested.value == null).map((r) => r.name) };
+}
+// What the player plays off in one event. -> { use, setBy, by, cosign, event, lapsed, at, reason }
+function evUse(ev, userKey, field, sug) {
+  const pk = pkeyOf(userKey), s = ev && ev.set && ev.set[pk] && ev.set[pk][field] != null ? ev.set[pk] : null, a = ev && ev.ap && ev.ap[pk] && ev.ap[pk][field] != null ? ev.ap[pk] : null;
+  if (s) return { use: s[field], setBy: ev.kind === 'tournament' || (!ev.org && ev.dir) ? 'tournament' : 'organizer', by: s.by || '', cosign: s.cosign, event: s[field], at: s.at, reason: s.reason };
+  if (a) { const move = field === 'hcp' ? CONF.seasonMove : CONF.seasonMoveRating, cur = sug && sug.value;
+    if (ev.kind === 'season' && cur != null && Math.abs(cur - N(a.base)) >= move - 1e-9) return { use: null, lapsed: true, event: null, reason: 'Approval lapsed: the Oddable number moved from ' + (field === 'hcp' ? R.fmtIdx(a.base) : a.base) + ' to ' + (field === 'hcp' ? R.fmtIdx(cur) : cur) + '. The organizer approves it again.' };
+    return { use: a[field], setBy: 'approved', by: a.by || '', cosign: a.cosign, event: a[field], at: a.at, approvedConfirmed: !!a.confirmed }; }
+  return { use: null, event: null };
+}
+// handicapFor(userKey, {eventId, casual}) ->
+//   { oddable: {index, rounds, ...}, confirmedIndex, rounds, confirmedRounds, makeup, flags, suggested: {value, confirmed, label, why}, vouched,
+//     event, setBy ('tournament' | 'organizer' | 'approved' | null), by, cosign, use, needsSet, shown, why, ask, ... }
+//   oddable.index = the Oddable Handicap Index from EVERY round played or logged in the app (H1). Always there.
+//   confirmedIndex = the index over the counting confirmed rounds, when the confirmed rule is met (else null).
+//   suggested = what the organizer is offered: the confirmed index when the rule is met, else the full index marked "unconfirmed".
+//   use = {casual: true}: the full index. Otherwise ONLY the event's approved or set value; null without one (needsSet). A NULL use IS NEVER 0:
+//   ratings.strokesOnHole / courseHandicap throw on it. The engine stops and asks the organizer.
+//   shown = what every player in the event sees: "12.6 approved by Coach Mo · Oddable 12.6 (real results)".
 const meRefOf = (userKey) => (/^guest:/.test(String(userKey || '')) ? '' : oppKeyFor(mkOf(userKey)));
+const showLine = (u, fmt, real) => (u.use == null ? '' : fmt(u.use) + (u.setBy === 'approved' ? ' approved by ' : ' set by ') + (u.by || (u.setBy === 'tournament' ? 'the tournament' : 'the organizer')) + (u.cosign ? ' with ' + u.cosign : '') + ' · Oddable ' + (real == null ? 'none yet' : fmt(real)) + ' (real results)');
 async function handicapFor(userKey, opts) {
-  const golfRecs = (await recsOf(userKey)).filter((r) => r.sport === 'golf'), h = golfHcp(golfRecs, meRefOf(userKey), await confCtx(golfRecs, meRefOf(userKey))), o = opts || {}, ev = o.eventId ? await evRow(o.eventId) : null, s = evOver(ev, userKey, 'hcp');
+  const golfRecs = (await recsOf(userKey)).filter((r) => r.sport === 'golf'), h = golfHcp(golfRecs, meRefOf(userKey), await confCtx(golfRecs, meRefOf(userKey))), o = opts || {}, ev = o.eventId ? await evRow(o.eventId) : null;
   const oddable = { index: h.index, rounds: h.rounds, need: h.need, selfLogged: h.selfLogged, confirmedOf: h.confirmedOf, of: h.of, text: h.text, cap: h.cap, label: HCP_LABEL, method: HCP_METHOD };
-  const typed = o.typed != null && o.typed !== '' && Number.isFinite(Number(o.typed)) && Number(o.typed) >= -10 && Number(o.typed) <= 54 ? r1(Number(o.typed)) : null, conf = h.moneyIndex;
-  const prov = h.provisional; let use = null, setBy = null, approved = false; if (s) { use = s.hcp; setBy = 'tournament'; } else if (o.casual === true) use = h.index; else if (conf != null) use = conf; else if (typed != null) { use = typed; setBy = 'organizer'; } else if (o.approved === true && prov != null) { use = prov; setBy = 'organizer'; approved = true; } // review 4: a provisional number plays only after the organizer approved it on the make-up screen
-  const needsSet = use == null && o.casual !== true, why = conf == null ? h.moneyWhy : '';
-  return { oddable, confirmedIndex: conf, provisional: prov != null ? prov : undefined, approved: approved || undefined, rounds: h.rounds, confirmedRounds: h.confirmedRounds, event: s ? s.hcp : null, setBy, use, needsSet, why: why || undefined, makeup: h.makeup,
-    ask: needsSet ? (prov != null ? 'Provisional handicap ' + R.fmtIdx(prov) + ': ' + why.replace(/^provisional: /, '') + ', or sets another number.' : 'No handicap for money games yet: ' + why + '. The organizer or tournament director sets a handicap for this game.') : undefined,
-    text: h.text, label: HCP_LABEL, method: HCP_METHOD, reason: s ? s.reason : use == null && why ? why : undefined, at: s ? s.at : undefined, locked: ev ? evLocked(ev) : undefined };
+  const sug = h.suggested, u = o.casual === true ? { use: h.index, event: null } : evUse(ev, userKey, 'hcp', sug), needsSet = u.use == null && o.casual !== true, vouched = /^guest:/.test(String(userKey)) ? [] : vouchedBy(await vouchRow(), mkOf(userKey));
+  const flags = (h.makeup.flags || []).slice(); if (!sug.confirmed && sug.value != null) flags.unshift('unconfirmed: ' + sug.why); if (vouched.length) flags.push('vouched by ' + vouched.join(', '));
+  const why = needsSet ? (u.reason || (ev ? 'not approved for this event yet' : 'a money game plays only a number the organizer approved')) : '';
+  return { oddable, confirmedIndex: h.moneyIndex, rounds: h.rounds, confirmedRounds: h.confirmedRounds, makeup: h.makeup, flags, suggested: sug, vouched, event: u.event != null ? u.event : null, setBy: u.setBy || null, by: u.by || undefined, cosign: u.cosign || undefined, lapsed: u.lapsed || undefined, use: u.use, needsSet,
+    shown: showLine(u, R.fmtIdx, h.index) || undefined, why: why || undefined, unconfirmedWhy: sug.confirmed ? undefined : sug.why,
+    ask: needsSet ? 'The organizer approves a number before the game: suggested ' + (sug.value == null ? 'none (no rounds yet: set one)' : R.fmtIdx(sug.value) + (sug.confirmed ? ' (confirmed)' : ' (UNCONFIRMED: ' + sug.why + ')')) + '.' : undefined,
+    text: h.text, label: HCP_LABEL, method: HCP_METHOD, reason: u.use != null ? u.reason : why || undefined, at: u.at, locked: ev ? evLocked(ev) : undefined };
 }
-// ratingFor(userKey, sport = 'pickleball', {eventId, casual}) -> { sport, oddable: {rating, matches, text, label}, confirmedRating, confirmedGames, event, setBy, use, start, text }
-//   oddable.rating = Elo over every match played or logged (null = none yet). confirmedRating = Elo over confirmed games only.
-//   use = the tournament's value when set; else the CONFIRMED rating (seeding: a self-logged match moves nothing until the opponent confirms it), 1500 when
-//   there is no confirmed game (start: true); {casual: true} gives the full rating.
-// REVIEW 3: (1) one rating per named sport: `sport` is a sport from the list, or the name of any other game ('cornhole', 'darts': kept as
-// 'other:cornhole'); 'golf' THROWS (it used to answer for pickleball). (2) Seeding uses the confirmed rating only when its games were confirmed by at
-// least 3 different accounts (the manager rule); otherwise use = null, needsSet and start are true and `why` says so. `seed` is always a number to
-// seed on (use, else the 1500 start) for an engine that has no "director sets it" step. (3) makeup as in handicapFor.
+// ratingFor(userKey, sport = 'pickleball', {eventId, casual}): the same for the Oddable rating (one per named sport; 'golf' THROWS).
+//   suggested = the confirmed rating when the rule is met, else the full rating (1500 with no games) marked unconfirmed. use = casual: the full rating;
+//   otherwise the event's approved / set value, else null. seed = use, else the confirmed rating, else 1500 (for an engine's own seeding maths only).
 async function ratingFor(userKey, sport, opts) {
-  const sp = normSport(sport), recsAll = await recsOf(userKey), E = eloAll(recsAll, meRefOf(userKey), await confCtx(recsAll.filter(ELOSRC), meRefOf(userKey)))[sp], o = opts || {}, ev = o.eventId ? await evRow(o.eventId) : null, s = evOver(ev, userKey, 'rating');
+  const sp = normSport(sport), recsAll = await recsOf(userKey), E = eloAll(recsAll, meRefOf(userKey), await confCtx(recsAll.filter(ELOSRC), meRefOf(userKey)))[sp], o = opts || {}, ev = o.eventId ? await evRow(o.eventId) : null;
   const oddable = { rating: E ? E.rating : null, matches: E ? E.matches : 0, text: E ? E.text : 'No games yet', label: RATING_LABEL }, cg = E ? E.confirmedGames : 0, cr = E ? E.seedRating : null, START = R.ELO.start;
-  const prov = E && E.provisional != null ? E.provisional : null, approved = !s && o.casual !== true && cr == null && o.approved === true && prov != null; // review 4: provisional under 8 counting games
-  const use = s ? s.rating : o.casual === true ? (E ? E.rating : START) : approved ? prov : cr, needsSet = use == null, why = !s && o.casual !== true && cr == null ? (E ? E.seedWhy : 'no confirmed games yet') : '';
-  return { sport: sp, name: E ? E.name : rateName(sp), oddable, confirmedRating: cr, provisional: prov != null ? prov : undefined, approved: approved || undefined, confirmedGames: cg, event: s ? s.rating : null, setBy: s ? 'tournament' : approved ? 'organizer' : null, use, seed: use != null ? use : START, needsSet, why: why || undefined, makeup: E ? E.makeup : makeupOf([], 'game'),
-    start: !s && (o.casual === true ? !E : use == null), text: oddable.text, label: RATING_LABEL, reason: s ? s.reason : use == null && why ? why : undefined, at: s ? s.at : undefined, locked: ev ? evLocked(ev) : undefined };
+  const sug = E ? E.suggested : { value: START, confirmed: false, label: 'unconfirmed', why: 'no games yet' }, u = o.casual === true ? { use: E ? E.rating : START, event: null } : evUse(ev, userKey, 'rating', sug), needsSet = u.use == null && o.casual !== true;
+  const vouched = /^guest:/.test(String(userKey)) ? [] : vouchedBy(await vouchRow(), mkOf(userKey)), mk = E ? E.makeup : makeupOf([], 'game');
+  const flags = (mk.flags || []).slice(); if (!sug.confirmed) flags.unshift('unconfirmed: ' + sug.why); if (vouched.length) flags.push('vouched by ' + vouched.join(', '));
+  const why = needsSet ? (u.reason || (ev ? 'not approved for this event yet' : 'a money game plays only a number the organizer approved')) : '';
+  return { sport: sp, name: E ? E.name : rateName(sp), oddable, confirmedRating: cr, confirmedGames: cg, makeup: mk, flags, suggested: sug, vouched, event: u.event != null ? u.event : null, setBy: u.setBy || null, by: u.by || undefined, cosign: u.cosign || undefined, lapsed: u.lapsed || undefined, use: u.use, seed: u.use != null ? u.use : cr != null ? cr : START, needsSet,
+    shown: showLine(u, (v) => String(v), oddable.rating) || undefined, why: why || undefined, unconfirmedWhy: sug.confirmed ? undefined : sug.why,
+    start: o.casual === true ? !E : u.use == null && cr == null, text: oddable.text, label: RATING_LABEL, reason: u.use != null ? u.reason : why || undefined, at: u.at, locked: ev ? evLocked(ev) : undefined };
 }
+// Course Handicap off THE handicap (tournament value when set) for one tee: strokes / net scores / flights.
 // Course Handicap off THE handicap (tournament value when set) for one tee: strokes / net scores / flights.
 async function courseHandicapFor(userKey, tee, opts) { const h = await handicapFor(userKey, opts), t = tee || {}; return Object.assign(h, { courseHandicap: h.use == null ? null : R.courseHandicap(h.use, Number(t.slope), Number(t.cr != null ? t.cr : t.rating), Number(t.par)) }); } // courseHandicap null = no handicap yet (needsSet): never play it as 0
 // pairingProfile(accountId, sport) -> what the pairing / "Suggest partners" screen may use and show for one player (P1), respecting the sharing switch.
@@ -949,8 +1086,8 @@ async function pairingProfile(accountId, sport) {
   const f = sp === 'golf' ? await handicapFor(accountId) : await ratingFor(accountId, sp), out = { sport: sp, shared: show, show, setBy: f.setBy };
   // Review 3, L11: with sharing OFF the number is handed over only as `pairOn` (for the pairing maths) with print: false. `use` (a number a screen may
   // print) is there only when the player switched sharing on. An engine must never print pairOn.
-  out.pairOn = f.use != null ? f.use : sp === 'golf' ? null : f.seed; out.print = show; if (show) out.use = f.use;
-  if (sp === 'golf') out.needsSet = f.needsSet; else out.start = f.start;
+  out.pairOn = f.use != null ? f.use : sp === 'golf' ? f.suggested.value : f.seed; out.print = show; if (show) out.use = out.pairOn; // review 5: pairing (no money) uses the suggested number
+  if (sp === 'golf') out.needsSet = out.pairOn == null; else out.start = f.start;
   if (!show) return out;
   const recs = (await recsOf(accountId)).filter((r) => (sp === 'golf' ? r.sport === 'golf' : rateKey(r) === sp || r.sport === sp)), n = node(recs), t = n.tot;
   out.text = f.text; out.oddable = sp === 'golf' ? { index: f.oddable.index, rounds: f.oddable.rounds } : { rating: f.oddable.rating, matches: f.oddable.matches };
@@ -1043,9 +1180,9 @@ async function handle(req, res) {
         const all = M.recs.filter((r) => (!from || r.date >= from) && (!sp || r.sport === sp) && (!kd || r.kind === kd) && (f === 'money' ? !!r.money : f === 'res' ? !!(r.result || (r.extra && r.extra.adj)) : true));
         send(res, 200, { ok: true, total: all.length, offset: off, rows: all.slice(off, off + lim) }); return true;
       }
-      const P = periods(M.recs, today), sh = await shareGet(mk).catch(() => null), sd = M.sd, since = await acctSince(e, sd, now);
+      const P = periods(M.recs, today), sh = await shareGet(mk).catch(() => null), sd = M.sd, si = await sinceOf(e, now), since = si.t;
       send(res, 200, { today, from: P.from, periods: P.periods, records: M.recs.slice(0, MAXREC), total: M.recs.length, more: Math.max(0, M.recs.length - MAXREC), page: PAGE, sources: sources(), errors: M.errors, share: !!sh, owner: !!D.acct().ownerOk(req),
-        golfHcp: M.H, ratings: M.E, guests: (sd.guests || []).length, tournaments: M.events, edits: M.edits, gone: (sd.gone || []).slice(-50).reverse().map((g) => ({ at: g.at, was: g.was })), lockHours: LOCKMS / 36e5, since: chiDay(since), logFrom: dayAdd(chiDay(since), -CONF.backDays), confirmRules: { linkDays: CONF.linkDays, needBy: CONF.needBy, perBy: CONF.perBy, gamePerBy: CONF.gamePerBy, allPerBy: CONF.allPerBy, typedMax: CONF.typedMax, fullRounds: CONF.fullRounds, byAgeDays: CONF.byAgeDays, byActs: CONF.byActs, perDay: CONF.perDay, linkOpenDays: CONF.linkOpen / DAY }, myCourses: mcOut(sd),
+        golfHcp: M.H, ratings: M.E, guests: (sd.guests || []).length, tournaments: M.events, edits: M.edits, gone: (sd.gone || []).slice(-50).reverse().map((g) => ({ at: g.at, was: g.was })), lockHours: LOCKMS / 36e5, since: si.known ? chiDay(since) : null, logFrom: si.known ? dayAdd(chiDay(since), -CONF.backDays) : null, confirmRules: { linkDays: CONF.linkDays, needBy: CONF.needBy, perBy: CONF.perBy, gamePerBy: CONF.gamePerBy, allPerBy: CONF.allPerBy, typedMax: CONF.typedMax, fullRounds: CONF.fullRounds, byAgeDays: CONF.byAgeDays, byActs: CONF.byActs, perDay: CONF.perDay, linkOpenDays: CONF.linkOpen / DAY }, myCourses: mcOut(sd),
         courseView: (await ownedCourses(e).catch(() => [])).length > 0 }); return true;
     }
     if (op === 'self/save' || op === 'self/delete' || op === 'share' || op.startsWith('guest/') || op.startsWith('confirm/')) {
@@ -1101,11 +1238,11 @@ async function writeOp(op, b, e, mk, now, ip) {
     if (old && (old.extra || {}).from) throw bad(400, 'This entry was logged by the other player. You can delete it, not change it.');
     if (old && isLocked(old)) throw bad(409, lockedMsg);
     if (!editId && (sd.items || []).length >= 2000) throw bad(400, 'You have 2000 entries. Delete some old ones first.');
-    const sinceMs = await acctSince(e, sd, now), id = editId || 's' + rnd(10), rec = selfRecord(b.item, id, now, gmap, chiDay(sinceMs));
+    const si = await sinceOf(e, now), id = editId || 's' + rnd(10), rec = selfRecord(b.item, id, now, gmap, si.known ? chiDay(si.t) : null); // no known start (before the backfill): nothing is marked as dated before it
     if (old) { const ox = old.extra || {}; rec.extra.at = ox.at; rec.extra.rev = N(ox.rev) + 1; rec.extra.editedAt = now; } // an edit keeps its entry time (order + the 48-hour lock) and loses any confirmation; the revision is set again INSIDE the queued write below
     const v = validate(rec, 'self'); if (!v.ok) throw bad(400, 'Could not save (' + v.why + ')');
     if (rec.extra.guest) { if (editId) throw bad(400, 'A guest player\'s round is changed from their page'); const gr = Object.assign({}, v.rec, { id: 'gr' + rnd(10) }); delete gr.extra.guest; gr.extra.loggedBy = orgName; await guestAdd(e, rec.extra.guest, gr); return { ok: true, record: gr, guest: rec.extra.guest }; }
-    const done = await selfMutate(e, (d) => { if (!(Number(d.since) > 0) || sinceMs < d.since) d.since = sinceMs;
+    const done = await selfMutate(e, (d) => { delete d.since; // review 5, H2: the stats row no longer keeps a start of its own
       if (editId) { const cur = d.items.find((x) => x.id === id); if (!cur) throw bad(404, 'Not found');
         v.rec.extra.rev = N((cur.extra || {}).rev) + 1; v.rec.extra.at = (cur.extra || {}).at; // review 3, L3: the counter is read where the write is queued, so 50 edits in a burst end at revision 50
         const hist = (d.edits = d.edits || {})[id] || []; hist.push({ at: now, was: snapOf(cur), rev: N((cur.extra || {}).rev) }); d.edits[id] = hist.length > 20 ? [hist[0]].concat(hist.slice(-19)) : hist; // review 3, L2: the ORIGINAL entry is never dropped
@@ -1290,8 +1427,8 @@ async function ownerView(today) {
   OWN = { at: D.now(), v: { today, from: Object.fromEntries(PERIODS.map((p) => [p, periodFrom(p, today)])), users } }; return OWN.v;
 }
 
-module.exports = { handle, register, statsFor, handicapFor, ratingFor, courseHandicapFor, pairingProfile, courseMembers, isConfirmed, confInfo, confirmMarks, confCtx, makeupOf, linkRef, acctRef, myCourses, myCourseUse, myCourseHome, CONF, EVT, rateKey, acctSince, moneyOf, playState, nameOf, eventSetup, eventOverride, eventLog, HCP_LABEL, HCP_METHOD, RATING_LABEL, guestAdd, guestRemove, consentOnJoin, coursePrefill, ownedCourses, golfHcp, eloAll, validate, tot, tree, periods, periodFrom, publicTree, betRecords, selfRecord, chiDay, mkOf, selfKey, SRC, SPORTS, KINDS, _deps: D,
+module.exports = { handle, register, statsFor, handicapFor, ratingFor, courseHandicapFor, pairingProfile, courseMembers, isConfirmed, confInfo, confirmMarks, confCtx, makeupOf, linkRef, acctRef, myCourses, myCourseUse, myCourseHome, CONF, EVT, rateKey, acctSince, moneyOf, playState, nameOf, eventSetup, eventOverride, eventLog, eventApprove, eventApproveAll, eventReview, vouch, unvouch, vouchLog, sinceOf, backfilled, ownPlay, BFROW, HCP_LABEL, HCP_METHOD, RATING_LABEL, guestAdd, guestRemove, consentOnJoin, coursePrefill, ownedCourses, golfHcp, eloAll, validate, tot, tree, periods, periodFrom, publicTree, betRecords, selfRecord, chiDay, mkOf, selfKey, SRC, SPORTS, KINDS, _deps: D,
   // Tests: _isolate() makes this module ignore whatever other engines sit next to it in a merged build (auto providers off, Enterprise / course-owner
   // stand-ins on), so the stats suite checks stats alone and runs the same on the stats branch and on the merged preview.
   _isolate: () => { Object.keys(MODS).forEach((k) => { AUTO[k] = null; }); D.limits = () => LIMSTAND; D.golf = () => GOLFSTAND; },
-  _reset: () => { RL.clear(); CACHE.clear(); QUEUE.clear(); REFS.clear(); BYC.clear(); CREFC = { at: 0, v: {} }; IDS.map = null; NMC = { at: 0, v: {} }; OWN = { at: 0, v: null }; } };
+  _reset: () => { VOC = { at: 0, v: null }; BF = { at: 0, v: null }; RL.clear(); CACHE.clear(); QUEUE.clear(); REFS.clear(); BYC.clear(); CREFC = { at: 0, v: {} }; IDS.map = null; NMC = { at: 0, v: {} }; OWN = { at: 0, v: null }; } };

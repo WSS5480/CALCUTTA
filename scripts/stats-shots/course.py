@@ -9,7 +9,7 @@
 # Every check fails on a07ab04 (PICS_DIR=<a07ab04>/pics node scripts/stats-shots/harness.js). Exit code 1 on any failure.
 import asyncio, json, sys, os
 from playwright.async_api import async_playwright
-ROOT = (sys.argv[1] if len(sys.argv) > 1 else '/tmp/stats-shots4').rstrip('/') + '/'
+ROOT = (sys.argv[1] if len(sys.argv) > 1 else os.environ.get('STATS_SHOTS_DIR', '/tmp/stats-shots5')).rstrip('/') + '/'  # review 5, L3: never another run's folder
 THEME = sys.argv[2] if len(sys.argv) > 2 else 'navy'
 API, WEB = 'http://127.0.0.1:8896', 'http://localhost:8897'
 SIZES = [(360, 740), (430, 900)]
@@ -82,8 +82,13 @@ async def run(b, who, name, W, H):
     # ---------- C. no tee data ----------
     opened = await open_course(2); ok('C (no tee data): the course still opens its own screen', opened); await shot('no_tees'); t = await txt()
     ok('C: it says there are no ratings on file, that typing them is optional, and when the round counts', 'No ratings on file for this course' in t and 'Enter Course Rating and Slope from the scorecard if you have them' in t and 'counts toward your handicap only when Course Rating and Slope are filled in' in t and await pg.locator('#sp_cr').count() == 1 and await pg.locator('#sp_yards').count() == 1, t[:500]); await bar('C')
+    ph = [await pg.get_attribute('#sp_cr', 'placeholder'), await pg.get_attribute('#sp_slope', 'placeholder'), await pg.get_attribute('#sp_yards', 'placeholder')]
+    ok('C (review 5, L1): the example numbers read as examples ("e.g. ..."), not as ratings on file', all(x and x.startswith('e.g. ') for x in ph), ph)
     await pg.fill('#sp_cr', '70.5'); await pg.click('#ostat [data-a=cuse]'); await pg.wait_for_timeout(200); ok('C: only one of Rating / Slope typed is caught on this screen', 'Enter both Course Rating and Slope, or leave both empty' in await txt())
-    await pg.fill('#sp_cr', ''); await pg.click('#ostat [data-a=cuse]'); await pg.wait_for_selector('#ostat .scset'); await shot('form_course_set_no_ratings'); cs = await pg.inner_text('#ostat .scset')
+    await pg.fill('#sp_cr', ''); await pg.click('#ostat [data-a=cuse]'); await pg.wait_for_selector('#ostat .scset');
+    fm = await pg.evaluate("""() => { const f = document.getElementById('sf_format'), t = [...document.querySelectorAll('.stoast')]; if (!f) return { found: false }; const a = f.getBoundingClientRect(); return { found: true, over: t.filter(x => { const b = x.getBoundingClientRect(); return b.left < a.right && b.right > a.left && b.top < a.bottom && b.bottom > a.top; }).length, toasts: t.length }; }""")
+    ok('C (review 5, L2): nothing pops up (over the Format field or anywhere) after "Use this course"', fm.get('found') and fm.get('over') == 0 and fm.get('toasts') == 0, fm)
+    await shot('form_course_set_no_ratings'); cs = await pg.inner_text('#ostat .scset')
     ok('C: "Use this course" with nothing typed sets the course and says the round will not count toward the handicap', await pg.input_value('#sf_course') == 'Cedar Ridge 3' and 'Course set' in cs and 'No ratings on file' in cs and 'counts toward your handicap only when' in cs, cs)
     await pg.fill('#sf_cr', ''); await pg.fill('#sf_slope', ''); await pg.fill('#sf_tees', ''); await pg.fill('#sf_total', '95'); await pg.click('#ostat [data-a=save]'); await pg.wait_for_selector('#ostat .stoast'); j = await me(); r = [x for x in j['records'] if x.get('title', '').startswith('Cedar Ridge 3')]
     ok('C: the round is logged with its courseId and marked as not counting toward the index', len(r) == 1 and r[0]['extra'].get('courseId') == 'c2' and 'no Course Rating and Slope' in r[0]['extra'].get('hcpNote', ''), r[0]['extra'] if r else None)

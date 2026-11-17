@@ -30,7 +30,7 @@ async function dbPatchIf(id, was, data, upd) {
   return (await r.json()).length > 0;
 }
 const arr = (x) => (Array.isArray(x) ? x : []);
-function merge(a, b) { // a = stored, b = incoming
+function mergeBase(a, b) { // a = stored, b = incoming. MAIN'S MERGE, UNCHANGED (only renamed): every user's bets pass through this.
   const tomb = [...new Set([...arr(a.tomb), ...arr(b.tomb)].map(String))].slice(-3000), T = new Set(tomb);
   const by = new Map();
   [...arr(a.bets), ...arr(b.bets)].forEach((x) => {
@@ -56,6 +56,40 @@ function merge(a, b) { // a = stored, b = incoming
     pinsAt: Math.max(Number(a.pinsAt || 0), Number(b.pinsAt || 0)),
     log, logAt: Math.max(la, lb), kdel: [...new Set([...arr(a.kdel), ...arr(b.kdel)])].slice(-3000), tomb,
   };
+}
+
+// ---------- Groups layer over the merge (Groups Phase 1, Nov 16 2026; ported from 1e47e93) ----------
+// OFF unless GROUPS_ENABLED=1: with the variable unset, merge() IS mergeBase() (same output, field for field; no stamp, no lock, nothing stripped).
+// ON, two things are added AROUND mergeBase (its body is never touched):
+//  1. Arrival stamp: every bet carries `sa` = the SERVER's time when that bet id first arrived. A phone-sent `sa` is ignored; a stamp, once given, never moves.
+//     Bets stored before stamps existed get the row's previous write time (an upper bound).
+//  2. Locked group bets (owner decision G16): a stored bet with `gl` (the server time /groups/bet/add saved it) is LOCKED. The stored copy always wins: a phone
+//     can't edit, swap or delete it (its tombstone is dropped). Only the phone's own result marks (res / fin / finPL / auto, and each leg's res) are taken, so
+//     My Bets still shows a result on every device; the server never grades from them. A phone can't make a bet a group bet: `gl` on an incoming bet the
+//     server did not save is removed.
+const groupsOn = () => process.env.GROUPS_ENABLED === '1';
+const GL_KEEP = ['res', 'fin', 'finPL', 'auto'];
+function lockedCopy(st, inc) {
+  if (!inc || inc === st) return st; const o = Object.assign({}, st);
+  GL_KEEP.forEach((k) => { if (inc[k] !== undefined) o[k] = inc[k]; else delete o[k]; });
+  if (Array.isArray(st.legs) && Array.isArray(inc.legs) && inc.legs.length === st.legs.length) o.legs = st.legs.map((l, i) => Object.assign({}, l, { res: inc.legs[i] && inc.legs[i].res !== undefined ? inc.legs[i].res : l.res }));
+  return o;
+}
+function merge(a, b, now, prevU) { // a = stored, b = incoming, now = the server's time of this write, prevU = the row's previous write time
+  if (!groupsOn()) return mergeBase(a, b);
+  const GL = new Map(arr(a.bets).filter((x) => x && x.id != null && Number(x.gl) > 0).map((x) => [String(x.id), x])); // the stored locked bets
+  const noGL = (t) => arr(t).filter((id) => !GL.has(String(id)));
+  // before: a locked bet's tombstone is dropped (both sides); `gl` the server did not save is removed from incoming bets
+  const a2 = GL.size ? Object.assign({}, a, { tomb: noGL(a.tomb) }) : a;
+  const b2 = Object.assign({}, b, { tomb: GL.size ? noGL(b.tomb) : b.tomb, bets: arr(b.bets).map((x) => { if (!x || x.gl === undefined || GL.has(String(x.id))) return x; const y = Object.assign({}, x); delete y.gl; return y; }) });
+  const out = mergeBase(a2, b2);
+  // after: every locked bet is the STORED copy (plus the phone's result marks from the last incoming copy), whatever mergeBase chose
+  if (GL.size) { const inc = new Map(); [...arr(a.bets), ...arr(b2.bets)].forEach((x) => { if (x && x.id != null && GL.has(String(x.id)) && x !== GL.get(String(x.id))) inc.set(String(x.id), x); });
+    out.bets = out.bets.map((x) => { const st = GL.get(String(x.id)); return st ? lockedCopy(st, inc.get(String(x.id))) : x; }); }
+  // after: the arrival stamp
+  const t = Number(now) > 0 ? Number(now) : Date.now(), old = new Map(arr(a.bets).filter((x) => x && x.id != null).map((x) => [String(x.id), Number(x.sa) > 0 ? Number(x.sa) : 0]));
+  out.bets = out.bets.map((x) => { const st = old.get(String(x.id)); return Object.assign({}, x, { sa: st !== undefined ? (st > 0 ? st : (Number(prevU) > 0 ? Number(prevU) : t)) : t }); });
+  return out;
 }
 
 function body(req) {
@@ -92,7 +126,7 @@ async function handle(req, res) {
       if (!row) fail('mk:' + ip);
       if (row) { send(res, 409, { error: 'That number already has an account. Use Sign in.' }); return true; }
       const salt = crypto.randomBytes(16).toString('hex');
-      const data = merge({}, b.data || {});
+      const data = merge({}, b.data || {}, Date.now());
       await dbPut({ id, salt, pinhash: hashPin(pin, salt), data, updated: Date.now() }, true);
       const mine = await dbGet(id); if (!mine || !same(hashPin(pin, mine.salt), mine.pinhash)) { send(res, 409, { error: 'That number already has an account. Use Sign in.' }); return true; }
       send(res, 200, { ok: true, data, updated: Date.now() }); return true;
@@ -102,7 +136,7 @@ async function handle(req, res) {
     if (path === '/sync/push') {
       let cur = row;
       for (let i = 0; i < 4; i++) { // never overwrite a write that landed since we read: patch only if `updated` is unchanged, else re-read and merge again
-        const data = merge(cur.data || {}, b.data || {}), upd = Math.max(Date.now(), Number(cur.updated || 0) + 1);
+        const upd = Math.max(Date.now(), Number(cur.updated || 0) + 1), data = merge(cur.data || {}, b.data || {}, upd, Number(cur.updated) || 0);
         if (await dbPatchIf(id, cur.updated, data, upd)) { send(res, 200, { ok: true, data, updated: upd }); return true; }
         cur = await dbGet(id) || cur;
       }
@@ -113,7 +147,11 @@ async function handle(req, res) {
 }
 async function adminUsers(emailOf) {
   const { url, key } = cfg();
-  const r = await fetch(`${url}/rest/v1/oddable_sync?select=id,updated,data&limit=2000`, { headers: hdr(key) });
+  // Groups Phase 1: once Groups is ON (many shared 'lock:' rows), ask the database to leave those rows out, so they can never use up the 2,000-row limit.
+  // NOT yet checked against the live database: if the filtered query is refused, main's own query (the line after) is used, so the owner dashboard cannot
+  // break because of it. While Groups is OFF only main's own query is sent, exactly as before. The JS filter below stays either way.
+  let r = groupsOn() ? await fetch(`${url}/rest/v1/oddable_sync?select=id,updated,data&id=not.like.lock:*&limit=2000`, { headers: hdr(key) }).catch(() => null) : null;
+  if (!r || !r.ok) r = await fetch(`${url}/rest/v1/oddable_sync?select=id,updated,data&limit=2000`, { headers: hdr(key) });
   if (!r.ok) throw new Error('db read ' + r.status);
   const rows = (await r.json()).filter((x) => !String(x.id).startsWith('lock:')); // shared lock rows are not players
   return rows.map((x) => {
@@ -163,4 +201,14 @@ async function verifyLogin(phone, pin, ip, create) {
   if (!same(hashPin(pin, row.salt), row.pinhash)) { fail(id); fail('ip:' + ip); throw bad(401, 'Wrong PIN'); }
   return { id, created: false };
 }
-module.exports = { handle, merge, normPhone, verifyLogin, adminUsers, dbGet, dbPut, dbPatchIf };
+// Groups (groups.js): every player row id (no data), to find a signed-in phone account's own synced bets row. Shared 'lock:' rows are left out.
+// If the database refuses the 'lock:' filter, the same read is done without it (the JS filter below still removes them).
+async function dbIds() {
+  const { url, key } = cfg(), o = { headers: hdr(key), signal: AbortSignal.timeout(15000) };
+  let r = await fetch(`${url}/rest/v1/oddable_sync?select=id&id=not.like.lock:*&limit=5000`, o).catch(() => null);
+  if (!r || !r.ok) r = await fetch(`${url}/rest/v1/oddable_sync?select=id&limit=5000`, { headers: hdr(key), signal: AbortSignal.timeout(15000) });
+  if (!r.ok) throw new Error('db read ' + r.status);
+  return (await r.json()).map((x) => String(x.id)).filter((id) => !id.startsWith('lock:'));
+}
+// (1e47e93 also added dbList(prefix); nothing in Groups calls it, so it was not ported.)
+module.exports = { handle, merge, mergeBase, groupsOn, normPhone, verifyLogin, adminUsers, dbGet, dbPut, dbPatchIf, dbIds };

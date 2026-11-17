@@ -504,6 +504,8 @@
     me = m; early = null; if (!m) return; setTimeout(drawAcct, 0);
     // v272 Groups phase 2: the server says, on the `me` this phone already gets, whether Groups is on for THIS account (odds-api/acct.js gFlag). Not said = no Groups: no tab, no file, no call.
     try { const gv = m.groups === true ? '1' : null; if (g('odd-grp') !== gv) s('odd-grp', gv); if (window.oddGroupsChanged) setTimeout(() => { try { window.oddGroupsChanged(); } catch (e) {} }, 0); } catch (e) {} setTimeout(() => { try { if (window.oddDays) window.oddDays(); } catch (e) {} }, 0);
+    // Calcutta (feature session, Nov 17 2026): the server says, on the same `me`, whether Calcutta is on for THIS account (odds-api/acct.js cFlag). Not said = no menu item, no file, no call.
+    try { const cv = m.calcutta === true ? '1' : null, ch = g('odd-calc') !== cv; if (ch) s('odd-calc', cv); if (window.oddCalcChanged) setTimeout(() => { try { window.oddCalcChanged(ch); } catch (e) {} }, 0); } catch (e) {}
     // v267 /?pay=1 (a renewal reminder): straight to the ONE pay screen. v270: time left = the early screen; time ended in guest mode = the pay sheet (it is not up by itself any more); GUEST_MODE=0 and ended = the subscribe wall is already up.
     if (wantPay) { wantPay = false; try { history.replaceState(null, '', location.pathname); } catch (e) {} if (m.role !== 'owner' && (m.allowed ? !!m.expires_on : gmode)) setTimeout(() => { try { window.oddPay(); } catch (e) {} }, 0); }
     setTimeout(() => timeCheck(m), 0); try { const dg = document.getElementById('odiag'); if (dg) dg.textContent = (m.ownerDash || (m.role === 'owner' && m.source === 'owner')) ? ' · acct ' + (m.role || '?') + (m.ownerDash ? '+dash' : '') + ' ' + String(m.email || '').slice(-8) : ''; s('odd-dash', (m.role === 'owner' && m.source === 'owner') || m.ownerDash ? '1' : null); if (window.navRender) setTimeout(window.navRender, 0); } catch (e) {}
@@ -619,6 +621,7 @@
     const r = await fetch(API + '/status', { cache: 'no-store', signal: AbortSignal.timeout(12000) }), j = await r.json(); const on = j.gate === true; s('odd-gate', on ? '1' : '0');
     if (typeof j.guest === 'boolean') { gmode = j.guest; s('odd-guest', gmode ? '1' : '0'); } else { gmode = GUEST_MODE; s('odd-guest', null); } // an older server does not say: the constant decides
     if (j.groups === true) { s('odd-gsw', '1'); try { if (window.oddGroupsSw) window.oddGroupsSw(); } catch (e) {} } else if (g('odd-gsw')) { s('odd-gsw', null); s('odd-grp', null); } // v272: Groups exists on the server at all (GROUPS_ENABLED=1). Not said = dark: nothing Groups-related is kept or run
+    if (j.calcutta === true) { s('odd-csw', '1'); try { if (window.oddCalcSw) window.oddCalcSw(); } catch (e) {} } else if (g('odd-csw')) s('odd-csw', null); // Calcutta (feature session): Calcutta exists on the server (CALCUTTA_ENABLED=1); not said = nothing kept or run
     return on;
   }
   async function boot() {

@@ -517,6 +517,7 @@ function navRender() { swRender();
   if (grpOn()) return navRender5(anyLive); // v272: the five-tab bar, only for an account Groups is switched on for. Everyone else: the bar below, unchanged.
   const it = [['all', '🏠', 'Games'], ['livepg', '📡', 'Live'], ['bets', '🧾', 'My Bets'], ['surv', '🛡️', 'Survivor'], ['win', '✅', 'Winning'], ['lose', '🔻', 'Losing']];
   try { if (localStorage.getItem('odd-dash') === '1') it.push(['dash', '📊', 'Dashboard']); } catch (e) {}
+  if (calcOn()) it.push(['calc', '🏆', 'Calcutta']); // Calcutta (feature session): only for an account the server switched Calcutta on for
   $('#bn').classList.toggle('n7', it.length > 6); $('#bn').innerHTML = it.map(([k, i, l]) => `<button class="${(k === 'livepg' ? VIEW === 'live' : k === 'bets' ? VIEW === 'bets' : k === 'surv' ? VIEW === 'surv' : VIEW === 'main' && FILT === k) ? 'on' : ''}" onclick="navGo('${k}')"><span>${i}</span>${l}${k === 'livepg' && anyLive ? '<i class="dot"></i>' : ''}</button>`).join('');
 }
 // ================= v272 GROUPS PHASE 2: the switch, the five-tab bar, invite links =================
@@ -534,6 +535,7 @@ function navMore(open) {
   let e = document.getElementById('bnmore'); if (e) e.remove(); if (open === false) return;
   const it = [['surv', '🛡️', 'Survivor', 'Pick one team a week'], ['win', '✅', 'Winning', 'Games going your way'], ['lose', '🔻', 'Losing', 'Games going against you']];
   try { if (localStorage.getItem('odd-dash') === '1') it.push(['dash', '📊', 'Dashboard', 'Owner only']); } catch (x) {}
+  if (calcOn()) it.push(['calc', '🏆', 'Calcutta', 'Auctions on teams and golfers']); // Calcutta (feature session)
   e = document.createElement('div'); e.id = 'bnmore'; e.setAttribute('role', 'dialog'); e.setAttribute('aria-label', 'More');
   e.innerHTML = '<div class="bnsheet"><div class="bnhd"><b>More</b><button class="bnx" onclick="navMore(false)" aria-label="Close">Close</button></div>' + it.map(([k, i, l, d]) => `<button class="bnrow${(k === 'surv' ? VIEW === 'surv' : VIEW === 'main' && FILT === k) && !grpOpen() ? ' on' : ''}" onclick="navGo('${k}')"><span>${i}</span><span class="bnl"><b>${l}</b><small>${d}</small></span><i>›</i></button>`).join('') + '</div>';
   e.addEventListener('click', (ev) => { if (ev.target === e) navMore(false); }); document.body.appendChild(e);
@@ -546,7 +548,7 @@ function grpLoad(then) { // pics/groups.js, fetched the first time it is needed
 // Invite links: https://<site>/?join=g.<code> (built with window.oddShareUrl, so they also carry ?ref=). The code is kept for this tab and taken out of the address bar.
 // Read ONLY when the server says Groups exists (/acct/status `groups`, kept in 'odd-gsw'); with Groups dark the link is left alone and opens the app as any link does.
 const grpPend = (v) => { try { if (v === undefined) return sessionStorage.getItem('odd-join') || ''; if (v) sessionStorage.setItem('odd-join', v); else sessionStorage.removeItem('odd-join'); } catch (e) {} return ''; };
-function grpCapture() { try { const u = new URL(location.href), m = /^g\.([A-Za-z0-9-]{4,40})$/.exec(u.searchParams.get('join') || ''); if (!u.searchParams.has('join')) return; if (m) grpPend(m[1]); u.searchParams.delete('join'); history.replaceState(history.state, '', u.pathname + (u.searchParams.toString() ? '?' + u.searchParams.toString() : '') + u.hash); } catch (e) {} }
+function grpCapture() { try { const u = new URL(location.href), m = /^g\.([A-Za-z0-9-]{4,40})$/.exec(u.searchParams.get('join') || ''); if (!m) return; grpPend(m[1]); u.searchParams.delete('join'); history.replaceState(history.state, '', u.pathname + (u.searchParams.toString() ? '?' + u.searchParams.toString() : '') + u.hash); } catch (e) {} } // only g. (group) links: c. / e. links are left for their own game
 // Signed in with an invite waiting: Groups on for this account -> the join screen (an ended account gets the "Your time has ended" lock there and continues
 // after paying). Groups not on for this account (the owner-only test) -> one sheet that says so, with "Ask to be let in" (POST /groups/access/request, only on the tap).
 let GRPLAST = ''; // the invite code this page already acted on (gate.js reports a sign-in twice: the account, then afterSignIn)
@@ -570,11 +572,39 @@ window.oddGroupsChanged = function () {
 };
 if (GRPWAS) setTimeout(() => grpLoad(), 1500); // a known Groups account: the file is ready before the first bet (the bet step lives in it)
 // ================= end v272 Groups (switch, bar, invites) =================
+// ================= Calcutta (feature session, Nov 17 2026; dark) =================
+// calcOn(): the server said Calcutta is on for THIS signed-in account (gate.js keeps `me.calcutta` from the sign-in answers in 'odd-calc'; env CALCUTTA_ENABLED /
+// CALCUTTA_OWNER_ONLY / CALCUTTA_TESTERS on the odds server). False for everybody else and in ?mirror=1: no menu item, pics/calcutta.js is never requested, no /calcutta call.
+function calcOn() { try { return !/[?&]mirror=1/.test(location.search) && localStorage.getItem('odd-calc') === '1' && !!localStorage.getItem('odd-tok'); } catch (e) { return false; } }
+let CALCL = 0; const CALCQ = [];
+function calcLoad(then) { // pics/calcutta.js, fetched the first time it is needed
+  if (window.oddCalc) { if (then) then(); return; } if (then) CALCQ.push(then); if (CALCL) return; CALCL = 1;
+  const sc = document.createElement('script'); sc.src = 'calcutta.js?v=274'; sc.onload = () => { CALCQ.splice(0).forEach((f) => { try { f(); } catch (e) {} }); }; sc.onerror = () => { CALCL = 0; CALCQ.length = 0; sc.remove(); }; document.head.appendChild(sc);
+}
+// Invite links https://<site>/?join=c.<code> (the Groups pattern): read ONLY when the server says Calcutta exists (/acct/status `calcutta`, CALCUTTA_ENABLED=1; gate.js
+// calls oddCalcSw). The code is kept for this tab (sessionStorage 'odd-cjoin', survives the sign-up reload) and taken out of the address bar. A guest gets the sign-up
+// sheet; once signed in with Calcutta on for the account, the join screen opens (calcJoinRun, from oddCalcChanged on every account read and at load).
+const calcPend = (v) => { try { if (v === undefined) return sessionStorage.getItem('odd-cjoin') || ''; if (v) sessionStorage.setItem('odd-cjoin', v); else sessionStorage.removeItem('odd-cjoin'); } catch (e) {} return ''; };
+function calcCapture() { try { const u = new URL(location.href), m = /^c\.([A-Za-z0-9-]{4,40})$/.exec(u.searchParams.get('join') || ''); if (!m) return; calcPend(m[1]); u.searchParams.delete('join'); history.replaceState(history.state, '', u.pathname + (u.searchParams.toString() ? '?' + u.searchParams.toString() : '') + u.hash); } catch (e) {} }
+function calcJoinRun() { const c = calcPend(); if (!c || !calcOn()) return; calcPend(null); calcLoad(() => { if (calcOn() && window.oddCalc) window.oddCalc({ join: c }); }); }
+window.oddCalcSw = function () { calcCapture(); if (!calcPend()) return; setTimeout(() => { try { if (calcPend() && window.__oddLock === 'guest' && !lsg('odd-tok') && window.oddSignUp) window.oddSignUp('calc:' + calcPend()); } catch (e) {} }, 400); };
+// The Groups "Games" catalog (pics/groups.js addGame): a Calcutta card, only while Calcutta is on for this account. A group's commissioner starts one for the group
+// (the server lets only that group's commissioner create it: 403 groupcomm); members open the group's Calcutta (one) or their Calcutta list (several / none).
+const calcEsc = (x) => String(x == null ? '' : x).replace(/[&<>"']/g, (c) => '&#' + c.charCodeAt(0) + ';');
+function calcGroupGame() { try { if (!calcOn() || !window.OddGroups || typeof window.OddGroups.addGame !== 'function') return; const mine = (gr) => (gr.contests || []).filter((c) => c.kind === 'ext' && c.type === 'calc');
+  window.OddGroups.addGame({ key: 'calcutta', title: 'Calcutta', blurb: 'An auction on teams or golfers; payouts from final scores. Oddable never collects, holds or pays money.',
+    state: (gr) => { const L = mine(gr); return L.length ? { k: 'open', text: L.length === 1 ? calcEsc(L[0].name) : L.length + ' Calcuttas' } : { k: 'none', text: 'No Calcutta yet' + (gr.role === 'comm' ? ': start one' : '') }; },
+    open: (gr) => { const L = mine(gr); calcLoad(() => { if (!calcOn() || !window.oddCalc) return; if (L.length === 1) window.oddCalc({ open: L[0].ref }); else if (!L.length && gr.role === 'comm') window.oddCalc({ create: { name: '', groupId: gr.id, groupName: gr.name } }); else window.oddCalc(); }); } }); } catch (e) {} }
+window.oddCalcChanged = function (changed) { try { if (changed !== false) { if (!calcOn()) { const o = document.getElementById('ocalc'); if (o) o.remove(); } navMore(false); navRender(); } } catch (e) {} calcJoinRun(); if (calcOn() && grpOn()) grpLoad(calcGroupGame); };
+{ const og = window.oddGroupsChanged; window.oddGroupsChanged = function () { const r = og.apply(this, arguments); try { if (calcOn() && grpOn()) grpLoad(calcGroupGame); } catch (e) {} return r; }; } // Groups switched on later: add the Calcutta card too
+if (calcOn()) setTimeout(() => { calcLoad(); calcJoinRun(); if (grpOn()) grpLoad(calcGroupGame); }, 1500); // a known Calcutta account: the overlay file is ready (it also re-opens a Calcutta that was open, and a guest claim link)
+// ================= end Calcutta =================
 function navGo(k) {
   if (k === 'more') { navMore(!document.getElementById('bnmore')); return; }
   if (document.getElementById('bnmore')) navMore(false);
   if (k === 'groups') { grpLoad(() => { if (grpOn()) window.OddGroups.open(); }); return; }
   if (grpOpen()) { try { window.OddGroups.close(); } catch (e) {} }
+  if (k === 'calc') { calcLoad(() => { if (calcOn() && window.oddCalc) window.oddCalc(); }); return; } // Calcutta (feature session)
   if (k === 'livepg') { setView('live'); return; }
   if (k === 'bets') { setView('bets'); return; }
   if (k === 'surv') { setView('surv'); return; }
@@ -3296,6 +3326,7 @@ loadAll();
 const vnum = (x) => +((/(?:Pics|Oddable) v(\d+)/.exec(x) || [])[1] || 0);
 async function checkUpdate() {
   if (document.querySelector('#odash,#ogrp')) return; // never reload under the owner dashboard or Groups
+  if (document.getElementById('ocalc')) return; // Calcutta (feature session): nor under the Calcutta overlay
   try {
     const t = await (await fetch('index.html?c=' + Date.now(), { cache: 'no-store' })).text();
     const mine = vnum(document.querySelector('header').textContent) || vnum(document.documentElement.innerHTML), theirs = vnum(t);
@@ -3313,6 +3344,7 @@ setTimeout(() => { if (lsg('kal-id')) kalshiSync(false); }, 3000); setTimeout(lo
 if ('serviceWorker' in navigator) {
   const had = !!navigator.serviceWorker.controller; let rl = false;
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((r) => { r.update().catch(() => {}); const up = () => { if (!document.hidden) r.update().catch(() => {}); }; document.addEventListener('visibilitychange', up); setInterval(up, 300000); }).catch(() => {});
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (document.getElementById('ocalc')) rl = true; }); // Calcutta (feature session): runs first; no reload under the Calcutta overlay
   navigator.serviceWorker.addEventListener('controllerchange', () => { if (had && !rl && !document.querySelector('#odash,#ogrp')) { rl = true; location.reload(); } });
 }
 
@@ -3322,6 +3354,7 @@ if ('serviceWorker' in navigator) {
   let y0 = null, d = 0, busy = false;
   const set = (h, t) => { bar.style.height = h + 'px'; bar.textContent = t || ''; };
   window.addEventListener('touchstart', (e) => { y0 = window.scrollY <= 0 && !busy && !document.querySelector('#odash,#ogrp') ? e.touches[0].clientY : null; d = 0; }, { passive: true });
+  window.addEventListener('touchstart', () => { if (document.getElementById('ocalc')) y0 = null; }, { passive: true }); // Calcutta (feature session): runs after the line above; no pull-to-refresh under the Calcutta overlay
   window.addEventListener('touchmove', (e) => {
     if (y0 === null) return;
     d = e.touches[0].clientY - y0;

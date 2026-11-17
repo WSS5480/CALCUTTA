@@ -332,7 +332,7 @@ test('R-CALC a Main Calcutta attached by the commissioner shows in the group\'s 
   const mc = await G.memberCheck(g.id, pe(SID.bob)); assert.deepStrictEqual([mc.member, mc.comm], [true, false]); assert.strictEqual(await G.memberCheck(g.id, pe(SID.eve)), null); PH.phoneCheck(() => assert.ok(/openGame\(/.test(client()), 'the hub opens an attached game for members'));
 });
 test('R-CALC2 against the REAL Calcutta engine (a copy of calcutta-v1 calcutta.js when it is on this machine, else a stand-in with its contract): wired by wireGroups, a Main Calcutta in the main pot with unclaimed / carried, a refused attach rolls back and returns the refusal', async () => {
-  const src = process.env.ODD_CALCUTTA || '/home/claude/calcutta-calc/odds-api/calcutta.js'; let C, real = false;
+  const src = process.env.ODD_CALCUTTA || path.join(__dirname, 'calcutta.js'); let C, real = false; const ce0 = process.env.CALCUTTA_ENABLED; process.env.CALCUTTA_ENABLED = '1'; try { // Calcutta on main: the engine in this tree, switched on for this check only
   if (fs.existsSync(src)) { const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'oddcalc-')); fs.copyFileSync(src, path.join(dir, 'calcutta.js')); ['sync', 'acct', 'ip', 'limits'].forEach((m) => fs.writeFileSync(path.join(dir, m + '.js'), 'module.exports = require(' + JSON.stringify(R + m) + ');'));
     C = require(path.join(dir, 'calcutta.js')); C._deps.S = D.S; C._deps.acct = D.acct; C._deps.now = () => D.now(); C._deps.fetch = D.fetch; if (C._reset) C._reset(); real = typeof C.wireGroups === 'function'; }
   if (!real) { const st = {}; C = { wireGroups: (GG) => { GG.registerGame('calc', { potSummary: C.potSummary, attachToGroup: C.attachToGroup }); return true; }, potSummary: async (id) => (st[id] ? { bids: 0, take: 0, pool: 0, main: true, paidOut: 0, inPlay: 0, unclaimed: 0, carried: 0 } : null),
@@ -354,6 +354,7 @@ test('R-CALC2 against the REAL Calcutta engine (a copy of calcutta-v1 calcutta.j
   G.registerGame('calc', { potSummary: async () => ({ bids: 1000, take: 100, pool: 900, paidOut: 500, inPlay: 250, unclaimed: 100, carried: 50, main: true }) }); G._reset(); // the money fields a running Calcutta reports
   const m2 = (await call('cat', 'get', { id: gm.id })).j.group.pots.main; assert.deepStrictEqual([m2.games[0].pool, m2.games[0].unclaimed, m2.games[0].carried, m2.totalPool], [900, 100, 50, 900]); PH.phoneCheck(() => assert.ok(client().includes('waiting to roll') && client().includes('carried to the next Calcutta')));
   console.log('        (R-CALC2 ran against ' + (real ? 'the real calcutta.js: ' + src : 'the stand-in: no calcutta.js on this machine') + ')');
+  } finally { if (ce0 === undefined) delete process.env.CALCUTTA_ENABLED; else process.env.CALCUTTA_ENABLED = ce0; }
 });
 test('R-VOID the commissioner\'s void exists and only works under the void rules: a duplicate added within 2 minutes (later copy, before kickoff) or a postponed game; reason required, logged, shown to all', async () => {
   const g = await mk('ann'); await joinAll(g, ['bob', 'cat']); NOW = START - 6 * H; const cid = g.contests[0].cid;

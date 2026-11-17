@@ -4,9 +4,9 @@ const KEY = 'AIzaSyTEST-key_0123456789abcdefghijklmn';
 let NOW, calls, myapps, maOn, env;
 function start() { S._reset(); C._reset(); NOW = Date.parse('2026-11-16T18:00:00Z'); calls = 0; maOn = true; env = {}; myapps = () => ({ ok: false, status: 404, j: {} }); }
 const deps = { ma: async (path, data) => { calls++; assert.strictEqual(path, '/api/v1/app/settings'); assert.deepStrictEqual(data, {}); return myapps(); }, maReady: () => maOn, now: () => NOW, log: () => {} };
-A._deps.settings = () => S.get(deps); A._deps.env = (k) => env[k];
+A._deps.settings = () => S.get(deps); A._deps.announce = () => S.announce(deps); A._deps.env = (k) => env[k]; A._deps.now = () => NOW;
 Object.assign(C._deps, { ma: deps.ma, maReady: deps.maReady, now: deps.now, log: () => {}, env: (k) => env[k] });
-const ok = (settings) => () => ({ ok: true, status: 200, j: { ok: true, settings } });
+const ok = (settings, announce) => () => ({ ok: true, status: 200, j: announce === undefined ? { ok: true, settings } : { ok: true, settings, announce } }); // v267: announce sits NEXT TO settings
 const srv = http.createServer(async (req, res) => { if (!(await A.handle(req, res))) { res.statusCode = 404; res.end('{}'); } });
 const get = (path, method) => new Promise((done, fail) => { const r = http.request({ port: srv.address().port, path: path || '/appcfg', method: method || 'GET' }, (res) => { let b = ''; res.on('data', (d) => (b += d)); res.on('end', () => done({ status: res.statusCode, headers: res.headers, text: b, j: JSON.parse(b || '{}') })); }); r.on('error', fail); r.end(); });
 (async () => {
@@ -41,6 +41,40 @@ const get = (path, method) => new Promise((done, fail) => { const r = http.reque
     // 9. route shape: other methods, other paths, a query string
     start(); r = await get('/appcfg', 'POST'); assert.strictEqual(r.status, 405); assert.strictEqual(calls, 0);
     r = await get('/appcfg?x=1&card_theme=black'); assert.deepStrictEqual(r.j, { ok: true, card_theme: 'oddable' }, 'the caller cannot set it'); r = await get('/appcfgx'); assert.strictEqual(r.status, 404);
+    // ---- v267: announce (the latest "Everyone" message). 10. a valid one comes back with exactly five fields; the key still never leaves
+    const AT = '2026-11-16T15:00:00.000Z', ANN = { id: 'b_17', title: 'Thursday night picks are up', body: 'Open Oddable and look at the Alert.', link: '/?open=bets', at: AT };
+    start(); myapps = ok({ card_theme: 'black', google_places_key: KEY }, Object.assign({ secret: 'zzz-secret', audience: 'all', sent: 9, people: 4, by: KEY, html: '<b>x</b>' }, ANN)); r = await get();
+    assert.deepStrictEqual(r.j, { ok: true, card_theme: 'black', announce: ANN }); assert.deepStrictEqual(Object.keys(r.j.announce), ['id', 'title', 'body', 'link', 'at']);
+    assert(!r.text.includes(KEY) && !/google|secret|provider|AIza|zzz|audience|people/i.test(r.text), 'whitelist with an announcement: ' + r.text);
+    // 11. link: a name from the list or its URL is accepted and always leaves as the URL; none = ""; anything else is dropped to "" (the message still shows)
+    for (const [inp, want] of [['bets', '/?open=bets'], ['home', '/'], ['/', '/'], ['live', '/?open=live'], ['pga', '/pga.html'], ['/pickleball.html', '/pickleball.html'], ['/sports.html', '/sports.html'], ['sports', '/sports.html'], ['/golfgps.html', '/golfgps.html'], ['/classic.html', ''], ['/sports.html?lg=nba', ''], ['/pga.html#x', ''], ['pga.html', ''], [undefined, ''], [null, ''], ['', ''],
+      ['https://evil.example/x', ''], ['javascript:alert(1)', ''], ['//evil.example', ''], ['/?open=bets&x=1', ''], ['/admin', ''], [7, ''], [{ a: 1 }, ''], [['bets'], ''], ['__proto__', ''], ['constructor', '']]) {
+      start(); myapps = ok({}, Object.assign({}, ANN, { link: inp })); r = await get(); assert.strictEqual(r.j.announce.link, want, 'link ' + JSON.stringify(inp)); }
+    // 12. id may be a number; at may be a number of milliseconds; both leave as text
+    start(); myapps = ok({}, Object.assign({}, ANN, { id: 42, at: Date.parse(AT) })); r = await get(); assert.deepStrictEqual(r.j.announce, Object.assign({}, ANN, { id: '42' }));
+    // 13. oversized, empty, wrong types, bad id / date, too old, from the future: the whole announcement is left out (never cut to fit), the rest is unchanged
+    const bad = [{ title: 'x'.repeat(61) }, { body: 'y'.repeat(241) }, { title: '' }, { title: '   \n ' }, { body: '' }, { title: 7 }, { title: null }, { title: ['a'] }, { title: { toString: () => 'x' } }, { body: 5 }, { body: null }, { body: { a: 1 } },
+      { id: '' }, { id: null }, { id: {} }, { id: 'a b' }, { id: '<i>' }, { id: 'x'.repeat(65) }, { id: NaN }, { at: '' }, { at: null }, { at: 'yesterday' }, { at: {} }, { at: 'x'.repeat(50) }, { at: '2026-11-01T00:00:00Z' }, { at: '2026-11-17T00:00:00Z' }, { at: -5 }];
+    for (const b of bad) { start(); myapps = ok({ card_theme: 'green' }, Object.assign({}, ANN, b)); r = await get(); assert.deepStrictEqual(r.j, { ok: true, card_theme: 'green' }, 'bad announce ' + JSON.stringify(b).slice(0, 40)); }
+    for (const whole of [null, undefined, '', 'hello', 7, true, [], [ANN], {}]) { start(); myapps = ok({}, whole); r = await get(); assert.deepStrictEqual(r.j, { ok: true, card_theme: 'oddable' }, 'announce ' + JSON.stringify(whole)); }
+    start(); myapps = ok({}, Object.assign({}, ANN, { title: 'x'.repeat(60), body: 'y'.repeat(240) })); r = await get(); assert.strictEqual(r.j.announce.title.length, 60); assert.strictEqual(r.j.announce.body.length, 240);
+    start(); myapps = ok({}, Object.assign({}, ANN, { at: '2026-11-02T18:00:01Z' })); r = await get(); assert(r.j.announce, '14 days old less a second still shows');
+    // 14. PLAIN TEXT: tags are not removed and not turned into HTML here; they travel as the characters typed, inside JSON (the phone uses textContent). Line breaks and control characters become spaces.
+    const X = '<script>alert(1)</script><img src=x onerror=alert(2)>';
+    start(); myapps = ok({}, Object.assign({}, ANN, { title: '<b>Hi</b> & "you"', body: X + '\n\u0000 line\ttwo \u2028end' })); r = await get();
+    assert.strictEqual(r.j.announce.title, '<b>Hi</b> & "you"'); assert.strictEqual(r.j.announce.body, X + ' line two end'); assert.strictEqual(r.headers['content-type'], 'application/json');
+    // 15. it rides the same cached read (no extra My Apps call), goes away when My Apps says null, and a caller cannot plant one
+    start(); myapps = ok({}, ANN); await get(); await get(); assert.strictEqual(calls, 1); NOW += 5 * 6e4 + 1; myapps = ok({}, null); r = await get(); assert.strictEqual(calls, 2); assert(!('announce' in r.j));
+    start(); r = await get('/appcfg?announce[title]=x&announce=%7B%22id%22%3A1%7D'); assert.deepStrictEqual(r.j, { ok: true, card_theme: 'oddable' });
+    // 15b. an `announce` INSIDE settings is not the contract and is ignored; My Apps down keeps the last one; Hide (a good read with null) removes it
+    start(); myapps = ok({ card_theme: 'light', announce: ANN }); r = await get(); assert.deepStrictEqual(r.j, { ok: true, card_theme: 'light' }, 'announce inside settings is ignored');
+    start(); myapps = ok({ card_theme: 'light' }); r = await get(); assert.deepStrictEqual(r.j, { ok: true, card_theme: 'light' }, 'an older My Apps with no announce field');
+    start(); myapps = ok({}, ANN); await get(); NOW += 5 * 6e4 + 1; myapps = () => { throw new Error('down'); }; r = await get(); assert.deepStrictEqual(r.j.announce, ANN, 'kept while My Apps is down'); NOW += 6e4 + 1; myapps = ok({}, null); r = await get(); assert(!('announce' in r.j), 'Hide');
+    // 15c. courts.js and the raw settings are untouched by the announcement: get() still returns only the settings object
+    start(); myapps = ok({ courts_provider: 'google', google_places_key: KEY }, ANN); assert.deepStrictEqual(await S.get(deps), { courts_provider: 'google', google_places_key: KEY }); assert.deepStrictEqual(await C._settings(), { provider: 'google', key: KEY, from: 'myapps' }); assert.strictEqual(calls, 1);
+    r = await get(); assert.deepStrictEqual(r.j, { ok: true, card_theme: 'oddable', announce: ANN }); assert.strictEqual(calls, 1, 'still one My Apps read'); assert(!r.text.includes(KEY));
+    // 16. an announcement that was fine when read is dropped once it passes 14 days, even while My Apps is down
+    start(); myapps = ok({}, ANN); r = await get(); assert(r.j.announce); NOW += 14 * 864e5; myapps = () => { throw new Error('down'); }; r = await get(); assert(!('announce' in r.j));
     console.log('appcfg.test.js: all passed');
   } catch (e) { console.error('FAILED', e); process.exitCode = 1; } finally { srv.close(); }
 })();

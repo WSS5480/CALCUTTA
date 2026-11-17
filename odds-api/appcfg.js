@@ -14,7 +14,9 @@ async function handle(req, res) {
   if (req.url.split('?')[0] !== '/appcfg') return false;
   if (req.method !== 'GET') { send(res, 405, { ok: false, error: 'GET only' }); return true; }
   let c; try { c = await cfg(); } catch (e) { c = { ok: true, card_theme: 'oddable' }; }
-  send(res, 200, { ok: true, card_theme: c.card_theme }); // rebuilt here too: only these two fields can leave
+  const out = { ok: true, card_theme: c.card_theme }; // rebuilt here too: only these two fields can leave
+  if (D.env('BETPUSH_ENABLED') === '1') out.betpush = true; // v266: tells the page the bet alerts are switched on, so it asks /betpush/status only then (field absent = off: the answer is unchanged)
+  send(res, 200, out);
   return true;
 }
 module.exports = { handle, _deps: D, _cfg: cfg, THEMES };

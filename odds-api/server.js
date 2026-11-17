@@ -68,6 +68,7 @@ if (process.env.RENDER_EXTERNAL_URL && process.env.KEEP_AWAKE !== '0') {
   setInterval(() => fetch(process.env.RENDER_EXTERNAL_URL + '/health').catch(() => {}), 10 * 60 * 1000);
 }
 
+try { require('./betwatch').start(); } catch (e) { console.error('betpush:', e && e.message); } // v266 score watcher for the phone alerts: sets no timer and makes no call unless BETPUSH_ENABLED=1
 const kalshi = require('../kalshi-sync/server.js'); const BT = {};
 process.on('uncaughtException', (e) => console.error('uncaught:', e && e.message)); process.on('unhandledRejection', (e) => console.error('unhandled:', e && e.message));
 http.createServer(async (req, res) => {
@@ -87,6 +88,7 @@ http.createServer(async (req, res) => {
   if (req.url.startsWith('/alert')) { try { if (await require('./alert').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"alert error"}'); } }
   if (req.url.startsWith('/propideas')) { try { if (await require('./propideas').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"prop ideas error"}'); } }
   if (req.url.startsWith('/appcfg')) { try { if (await require('./appcfg').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"appcfg error"}'); } }
+  if (req.url.startsWith('/betpush')) { try { if (await require('./betwatch').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"alerts error"}'); } } // v266 phone alerts for a player's bets: OFF unless BETPUSH_ENABLED=1
   if (req.url.startsWith('/courts')) { try { if (await require('./courts').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"court search error"}'); } }
   // Groups (Phase 1, dark): every /groups/* answer is decided by the switches at the top of groups.js handle() (GROUPS_ENABLED, GROUPS_OWNER_ONLY, GROUPS_TESTERS).
   // If groups.js itself cannot load while Groups is off, the bet-status question still gets the safe "not in a group" answer (a failing status call must never block a bet).

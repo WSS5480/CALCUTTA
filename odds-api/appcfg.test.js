@@ -41,6 +41,9 @@ const get = (path, method) => new Promise((done, fail) => { const r = http.reque
     // 9. route shape: other methods, other paths, a query string
     start(); r = await get('/appcfg', 'POST'); assert.strictEqual(r.status, 405); assert.strictEqual(calls, 0);
     r = await get('/appcfg?x=1&card_theme=black'); assert.deepStrictEqual(r.j, { ok: true, card_theme: 'oddable' }, 'the caller cannot set it'); r = await get('/appcfgx'); assert.strictEqual(r.status, 404);
+    // 9. v266: `betpush:true` is added ONLY when BETPUSH_ENABLED is exactly '1' (it tells the page the bet alerts are on); otherwise the answer is unchanged
+    for (const v of [undefined, '', '0', 'true', 'yes']) { start(); env = { BETPUSH_ENABLED: v }; r = await get(); assert.deepStrictEqual(r.j, { ok: true, card_theme: 'oddable' }, 'off: ' + v); }
+    start(); env = { BETPUSH_ENABLED: '1' }; myapps = ok({ card_theme: 'black', google_places_key: KEY, betpush: 'x' }); r = await get(); assert.deepStrictEqual(r.j, { ok: true, card_theme: 'black', betpush: true }); assert(!r.text.includes(KEY));
     console.log('appcfg.test.js: all passed');
   } catch (e) { console.error('FAILED', e); process.exitCode = 1; } finally { srv.close(); }
 })();

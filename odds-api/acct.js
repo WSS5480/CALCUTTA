@@ -110,7 +110,11 @@ async function expired(e) { if (!on() || !e || e === 'owner') return false; try 
 // GROUPS_ENABLED=1 and only for an account the switches let in (GROUPS_OWNER_ONLY: the owner-PIN sign-in, the OWNER_PHONE accounts, GROUPS_TESTERS). Everyone
 // else, and everyone while the variable is unset, gets exactly the `me` of v271: no field, no extra read, no new route. A copy is returned: OWNER_ME and the
 // entitlement cache are never changed.
-function gFlag(me, e) { if (!me || process.env.GROUPS_ENABLED !== '1') return me; try { return require('./groups').onFor(e) ? Object.assign({}, me, { groups: true }) : me; } catch (er) { return me; } }
+function gFlag(me, e) { return cFlag(gFlag0(me, e), e); }
+function gFlag0(me, e) { if (!me || process.env.GROUPS_ENABLED !== '1') return me; try { return require('./groups').onFor(e) ? Object.assign({}, me, { groups: true }) : me; } catch (er) { return me; } }
+// Calcutta (feature session, Nov 17 2026): the same idea for Calcutta. `calcutta: true` is added ONLY while CALCUTTA_ENABLED=1 and only for an account the
+// Calcutta switches let in (calcutta.js onFor: CALCUTTA_OWNER_ONLY / CALCUTTA_TESTERS). Unset = the `me` of v274, the same object, nothing required.
+function cFlag(me, e) { if (!me || process.env.CALCUTTA_ENABLED !== '1') return me; try { return require('./calcutta').onFor(e) ? Object.assign({}, me, { calcutta: true }) : me; } catch (er) { return me; } }
 async function handle(req, res) {
   if (req.method === 'OPTIONS') return false;
   const path = req.url.split('?')[0];

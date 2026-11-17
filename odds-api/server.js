@@ -68,6 +68,11 @@ if (process.env.RENDER_EXTERNAL_URL && process.env.KEEP_AWAKE !== '0') {
   setInterval(() => fetch(process.env.RENDER_EXTERNAL_URL + '/health').catch(() => {}), 10 * 60 * 1000);
 }
 
+// Calcutta (feature session, Nov 17 2026; dark): with CALCUTTA_ENABLED unset (or anything but exactly "1") this line does nothing: no require, no timer, no wiring.
+// On: the engine attaches to Groups through main's groups.wire() (Calcutta only: golf / events / stats are passed as null) and starts its background score
+// watcher (one unref'd 20 s tick; ESPN only for Calcuttas under way; no Odds API credits). See HANDOFF "Calcutta on main (from the feature session)".
+// TODO (main session) CALCUTTA STATS: deliberately a no-op here. Main has no stats registry (gstats.js covers picks + golf days and has no register()); calcutta.statsFor(userKey, { from, to }) is ready for a gstats.js adapter.
+if (process.env.CALCUTTA_ENABLED === '1') { try { const CC = require('./calcutta'), GG = require('./groups'); if (typeof GG.wire === 'function') GG.wire({ calcutta: CC, golf: null, events: null, stats: null }); else CC.wireGroups(GG); } catch (e) { console.error('calcutta wiring:', e && e.message); } try { require('./calcutta').watch(); } catch (e) { console.error('calcutta watch:', e && e.message); } }
 try { require('./betwatch').start(); } catch (e) { console.error('betpush:', e && e.message); } // v266 score watcher for the phone alerts: sets no timer and makes no call unless BETPUSH_ENABLED=1
 const kalshi = require('../kalshi-sync/server.js'); const BT = {};
 process.on('uncaughtException', (e) => console.error('uncaught:', e && e.message)); process.on('unhandledRejection', (e) => console.error('unhandled:', e && e.message));
@@ -98,6 +103,8 @@ http.createServer(async (req, res) => {
   if (req.url.startsWith('/groups')) { try { if (await require('./groups').handle(req, res)) return; } catch (e) { console.error('groups:', e && e.message); res.setHeader('Access-Control-Allow-Origin', '*'); if (process.env.GROUPS_ENABLED !== '1' && req.url.split('?')[0] === '/groups/bet/status') return res.end('{"betLock":0,"canBet":false,"saved":false}'); res.statusCode = 500; return res.end('{"error":"groups error"}'); } }
   // v273 Golf days (a group game): behind the SAME switches as /groups (golfday.js asks groups.js onFor). Off = 403 {off:true}, nothing read.
   if (req.url.startsWith('/golfday')) { try { if (await require('./golfday').handle(req, res)) return; } catch (e) { console.error('golfday:', e && e.message); res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"golf day error"}'); } }
+  // Calcutta (dark): only while CALCUTTA_ENABLED=1; then calcutta.js handle() applies CALCUTTA_OWNER_ONLY / CALCUTTA_TESTERS itself (blocked = 403 {off:true}, /calcutta/on = {on:false}).
+  if (process.env.CALCUTTA_ENABLED === '1' && req.url.startsWith('/calcutta')) { try { if (await require('./calcutta').handle(req, res)) return; } catch (e) { console.error('calcutta:', e && e.message); res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"calcutta error"}'); } }
   if (req.url.startsWith('/locks')) { try { if (await require('./locks').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"lock error"}'); } }
   if (req.url.startsWith('/games')) { res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json'); res.setHeader('Cache-Control', 'public, max-age=120'); try { const g = await require('./games').get('nfl', NAMES); return res.end(JSON.stringify({ updated: g.updated, remaining: g.remaining, games: g.games })); } catch (e) { res.statusCode = 502; return res.end(JSON.stringify({ error: e.message })); } }
   if (req.url.startsWith('/lines')) { res.setHeader('Cache-Control', 'public, max-age=60'); return res.end(JSON.stringify(LINES)); }

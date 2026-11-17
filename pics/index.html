@@ -517,6 +517,7 @@ function navRender() { swRender();
   if (grpOn()) return navRender5(anyLive); // v272: the five-tab bar, only for an account Groups is switched on for. Everyone else: the bar below, unchanged.
   const it = [['all', '🏠', 'Games'], ['livepg', '📡', 'Live'], ['bets', '🧾', 'My Bets'], ['surv', '🛡️', 'Survivor'], ['win', '✅', 'Winning'], ['lose', '🔻', 'Losing']];
   try { if (localStorage.getItem('odd-dash') === '1') it.push(['dash', '📊', 'Dashboard']); } catch (e) {}
+  if (calcOn()) it.push(['calc', '🏆', 'Calcutta']); // Calcutta (feature session): only for an account the server switched Calcutta on for
   $('#bn').classList.toggle('n7', it.length > 6); $('#bn').innerHTML = it.map(([k, i, l]) => `<button class="${(k === 'livepg' ? VIEW === 'live' : k === 'bets' ? VIEW === 'bets' : k === 'surv' ? VIEW === 'surv' : VIEW === 'main' && FILT === k) ? 'on' : ''}" onclick="navGo('${k}')"><span>${i}</span>${l}${k === 'livepg' && anyLive ? '<i class="dot"></i>' : ''}</button>`).join('');
 }
 // ================= v272 GROUPS PHASE 2: the switch, the five-tab bar, invite links =================
@@ -534,6 +535,7 @@ function navMore(open) {
   let e = document.getElementById('bnmore'); if (e) e.remove(); if (open === false) return;
   const it = [['surv', '🛡️', 'Survivor', 'Pick one team a week'], ['win', '✅', 'Winning', 'Games going your way'], ['lose', '🔻', 'Losing', 'Games going against you']];
   try { if (localStorage.getItem('odd-dash') === '1') it.push(['dash', '📊', 'Dashboard', 'Owner only']); } catch (x) {}
+  if (calcOn()) it.push(['calc', '🏆', 'Calcutta', 'Auctions on teams and golfers']); // Calcutta (feature session)
   e = document.createElement('div'); e.id = 'bnmore'; e.setAttribute('role', 'dialog'); e.setAttribute('aria-label', 'More');
   e.innerHTML = '<div class="bnsheet"><div class="bnhd"><b>More</b><button class="bnx" onclick="navMore(false)" aria-label="Close">Close</button></div>' + it.map(([k, i, l, d]) => `<button class="bnrow${(k === 'surv' ? VIEW === 'surv' : VIEW === 'main' && FILT === k) && !grpOpen() ? ' on' : ''}" onclick="navGo('${k}')"><span>${i}</span><span class="bnl"><b>${l}</b><small>${d}</small></span><i>›</i></button>`).join('') + '</div>';
   e.addEventListener('click', (ev) => { if (ev.target === e) navMore(false); }); document.body.appendChild(e);
@@ -570,11 +572,26 @@ window.oddGroupsChanged = function () {
 };
 if (GRPWAS) setTimeout(() => grpLoad(), 1500); // a known Groups account: the file is ready before the first bet (the bet step lives in it)
 // ================= end v272 Groups (switch, bar, invites) =================
+// ================= Calcutta (feature session, Nov 17 2026; dark) =================
+// calcOn(): the server said Calcutta is on for THIS signed-in account (gate.js keeps `me.calcutta` from the sign-in answers in 'odd-calc'; env CALCUTTA_ENABLED /
+// CALCUTTA_OWNER_ONLY / CALCUTTA_TESTERS on the odds server). False for everybody else and in ?mirror=1: no menu item, pics/calcutta.js is never requested, no /calcutta call.
+function calcOn() { try { return !/[?&]mirror=1/.test(location.search) && localStorage.getItem('odd-calc') === '1' && !!localStorage.getItem('odd-tok'); } catch (e) { return false; } }
+let CALCL = 0; const CALCQ = [];
+function calcLoad(then) { // pics/calcutta.js, fetched the first time it is needed
+  if (window.oddCalc) { if (then) then(); return; } if (then) CALCQ.push(then); if (CALCL) return; CALCL = 1;
+  const sc = document.createElement('script'); sc.src = 'calcutta.js?v=274'; sc.onload = () => { CALCQ.splice(0).forEach((f) => { try { f(); } catch (e) {} }); }; sc.onerror = () => { CALCL = 0; CALCQ.length = 0; sc.remove(); }; document.head.appendChild(sc);
+}
+// an invite link ?join=c.<code> is acted on ONLY on a phone that already knows Calcutta is on for it (otherwise the link is left alone, as before)
+function calcJoinRun() { try { if (!calcOn()) return; const u = new URL(location.href), m = /^c\.([A-Za-z0-9-]{4,40})$/.exec(u.searchParams.get('join') || ''); if (!m) return; u.searchParams.delete('join'); history.replaceState(history.state, '', u.pathname + (u.searchParams.toString() ? '?' + u.searchParams.toString() : '') + u.hash); calcLoad(() => { if (calcOn() && window.oddCalc) window.oddCalc({ join: m[1] }); }); } catch (e) {} }
+window.oddCalcChanged = function () { try { if (!calcOn()) { const o = document.getElementById('ocalc'); if (o) o.remove(); } navMore(false); navRender(); } catch (e) {} calcJoinRun(); };
+if (calcOn()) setTimeout(() => { calcLoad(); calcJoinRun(); }, 1500); // a known Calcutta account: the overlay file is ready (it also re-opens a Calcutta that was open, and a guest claim link)
+// ================= end Calcutta =================
 function navGo(k) {
   if (k === 'more') { navMore(!document.getElementById('bnmore')); return; }
   if (document.getElementById('bnmore')) navMore(false);
   if (k === 'groups') { grpLoad(() => { if (grpOn()) window.OddGroups.open(); }); return; }
   if (grpOpen()) { try { window.OddGroups.close(); } catch (e) {} }
+  if (k === 'calc') { calcLoad(() => { if (calcOn() && window.oddCalc) window.oddCalc(); }); return; } // Calcutta (feature session)
   if (k === 'livepg') { setView('live'); return; }
   if (k === 'bets') { setView('bets'); return; }
   if (k === 'surv') { setView('surv'); return; }
@@ -3295,7 +3312,7 @@ loadAll();
 // Auto-update: when the app comes back to the front (or every 10 minutes) check for a newer version and reload into it
 const vnum = (x) => +((/(?:Pics|Oddable) v(\d+)/.exec(x) || [])[1] || 0);
 async function checkUpdate() {
-  if (document.querySelector('#odash,#ogrp')) return; // never reload under the owner dashboard or Groups
+  if (document.querySelector('#odash,#ogrp,#ocalc')) return; // never reload under the owner dashboard or Groups
   try {
     const t = await (await fetch('index.html?c=' + Date.now(), { cache: 'no-store' })).text();
     const mine = vnum(document.querySelector('header').textContent) || vnum(document.documentElement.innerHTML), theirs = vnum(t);
@@ -3313,7 +3330,7 @@ setTimeout(() => { if (lsg('kal-id')) kalshiSync(false); }, 3000); setTimeout(lo
 if ('serviceWorker' in navigator) {
   const had = !!navigator.serviceWorker.controller; let rl = false;
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((r) => { r.update().catch(() => {}); const up = () => { if (!document.hidden) r.update().catch(() => {}); }; document.addEventListener('visibilitychange', up); setInterval(up, 300000); }).catch(() => {});
-  navigator.serviceWorker.addEventListener('controllerchange', () => { if (had && !rl && !document.querySelector('#odash,#ogrp')) { rl = true; location.reload(); } });
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (had && !rl && !document.querySelector('#odash,#ogrp,#ocalc')) { rl = true; location.reload(); } });
 }
 
 // Pull down to refresh: wipes the saved app copy and reloads fresh code and data
@@ -3321,7 +3338,7 @@ if ('serviceWorker' in navigator) {
   const bar = document.createElement('div'); bar.id = 'ptr'; document.body.appendChild(bar);
   let y0 = null, d = 0, busy = false;
   const set = (h, t) => { bar.style.height = h + 'px'; bar.textContent = t || ''; };
-  window.addEventListener('touchstart', (e) => { y0 = window.scrollY <= 0 && !busy && !document.querySelector('#odash,#ogrp') ? e.touches[0].clientY : null; d = 0; }, { passive: true });
+  window.addEventListener('touchstart', (e) => { y0 = window.scrollY <= 0 && !busy && !document.querySelector('#odash,#ogrp,#ocalc') ? e.touches[0].clientY : null; d = 0; }, { passive: true });
   window.addEventListener('touchmove', (e) => {
     if (y0 === null) return;
     d = e.touches[0].clientY - y0;
@@ -3414,7 +3431,7 @@ if ('serviceWorker' in navigator) {
   document.addEventListener('visibilitychange', () => { if (hb) here(); });
   // ---- the invitation: a card in the page flow (never fixed, never a modal), at most once per app open ----
   const inv = () => { try { const o = JSON.parse(ls(IK) || '{}'); return { n: Number(o.n) || 0, t: Number(o.t) || 0 }; } catch (e) { return { n: 0, t: 0 }; } };
-  const overlay = () => !!(el('gate') || el('oddwarn') || el('gnm') || el('odash') || el('ogrp') || el('bnmore') || ['infosheet', 'teampage', 'mv', 'lvov'].some((id) => { const x = el(id); return x && !x.hidden; }));
+  const overlay = () => !!(el('gate') || el('oddwarn') || el('gnm') || el('odash') || el('ogrp') || el('ocalc') || el('bnmore') || ['infosheet', 'teampage', 'mv', 'lvov'].some((id) => { const x = el(id); return x && !x.hidden; }));
   function openToday() { try { const d = dayKey(Date.now()); return BETS.some((b) => !b.fin && !b.res && betDay(b) === d); } catch (e) { return false; } }
   function hide(forGood) { const c = el('bpinv'); if (c) { c.hidden = true; c.innerHTML = ''; } if (forGood) { BP.gone = true; clearInterval(BP.t); } }
   function invite() {

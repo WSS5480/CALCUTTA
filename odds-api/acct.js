@@ -167,4 +167,4 @@ const dashOk = (e, req, b) => (e === 'owner' && !!OWNER_PIN()) || (isOwnerPhone(
 const phoneEmail = (id) => crypto.createHmac('sha256', KEY()).update('phoneid|' + id).digest('hex').slice(0, 20) + '@phone.oddable';
 // Owner-only check for other routes (e.g. /cfbd): an owner-PIN token, or an owner-phone token plus its dashboard second factor (x-dash). Same rule as /acct/dash.
 function ownerOk(req) { const e = verify(req.headers['x-token']); return !!e && dashOk(e, req); }
-module.exports = { handle, check, on, phoneEmail, ownerOk };
+module.exports = { handle, check, on, phoneEmail, ownerOk, ma, maReady: () => !!(URL_() && SECRET()) }; // ma / maReady: courts.js reads the app settings from My Apps

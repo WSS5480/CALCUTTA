@@ -1,7 +1,9 @@
 /* Oddable 🏓 Pickleball (v253). Social pools and games for a pickleball group.
    POINTS ONLY: nobody bets money here. Oddable never takes, holds or pays money.
    Local-only: events live in this device's localStorage (keys start with 'pb1-').
-   No server calls of any kind. Groups pass an event around with a share code. */
+   Events make no server calls of any kind. Groups pass an event around with a share code.
+   The ONE server call on this page is "Find local courts" (v259, #/courts): it asks the Oddable odds server (GET /courts) for
+   pickleball courts near a city, ZIP or the phone's location, only when the user taps Search / Use my location. */
 (function () {
   'use strict';
   const PFX = 'pb1-ev-';
@@ -461,6 +463,7 @@
       if (!R.length) h = viewHome();
       else if (R[0] === 'new') h = viewNew();
       else if (R[0] === 'join') h = viewJoin();
+      else if (R[0] === 'courts') h = viewCourts();
       else if (R[0] === 'e') { const ev = load(R[1]), raw = lsGet(PFX + R[1]); if (!ev && raw == null) h = back('', 'My events') + '<div class="card">This event is not on this device.</div>';
         else if (!ev || typeof ev !== 'object' || ev.id !== R[1]) h = back('', 'My events') + badCard(ev && typeof ev === 'object' ? ev : null, R[1]); else { try { RES = ev.bk ? resolve(ev) : null; h = viewEvent(ev, R.slice(2)); } catch (x) { h = back('', 'My events') + badCard(ev, R[1]); } } }
       else h = viewHome();
@@ -474,7 +477,8 @@
 
   function viewHome() {
     const L = listEvents();
-    let h = `<div class="nomoney">🏓 Social games for your pickleball group. ${esc(NOMONEY)}</div>
+    let h = `<a class="card find" href="#/courts"><span class="fi">📍</span><span class="ft"><b>Find local courts</b><small>Pickleball courts near a city, a ZIP code or where you are</small></span><span class="fgo">›</span></a>
+<div class="nomoney">🏓 Social games for your pickleball group. ${esc(NOMONEY)}</div>
 <div class="btns"><a class="pill pri" href="#/new">＋ New event</a><a class="pill" href="#/join">Join with code</a></div>
 <div class="gh">My events</div>`;
     if (!L.length) h += '<div class="card note">No events yet. Tap ＋ New event to set up a round robin, King of the Court, a bracket, a ladder or a Calcutta for your group.</div>';
@@ -484,6 +488,81 @@
 <div class="sub2">${f.ico} ${esc(f.n)} · ${ev.date ? esc(ev.date) + ' · ' : ''}${ev.us.length} ${f.ind || ev.team === 's' ? 'players' : 'teams'}</div>${adds ? `<div class="sub2">${adds}</div>` : ''}
 ${sc && top.length ? `<div class="sub2">${d ? '🏆 ' : 'Leading: '}${esc(top.slice(0, 2).map((u) => uName(ev, u)).join(' & ') + (top.length > 2 ? ' +' + (top.length - 2) : ''))}</div>` : ''}</a>`; } catch (e) { h += badCard(ev, ev.id); } });
     return h;
+  }
+
+  /* ---- 📍 Find local courts (#/courts). The list comes from the odds server; nothing here is made up on the phone. ---- */
+  const CTU = 'https://calcutta-odds.onrender.com/courts', CTK = 'pb1-courts', CTR = [5, 15, 30];
+  const CT = { q: '', r: 15, st: 'idle', msg: '', data: null, last: null, seq: 0 };
+  (function () { try { const o = JSON.parse(lsGet(CTK) || 'null'); if (o && typeof o === 'object') { if (typeof o.q === 'string') CT.q = o.q.slice(0, 80); if (CTR.includes(+o.r)) CT.r = +o.r; } } catch (e) {} })();
+  const ctKeep = () => lsSet(CTK, JSON.stringify({ q: CT.q, r: CT.r }));
+  function ctTags(c) {
+    const t = [];
+    if (c.indoor === true) t.push('Indoor'); else if (c.indoor === false) t.push('Outdoor');
+    if (c.lit === true) t.push('Lights'); else if (c.lit === false) t.push('No lights');
+    const n = Math.floor(+c.courts); if (n > 0 && n < 200) t.push(n + (n === 1 ? ' court' : ' courts') + (c.courtsFrom === 'mapped' ? ' on the map' : ''));
+    if (c.fee === true) t.push('Fee'); else if (c.fee === false) t.push('Free');
+    if (c.access === 'customers') t.push('Customers only'); else if (c.access === 'members') t.push('Members only'); else if (c.access === 'permit') t.push('Permit needed');
+    if (Array.isArray(c.shared) && c.shared.length) t.push('Shared with ' + c.shared.slice(0, 2).map((x) => String(x).replace(/_/g, ' ')).join(', '));
+    return t;
+  }
+  function ctMaps(c) { const m = String(c.maps || ''); if (/^https:\/\/www\.google\.com\/maps\//.test(m)) return m; const la = +c.lat, lo = +c.lon; return isFinite(la) && isFinite(lo) ? 'https://www.google.com/maps/search/?api=1&query=' + la + ',' + lo : ''; }
+  function ctResults() {
+    if (CT.st === 'loading') return `<div class="card note" id="cload" role="status">Looking for courts… The first search can take up to a minute while the server wakes up.</div>`;
+    if (CT.st === 'err') return `<div class="card err" role="alert">${esc(CT.msg)}${CT.last ? `<div class="btns"><button type="button" class="pill" data-act="cretry">Try again</button></div>` : ''}</div>`;
+    if (CT.st === 'geo') return `<div class="card err" role="alert">${esc(CT.msg)}</div>`;
+    const d = CT.data; if (CT.st !== 'ok' || !d) return '';
+    const L = Array.isArray(d.courts) ? d.courts : [], where = d.center && d.center.label ? String(d.center.label) : 'that spot', rad = +d.radius || CT.r, google = d.provider === 'google';
+    let h = `<div class="gh">${L.length ? L.length + (L.length === 1 ? ' place' : ' places') : 'No courts found'} <small>within ${esc(rad)} miles of ${esc(where)}</small></div>`;
+    if (d.note) h += `<div class="card note">${esc(d.note)}</div>`; else if (!L.length) h += `<div class="card note">No pickleball courts were found within ${esc(rad)} miles. Try a bigger distance.</div>`;
+    L.forEach((c) => { const tags = ctTags(c), m = ctMaps(c), mi = +c.miles;
+      h += `<div class="card ct"><div class="cth"><b>${esc(c.name || 'Pickleball courts')}</b>${isFinite(mi) ? `<span class="b">${esc(mi.toFixed(1))} mi</span>` : ''}</div>
+${c.address ? `<div class="sub2">${esc(c.address)}</div>` : ''}${c.unnamed ? `<div class="sub2">No name on the map for this one.</div>` : ''}
+${tags.length ? `<div class="tags">${tags.map((x) => `<span class="b">${esc(x)}</span>`).join('')}</div>` : ''}
+${m ? `<a class="pill ctm" href="${esc(m)}" target="_blank" rel="noopener noreferrer">Open in Maps</a>` : ''}</div>`; });
+    let when = ''; try { const t = new Date(d.asOf); if (!isNaN(t)) when = ' · list from ' + t.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch (e) {}
+    h += `<div class="note src">${google ? 'Courts from Google' : 'Courts from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>'}${esc(when)}. ${google ? 'A listing' : 'Volunteers keep that map, so a listing'} can be missing, closed or out of date. Check before you drive over.</div>`;
+    return h;
+  }
+  function viewCourts() {
+    const busy = CT.st === 'loading' ? ' disabled' : '';
+    return back('', 'Pickleball') + `<h2>📍 Find local courts</h2>
+<form id="cf" class="card frm" onsubmit="return false">
+<label for="cq">City or ZIP code</label><input id="cq" name="q" maxlength="80" value="${esc(CT.q)}" placeholder="McAllen, TX or 78501" autocomplete="off" autocapitalize="words" enterkeyhint="search">
+<label for="cr">Distance</label><select id="cr">${CTR.map((n) => `<option value="${n}"${n === CT.r ? ' selected' : ''}>Within ${n} miles</option>`).join('')}</select>
+<div class="btns two"><button type="button" class="pill pri" data-act="csearch"${busy}>Search</button><button type="button" class="pill" data-act="cloc"${busy}>Use my location</button></div>
+</form>
+<div id="cres" aria-live="polite">${ctResults()}</div>
+<div class="note">Your city, ZIP or location is sent to Oddable's server only to look up courts. It is not saved there. Your location is asked for only when you tap Use my location.</div>`;
+  }
+  function ctPaint() { if (route()[0] !== 'courts') return; const box = $('#cres'); if (!box) return render(); box.innerHTML = ctResults(); document.querySelectorAll('#cf button').forEach((b) => { b.disabled = CT.st === 'loading'; }); }
+  function ctFail(msg, st) { CT.st = st || 'err'; CT.msg = msg; CT.data = null; ctPaint(); }
+  async function ctRun(req) { // req = { q } or { lat, lon }; one request per tap, never retried by itself
+    const my = ++CT.seq; CT.last = req; CT.st = 'loading'; CT.msg = ''; ctPaint();
+    const u = CTU + '?' + (req.q != null ? 'q=' + encodeURIComponent(req.q) : 'lat=' + req.lat + '&lon=' + req.lon) + '&r=' + CT.r;
+    let ac = null, tm = null; try { ac = new AbortController(); tm = setTimeout(() => ac.abort(), 70000); } catch (e) {}
+    try {
+      const r = await fetch(u, ac ? { signal: ac.signal } : {}); let j = null; try { j = await r.json(); } catch (e) {}
+      if (my !== CT.seq) return;
+      if (!r.ok || !j || j.ok !== true || !Array.isArray(j.courts)) return ctFail(j && typeof j.error === 'string' && j.error ? j.error.slice(0, 200) : 'The court search did not work (' + r.status + '). Try again.');
+      CT.st = 'ok'; CT.data = j; ctPaint();
+    } catch (e) { if (my === CT.seq) ctFail('Could not reach the court search. Check your connection and try again.'); }
+    finally { if (tm) clearTimeout(tm); }
+  }
+  function ctSearch() {
+    const q = String(($('#cq') || {}).value || '').replace(/\s+/g, ' ').trim(); CT.q = q.slice(0, 80); ctKeep();
+    if (q.length < 2) { CT.last = null; return ctFail('Type a city or ZIP code first, or tap Use my location.', 'geo'); }
+    ctRun({ q: CT.q });
+  }
+  function ctLocate() {
+    ctKeep();
+    const no = (m) => { CT.last = null; ctFail(m, 'geo'); };
+    if (!navigator.geolocation || !navigator.geolocation.getCurrentPosition) return no('This browser can\'t share a location. Type a city or ZIP code instead.');
+    const my = ++CT.seq; CT.st = 'loading'; CT.msg = ''; ctPaint();
+    navigator.geolocation.getCurrentPosition((p) => { if (my !== CT.seq) return; const la = p && p.coords ? +p.coords.latitude : NaN, lo = p && p.coords ? +p.coords.longitude : NaN;
+      if (!isFinite(la) || !isFinite(lo)) return no('Could not get your location. Type a city or ZIP code instead.');
+      ctRun({ lat: la.toFixed(3), lon: lo.toFixed(3) }); // about 100 m: close enough for distances, not your doorstep
+    }, (e) => { if (my !== CT.seq) return; no(e && e.code === 1 ? 'Location is turned off for this page. Type a city or ZIP code instead, or allow location in your browser settings and tap Use my location again.' : 'Could not get your location. Type a city or ZIP code instead.'); },
+    { enableHighAccuracy: false, timeout: 15000, maximumAge: 600000 });
   }
 
   function badCard(ev, key) { const id = String(key); return `<div class="card err bad" data-id="${esc(id)}"><b>${esc((ev && ev.name) || 'An event')}</b> can't be shown (its data is damaged). <div class="btns"><button class="pill dang" data-act="delbad" data-id="${esc(id)}">Delete it</button></div></div>`; }
@@ -726,6 +805,9 @@ ${ERR ? `<div class="err">${esc(ERR)}</div>` : ''}<div class="btns"><button clas
     if (a === 'delbad') { const id = t.getAttribute('data-id'), box = t.closest('.btns'); box.innerHTML = `<button class="pill dang" data-act="delbadyes" data-id="${esc(id)}">Yes, delete</button><button class="pill" data-act="delbadno">Keep</button>`; return; }
     if (a === 'delbadyes') { remove(t.getAttribute('data-id')); if (route()[0] === 'e') go(''); else render(); return; }
     if (a === 'delbadno') return render();
+    if (a === 'csearch') return ctSearch();
+    if (a === 'cloc') return ctLocate();
+    if (a === 'cretry') { if (CT.last && CT.st !== 'loading') ctRun(CT.last); return; }
     let ev = null; try { ev = cur(); } catch (x) { ev = null; } if (!ev) return;
     if (a === 'gopen') { OPEN = OPEN === gid ? null : gid; ERR = ''; render(); const i = $('#sa'); if (i) { i.focus(); i.scrollIntoView({ block: 'center' }); } return; }
     if (a === 'gclose') { OPEN = null; ERR = ''; return render(); }
@@ -746,15 +828,16 @@ ${ERR ? `<div class="err">${esc(ERR)}</div>` : ''}<div class="btns"><button clas
       if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(done, () => { ta.select(); try { document.execCommand('copy'); done(); } catch (x) { $('#cpmsg').textContent = 'Select the code and copy it.'; } });
       else { ta.select(); try { document.execCommand('copy'); done(); } catch (x) {} } return; }
   });
-  document.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('[data-act="gopen"]')) { e.preventDefault(); e.target.click(); } });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.id === 'cq') { e.preventDefault(); if (CT.st !== 'loading') ctSearch(); return; } if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('[data-act="gopen"]')) { e.preventDefault(); e.target.click(); } });
   document.addEventListener('change', (e) => {
     const t = e.target;
     if (t.closest && t.closest('#nf') && (t.name === 'fmt' || ['calc', 'skins', 'pick'].includes(t.name))) { readForm(); render(); return; }
     if (t.id === 'pkas') { PICKAS = t.value; lsSet('pb1-me', PICKAS); render(); return; }
     if (t.id === 'pkw') { const ev = cur(); if (!ev || started(ev)) return render(); if (t.value) ev.pk.w[PICKAS] = t.value; else delete ev.pk.w[PICKAS]; save(ev); render(); return; }
     if (t.id === 'lch') fillDef();
+    if (t.id === 'cr') { const n = +t.value; if (CTR.includes(n)) { CT.r = n; ctKeep(); } }
   });
-  document.addEventListener('input', (e) => { if (e.target.closest && e.target.closest('#nf')) readForm(); });
+  document.addEventListener('input', (e) => { if (e.target.closest && e.target.closest('#nf')) readForm(); if (e.target.id === 'cq') CT.q = String(e.target.value || '').slice(0, 80); });
   function fillDef() { const s = $('#ldf'), c = $('#lch'); if (!s || !c) return; let ev = null; try { ev = cur(); } catch (x) { return; } if (!ev) return; s.innerHTML = defOpts(ev, c.value).map((u) => `<option value="${esc(u)}">${ladderOrder(ev).indexOf(u) + 1}. ${esc(uName(ev, u))}</option>`).join('') || '<option value="">Nobody free within 3 spots</option>'; }
   document.addEventListener('toggle', (e) => { const d = e.target; if (d.matches && d.matches('details[data-k]')) { if (d.open) DOPEN.add(d.getAttribute('data-k')); else DOPEN.delete(d.getAttribute('data-k')); } }, true);
   window.addEventListener('hashchange', () => { OPEN = null; ERR = ''; render(); window.scrollTo(0, 0); });

@@ -13,6 +13,7 @@ async function open(o) {
       const [k, body] = answer(u); ctl.calls.push(k + ' ' + u.replace(/^https:\/\/[^/]+/, '')); const md = ctl.mode[k];
       if (md === 'fail') return route.fulfill({ status: 503, body: 'no' });
       if (md === 'hold') { ctl.held.push({ route, k, body }); return; }
+      if (typeof md === 'function') return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(md(JSON.parse(JSON.stringify(body)))) }); // a bad-shape answer (review 1)
       if (body === null) return route.fulfill({ status: 404, body: '{}' });
       return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
     }

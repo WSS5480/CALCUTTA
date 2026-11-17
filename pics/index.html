@@ -55,6 +55,8 @@ details>summary::after{content:'▾';color:var(--blue)}details[open]>summary::af
 .lg{display:flex;gap:8px;margin:6px 0}.lg button{border:1px solid var(--blue);background:#fff;color:var(--blue);border-radius:999px;padding:6px 16px;font:700 14px inherit;cursor:pointer}.lg button.on{background:var(--blue);color:#fff}
 input#tsearch{width:100%;max-width:320px;margin:2px 0 4px;padding:9px 12px;border:1px solid rgba(255,255,255,.4);border-radius:12px;background:rgba(0,0,0,.28);color:#fff;font:600 15px inherit;box-sizing:border-box}input#tsearch::placeholder{color:rgba(255,255,255,.7)}.arbbar{overflow:hidden;white-space:nowrap;border-radius:12px;margin:8px 0 2px;border:2px solid #f5c542;background:rgba(245,197,66,.16);color:#ffd66b;font:800 14px system-ui;cursor:pointer;min-height:34px;display:flex;align-items:center}.arbbar[hidden]{display:none}.arbbar .mq{display:inline-block;padding-left:100%;animation:arbrun 22s linear infinite}.arbbar.arb{border-color:#f5c542;background:#f5c542;color:#111;animation:arbblink 0.9s steps(2,start) infinite}.arbbar.arb .mq{animation-duration:16s}@keyframes arbrun{to{transform:translateX(-100%)}}@keyframes arbblink{50%{background:rgba(245,197,66,.22);color:#ffd66b}}.arbtag{background:#f5c542;color:#111;font:800 13px system-ui;text-align:center;padding:5px 8px;border-radius:10px;margin:0 0 6px}@media (prefers-reduced-motion:reduce){.arbbar,.arbbar .mq{animation:none!important}.arbbar .mq{padding-left:8px;white-space:normal}}
 .srow select:not(#conf){flex:1 1 auto;min-width:0;font:600 14px inherit;padding:9px 10px;border-radius:12px}.srow{display:flex;gap:8px;align-items:center;margin:2px 0 4px;max-width:100%}.srow input#tsearch{flex:1 1 auto;min-width:0;max-width:none;margin:0}.srow select#conf{flex:0 1 44%;min-width:0;max-width:170px;padding:9px 8px;border:1px solid rgba(255,255,255,.4);border-radius:12px;background:rgba(0,0,0,.28);color:#fff;font:600 14px inherit}html.cb .srow select#conf{background:rgba(4,30,66,.55);border-color:rgba(198,203,215,.45);color:#fff}.srow select#conf option{color:#111}
+/* v275: the team-search list (matches under the search box, in the header flow) */
+.tsug{display:flex;flex-direction:column;gap:4px;margin:0 0 6px;padding:4px;max-width:100%;box-sizing:border-box;border:1px solid rgba(255,255,255,.4);border-radius:12px;background:rgba(0,0,0,.34)}.tsug[hidden]{display:none}.tsug button{display:block;width:100%;min-height:44px;margin:0;text-align:left;padding:10px 12px;border:0;border-radius:9px;background:rgba(255,255,255,.08);color:#fff;font-weight:600;font-size:15px;font-family:inherit;line-height:1.3;cursor:pointer;white-space:normal;overflow-wrap:anywhere}.tsug button.on,.tsug button:focus-visible{background:rgba(255,255,255,.24);outline:none}.tsug button small{font-weight:600;font-size:12px;opacity:.75;margin-left:6px}.tsug .tsnone,.tsug .tsmore{padding:10px 12px;color:rgba(255,255,255,.88);font-weight:600;font-size:14px}html.cb .tsug{background:rgba(4,30,66,.72);border-color:rgba(198,203,215,.45)}@media (min-width:768px){.tsug{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}.tsug .tsnone,.tsug .tsmore{grid-column:1/-1}}
 #survpage{padding:4px 0 110px}#survpage .sv-top{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}#survpage h2{margin:6px 0}#survpage .svs{font:800 13px system-ui;padding:5px 11px;border-radius:999px}#survpage .svs.ok{background:rgba(22,145,90,.18);color:var(--green)}#survpage .svs.no{background:rgba(217,58,46,.18);color:var(--red)}.svchips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.svchips span{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:999px;border:1px solid var(--line);background:var(--panel);font:600 12px system-ui}.svchips span.used{opacity:.4;text-decoration:line-through}.svchips img{width:18px;height:18px;object-fit:contain}.svrow{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin:6px 0}.svrow img{width:34px;height:34px;object-fit:contain}.svrow .m{flex:1;min-width:0}.svrow .m b{display:block}.svrow .m small{color:var(--muted)}.svrow button{border:0!important;border-radius:10px;padding:9px 13px;font:700 14px system-ui;background:var(--blue)!important;color:#fff!important;min-width:64px}.svrow button.alt{background:var(--panel2)!important;color:var(--ink)!important}.svrow.best{border:2px solid #f5c542;background:linear-gradient(135deg,rgba(245,197,66,.2),transparent)}.svrow.lock{opacity:.55}.svwk{display:flex;align-items:center;justify-content:center;gap:14px;margin:8px 0}.svwk button{border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:8px 14px;font:700 16px system-ui;color:inherit}
 .gc{position:relative}.gpin{position:absolute;top:6px;right:8px;z-index:2;border:1px solid rgba(124,58,237,.5);background:rgba(124,58,237,.12);color:inherit;border-radius:999px;font:600 11px inherit;padding:3px 9px}.gpin.on{background:#7c3aed;color:#fff}.pinhd{font:700 12px inherit;letter-spacing:.08em;text-transform:uppercase;opacity:.75;margin:12px 4px 6px}
 .ldate{display:inline-block;font:700 11px inherit;padding:2px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted);vertical-align:middle}.ldate.diff{background:#facc15;border-color:#facc15;color:#1b1400}.also{margin:8px 4px 0}
@@ -270,18 +272,19 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v274 -->
+<!-- Pics v275 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v274</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v275</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
   <div id="arbbar" class="arbbar" hidden onclick="arbBarTap()" role="button" aria-label="Arbitrage alert"><span class="mq" id="arbmq"></span></div>
   <div class="mrow" id="mrow"><label><span>League</span><select id="lgsel" aria-label="League" autocomplete="off"><option value="nfl">🏈 NFL</option><option value="cfb">🎓 NCAA</option><option value="pga">⛳ PGA Tour</option><option value="golfgps">📍 Golf GPS</option><option value="pickleball">🏓 Pickleball</option><option value="nba">🏀 NBA</option><option value="mlb">⚾ MLB</option><option value="nhl">🏒 NHL</option><option value="ncaab">🏀 NCAAB</option></select></label><label id="gvlab"><span>View</span><select id="gvsel" aria-label="View" autocomplete="off" onchange="gvSet(this.value)"></select></label></div>
   <div class="srow"><input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team"><select id="conf" aria-label="Conference"><option value="">All</option></select></div>
+  <div id="tsug" class="tsug" hidden role="listbox" aria-label="Matching teams"></div>
   <select id="team" aria-label="Team" hidden><option value="">All teams</option></select>
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v274 (email sign-in · lost PIN or password · share Oddable)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v275 (team search: tap a team from the list)</div>
   <div class="sub nsw" id="nsw"></div>
   <div class="sub" id="spset"><label>Score pop-ups <select id="spsel" aria-label="Score pop-ups" autocomplete="off" onchange="spSet(this.value)"><option value="mine">My bets only</option><option value="all">All live games</option><option value="off">Off</option></select></label><div style="font-size:11px;opacity:.75;margin-top:4px">A card pops up when a live game scores or ends, with where your bets stand right now.</div></div>
   <div class="sub" id="bpset"><label>Phone alerts for my bets: every score, and the final. <select id="bpsel" aria-label="Phone alerts for my bets (app closed)" autocomplete="off" onchange="bpSet(this.value)"><option value="off">Off</option><option value="on">On</option></select></label><div class="bph">For when Oddable is closed. Needs Oddable added to your Home Screen on iPhone or iPad, and notifications allowed.</div><div id="bpbbw" hidden><label style="margin-top:6px">Basketball <select id="bpbb" aria-label="Basketball alerts" autocomplete="off" onchange="bpBB(this.value)"><option value="q">Quarter ends and final</option><option value="all">Every score</option></select></label><div class="bph">Every score in basketball can mean 150+ alerts a game.</div></div><div id="bpmsg" role="status"></div><button type="button" id="bptest" hidden onclick="bpTest()">Send me a test</button></div>
@@ -302,7 +305,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </div>
 <div id="plb" hidden></div>
 <nav class="bn" id="bn"></nav>
-<script src="trophy.js?v=274"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
+<script src="trophy.js?v=275"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
 <script>
 // ================= v268 GUEST MODE (1 of 3): the flag. The rest is in the "v268 GUEST MODE" script block near the end of this file and in gate.js. =================
 // window.__oddLock: '' = signed in and paid up, or no gate (everything shows, exactly as before v268) · 'guest' = no account · 'expired' = signed in, time has ended.
@@ -542,7 +545,7 @@ function navMore(open) {
 let GRPL = 0; const GRPQ = [];
 function grpLoad(then) { // pics/groups.js, fetched the first time it is needed
   if (window.OddGroups) { if (then) then(); return; } if (then) GRPQ.push(then); if (GRPL) return; GRPL = 1;
-  const sc = document.createElement('script'); sc.src = 'groups.js?v=274'; sc.onload = () => { GRPQ.splice(0).forEach((f) => { try { f(); } catch (e) {} }); }; sc.onerror = () => { GRPL = 0; GRPQ.length = 0; sc.remove(); }; document.head.appendChild(sc);
+  const sc = document.createElement('script'); sc.src = 'groups.js?v=275'; sc.onload = () => { GRPQ.splice(0).forEach((f) => { try { f(); } catch (e) {} }); }; sc.onerror = () => { GRPL = 0; GRPQ.length = 0; sc.remove(); }; document.head.appendChild(sc);
 }
 // Invite links: https://<site>/?join=g.<code> (built with window.oddShareUrl, so they also carry ?ref=). The code is kept for this tab and taken out of the address bar.
 // Read ONLY when the server says Groups exists (/acct/status `groups`, kept in 'odd-gsw'); with Groups dark the link is left alone and opens the app as any link does.
@@ -1922,7 +1925,7 @@ async function alertPush() {
   ASQ = Date.now();
   try { const r = await fetch(ALU, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': alertTok() }, body: JSON.stringify({ week: CUR, rec: { lock: a.lock, dogs: a.dogs, helper: { id: h.g.id, abbr: h.abbr, conf: h.conf } } }) }); if (!r.ok) return; const j = await r.json(); if (j && j.rec && j.week === CUR && alertTake(Object.assign({}, ASV, { [CUR]: j.rec }))) render(); } catch (e) {}
 }
-async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=274')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
+async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=275')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
 const trGrade = (p) => { const g = ALL[p.id]; if (!g || g.state !== 'post') return null; const m = (g.home.abbr === p.abbr ? 1 : -1) * (g.home.score - g.away.score) + p.line; return m === 0 ? 'push' : m > 0 ? 'hit' : 'miss'; };
 function trophyData() {
   if (CFB || !window.Trophy || !Trophy.ready()) return null;
@@ -2048,7 +2051,7 @@ let TPS = [], TPT = 'games', TPC = {}, TPST = null;
 // never by abbreviation; the NFL keeps data-team="ABBR". Off: every college tap does nothing, exactly as before. NFL: unchanged either way.
 const ctOn = () => CFB && !!(window.ODDCFG && window.ODDCFG.cfbteam === true);
 const ctAb = (abbr) => { const ids = abbr ? Object.keys(TEAMID).filter((k) => TEAMID[k] === abbr) : []; return ids.length === 1 ? ids[0] : ''; }; // an abbreviation counts only when exactly one loaded team has it
-const ctKey = (a) => { if (!ctOn() || !a) return ''; return typeof a === 'object' ? String(a.tid || ctAb(a.abbr)) : ctAb(a); }; // weeks saved on the phone before CFB-TEAM have no `tid`: those fall back to a unique abbreviation
+const ctKey = (a) => { if (!ctOn() || !a) return ''; const k = typeof a === 'object' ? String(a.tid || ctAb(a.abbr)) : ctAb(a); return /^\d+$/.test(k) ? k : ''; }; // only numeric ESPN ids // weeks saved on the phone before CFB-TEAM have no `tid`: those fall back to a unique abbreviation
 window.ctCfg = (j) => { if (CFB && j && j.cfbteam === true) renderBg(); }; // the switch can land after the first draw: draw once more so the names become tappable
 const tpAb = (a) => (a && typeof a === 'object' ? a.abbr : a); // a team object (g.home / g.away) or an abbreviation
 const tpAt = (a) => { if (CFB) { const k = ctKey(a); return k ? ` data-cteam="${escH(k)}"` : ''; } a = tpAb(a); return !a ? '' : ` data-team="${escH(a)}"`; };
@@ -2072,7 +2075,7 @@ async function tpGet(u) { const ctl = new AbortController(), to = setTimeout(() 
 // slot = { t, j, err, busy }. Fetches once per 10 minutes; repaints the page when it lands.
 function tpNeed(slot, url, a) {
   if (slot.busy || (slot.t && Date.now() - slot.t < TPTTL && (slot.j || slot.err))) return; slot.busy = true; slot.err = false;
-  tpGet(url).then((j) => { slot.j = j; slot.err = false; }).catch(() => { slot.err = true; }).then(() => { slot.busy = false; slot.t = Date.now(); if (TPS.length && (!a || TPS[TPS.length - 1] === a)) tpPaint(); try { nvLanded(); } catch (e) {} });
+  tpGet(url).then((j) => { if (CFB && (!j || typeof j !== 'object')) throw new Error('not an object'); /* college: a null / non-object answer is a failure (Try again), not an endless Loading */ slot.j = j; slot.err = false; }).catch(() => { slot.err = true; }).then(() => { slot.busy = false; slot.t = Date.now(); if (TPS.length && (!a || TPS[TPS.length - 1] === a)) tpPaint(); try { nvLanded(); } catch (e) {} });
 }
 const tpSlot = (a, k) => { const c = (TPC[a] = TPC[a] || {}); return (c[k] = c[k] || { t: 0, j: null, err: false, busy: false }); };
 const tpWait = (slot, what) => (slot.j ? '' : slot.err ? `<div class="note">${what} not available right now.${tpTry()}</div>` : `<div class="note">Loading ${what.toLowerCase()}…</div>`);
@@ -2084,7 +2087,7 @@ const tpStand = () => { TPST = TPST || { t: 0, j: null, err: false, busy: false 
 function tpStAll() { const j = TPST && TPST.j; if (!j) return null; return (j.children || []).map((c) => ({ conf: c.abbreviation || c.name || '', name: c.name || '', divs: (c.children || []).map((d) => ({ name: d.name || '', rows: ((d.standings || {}).entries || []).map((e) => ({ abbr: ab((e.team || {}).abbreviation || ''), name: (e.team || {}).shortDisplayName || (e.team || {}).displayName || '', s: Object.fromEntries((e.stats || []).map((x) => [x.name || x.type, x.displayValue])) })) })) })); }
 function tpDiv(a) { let out = null; (tpStAll() || []).forEach((c) => c.divs.forEach((d) => { const i = d.rows.findIndex((e) => e.abbr === a); if (i >= 0) out = { name: d.name, rows: d.rows, place: i + 1 }; })); return out; }
 const tpOrd = (n) => n + (['th', 'st', 'nd', 'rd'][n % 100 > 10 && n % 100 < 14 ? 0 : n % 10] || 'th');
-function tpOpen(a) { if ((CFB && !ctOn()) || !a) return; a = ab(String(a)); if (TPS[TPS.length - 1] !== a) TPS.push(a); TPT = 'games'; const sh = document.getElementById('infosheet'); if (sh) sh.style.zIndex = ''; tpPaint(true); }
+function tpOpen(a) { if ((CFB && !ctOn()) || !a || (CFB && !/^\d+$/.test(String(a)))) return; a = ab(String(a)); if (TPS[TPS.length - 1] !== a) TPS.push(a); TPT = 'games'; const sh = document.getElementById('infosheet'); if (sh) sh.style.zIndex = ''; tpPaint(true); }
 function tpBack() { TPS.pop(); if (!TPS.length) return tpClose(); TPT = 'games'; tpPaint(true); }
 function tpClose() { TPS = []; const e = document.getElementById('teampage'); if (e) e.hidden = true; }
 function tpTab(k) { TPT = k; tpPaint(true); }
@@ -2108,24 +2111,26 @@ function tpGamesOut(rows, rec, note) {
   const td = 'padding:8px 4px;border-bottom:1px solid var(--line);vertical-align:top', num = td + ';text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap', day = (t) => new Date(t).toLocaleDateString(undefined, { weekday: 'short', month: 'numeric', day: 'numeric' }), tm = (t) => new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   const cov = (r) => (r.ats === 'hit' ? ' <b style="color:#4fd18b">✓</b>' : r.ats === 'miss' ? ' <b style="color:#ff6b6b">✗</b>' : r.ats === 'push' ? ' <span class="sub">push</span>' : '');
   const body = rows.map((r) => r.bye ? `<tr><td style="${td}">Wk ${r.wk}</td><td style="${td}" colspan="3"><span class="sub">Bye week</span></td></tr>`
-    : `<tr ${r.g ? `onclick="tpGame('${r.g.id}')" style="cursor:pointer"` : ''}><td style="${td}">${r.wl || 'Wk ' + r.wk}<small class="sub" style="display:block">${day(r.start)}</small></td><td style="${td}">${r.home ? 'vs' : '@'} <b>${escH(r.opp)}</b>${r.g ? ' <span class="sub">›</span>' : ''}</td><td style="${num}">${r.state === 'post' ? `<b style="color:${r.su === 'W' ? '#4fd18b' : r.su === 'L' ? '#ff6b6b' : 'inherit'}">${r.su}</b> ${r.pf}-${r.pa}` : r.state === 'in' ? `<b>LIVE</b> ${r.pf}-${r.pa}` : tm(r.start)}</td><td style="${num}">${r.line === null ? '<span class="sub">–</span>' : sp(r.line) + cov(r)}</td></tr>`).join('');
-  const sum = `<div class="card" style="margin:8px 0"><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px"><div><div class="sub">Straight up</div><b style="font-size:18px">${tpWL(rec.su)}</b></div><div><div class="sub">Against the spread</div><b style="font-size:18px">${rec.ats.w}-${rec.ats.l}${rec.ats.p ? '-' + rec.ats.p : ''}</b></div><div><div class="sub">Home</div><b>${tpWL(rec.hm)}</b></div><div><div class="sub">Away</div><b>${tpWL(rec.aw)}</b></div></div></div>`;
+    : `<tr ${r.g ? `onclick="tpGame('${r.g.id}')" style="cursor:pointer"` : ''}><td style="${td}">${r.wl || 'Wk ' + r.wk}<small class="sub" style="display:block">${day(r.start)}</small></td><td style="${td}">${r.home ? 'vs' : '@'} <b>${escH(CFB && r.on && Object.keys(TEAMID).some((k) => TEAMID[k] === r.opp && k !== r.oid) ? r.on : r.opp)}</b>${r.g ? ' <span class="sub">›</span>' : ''}</td><td style="${num}">${r.state === 'post' ? `<b style="color:${r.su === 'W' ? '#4fd18b' : r.su === 'L' ? '#ff6b6b' : 'inherit'}">${r.su}</b> ${r.pf}-${r.pa}` : r.state === 'in' ? `<b>LIVE</b> ${r.pf}-${r.pa}` : tm(r.start)}</td><td style="${num}">${r.line === null ? '<span class="sub">–</span>' : sp(r.line) + cov(r)}</td></tr>`).join('');
+  const sum = `<div class="card" style="margin:8px 0"><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px"><div><div class="sub">Straight up</div><b style="font-size:18px">${tpWL(rec.su)}</b></div>${CFB && !(rec.ats.w + rec.ats.l + rec.ats.p) ? '' : `<div><div class="sub">Against the spread</div><b style="font-size:18px">${rec.ats.w}-${rec.ats.l}${rec.ats.p ? '-' + rec.ats.p : ''}</b></div>`}<div><div class="sub">Home</div><b>${tpWL(rec.hm)}</b></div><div><div class="sub">Away</div><b>${tpWL(rec.aw)}</b></div></div></div>`;
   return sum + note + (rows.length ? `<table style="width:100%;border-collapse:collapse;font-size:14px"><tr class="sub"><th style="${td};text-align:left">Week</th><th style="${td};text-align:left">Opponent</th><th style="${num}">Result</th><th style="${num}">Spread</th></tr>${body}</table><div class="sub" style="margin-top:8px">${CFB ? "Spread = this team's line: ESPN's line, or for a game that has started the last line this phone saw (– = none). ✓ covered, ✗ did not. Tap a game with › to open it." : "Spread = this team's line: the closing line for games that have started, the current line for games to come. ✓ covered, ✗ did not. Tap a game to open it."}</div>` : '<div class="note">No games loaded yet.</div>');
 }
 // ---- CFB-TEAM: college pieces of the team page (only reached when ctOn(); `a` is the ESPN team id as a string) ----
 // One row of ESPN's teams/{id}/schedule (bowls and the playoff included). Field names as the NFL schedule; college ones UNVERIFIED (see HANDOFF "CFB-TEAM").
-function tpSchedRow(e, a) {
+function tpSchedRow(e, a, post3) {
   const c = (e && e.competitions || [])[0]; if (!c) return null; const cs = c.competitors || [], idOf = (x) => String((x.team && x.team.id) || x.id || ''), me = cs.find((x) => idOf(x) === a), op = cs.find((x) => x !== me); if (!me || !op) return null;
-  const st = (((c.status || e.status || {}).type) || {}).state || '', sc = (x) => { const v = x.score; return v && typeof v === 'object' ? +v.value || 0 : +v || 0; }, wk = (e.week && +e.week.number) || 0, post = !!(e.seasonType && +e.seasonType.type === 3), t = Date.parse(e.date);
+  const st = (((c.status || e.status || {}).type) || {}).state || '', sc = (x) => { const v = x.score; return v && typeof v === 'object' ? +v.value || 0 : +v || 0; }, wk = (e.week && +e.week.number) || 0, post = !!post3 || !!(e.seasonType && +e.seasonType.type === 3), t = Date.parse(e.date), ot = op.team || {};
   if (!Number.isFinite(t)) return null;
-  return { wk, wl: post ? 'Post' : '', home: me.homeAway === 'home', opp: ab(((op.team || {}).abbreviation) || '') || '?', state: st, start: t, line: null, su: st === 'post' ? (sc(me) > sc(op) ? 'W' : sc(me) < sc(op) ? 'L' : 'T') : '', ats: '', pf: sc(me), pa: sc(op), g: null };
+  return { wk, wl: post ? 'Post' : '', home: me.homeAway === 'home', opp: ab(ot.abbreviation || '') || '?', oid: idOf(op), on: ot.displayName || ot.shortDisplayName || '', state: st, start: t, line: null, su: st === 'post' ? (sc(me) > sc(op) ? 'W' : sc(me) < sc(op) ? 'L' : 'T') : '', ats: '', pf: sc(me), pa: sc(op), g: null };
 }
 // Games tab: the phone's games for the team (regular season, tappable) plus ESPN's schedule for the rest (bowls, playoff, weeks not loaded yet), by date.
 function tpCGames(a) {
-  const G = tpGames(a), R = G.map((g) => tpRow(g, a)), seen = new Set(G.map((g) => String(g.id))), sl = tpSlot(a, 'sched'); tpNeed(sl, SB + 'teams/' + encodeURIComponent(a) + '/schedule', a);
+  const G = tpGames(a), R = G.map((g) => tpRow(g, a)), seen = new Set(G.map((g) => String(g.id))), u = SB + 'teams/' + encodeURIComponent(a) + '/schedule?seasontype=', s2 = tpSlot(a, 'sched'), s3 = tpSlot(a, 'sched3'); tpNeed(s2, u + '2', a); tpNeed(s3, u + '3', a); // regular season and postseason asked separately (one call without seasontype gives only the current part)
   let note = '';
-  if (sl.j) (sl.j.events || []).forEach((e) => { if (!e || seen.has(String(e.id))) return; const r = tpSchedRow(e, a); if (r) { seen.add(String(e.id)); R.push(r); } });
-  else note = sl.err ? '<div class="note">The full schedule (bowls, playoff) is not available right now.' + tpTry() + '</div>' : '<div class="note">Loading the full schedule…</div>';
+  [s2, s3].forEach((sl) => { if (sl.j && !Array.isArray(sl.j.events)) { sl.j = null; sl.err = true; } }); // a feed with no list of games counts as failed (Try again)
+  [[s2, 0], [s3, 1]].forEach(([sl, p3]) => { if (sl.j && Array.isArray(sl.j.events)) sl.j.events.forEach((e) => { if (!e || seen.has(String(e.id))) return; const r = tpSchedRow(e, a, p3); if (r) { seen.add(String(e.id)); R.push(r); } }); });
+  R.forEach((r) => { if (r.g) { const o = tpIs(r.g.home, a) ? r.g.away : r.g.home; r.oid = String(o.tid || ''); r.on = o.name || ''; } });
+  if (!s2.j || !s3.j) note = s2.err || s3.err ? '<div class="note">The full schedule (bowls, playoff) is not available right now.' + tpTry() + '</div>' : '<div class="note">Loading the full schedule…</div>';
   R.sort((x, y) => x.start - y.start);
   return tpGamesOut(R, tpRec(R), note);
 }
@@ -2148,13 +2153,13 @@ function tpCConf(j, a) {
     let ovr = rec(S.find((x) => x && (x.type === 'total' || x.name === 'overall'))); if (!isRec(ovr) && dv('wins') !== '' && dv('losses') !== '') ovr = dv('wins') + '-' + dv('losses') + (dv('ties') && dv('ties') !== '0' ? '-' + dv('ties') : '');
     const cf = rec(S.find((x) => x && (x.type === 'vsconf' || /conf/i.test(String(x.name || '') + String(x.abbreviation || ''))) && isRec(rec(x))));
     return { id: idOf(e), abbr: ab(T.abbreviation || '') || '', name: T.shortDisplayName || T.displayName || T.location || '', conf: cf, ovr: isRec(ovr) ? ovr : '', pf: dv('pointsFor'), pa: dv('pointsAgainst') };
-  }).filter((r) => r.id);
-  if (rows.length && rows.every((r) => pctOf(r.conf) !== null)) rows.sort((x, y) => pctOf(y.conf) - pctOf(x.conf) || (pctOf(y.ovr) || 0) - (pctOf(x.ovr) || 0)); // ESPN's college order is not guaranteed to be the table order: conference record, then overall
+  }).filter((r) => /^\d+$/.test(r.id));
+  if (rows.length && rows.every((r) => pctOf(r.conf) !== null) && rows.some((r, i) => i && pctOf(r.conf) > pctOf(rows[i - 1].conf))) rows.sort((x, y) => pctOf(y.conf) - pctOf(x.conf) || (pctOf(y.ovr) || 0) - (pctOf(x.ovr) || 0)); // ESPN orders by its tiebreakers: re-sort (conference record, then overall) only when its order is not already by conference record
   return { name: hit.name, rows };
 }
 function tpCStandHtml(a) {
   const sl = tpCStand(a); if (!sl) { const f = tpSlot(a, 'team'); return f.j || f.err ? '<div class="note">Conference standings are not available for this team.</div>' : '<div class="note">Loading standings…</div>'; }
-  if (!sl.j) return tpWait(sl, 'Standings'); const d = tpCConf(sl.j, a); if (!d || !d.rows.length) return '<div class="note">Standings are not available right now.</div>';
+  if (!sl.j) return tpWait(sl, 'Standings'); const d = tpCConf(sl.j, a); if (!d || !d.rows.length) return tpCBad(a, 'stand');
   const td = 'padding:12px 4px;border-bottom:1px solid var(--line);vertical-align:top', num = td + ';text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap', v = (x) => escH(x || '–'), pts = d.rows.some((r) => r.pf || r.pa), cf = d.rows.some((r) => r.conf);
   return `<div style="margin:6px 0"><b>${escH(d.name)}</b></div><table style="width:100%;border-collapse:collapse;font-size:14px"><tr class="sub"><th style="${td};text-align:left">Team</th>${cf ? `<th style="${num}">Conf</th>` : ''}<th style="${num}">Overall</th>${pts ? `<th style="${num}">PF</th><th style="${num}">PA</th>` : ''}</tr>${d.rows.map((r, i) => `<tr ${r.id === a ? 'style="background:rgba(124,58,237,.18);font-weight:700"' : `onclick="tpOpen('${escH(r.id)}')" style="cursor:pointer"`}><td style="${td};overflow-wrap:anywhere">${i + 1}. ${escH(r.abbr || r.name)}${r.id === a ? '' : ' <span class="sub">›</span>'}${r.name && r.abbr && r.name !== r.abbr ? `<small class="sub" style="display:block;font-weight:400">${escH(r.name)}</small>` : ''}</td>${cf ? `<td style="${num}">${v(r.conf)}</td>` : ''}<td style="${num}">${v(r.ovr)}</td>${pts ? `<td style="${num}">${v(r.pf)}</td><td style="${num}">${v(r.pa)}</td>` : ''}</tr>`).join('')}</table><div class="sub" style="margin-top:8px">${cf ? 'Conf = record inside the conference. ' : ''}${pts ? 'PF / PA = points for and against. ' : ''}Tap another team to open its page.</div>`;
 }
@@ -2163,7 +2168,7 @@ function tpCHead(a, t, rec) {
   const f = tpCInfo(a), G = tpGames(a), lastG = G.filter((g) => g.state !== 'pre').pop() || G[G.length - 1], side = lastG ? (tpIs(lastG.home, a) ? lastG.home : lastG.away) : t;
   const logo = (t.logo || (f && f.logo) || ''), rk = (f && f.rank) || (side && side.rank) || 0, nm = (f && f.name) || t.name || NAMES[t.abbr] || t.abbr || 'Team', R = (f && f.rec) || tpWL(rec);
   let cf = f && f.conf ? f.conf : ''; if (!cf) { const sl = tpCStand(a), d = sl && sl.j ? tpCConf(sl.j, a) : null; if (d) cf = d.name; }
-  return `${/^https:\/\//i.test(logo) ? `<img class="tplg" src="${escH(logo)}" alt="" onerror="this.remove()">` : ''}<b>${escH(nm)}</b><small>${escH(R)}${rk ? ' · AP #' + rk : ''}${cf ? ' · ' + escH(cf) : ''}</small>`;
+  return `${/^https:\/\//i.test(logo) ? `<img class="tplg" src="${escH(logo)}" alt="" onerror="this.remove()">` : ''}<b>${escH(nm)}</b><small>${escH(R)}${rk ? ' · #' + rk : ''}${cf ? ' · ' + escH(cf) : ''}</small>`;
 }
 function tpPicksHtml(a) {
   if (GUEST()) return gk("Sign up free to see every Oddable pick on this team", 'team:' + a, { big: 1 }); // v268 guest
@@ -2178,9 +2183,9 @@ function tpPicksHtml(a) {
 const TPSTATS = [['Points per game', 'passing', 'totalPointsPerGame'], ['Total yards per game', 'passing', 'yardsPerGame'], ['Passing yards per game', 'passing', 'netPassingYardsPerGame'], ['Rushing yards per game', 'rushing', 'rushingYardsPerGame'], ['Yards per rush', 'rushing', 'yardsPerRushAttempt'], ['Passing touchdowns', 'passing', 'passingTouchdowns'], ['Rushing touchdowns', 'rushing', 'rushingTouchdowns'], ['Interceptions thrown', 'passing', 'interceptions'], ['Times sacked', 'passing', 'sacks'], ['3rd down %', 'miscellaneous', 'thirdDownConvPct'], ['Giveaways', 'miscellaneous', 'totalGiveaways'], ['Takeaways', 'miscellaneous', 'totalTakeaways'], ['Turnover margin', 'miscellaneous', 'turnOverDifferen'], ['Penalties', 'miscellaneous', 'totalPenalties']];
 function tpStatsHtml(a) {
   const sl = tpSlot(a, 'stats'), id = tpId(a); if (!id) return '<div class="note">Team stats are not available right now.</div>'; tpNeed(sl, SB + 'teams/' + id + '/statistics', a); if (!sl.j) return tpWait(sl, 'Team stats');
-  const R = sl.j.results || {}, mine = (R.stats && R.stats.categories) || [], opp = Array.isArray(R.opponent) ? R.opponent : [], val = (C, cat, n) => { const c = C.find((x) => x.name === cat), s = c && (c.stats || []).find((x) => x.name === n || (n === 'turnOverDifferen' && String(x.name || '').indexOf(n) === 0)); return s && s.displayValue !== undefined ? String(s.displayValue) : ''; };
+  const R = sl.j.results || {}, mine = (R.stats && Array.isArray(R.stats.categories)) ? R.stats.categories : [], opp = Array.isArray(R.opponent) ? R.opponent : [], val = (C, cat, n) => { const c = C.find((x) => x && x.name === cat), s = c && (c.stats || []).find((x) => x.name === n || (n === 'turnOverDifferen' && String(x.name || '').indexOf(n) === 0)); return s && s.displayValue !== undefined ? String(s.displayValue) : ''; };
   const td = 'padding:8px 4px;border-bottom:1px solid var(--line)', num = td + ';text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap', rows = TPSTATS.map(([l, c, n]) => [l, val(mine, c, n), val(opp, c, n)]).filter((r) => r[1] || r[2]);
-  if (!rows.length) return '<div class="note">Team stats are not available right now.</div>';
+  if (!rows.length) return CFB ? tpCBad(a, 'stats') : '<div class="note">Team stats are not available right now.</div>'; // college: Try again
   const nm = tpNm(a), two = !CFB || rows.some((r) => r[2]); // college: no Opponents column when the feed has none
   return `<table style="width:100%;border-collapse:collapse;font-size:14px"><tr class="sub"><th style="${td};text-align:left">Season</th><th style="${num}">${escH(nm)}</th>${two ? `<th style="${num}">Opponents</th>` : ''}</tr>${rows.map((r) => `<tr><td style="${td}">${r[0]}</td><td style="${num}"><b>${escH(r[1] || '–')}</b></td>${two ? `<td style="${num}">${escH(r[2] || '–')}</td>` : ''}</tr>`).join('')}</table><div class="sub" style="margin-top:8px">Season totals and per-game figures from ESPN.${two ? ` "Opponents" is what teams have done against ${escH(nm)}.` : ''} ESPN's feed gives no ${CFB ? 'national' : 'league'} rank, so none is shown.</div>`;
 }
@@ -2192,9 +2197,9 @@ function tpStandHtml(a) {
 }
 function tpRosterHtml(a) {
   const sl = tpSlot(a, 'roster'), id = tpId(a); if (!id) return '<div class="note">Roster not available right now.</div>'; tpNeed(sl, SB + 'teams/' + id + '/roster', a); if (!sl.j) return tpWait(sl, 'Roster');
-  const NM = { offense: 'Offense', defense: 'Defense', specialTeam: 'Special teams', injuredReserveOrOut: 'Injured reserve or out' }; let G = (sl.j.athletes || []).filter((g) => NM[g.position] && (g.items || []).length);
+  const NM = { offense: 'Offense', defense: 'Defense', specialTeam: 'Special teams', injuredReserveOrOut: 'Injured reserve or out' }; let G = (Array.isArray(sl.j.athletes) ? sl.j.athletes : []).filter((g) => g && NM[g.position] && Array.isArray(g.items) && g.items.length);
   if (CFB && !G.length) { const fl = (Array.isArray(sl.j.athletes) ? sl.j.athletes : []).filter((p) => p && !p.items && (p.displayName || p.fullName)); if (fl.length) { NM.all = 'Players'; G = [{ position: 'all', items: fl }]; } } // college: a flat list of players instead of groups
-  if (!G.length) return '<div class="note">Roster not available right now.</div>';
+  if (!G.length) return CFB ? tpCBad(a, 'roster') : '<div class="note">Roster not available right now.</div>'; // college: Try again
   const td = 'padding:8px 4px;border-bottom:1px solid var(--line)', num = td + ';text-align:right;font-variant-numeric:tabular-nums;width:2.6em', ideas = piList();
   return G.map((g) => `<div class="gh" style="margin:14px 0 4px">${NM[g.position]} · ${g.items.length}</div><table style="width:100%;border-collapse:collapse;font-size:14px"><tr class="sub"><th style="${num}">No.</th><th style="${td};text-align:left">Player</th><th style="${td};text-align:left;width:3.4em">Pos</th></tr>${g.items.slice().sort((x, y) => (+x.jersey || 999) - (+y.jersey || 999)).map((p) => { const k = ideas.findIndex((o) => String(o.id) === String(p.id)); return `<tr><td style="${num}">${escH(p.jersey || '')}</td><td style="${td};overflow-wrap:anywhere">${escH(p.displayName || p.fullName || '')}${k >= 0 ? ` <button class="nw" style="min-height:36px" onclick="tpIdea(${k})">🎯 prop idea ›</button>` : ''}</td><td style="${td}">${escH((p.position && p.position.abbreviation) || '')}</td></tr>`; }).join('')}</table>`).join('') + '<div class="sub" style="margin-top:8px">Roster from ESPN. 🎯 = on this week\'s prop ideas list (an idea, not a pick).</div>';
 }
@@ -2215,13 +2220,16 @@ function tpPaint(top) {
   e.hidden = false; const nb = e.querySelector('.tpb'); if (nb) nb.scrollTop = y;
 }
 // College: the same page frame with four tabs (Games, Standings, Stats, Roster); no Our picks (the Alert is NFL) and no News.
+// A tab whose feed came in a shape the page cannot read: "not available" + Try again; its answers are dropped so Try again fetches them again.
+function tpCBad(a, k) { const S = { games: ['sched', 'sched3'], stats: ['stats'], roster: ['roster'], stand: [] }[k] || []; S.forEach((x) => { const s = tpSlot(a, x); s.j = null; s.err = true; s.t = Date.now(); }); if (k === 'stand') { try { const c = TPC['@g' + tpCGid(a)]; if (c && c.s) { c.s.j = null; c.s.err = true; c.s.t = Date.now(); } } catch (e) {} } return `<div class="note">${{ games: 'The schedule is', stats: 'Team stats are', roster: 'The roster is', stand: 'Standings are' }[k] || 'This is'} not available right now.${tpTry()}</div>`; }
 const TPCTABS = [['games', 'Games'], ['stand', 'Standings'], ['stats', 'Stats'], ['roster', 'Roster']];
 function tpPaintC(a, e, top) {
   if (!TPCTABS.some((x) => x[0] === TPT)) TPT = 'games';
   const t = tpTeam(a), f = tpCInfo(a), c0 = t.color || (f && f.color) || '', col = /^#[0-9a-f]{6}$/i.test(c0) ? c0 : '#3b1a8c', R = tpGames(a).map((g) => tpRow(g, a)), rec = tpRec(R).su;
-  const body = TPT === 'stats' ? tpStatsHtml(a) : TPT === 'stand' ? tpStandHtml(a) : TPT === 'roster' ? tpRosterHtml(a) : tpGamesHtml(a);
+  let body, hd; try { body = TPT === 'stats' ? tpStatsHtml(a) : TPT === 'stand' ? tpStandHtml(a) : TPT === 'roster' ? tpRosterHtml(a) : tpGamesHtml(a); } catch (err) { body = tpCBad(a, TPT); }
+  try { hd = tpCHead(a, t, rec); } catch (err) { hd = `<b>${escH(t.name || t.abbr || 'Team')}</b><small>${escH(tpWL(rec))}</small>`; }
   const old = e.querySelector('.tpb'), y = old && !top ? old.scrollTop : 0;
-  e.innerHTML = `<div class="tpw"><div class="tph" style="background:linear-gradient(135deg,${col},#0b0f17 140%)"><button onclick="tpBack()" aria-label="Back">‹ Back</button><div class="tpn">${tpCHead(a, t, rec)}</div><button onclick="tpClose()" aria-label="Close">✕</button></div><div class="tpt c4">${TPCTABS.map(([k, l]) => `<button class="${TPT === k ? 'on' : ''}" onclick="tpTab('${k}')">${l}</button>`).join('')}</div><div class="tpb">${body}</div></div>`;
+  e.innerHTML = `<div class="tpw"><div class="tph" style="background:linear-gradient(135deg,${col},#0b0f17 140%)"><button onclick="tpBack()" aria-label="Back">‹ Back</button><div class="tpn">${hd}</div><button onclick="tpClose()" aria-label="Close">✕</button></div><div class="tpt c4">${TPCTABS.map(([k, l]) => `<button class="${TPT === k ? 'on' : ''}" onclick="tpTab('${k}')">${l}</button>`).join('')}</div><div class="tpb">${body}</div></div>`;
   e.hidden = false; const nb = e.querySelector('.tpb'); if (nb) nb.scrollTop = y;
 }
 // --- v258: Standings / Team stats / Season, three views in the View menu (NFL only). They draw into #list like Stats / Results do.
@@ -2444,6 +2452,7 @@ async function getJson(u) { const r = await fetch(u, { cache: 'no-store' }); if 
 async function loadWeek(n) {
   let list = null;
   try { list = JSON.parse(localStorage.getItem((CFB ? 'cw26-' : 'pw26-') + n)); } catch (e) {}
+  if (CFB && Array.isArray(list) && list.some((g) => !g || !g.home || !g.away || !('tid' in g.home) || !('tid' in g.away))) list = null; // CFB-TEAM: a college week saved before ESPN team ids were kept is fetched once more (then saved with them)
   if (!list) {
     list = parseEvents(await getJson(SB + 'scoreboard?week=' + n + '&seasontype=2' + SCX), n);
     if (list.length && list.every((g) => g.state === 'post')) { try { localStorage.setItem((CFB ? 'cw26-' : 'pw26-') + n, JSON.stringify(list)); } catch (e) {} }
@@ -3013,12 +3022,36 @@ function confSelect() {
 function teamSelect() {
   confSelect();
   const set = new Set(); Object.values(ALL).forEach((g) => { set.add(g.home.abbr); set.add(g.away.abbr); });
-  if (TEAM && set.size > 40 && !set.has(TEAM)) { TEAM = ''; try { localStorage.setItem('pics-team-' + LG, ''); } catch (e) {} }
+  if (TEAM && set.size > 40 && tsAllIn() && !set.has(TEAM)) { TEAM = ''; try { localStorage.setItem('pics-team-' + LG, ''); } catch (e) {} }
   const q = nn((($('#tsearch') || {}).value) || ''); let arr = [...set].sort((a, b) => nm(a).localeCompare(nm(b))); const sel = $('#team'); if (q) arr = arr.filter((a) => nn(nm(a)).includes(q) || nn(a).includes(q));
   if (sel.dataset.n !== String(arr.length) + '|' + q) { sel.innerHTML = '<option value="">All teams</option>' + arr.map((a) => `<option value="${a}">${nm(a)}</option>`).join(''); sel.dataset.n = arr.length + '|' + q; sel.value = TEAM; }
+  { const tb = $('#tsug'); if (tb && !tb.hidden) tsPaint(true); } // v275: the open list follows teams still loading in
 }
+// v275 TEAM SEARCH: a tappable list of matching teams under the search box. Before, the box only acted when the text matched exactly ONE team,
+// so on college "Texas", "Ohio", "Miami", "Michigan" (several teams each) did nothing. Teams come from every game loaded (the whole season) plus,
+// for college, every name ESPN gave this phone, and for the NFL all 32 teams in data/teams.json. No new network call.
+const tsAllIn = () => { try { return ALLW; } catch (e) { return false; } };
+const tsQ = (s) => String(s || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim(); // like nn() without "st" -> "state", so "st" still finds Stanford and "michigan st" is a start of "michigan state"
+function tsUniverse() { const set = new Set(); Object.values(ALL).forEach((g) => { set.add(g.home.abbr); set.add(g.away.abbr); }); if (CFB) Object.keys(NAMES).forEach((a) => set.add(a)); else if (M && M.by) Object.keys(M.by).forEach((a) => set.add(a)); set.delete(''); set.delete(undefined); return [...set]; }
+function tsMatches(raw) {
+  const q = tsQ(raw); if (!q) return [];
+  const rk = (a) => { const n = nn(nm(a)), x = tsQ(a); if (n === q || x === q || tsQ(nm(a)) === q) return 0; if (n.startsWith(q) || tsQ(nm(a)).startsWith(q)) return 1; if ((' ' + n).includes(' ' + q) || (' ' + tsQ(nm(a))).includes(' ' + q)) return 2; if (n.includes(q) || x.includes(q) || tsQ(nm(a)).includes(q)) return 3; return -1; };
+  return tsUniverse().map((a) => [a, rk(a)]).filter((r) => r[1] >= 0).sort((p, o) => p[1] - o[1] || String(nm(p[0])).localeCompare(String(nm(o[0])))).map((r) => r[0]);
+}
+let TSI = [];
+function tsPaint(show) {
+  const box = $('#tsug'), inp = $('#tsearch'); if (!box || !inp) return;
+  if (!show || !tsQ(inp.value)) { TSI = []; if (!box.hidden) { box.hidden = true; box.innerHTML = ''; box.__h = ''; } return; }
+  TSI = tsMatches(inp.value);
+  const h = TSI.length ? TSI.slice(0, 8).map((a) => `<button type="button" role="option" data-ts="${escH(a)}" class="${a === TEAM ? 'on' : ''}" aria-selected="${a === TEAM}">${escH(nm(a))}${a === TEAM ? '<small>showing</small>' : ''}</button>`).join('') + (TSI.length > 8 ? `<div class="tsmore">${TSI.length - 8} more · keep typing</div>` : '') : '<div class="tsnone">No team found</div>';
+  if (box.__h !== h) { box.innerHTML = h; box.__h = h; } box.hidden = false;
+}
+// a team picked from the search: its games show even if a conference is chosen (the conference goes back to All when the team is not in it)
+function tsConf(a) { if (CONF && !inConf(tpTeam(a))) { CONF = ''; try { localStorage.setItem('pics-conf-' + LG, ''); } catch (x) {} const c = $('#conf'); if (c) c.value = ''; } }
+function tsPick(a) { if (!a) return; const inp = $('#tsearch'); tsConf(a); WKV = null; if (inp) { inp.value = nm(a); inp.blur(); } tsPaint(false); pickTeam(a); }
 // Stats card for the selected team: record, scoring, how it did against the spread, and how our picks did on its games
-function teamBanner() { return TEAM ? `<div class="note" style="text-align:left;border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin:8px 0">Showing only <b>${nm(TEAM)}</b> games. <button onclick="pickTeam('')" style="margin-left:6px;min-height:40px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:10px;padding:8px 14px;font:700 13px inherit">Show all teams</button></div>` : ''; }
+const tsNoGame = () => { const G = Object.values(ALL); return !!(TEAM && CUR && G.some((g) => g.week === CUR) && !G.some((g) => g.week === CUR && (g.home.abbr === TEAM || g.away.abbr === TEAM))); }; // v275: a team on a bye (or not in this week's games)
+function teamBanner() { return TEAM ? `<div class="note" style="text-align:left;border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin:8px 0">Showing only <b>${nm(TEAM)}</b> games.${tsNoGame() ? ' <b>No game this week.</b>' : ''} <button onclick="pickTeam('')" style="margin-left:6px;min-height:40px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:10px;padding:8px 14px;font:700 13px inherit">Show all teams</button></div>` : ''; }
 function teamBox(games) {
   if (!TEAM) return '';
   const fin = games.filter((g) => g.state === 'post' && g.home.score !== g.away.score);
@@ -3349,7 +3382,18 @@ async function loadAll() {
   BUSY = false;
 }
 document.addEventListener('toggle', (e) => { const d = e.target; if (d.tagName === 'DETAILS' && d.dataset.k) { DET[d.dataset.k] = d.open; if (d.dataset.k === 'injlab' && d.open && d.textContent.includes('Opening…')) render(); if (d.open && /^(wk|g\d)/.test(d.dataset.k)) liveFetch(); } }, true);
-document.querySelector('#tsearch').addEventListener('input', (e) => { teamSelect(); const sel = $('#team'), opts = [...sel.options].filter((o) => o.value); if (e.target.value && opts.length === 1) { sel.value = opts[0].value; TEAM = sel.value; try { localStorage.setItem('pics-team-' + LG, TEAM); } catch (x) {} render(); } else if (!e.target.value && TEAM) { TEAM = ''; try { localStorage.setItem('pics-team-' + LG, ''); } catch (x) {} sel.value = ''; render(); } });
+document.querySelector('#tsearch').addEventListener('input', (e) => { // v275: a list of matches; exactly one match still picks it at once, an empty box shows every team again
+  const v = e.target.value, sel = $('#team');
+  if (!tsQ(v)) { tsPaint(false); if (TEAM) { TEAM = ''; try { localStorage.setItem('pics-team-' + LG, ''); } catch (x) {} if (sel) sel.value = ''; render(); } return; }
+  const m = tsMatches(v);
+  if (m.length === 1) { tsPaint(false); if (m[0] !== TEAM) { tsConf(m[0]); WKV = null; TEAM = m[0]; try { localStorage.setItem('pics-team-' + LG, TEAM); } catch (x) {} teamSelect(); if (sel) sel.value = TEAM; render(); } return; }
+  tsPaint(true);
+});
+document.querySelector('#tsearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); const m = tsMatches(e.target.value); if (m.length) tsPick(m[0]); } else if (e.key === 'Escape') tsPaint(false); });
+document.querySelector('#tsearch').addEventListener('focus', (e) => { const m = tsMatches(e.target.value); if (m.length !== 1 || m[0] !== TEAM) tsPaint(true); });
+document.querySelector('#tsug').addEventListener('mousedown', (e) => e.preventDefault()); // keep the keyboard up until a team is tapped
+document.querySelector('#tsug').addEventListener('click', (e) => { const b = e.target.closest('button[data-ts]'); if (b) tsPick(b.dataset.ts); });
+document.addEventListener('click', (e) => { if (e.target && e.target.closest && !e.target.closest('.srow, #tsug')) tsPaint(false); });
 document.querySelector('#conf').addEventListener('change', (e) => { CONF = e.target.value; try { localStorage.setItem('pics-conf-' + LG, CONF); } catch (x) {} render(true); });
 document.querySelector('#team').addEventListener('change', (e) => { TEAM = e.target.value; try { localStorage.setItem('pics-team-' + LG, TEAM); } catch (x) {} render(); });
 // v258: the League menu (a real <select>, was the pill row). Choosing an item does what its pill did. The menu always shows the league this page is on,
@@ -3670,6 +3714,6 @@ if ('serviceWorker' in navigator) {
 })();
 // ================= end v268 GUEST MODE (3 of 3) =================
 </script>
-<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=274"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="announce.js?v=274"><\/script><script src="dash.js?v=274"><\/script>')</script>
+<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=275"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="announce.js?v=275"><\/script><script src="dash.js?v=275"><\/script>')</script>
 </body>
 </html>

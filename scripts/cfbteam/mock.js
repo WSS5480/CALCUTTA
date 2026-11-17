@@ -46,7 +46,7 @@ function nStand(lg) { const divs = {}; lg.T.forEach((t) => { (divs[t[5]] = divs[
 function answer(u) {
   const cfb = /college-football/.test(u), lg = cfb ? L.cfb : L.nfl; let m;
   if (/\/standings/.test(u)) { if (cfb) { m = /[?&]group=(\d+)/.exec(u); return ['stand', cStand(lg, m ? m[1] : '8')]; } return ['stand', nStand(lg)]; }
-  if ((m = /\/teams\/(\d+)\/schedule/.exec(u))) return ['sched', teamSched(lg, m[1])];
+  if ((m = /\/teams\/(\d+)\/schedule/.exec(u))) { const b = teamSched(lg, m[1]), st = /[?&]seasontype=(\d)/.exec(u); if (st && b) b.events = b.events.filter((e) => String(e.seasonType.type) === st[1]); return ['sched', b]; } // ?seasontype=2 regular season, 3 postseason
   if ((m = /\/teams\/(\d+)\/roster/.exec(u))) return ['roster', roster(lg, m[1])];
   if ((m = /\/teams\/(\d+)\/statistics/.exec(u))) return ['stats', stats(lg, m[1])];
   if ((m = /\/teams\/(\d+)(\?|$)/.exec(u))) return ['team', teamInfo(lg, m[1])];

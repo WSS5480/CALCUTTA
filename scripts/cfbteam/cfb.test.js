@@ -87,6 +87,32 @@ async function tapFrom(s, w, where, prep, sel) {
     await p.click('#teampage tr[onclick^="tpGame"]'); await p.waitForTimeout(900);
     const r = await p.evaluate(() => ({ gv: GV, tp: !document.getElementById('teampage').hidden })); ok(r.gv === 'results' && !r.tp, `${w} finished game -> Results ${JSON.stringify(r)}`);
     if (w === 430) { await p.evaluate(() => { TPC = {}; gvSet('games'); tpOpen('194'); }); await p.waitForTimeout(800); await p.screenshot({ path: '/tmp/cfbt/shots/cfb-header-430.png' }); await p.evaluate(() => tpClose()); }
+    // ---------- review 1: wrong shapes -> "not available" + Try again (never Loading forever), header "#N", ATS tile, shared abbreviation, re-sort, ids ----------
+    const BAD = [['games', 'sched', () => ({ events: {} }), 'Loading the full schedule'], ['roster', 'roster', () => ({ athletes: { a: 1 } }), 'Loading roster'], ['stats', 'stats', () => ({ results: { stats: { categories: {} } } }), 'Loading team stats'], ['stats', 'stats', () => null, 'Loading team stats'], ['roster', 'roster', () => 'x', 'Loading roster'], ['stand', 'stand', () => ({ children: {} }), 'Loading standings']];
+    for (const [tab, kind, fn, loading] of BAD) {
+      await p.evaluate(() => { TPC = {}; tpClose(); }); s.ctl.mode[kind] = fn; await p.evaluate((tab) => { tpOpen('194'); tpTab(tab); }, tab); await p.waitForTimeout(700);
+      const t = await body(p); ok(!t.includes(loading) && !/undefined|NaN|\[object/.test(t), `${w} bad shape ${kind} ${String(fn).slice(6, 40)}: no endless loading / bad text: ${t.slice(0, 100)}`);
+      ok(/not available/.test(t) && t.includes("Try again"), `${w} bad shape ${kind}: not available + Try again: ${t.slice(0, 90)}`);
+      s.ctl.mode[kind] = undefined;
+    }
+    await p.evaluate(() => { TPC = {}; tpClose(); window.__r = tpRosterHtml; tpRosterHtml = () => { throw new Error('boom'); }; tpOpen('194'); tpTab('roster'); }); await p.waitForTimeout(500);
+    const cb = await body(p); ok(cb.includes('not available') && cb.includes('Try again'), `${w} a tab that throws: not available + Try again (${cb.slice(0, 80)})`);
+    await p.evaluate(() => { tpRosterHtml = window.__r; }); await p.click('#teampage .tpb button:has-text("Try again")'); await p.waitForTimeout(700); ok((await body(p)).toUpperCase().includes('OFFENSE'), `${w} thrown tab: Try again -> roster`);
+    await p.evaluate(() => { TPC = {}; tpClose(); tpOpen('194'); }); await p.waitForTimeout(700);
+    const hh = await head(p); ok(/· #2\b/.test(hh) && !hh.includes('AP'), `${w} header rank "#2", no "AP": ${hh.replace(/\n/g, ' / ')}`);
+    const gb = await body(p); ok(!gb.includes('Against the spread'), `${w} college: ATS tile hidden when 0-0`);
+    ok(gb.includes('Michigan State Spartans') && gb.includes('Mississippi State Bulldogs') && !/(vs|@) MSU\b/.test(gb), `${w} shared abbreviation MSU shows the full names`);
+    ok(gb.includes('Post'), `${w} bowl row from the postseason request`); ok(s.ctl.calls.some((c) => /schedule\?seasontype=2/.test(c)) && s.ctl.calls.some((c) => /schedule\?seasontype=3/.test(c)), `${w} schedule asked for seasontype 2 and 3`);
+    const so = await p.evaluate(() => { const E = (ids, conf) => ids.map((id, i) => ({ team: { id, abbreviation: 'T' + id }, stats: [{ type: 'vsconf', summary: conf[i] }, { type: 'total', summary: '5-5' }] })), j = (ids, conf) => ({ name: 'C', standings: { entries: E(ids, conf) } });
+      return [tpCConf(j(['1', '2', '3'], ['5-1', '5-1', '2-4']), '1').rows.map((r) => r.id).join(), tpCConf(j(['2', '1', '3'], ['5-1', '5-1', '2-4']), '1').rows.map((r) => r.id).join(), tpCConf(j(['3', '1', '2'], ['2-4', '5-1', '4-2']), '1').rows.map((r) => r.id).join(), tpCConf(j(['1', "2');alert(1);//", '3'], ['5-1', '4-2', '2-4']), '1').rows.map((r) => r.id).join('|')]; });
+    ok(so[0] === '1,2,3' && so[1] === '2,1,3', `${w} conference: ESPN order kept when already by conference record (${so[0]} / ${so[1]})`); ok(so[2] === '1,2,3', `${w} conference: re-sorted when not (${so[2]})`); ok(so[3] === '1|3', `${w} conference: only numeric ids (${so[3]})`);
+    ok(await p.evaluate(() => ctKey({ tid: "1');x('", abbr: 'Z' }) === '' && ctKey({ tid: '344' }) === '344'), `${w} ctKey: numeric ids only`);
+    if (w === 430) await p.screenshot({ path: '/tmp/cfbt/shots/cfb-review1-games-430.png' });
+    // weeks saved before CFB-TEAM (no tid) are fetched once more: Michigan State keeps all its phone games
+    await p.evaluate(() => { tpClose(); for (let n = 1; n <= 11; n++) { const k = 'cw26-' + n, L = JSON.parse(localStorage.getItem(k) || 'null'); if (L) localStorage.setItem(k, JSON.stringify(L.map((g) => { delete g.home.tid; delete g.away.tid; return g; }))); } });
+    const n0w = s.ctl.calls.length; await p.reload({ waitUntil: 'domcontentloaded' }); await p.waitForFunction(() => document.querySelectorAll('.ngt .t').length > 3, null, { timeout: 30000 }); await p.waitForTimeout(3500);
+    const ms = await p.evaluate(() => ({ n: tpGames('127').length, saved: JSON.parse(localStorage.getItem('cw26-1') || '[]').every((g) => 'tid' in g.home) }));
+    ok(ms.n === 12 && ms.saved, `${w} saved weeks without ids refetched: MSU 127 has ${ms.n} phone games, re-saved with ids ${ms.saved}`); ok(s.ctl.calls.slice(n0w).some((c) => /scoreboard\?week=1&/.test(c)), `${w} week 1 fetched again`);
     ok(!s.errors.length, `${w} flag on: 0 page errors ${s.errors.join(' | ')}`);
     ok(!s.ctl.calls.some((c) => /\/nfl\//.test(c)) || true, 'n/a');
     console.log(w, 'flag on: [data-cteam] per view', JSON.stringify(counts));

@@ -1,5 +1,5 @@
 // Run: node odds-api/announce.test.js   (no network: My Apps is a fake behind announce.js _deps.ma; tokens are real acct.js tokens)
-// Covers v267: POST /acct/broadcast (owner only) and GET /acct/announce (the signed-in account's targeted message).
+// Covers v267: POST /acct/broadcast (owner only) and GET /acct/announce (the signed-in account's targeted message). v269: dry:true (count only) behind the capability gate.
 process.env.MYAPPS_URL = 'https://myapps.test'; process.env.MYAPPS_SECRET = 'sek-ret-XYZ'; process.env.GATE_KEY = 'test-gate-key'; process.env.OWNER_PIN = '4321'; process.env.OWNER_PHONE = '9565550101'; delete process.env.GATE_OFF;
 const assert = require('assert'), http = require('http'), crypto = require('crypto'), A = require('./acct'), N = require('./announce');
 const hm = (k, p, enc) => crypto.createHmac('sha256', 'test-gate-key').update(k + p).digest(enc);
@@ -108,6 +108,56 @@ let n = 0; const t = (name) => { n++; process.stdout.write('  ok ' + n + ' ' + n
     start(); for (let i = 0; i < 30; i++) { r = await hit('/acct/announce', null, { token: tok('me@x.test') }); assert.strictEqual(r.status, 200); } r = await hit('/acct/announce', null, { token: tok('me@x.test') }); assert.strictEqual(r.status, 429); t('31st read in 10 minutes for one account = 429');
     process.env.GATE_OFF = '1'; start(); r = await hit('/acct/announce', null, { token: tok('me@x.test') }); assert.deepStrictEqual(r.j, { ok: true, announce: null }); r = await hit('/acct/announce', null, {}); assert.strictEqual(r.status, 200); assert.strictEqual(calls.length, 0);
     r = await hit('/acct/broadcast', MSG, { token: tok('carl@x.test') }); assert.notStrictEqual(r.status, 200); assert.strictEqual(calls.length, 0); r = await hit('/acct/broadcast', MSG, own); assert.strictEqual(r.status, 200); delete process.env.GATE_OFF; t('gate off: announce answers null without My Apps; broadcast still needs the owner');
+
+    // ---- v269: dry:true = count only. THE GATE: /api/v1/broadcast gets a dry call only after My Apps said caps:["broadcast_dry"] on /api/v1/app/settings
+    const DRYJ = { ok: true, dry: true, people: 42, alerts: 9, devices: 11, left: 3 };
+    const DMSG = Object.assign({ dry: true }, MSG), bcalls = () => calls.filter((c) => c.path === '/api/v1/broadcast');
+    const ma2 = (settings, bc) => (path) => (path === '/api/v1/app/settings' ? (typeof settings === 'function' ? settings() : { status: 200, j: settings }) : (typeof bc === 'function' ? bc() : { status: 200, j: bc || DRYJ }));
+    const CAPS = { ok: true, settings: {}, announce: null, caps: ['broadcast_dry'] };
+    // an OLD My Apps: it would answer a dry call like a real send. It must never get one.
+    const noCaps = [{ ok: true, settings: {}, announce: null }, { ok: true, settings: {}, caps: [] }, { ok: true, settings: {}, caps: ['other'] }, { ok: true, settings: {}, caps: 'broadcast_dry' }, { ok: true, settings: {}, caps: { broadcast_dry: true } }, { ok: true, settings: { caps: ['broadcast_dry'] } }, { ok: false, caps: ['broadcast_dry'] }, { caps: ['broadcast_dry'] }, { ok: true, settings: {}, caps: ['BROADCAST_DRY'] }, { ok: true, settings: {}, caps: true }, null];
+    for (const sj of noCaps) { start(ma2(sj, OKJ)); r = await hit('/acct/broadcast', DMSG, own); assert.strictEqual(r.status, 200, JSON.stringify(sj)); assert.deepStrictEqual(r.j, { ok: false, code: 'nodry', error: 'nodry' }); assert.strictEqual(bcalls().length, 0, JSON.stringify(sj)); assert.deepStrictEqual(calls, [{ path: '/api/v1/app/settings', data: {} }]); }
+    for (const f of [() => ({ status: 404, j: {} }), () => ({ status: 500, j: CAPS }), () => ({ status: 401, j: CAPS }), () => { throw new Error('down'); }]) { start(ma2(f, OKJ)); r = await hit('/acct/broadcast', DMSG, own); assert.deepStrictEqual(r.j, { ok: false, code: 'nodry', error: 'nodry' }); assert.strictEqual(bcalls().length, 0); }
+    { start((path) => (path === '/api/v1/app/settings' ? new Promise(() => {}) : { status: 200, j: OKJ })); const st = global.setTimeout; global.setTimeout = (f, ms) => st(f, ms === 6000 ? 5 : ms); try { r = await hit('/acct/broadcast', DMSG, own); } finally { global.setTimeout = st; } assert.strictEqual(r.j.error, 'nodry'); assert.strictEqual(bcalls().length, 0); }
+    t('dry, capability absent / wrong shape / My Apps down or slow: {ok:false,error:"nodry"} and NO upstream broadcast call at all');
+    start(ma2({ ok: true, settings: {} }, OKJ)); await hit('/acct/broadcast', DMSG, own); await hit('/acct/broadcast', DMSG, own); assert.strictEqual(calls.length, 1); NOW = Date.now() + 6e4 + 5; myapps = ma2(CAPS, DRYJ); r = await hit('/acct/broadcast', DMSG, own); assert.strictEqual(r.j.ok, true); assert.strictEqual(calls.filter((c) => c.path === '/api/v1/app/settings').length, 2); assert.strictEqual(bcalls().length, 1); t('"no" is kept 1 minute (one settings read), then asked again: a My Apps that was updated starts counting');
+
+    start(ma2(CAPS, Object.assign({ secret: 'sek-ret-XYZ', accounts: ['a@x.test'], id: 'b_1', sent: 4 }, DRYJ))); r = await hit('/acct/broadcast', Object.assign({ link: 'pga', audience: 'active' }, DMSG, { audience: 'active' }), own);
+    assert.strictEqual(r.status, 200); assert.deepStrictEqual(r.j, { ok: true, dry: true, people: 42, alerts: 9, devices: 11, left: 3 }); assert(!/sek-ret|x\.test/.test(r.text));
+    assert.deepStrictEqual(calls, [{ path: '/api/v1/app/settings', data: {} }, { path: '/api/v1/broadcast', data: { title: 'Picks are up', body: 'The Alert of the week is ready.', audience: 'active', link: '/pga.html', dry: true } }]); t('dry, capability present: forwarded with dry:true (same cleaned fields); the answer is rebuilt as ok / dry / people / alerts / devices / left');
+    r = await hit('/acct/broadcast', DMSG, own); r = await hit('/acct/broadcast', DMSG, own); assert.strictEqual(calls.filter((c) => c.path === '/api/v1/app/settings').length, 1); assert.strictEqual(bcalls().length, 3);
+    NOW = Date.now() + 5 * 6e4 + 5; myapps = ma2({ ok: true, settings: {} }, OKJ); r = await hit('/acct/broadcast', DMSG, own); assert.strictEqual(r.j.error, 'nodry'); assert.strictEqual(bcalls().length, 3); t('"yes" is kept 5 minutes, then asked again: a My Apps rolled back to an old build stops getting dry calls');
+
+    start(ma2(CAPS, OKJ)); r = await hit('/acct/broadcast', MSG, own); assert.strictEqual(r.status, 200); assert.deepStrictEqual(r.j, { ok: true, test: false, id: 'b_9', people: 12, devices: 7, sent: 7 }); assert.deepStrictEqual(calls, [{ path: '/api/v1/broadcast', data: { title: 'Picks are up', body: 'The Alert of the week is ready.', audience: 'all' } }]);
+    for (const d of [false, null, undefined]) { start(ma2(CAPS, OKJ)); r = await hit('/acct/broadcast', Object.assign({}, MSG, { dry: d }), own); assert.strictEqual(r.status, 200); assert.strictEqual(r.j.id, 'b_9'); assert(!('dry' in r.j)); assert.strictEqual(calls.length, 1); assert(!('dry' in last().data)); }
+    start(ma2(CAPS, OKJ)); r = await hit('/acct/broadcast', Object.assign({ test: true }, MSG), own); assert(!('dry' in last().data)); assert.strictEqual(last().data.test, true); t('a real send (and a test) never carries `dry` and never reads the capability; dry:false / null = a real send');
+
+    start(ma2(CAPS, DRYJ));
+    for (const d of ['true', 1, 'yes', {}, []]) { N._reset(); r = await hit('/acct/broadcast', Object.assign({}, MSG, { dry: d }), own); assert.strictEqual(r.status, 400, String(d)); assert.deepStrictEqual(r.j, { ok: false, code: 'bad', error: 'bad request' }); }
+    N._reset(); r = await hit('/acct/broadcast', Object.assign({ test: true }, DMSG), own); assert.strictEqual(r.status, 400); assert.strictEqual(r.j.code, 'bad');
+    for (const [b, code, msg] of badv) { N._reset(); r = await hit('/acct/broadcast', Object.assign({}, DMSG, b), own); assert.strictEqual(r.status, 400); assert.deepStrictEqual(r.j, { ok: false, code, error: msg }); }
+    assert.strictEqual(calls.length, 0); t('dry that is not true / false = 400 (never a send); dry with test = 400; the same validation as a real send; My Apps is not called');
+
+    start(ma2(CAPS, DRYJ));
+    for (const o of [{ token: tok('carl@x.test') }, { token: tok('carl@x.test'), dash: dashTok(OWNER_E) }]) { r = await hit('/acct/broadcast', DMSG, o); assert.strictEqual(r.status, 403); assert.deepStrictEqual(r.j, { ok: false, error: 'Owner only' }); }
+    for (const o of [{}, { token: 'junk' }]) { r = await hit('/acct/broadcast', DMSG, o); assert.strictEqual(r.status, 401); }
+    r = await hit('/acct/broadcast', DMSG, { token: tok(OWNER_E) }); assert.strictEqual(r.j.need, 'owner-pin'); assert.strictEqual(calls.length, 0);
+    r = await hit('/acct/broadcast', DMSG, { token: tok(OWNER_E), dash: dashTok(OWNER_E) }); assert.strictEqual(r.j.people, 42); t('a count is owner only too: customers 403, no token 401, owner phone needs the unlock; nobody else reaches My Apps');
+
+    const dup2 = async (status, j) => { start(ma2(CAPS, () => ({ status, j }))); return hit('/acct/broadcast', DMSG, own); };
+    r = await dup2(400, { ok: false, error: 'contact' }); assert.strictEqual(r.status, 400); assert.deepStrictEqual(r.j, { ok: false, code: 'contact', error: 'Take the phone number or email out of the message.' });
+    r = await dup2(429, { ok: false, error: 'limit' }); assert.deepStrictEqual(r.j, { ok: false, code: 'limit', error: 'You have sent 5 today. Try again tomorrow.' });
+    r = await dup2(409, { ok: false, error: 'dup' }); assert.strictEqual(r.status, 409); assert.strictEqual(r.j.code, 'dup');
+    r = await dup2(400, { ok: false, error: 'title' }); assert.strictEqual(r.status, 400); assert.strictEqual(r.j.error, 'My Apps did not take that message. Check the words and try again.');
+    r = await dup2(500, { error: 'boom sek-ret-XYZ' }); assert.strictEqual(r.status, 502); assert.strictEqual(r.j.code, 'notready'); assert(!r.text.includes('sek-ret')); t('a count gets the same sentences as a real send: contact / limit / dup / other 400 / not ready');
+    r = await dup2(200, { ok: true, dry: true, people: '7', alerts: null, devices: -1 }); assert.deepStrictEqual(r.j, { ok: true, dry: true, people: 7, alerts: null, devices: null, left: null });
+    start(ma2(CAPS, OKJ)); r = await hit('/acct/broadcast', DMSG, own); assert.strictEqual(r.status, 502); assert.strictEqual(r.j.ok, false); assert.strictEqual(r.j.code, 'drysent'); assert(!('people' in r.j));
+    r = await hit('/acct/broadcast', DMSG, own); assert.strictEqual(r.j.error, 'nodry'); assert.strictEqual(bcalls().length, 1);
+    for (const dj of [{ ok: true, dry: 'true', people: 1 }, { ok: true, dry: 1, people: 1 }]) { start(ma2(CAPS, dj)); r = await hit('/acct/broadcast', DMSG, own); assert.strictEqual(r.j.code, 'drysent'); } t('counts are numbers or null; an answer WITHOUT dry:true is never shown as a count: the owner is warned and counting stops');
+
+    start(ma2(CAPS, DRYJ)); for (let i = 0; i < 20; i++) { r = await hit('/acct/broadcast', DMSG, Object.assign({ ip: '8.8.8.1, 1.1.1.1, 2.2.2.2' }, own)); assert.strictEqual(r.status, 200); }
+    r = await hit('/acct/broadcast', DMSG, Object.assign({ ip: '8.8.8.1, 1.1.1.1, 2.2.2.2' }, own)); assert.strictEqual(r.status, 429); assert.strictEqual(r.j.code, 'slow');
+    for (let i = 0; i < 8; i++) { r = await hit('/acct/broadcast', MSG, Object.assign({ ip: '8.8.8.1, 1.1.1.1, 2.2.2.2' }, own)); assert.strictEqual(r.status, 200, 'counting does not use up the real sends'); } r = await hit('/acct/broadcast', MSG, Object.assign({ ip: '8.8.8.1, 1.1.1.1, 2.2.2.2' }, own)); assert.strictEqual(r.status, 429); t('counts have their own slow-down (20 per 10 minutes per address); they do not use up the 8 real sends');
 
     // ---- routing
     start(); r = await hit('/acct/broadcastx', MSG, own); assert.strictEqual(r.status, 404); r = await hit('/acct/me', {}, own); assert.strictEqual(r.status, 404); r = await hit('/acct/broadcast?x=1', MSG, own); assert.strictEqual(r.status, 200); t('only the two paths are handled here');

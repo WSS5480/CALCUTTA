@@ -1167,3 +1167,43 @@ Owner: "Setting on my apps for notification like new bets, new group, Calcutta s
 - `golfgps.html` is on the Open-to list but is not in this branch's base; after the merge check the card's Open button lands there.
 - No "Hide" from the Oddable dashboard (My Apps has no API for it; the console can hide). "Sent today" is this session only; the full history is in My Apps.
 - With pga-wide (v265) and bet-push (v266) merged: look once at the top of `<main>` at 820 / 1180 with both cards and the bet-push invitation card.
+
+## v269 — Nov 16 2026: 📣 the "Send to everyone" confirm step says how many people get it (count first, nothing sent)
+- Owner (Nov 16 2026): why does the Oddable dashboard's confirm step not show how many people the message reaches before sending (the My Apps console does)? v267 decision 1 said "no dry count in the contract"; My Apps build .39 adds one, so this replaces that decision. Coder on `main` at v267 (aa96e93) while `guest-mode` (v268: gate.js, index.html, acct.js `/acct/status`) was in flight in another worktree: only `odds-api/announce.js`, `odds-api/announce.test.js`, `pics/dash.js`, the version lines and this file were touched. **Committed locally, not pushed; the manager settles the version lines against v268 at merge.**
+- **Needs My Apps .39 deployed AND answering `caps:["broadcast_dry"]` (see the gate). Until then the confirm step looks like v267 plus the small note "Count not available right now." and sending works as before.**
+
+### The capability gate (read before touching `/acct/broadcast`)
+- My Apps .39: `POST /api/v1/broadcast` with `dry:true` answers `{ok:true, dry:true, people, alerts, devices, left}` (people who will see it in the app, how many of them have phone alerts on, devices, sends left today), same validation and error codes as a real send, sends and stores nothing; `dry` with `test` is a 400. **An OLDER My Apps does not know `dry` and would SEND the message for real.**
+- So `odds-api/announce.js` never sends a dry call to `/api/v1/broadcast` unless My Apps has said it can count: `canDry()` asks `POST /api/v1/app/settings` and needs `ok:true` and a TOP-LEVEL `caps` ARRAY that holds the text `broadcast_dry`. Anything else (field missing, a string, an object, inside `settings`, other spelling, 404 / 5xx / refused / down / slower than 6 s) = no.
+  - "Yes" is kept 5 minutes, "no" 1 minute, then asked again (in memory, per process: a restart asks again). So an updated My Apps starts counting within a minute, and a My Apps rolled BACK stops getting dry calls within 5 minutes.
+  - The read is announce.js's own call (`appsettings.js` was off limits and its cache keeps only `settings` + `announce`). One small extra My Apps read per 5 minutes, only while the owner is using the count. If `appsettings.js` later keeps `caps`, `canDry()` can use that read instead.
+  - No capability: `/acct/broadcast` with `dry:true` answers `200 {ok:false, code:'nodry', error:'nodry'}` and `/api/v1/broadcast` is NOT called.
+  - Second lock: a count is shown only when My Apps' answer itself carries `dry:true`. `ok:true` WITHOUT it (My Apps claimed the capability but behaved like a send) = `502 code:'drysent'` "My Apps may have SENT this message instead of counting. Check My Apps before you send it again.", counting is switched off for a minute, and the phone does not open the confirm step.
+  - **The My Apps coder must add `caps:["broadcast_dry"]` to the `/api/v1/app/settings` answer in build .39** (top level, next to `settings` and `announce`). Without it Oddable never counts.
+
+### Server (`odds-api/announce.js`)
+- `POST /acct/broadcast` accepts `dry` (strictly `true`; `false` / absent / null = a real send; any other type = 400 `bad`, never a send). Owner only exactly as before (the owner check is the first thing in the route, before `dry` is even read). `dry` + `test:true` = 400. Same title / message / audience / link checks. Forwarded as the same cleaned fields plus `dry:true`; **a real send or a test never carries `dry` and never reads the capability.**
+- Answer rebuilt field by field: `{ok:true, dry:true, people, alerts, devices, left}` (numbers or null). Errors use the same table as a real send (`limit`, `dup`, `busy`, `contact`, other 400, not ready).
+- A count has its own slow-down (20 per 10 minutes per address, 40 overall) so counting does not use up the 8 / 16 real sends.
+
+### Phone (`pics/dash.js`)
+- Tapping **Send to everyone** (or "Send to paid or trial" / "Send to expired") now asks for the count first (button reads "Counting…", all buttons off), then opens the confirm step: **"Send to 42 people?"** and under it "9 of them have phone alerts on (11 devices) and get it on the phone now. Everyone else sees it the next time they open Oddable. 3 sends left today. This cannot be unsent." Other cases: "Send to 1 person?" / "1 of them has ... and gets it"; "None of them has phone alerts on. They see it the next time they open Oddable."; "All 5 have phone alerts on (8 devices) ..."; 0 people = "Nobody is in this group right now, so nobody would see it." (the Yes button stays); a count with no alerts number = a general sentence; no `left` = that part is left out.
+- **No count** (`nodry`, My Apps not ready, slow-down, 5xx, no network, an answer without `dry:true` or without a people number): the v267 wording ("Send this to everyone with an Oddable account?" ...) plus the small note "Count not available right now." Sending still works.
+- **Errors from the count** (`contact`, `limit`, `dup`, any 400, `drysent`): the server's sentence in red on the form, the confirm step does NOT open, the text is kept, nothing is sent, no retry. 401 `owner-pin` = the PIN screen, as on a send.
+- "Yes, send now" is the same real send as v267 (no `dry`). "Send test to my devices" is not counted first. No drill-down on the counts (not asked for here).
+- Version v269 on the whole list: index.html (comment, header pill, footer, trophy.js / gate.js / alert-frozen.json / announce.js / dash.js `?v=269`), sports.html `gate.js`, pga.html (comment, footer, pga.js, gate.js), golfgps.html (comment, footer, leaflet css + js, golfgps.js, gate.js), pickleball.html (comment, footer, pickleball.js), sw.js `pics-v269`.
+
+### Decisions
+1. 2026-11-16 — The capability is read by announce.js itself and re-checked every 5 minutes instead of "once per process". Why: a My Apps rollback after a first good answer would otherwise turn a count into a real send.
+2. 2026-11-16 — `nodry` is a 200 with `ok:false` (it is not a failure of the request; the phone just shows the wording without a number).
+3. 2026-11-16 — A count that reaches 0 people still lets the owner send (My Apps decides what a send to nobody does); the sentence says nobody would see it.
+4. 2026-11-16 — `busy` / `slow` / not ready on the COUNT fall back to the no-number confirm step rather than blocking; the real send then gives its own sentence if it is still refused.
+
+### Tests
+- `odds-api/announce.test.js` 36 tests (10 new: capability absent in 11 shapes + down / slow = `nodry` and NO `/api/v1/broadcast` call; "no" kept 1 minute; present = forwarded with `dry:true`; "yes" expires after 5 minutes; a real send / test never carries `dry`; bad `dry` types and `dry`+`test` = 400; owner only; same error sentences; answer without `dry:true` = `drysent`; separate slow-down). Nine mutations of the gate each failed a test. Every `odds-api/*.test.js` passes (23 files).
+- Playwright (owner dashboard, everything outside the page mocked, service workers blocked) at 390x844 and 1180x820: 308 of 308 checks, 0 page errors. Script and pictures in the session scratchpad `dry/` (`t.js`, `lib.js`).
+
+### NOT verified / open
+- The real My Apps .39 (not committed when this was written: the contract in the task brief was faked) and the live site / a real phone. **After both deploys: open the real dashboard in Chrome, tap Send to everyone, check the number against the My Apps console, then Back (nothing must be sent).**
+- Whether My Apps counts a dry call against its `busy` limit, and what `left` says when 0 are left (expected: the `limit` error instead of a count).
+- 430 and 820 widths were not run for this change (390 and 1180 only, as asked).

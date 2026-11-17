@@ -1,6 +1,9 @@
 // v267. Messages from the owner to every Oddable user ("broadcast"). My Apps owns the engine (who gets it, the phone pushes, the 5-a-day limit);
 // this file is the Oddable side of My Apps "API contract 4":
 //   POST /acct/broadcast  OWNER ONLY  {title, body, link?, audience, test?} -> My Apps /api/v1/broadcast -> {ok, id, people, devices, sent}
+//   v269  the same route with dry:true = COUNT ONLY, nothing is sent: -> {ok, dry:true, people, alerts, devices, left}. An old My Apps does not know `dry` and
+//         would SEND the message, so a dry call goes to /api/v1/broadcast ONLY after My Apps has said it can count: `caps` holding "broadcast_dry" in its
+//         /api/v1/app/settings answer (asked here, kept 5 minutes; "no" is asked again after 1 minute). Without it: {ok:false, error:'nodry'} and no broadcast call.
 //   GET  /acct/announce   signed in   -> My Apps /api/v1/announce/for {account} -> {ok, announce|null}   (the latest message aimed at this account)
 //   clean(a)              the ONE check for an announcement that goes to a phone; appcfg.js uses it for the public "Everyone" message.
 // Text is plain text, always. Nothing from My Apps is passed on as it came: every answer is rebuilt field by field.
@@ -43,6 +46,21 @@ const ERR = {
   busy: [429, 'Too many sends right now. Try again in a few minutes.'],
   contact: [400, 'Take the phone number or email out of the message.']
 };
+// v269. Can My Apps count without sending? Only a good /api/v1/app/settings answer whose top-level `caps` list holds "broadcast_dry" says yes.
+// Anything else (old build, down, slow, wrong shape) is no. Never guessed, never remembered past CAP_YES.
+const CAP = 'broadcast_dry', CAP_YES = 5 * 6e4, CAP_NO = 6e4, CAP_WAIT = 6000;
+let DRY = { t: 0, ok: false };
+async function canDry() {
+  const now = D.now(); if (DRY.t && now < DRY.t) return DRY.ok;
+  let ok = false, timer;
+  try {
+    const late = new Promise((r) => { timer = setTimeout(() => r(null), CAP_WAIT); });
+    const r = await Promise.race([D.ma('/api/v1/app/settings', {}), late]);
+    ok = !!(r && r.ok && r.j && r.j.ok === true && Array.isArray(r.j.caps) && r.j.caps.includes(CAP));
+  } catch (e) {} finally { clearTimeout(timer); }
+  DRY = { t: now + (ok ? CAP_YES : CAP_NO), ok };
+  return ok;
+}
 const count = (v) => { const n = Number(v); return v != null && v !== '' && Number.isFinite(n) && n >= 0 ? Math.floor(n) : null; };
 async function broadcast(req, res) {
   if (req.method !== 'POST') { send(res, 405, { ok: false, error: 'POST only' }); return; }
@@ -51,9 +69,12 @@ async function broadcast(req, res) {
     if (e && D.isOwnerPhone(e)) send(res, 401, { ok: false, error: 'Owner PIN needed', need: 'owner-pin' }); else if (e) send(res, 403, { ok: false, error: 'Owner only' }); else send(res, 401, { ok: false, error: 'Sign in again' });
     return;
   }
-  if (throttled(D.ip(req) + '|bcast') || throttled('owner|bcast', 16)) { send(res, 429, { ok: false, code: 'slow', error: 'Too many tries, wait a few minutes' }); return; }
-  let b = null; try { b = await body(req); } catch (e) {}
-  if (!b) { send(res, 400, { ok: false, code: 'bad', error: 'bad request' }); return; }
+  let b = null, bodyBad = false; try { b = await body(req); } catch (e) { bodyBad = true; }
+  // strictly `true` is a count; a count has its own slow-down (20 / 40 per 10 minutes) so counting never uses up the tries for real sends
+  const dry = !!b && b.dry === true;
+  if (dry ? (throttled(D.ip(req) + '|bcdry', 20) || throttled('owner|bcdry', 40)) : (throttled(D.ip(req) + '|bcast') || throttled('owner|bcast', 16))) { send(res, 429, { ok: false, code: 'slow', error: 'Too many tries, wait a few minutes' }); return; }
+  if (!b || bodyBad) { send(res, 400, { ok: false, code: 'bad', error: 'bad request' }); return; }
+  if (b.dry != null && typeof b.dry !== 'boolean') { send(res, 400, { ok: false, code: 'bad', error: 'bad request' }); return; }
   const title = line(b.title), text = line(b.body), aud = b.audience == null ? 'all' : b.audience;
   if (!title) { send(res, 400, { ok: false, code: 'title', error: 'Type a title.' }); return; }
   if (title.length > TITLE_MAX) { send(res, 400, { ok: false, code: 'title', error: 'Keep the title to ' + TITLE_MAX + ' characters or less.' }); return; }
@@ -63,11 +84,20 @@ async function broadcast(req, res) {
   let link = '';
   if (b.link != null && b.link !== '') { link = typeof b.link === 'string' && Object.prototype.hasOwnProperty.call(LINKS, b.link) ? LINKS[b.link] : ''; if (!link) { send(res, 400, { ok: false, code: 'link', error: 'Pick where it opens from the list.' }); return; } }
   if (b.test != null && typeof b.test !== 'boolean') { send(res, 400, { ok: false, code: 'bad', error: 'bad request' }); return; }
+  if (dry && b.test === true) { send(res, 400, { ok: false, code: 'bad', error: 'bad request' }); return; } // a count of a test makes no sense (My Apps says 400 too)
   let ready = false; try { ready = !!D.maReady(); } catch (e) {}
   if (!ready) { send(res, 502, { ok: false, code: 'notready', error: NOT_READY }); return; }
-  const out = { title, body: text, audience: aud }; if (link) out.link = link; if (b.test === true) out.test = true;
+  // THE GATE: no count is asked of a My Apps that has not said it can count (it would send the message for real)
+  if (dry && !(await canDry())) { send(res, 200, { ok: false, code: 'nodry', error: 'nodry' }); return; }
+  const out = { title, body: text, audience: aud }; if (link) out.link = link; if (b.test === true) out.test = true; if (dry) out.dry = true; // a real send never carries `dry`
   let r; try { r = await D.ma('/api/v1/broadcast', out); } catch (e) { send(res, 502, { ok: false, code: 'notready', error: NOT_READY }); return; }
   const j = (r && r.j && typeof r.j === 'object') ? r.j : {};
+  if (dry && r && r.ok && j.ok === true) {
+    if (j.dry === true) { send(res, 200, { ok: true, dry: true, people: count(j.people), alerts: count(j.alerts), devices: count(j.devices), left: count(j.left) }); return; }
+    // My Apps said it can count but answered like a real send. Stop counting and tell the owner the truth so he does not send it twice.
+    DRY = { t: D.now() + CAP_NO, ok: false };
+    send(res, 502, { ok: false, code: 'drysent', error: 'My Apps may have SENT this message instead of counting. Check My Apps before you send it again.' }); return;
+  }
   if (r && r.ok && j.ok === true) {
     send(res, 200, { ok: true, test: b.test === true, id: typeof j.id === 'string' || typeof j.id === 'number' ? String(j.id).slice(0, 64) : null, people: count(j.people), devices: count(j.devices), sent: count(j.sent) });
     return;
@@ -107,4 +137,4 @@ async function handle(req, res) {
   if (path === '/acct/announce') { await announceFor(req, res); return true; }
   return false;
 }
-module.exports = { handle, clean, linkOf, LINKS, AUDIENCES, TITLE_MAX, BODY_MAX, _deps: D, _reset: () => { TRY = new Map(); FOR = new Map(); } };
+module.exports = { handle, clean, linkOf, LINKS, AUDIENCES, TITLE_MAX, BODY_MAX, _deps: D, _reset: () => { TRY = new Map(); FOR = new Map(); DRY = { t: 0, ok: false }; } };

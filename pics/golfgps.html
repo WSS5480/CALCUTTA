@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- Golf GPS v264 (part of Oddable; your own round: live position on a satellite picture, yards to the pin, flag colour sets the pin. No picks, no bets.) -->
+<script>try{if(localStorage.getItem('pics-theme')!=='violet')document.documentElement.classList.add('cb')}catch(e){document.documentElement.classList.add('cb')}</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Golf GPS · Oddable</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#041e42">
+<link rel="stylesheet" href="leaflet/leaflet.css?v=264">
+<style>
+:root{--bg:#f6f4fb;--panel:#fff;--panel2:#ece6fb;--line:#d9d0ee;--ink:#2b2b2b;--muted:#5d5873;--blue:#7c3aed;--green:#16915a;--red:#d93a2e;--gold:#b7791f}
+body.dark{--bg:#0a0c10;--panel:#13161d;--panel2:#1b1f29;--line:#272c38;--ink:#eef0f4;--muted:#8b93a3;--blue:#a78bfa;--green:#4fd18b;--red:#ff5a4d;--gold:#f5c542}
+html.cb body,html.cb body.dark{--bg:#050c17;--panel:#0b1a30;--panel2:#10264a;--line:#1f3d69;--ink:#f3f6fa;--muted:#9aabbf;--blue:#c6cbd7;--green:#4fd18b;--red:#ff5a4d;--gold:#f5c542}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:40px;overflow-wrap:anywhere}
+/* Same page width as the main Games view of index.html: 720 up to 899 px, 1200 from 900, 1360 from 1500; the header's edges line up with the content's. */
+header{position:relative;margin:0 0 8px;padding:max(14px,env(safe-area-inset-top)) max(16px,calc((100% - 688px)/2)) 12px;background:linear-gradient(135deg,#7c3aed 0%,#4c1d95 55%,#1b1f29 100%);border-radius:0 0 26px 26px;color:#fff}
+html.cb header{background:linear-gradient(135deg,#003594 0%,#002b5c 38%,#041e42 74%,#08111f 100%);border-bottom:3px solid #869397}
+main{max-width:720px;margin:0 auto;padding:0 16px}
+@media (min-width:900px){main{max-width:1200px}header{padding-left:max(16px,calc((100% - 1168px)/2));padding-right:max(16px,calc((100% - 1168px)/2))}}
+/* index.html has a 104 px rail down the left side from 900 px; the same rail here keeps the header and content edges where they are in the main app */
+.rail{display:none}
+@media (min-width:900px){body{padding-left:104px}.rail{display:flex;position:fixed;left:0;top:0;bottom:0;width:104px;flex-direction:column;gap:6px;padding:22px 8px 12px;border-right:1px solid var(--line);background:var(--panel);box-shadow:2px 0 14px #0006;z-index:30}.rail a,.rail button{display:flex;flex-direction:column;align-items:center;gap:4px;width:100%;min-height:64px;padding:12px 4px;border-radius:14px;border:0;background:none;color:var(--muted);font:600 12px system-ui;text-decoration:none;cursor:pointer;text-align:center}.rail a span,.rail button span{font-size:24px}.rail .on{background:var(--panel2);color:var(--ink);box-shadow:inset 3px 0 0 var(--blue)}header .hrow{display:none}header h1{margin-top:0}.sheet{left:104px}}
+@media (min-width:1500px){main{max-width:1360px}header{padding-left:max(16px,calc((100% - 1328px)/2));padding-right:max(16px,calc((100% - 1328px)/2))}}
+.hrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+header h1{margin:8px 0 0;font-size:24px;color:#fff;white-space:nowrap}
+header .sub{color:#ede4ff;font-size:13px}html.cb header .sub{color:#c6cbd7}
+.home{display:inline-flex;align-items:center;min-height:44px;padding:6px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.12);color:#fff;text-decoration:none;font:700 14px system-ui;white-space:nowrap}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:8px 0}
+.card.err{border-color:var(--red)}.card.warn{border-color:var(--gold)}
+.card h2{margin:0 0 4px;font-size:18px;line-height:1.25}
+.note{color:var(--muted);font-size:13px;margin:6px 2px}
+.btn{display:inline-flex;align-items:center;justify-content:center;text-align:center;min-height:48px;padding:8px 16px;border-radius:12px;border:1px solid var(--blue);background:var(--panel);color:var(--ink);font:700 15px system-ui;cursor:pointer}
+.btn.pri{background:var(--green);border-color:var(--green);color:#04130b}.btn:disabled{opacity:.45;cursor:default}.btn.wide{width:100%}
+.bk{display:inline-flex;align-items:center;min-height:48px;padding:0 10px 0 2px;background:none;border:0;color:var(--blue);font:700 16px system-ui;cursor:pointer;white-space:nowrap}
+label.f{display:block;font-weight:700;font-size:12px;color:var(--muted);min-width:0}
+label.f select,label.f input{display:block;width:100%;min-height:48px;margin-top:3px;padding:9px 10px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);font:500 16px system-ui}
+/* pick a course */
+.srch{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}
+.srch2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,140px);gap:8px;align-items:end;margin-top:8px}
+.res{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px;margin:8px 0}
+button.cc{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;color:inherit;font:inherit;cursor:pointer;min-height:64px}
+button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display:block;color:var(--muted);font-size:13px;margin-top:2px}button.cc:active{opacity:.75}
+.gh{margin:16px 2px 4px;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+/* hole screen */
+.hbar{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px;align-items:center}.hbar b{font-size:16px;line-height:1.2;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hnav{display:grid;grid-template-columns:minmax(76px,.6fr) minmax(0,1.6fr) minmax(76px,.6fr);gap:8px;margin:4px 0 8px}
+.hnav select{min-height:52px;width:100%;padding:8px 10px;border:1px solid var(--blue);border-radius:12px;background:var(--panel);color:var(--ink);font:800 18px system-ui;text-overflow:ellipsis}
+.hnav .btn{min-height:52px;padding:8px 6px;white-space:nowrap}
+#sug{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;border:2px solid var(--gold);background:var(--panel);border-radius:14px;padding:8px 10px;margin:0 0 8px;font-weight:700}
+.hg{display:grid;grid-template-columns:minmax(0,1fr);grid-template-areas:"a" "m" "b";gap:8px}
+.ga{grid-area:a;min-width:0}.gm{grid-area:m;min-width:0}.gb{grid-area:b;min-width:0}
+@media (min-width:740px){.hg{grid-template-columns:minmax(0,1.55fr) minmax(280px,1fr);grid-template-areas:"m a" "m b";grid-template-rows:auto 1fr;gap:12px;align-items:start}.gm{position:sticky;top:8px}}
+.dist{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:10px 12px 12px;text-align:center}
+.dist .lab{font:800 12px/1.2 system-ui;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.dist .big{font:900 84px/1 system-ui;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin:2px 0 0}.dist .big small{font:800 22px system-ui;color:var(--muted);margin-left:4px}
+.dist .why{font-weight:700;font-size:14px;margin:2px 0 8px}
+.scl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.scl button{min-height:60px;border-radius:12px;border:2px solid var(--line);background:var(--panel2);color:var(--ink);font:inherit;cursor:pointer;padding:5px 2px}
+.scl button span{display:block;font:800 11px/1.2 system-ui;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}.scl button b{display:block;font:800 24px/1.15 system-ui;font-variant-numeric:tabular-nums}
+.scl button.on{border-color:var(--green);background:var(--panel)}.scl button.on span{color:var(--green)}.scl button:disabled{opacity:.5;cursor:default}
+.fl{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:8px 10px 10px;margin-top:8px}
+.fl .lab{font:800 12px/1.2 system-ui;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:2px 2px 6px}
+.fbs{display:grid;grid-template-columns:repeat(auto-fit,minmax(60px,1fr));gap:6px}
+.fbs button{min-height:58px;border-radius:12px;border:3px solid transparent;font:800 14px/1.15 system-ui;cursor:pointer;padding:4px 1px;color:#111;min-width:0;overflow-wrap:normal}
+.fbs button small{display:block;font:700 11px/1.1 system-ui;opacity:.85}
+.fbs .red{background:#d93a2e;color:#fff}.fbs .white{background:#fff;border-color:#c9c9c9}.fbs .blue{background:#2563eb;color:#fff}.fbs .yellow{background:#f5c542}.fbs .none{background:var(--panel2);color:var(--ink);border-color:var(--line)}
+.fbs button.on{border-color:var(--green);box-shadow:0 0 0 3px var(--green)}.fbs button:disabled{opacity:.4;cursor:default}
+.gps{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;margin-top:8px;padding:8px 10px;border-radius:12px;border:1px solid var(--line);background:var(--panel);font-size:14px;font-weight:600}
+.gps.bad{border-color:var(--gold)}.gps .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--muted);margin-right:7px}.gps.ok .dot{background:var(--green)}.gps.bad .dot{background:var(--gold)}
+/* map: #mapbox is the window; #maprot is a square as wide as the window's diagonal, turned so the line of play points up; Leaflet lives inside it */
+#mapbox{position:relative;overflow:hidden;border-radius:16px;border:1px solid var(--line);background:#16241a;height:min(56vh,520px);min-height:300px;touch-action:manipulation}
+@media (min-width:740px){#mapbox{height:calc(100vh - 150px);min-height:420px;max-height:900px}}
+#maprot{position:absolute;left:50%;top:50%;transform-origin:50% 50%}
+#map{width:100%;height:100%;background:#16241a}
+#mapbox.free #maprot{touch-action:none}
+.mtools{position:absolute;right:8px;top:8px;display:grid;gap:6px;z-index:500}
+.mtools button{width:48px;height:48px;border-radius:12px;border:1px solid rgba(255,255,255,.5);background:rgba(8,17,31,.82);color:#fff;font:800 20px system-ui;cursor:pointer;padding:0}
+.mtools button.t{font-size:11px;line-height:1.1}
+#mmode{margin:0 0 8px;background:#08111f;color:#fff;border:2px solid var(--gold);border-radius:12px;padding:8px 10px;font-weight:700;font-size:14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+#mmode button{min-height:44px;border-radius:10px;border:1px solid #fff;background:none;color:#fff;font:700 14px system-ui;padding:0 12px;cursor:pointer}
+#mread{position:absolute;left:8px;right:8px;bottom:8px;z-index:500;background:rgba(8,17,31,.9);color:#fff;border-radius:12px;padding:8px 10px;font-weight:700;font-size:15px;text-align:center}
+#mnorth{position:absolute;left:8px;bottom:8px;z-index:450;width:34px;height:34px;border-radius:50%;background:rgba(8,17,31,.8);color:#fff;font:800 12px/34px system-ui;text-align:center;pointer-events:none}
+.attr{color:var(--muted);font-size:11px;margin:4px 2px 0}
+.gi{transform:rotate(var(--rot,0deg))}
+.gi.flag{transform-origin:5px 38px}.gi.lbl{background:rgba(8,17,31,.88);color:#fff;border-radius:8px;padding:2px 6px;font:800 13px/1.2 system-ui;white-space:nowrap;display:inline-block;transform-origin:50% 50%}
+.gi.tee{width:22px;height:22px;border-radius:5px;background:#fff;color:#111;font:800 12px/22px system-ui;text-align:center;border:2px solid #111}
+.leaflet-container{font:inherit;background:#16241a}.leaflet-div-icon{background:none;border:0}
+.opt{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;min-height:48px}.opt input{width:26px;height:26px}
+.opt label{font-weight:700;display:block;padding:10px 0;cursor:pointer}
+.cfl{font-weight:700}.cfl small{display:block;font-weight:500;color:var(--muted);margin-top:2px}
+.row2{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:8px}
+.sheet{position:fixed;inset:0;z-index:2000;background:var(--bg);overflow:auto;padding:max(10px,env(safe-area-inset-top)) 0 30px}
+.sheet .in{max-width:560px;margin:0 auto;padding:0 16px}
+.sgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0}
+.sw{display:inline-block;width:14px;height:14px;border-radius:50%;border:1px solid #888;margin-right:6px;vertical-align:-2px}
+#toast{position:fixed;left:12px;right:12px;bottom:18px;margin:0 auto;max-width:520px;z-index:3000;background:#08111f;color:#fff;border:1px solid var(--gold);border-radius:14px;padding:12px 14px;font-weight:700;text-align:center}
+.foot{color:var(--muted);font-size:12px;margin:24px 0 8px;text-align:center;padding:0 12px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<nav class="rail" aria-label="Oddable"><a href="index.html"><span>🏈</span>Oddable</a><a href="pga.html"><span>⛳</span>PGA Tour</a><button type="button" id="railc" class="on"><span>📍</span>Golf GPS</button></nav>
+<header>
+  <div class="hrow"><a class="home" href="index.html">‹ Oddable</a><a class="home" href="pga.html">⛳ PGA Tour scores</a></div>
+  <h1>📍 Golf GPS</h1>
+  <div class="sub">Your round: yards to the pin on a satellite picture.</div>
+</header>
+<main>
+  <section id="pv">
+    <div class="card">
+      <h2>Pick your course</h2>
+      <form id="sf" class="srch" autocomplete="off"><label class="f">Course name or city<input id="q" type="search" placeholder="e.g. McAllen, TX" autocapitalize="words" spellcheck="false" enterkeyhint="search" maxlength="80"></label><button class="btn pri" id="sb" type="submit">Search</button></form>
+      <div class="srch2"><button class="btn" id="near" type="button">📍 Courses near me</button><label class="f">Within<select id="rad"><option value="5">5 miles</option><option value="15" selected>15 miles</option><option value="30">30 miles</option><option value="50">50 miles</option></select></label></div>
+      <div class="note">"Near me" asks for your location only when you tap it.</div>
+    </div>
+    <div id="smsg" aria-live="polite"></div>
+    <div id="sres"></div>
+    <div id="recent"></div>
+    <div class="note">Phone GPS is usually within 3 to 5 yards. Not a rangefinder. Course map from OpenStreetMap contributors: volunteers draw it, so a course can be missing greens. You can mark them yourself as you play.</div>
+  </section>
+  <section id="hv" hidden>
+    <div class="hbar"><button class="bk" id="back" type="button">‹ Courses</button><b id="cname"></b></div>
+    <div id="cmsg"></div>
+    <div id="hole" hidden>
+      <div class="hnav"><button class="btn" id="prev" type="button">‹ Prev</button><select id="hsel" aria-label="Hole"></select><button class="btn" id="next" type="button">Next ›</button></div>
+      <div id="sug" hidden></div>
+      <div class="hg">
+        <div class="ga"><div id="dist"></div><div id="flags"></div><div id="gps"></div></div>
+        <div class="gm">
+          <div id="mmode" hidden></div>
+          <div id="mapbox"><div id="maprot"><div id="map"></div></div>
+            <div class="mtools"><button type="button" id="zin" aria-label="Zoom in">＋</button><button type="button" id="zout" aria-label="Zoom out">－</button><button type="button" id="fit" class="t" aria-label="Show the whole hole">Whole hole</button><button type="button" id="ori" class="t" aria-label="Turn the map">North up</button></div>
+            <div id="mnorth" aria-hidden="true">N↑</div><div id="mread" hidden></div>
+          </div>
+          <div class="attr" id="attr"></div>
+        </div>
+        <div class="gb" id="more"></div>
+      </div>
+    </div>
+  </section>
+</main>
+<div class="sheet" id="sheet" hidden><div class="in" id="sheetin"></div></div>
+<div id="toast" hidden role="status"></div>
+<div class="foot">Oddable v264 · Golf GPS · course map © OpenStreetMap contributors · not a rangefinder · no picks, no bets</div>
+<script>try{if(localStorage.getItem('pics-dark')!=='0')document.body.classList.add('dark')}catch(e){document.body.classList.add('dark')}</script>
+<script src="leaflet/leaflet.js?v=264"></script>
+<script src="golfgps.js?v=264"></script>
+<script>
+(function () {
+  'use strict';
+  const G = window.GolfGPS, $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const lsg = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, lss = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+  const FLAGHEX = { red: '#d93a2e', white: '#ffffff', blue: '#2563eb', yellow: '#f5c542' };
+  let C = null, N = 1, R = null;                 // course, hole number, today's round
+  let FIX = null, GERR = '', WATCH = null, WANT = false; // GPS: last fix {lat,lon,acc,t}, error word, watch id, the player asked for GPS
+  let MODE = 'measure', MEAS = null;             // what the next tap on the map does: measure | pin | green | tee; the measured point
+  let HOLEUP = true, ROT = 0, VIEWED = null, USERVIEW = false; // map turned so the line of play points up; its angle; where it was last framed from
+  let TEEST = null, SUG = 0, NOSUG = {}, TICK = null, WAKE = null, TOASTT = null, TILEERR = 0, BUSY = false;
+  let map = null, LYR = null, MEL = null, ME = null, MEACC = null;
+
+  function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(TOASTT); TOASTT = setTimeout(() => { t.hidden = true; }, 4500); }
+
+  // ================= pick a course =================
+  function cardHtml(c, miles) { return '<button type="button" class="cc" data-course="' + esc(c.id) + '"><b>' + esc(c.name) + '</b><span>' + (miles != null ? esc(miles) + ' mi · ' : '') + esc(c.holesMapped || 0) + ' of ' + esc(c.holes || 18) + ' holes mapped</span></button>'; }
+  function showRecent() { const r = G.recent(); $('#recent').innerHTML = r.length ? '<div class="gh">Recent courses</div><div class="res">' + r.map((c) => cardHtml(c, null)).join('') + '</div>' : ''; }
+  async function doSearch(where) {
+    if (BUSY) return; BUSY = true; $('#sb').disabled = $('#near').disabled = true;
+    $('#smsg').innerHTML = '<div class="card">Looking for courses… The free map can take up to a minute.</div>'; $('#sres').innerHTML = '';
+    try {
+      const j = await G.search(where, $('#rad').value), list = Array.isArray(j.courses) ? j.courses : [];
+      $('#smsg').innerHTML = '<div class="note">' + esc(list.length) + (list.length === 1 ? ' course' : ' courses') + ' within ' + esc(j.radius) + ' miles of ' + esc((j.center && j.center.label) || 'there') + '.' + (j.note ? ' ' + esc(j.note) : '') + '</div>';
+      $('#sres').innerHTML = '<div class="res">' + list.map((c) => cardHtml(c, c.miles)).join('') + '</div>';
+    } catch (e) { $('#smsg').innerHTML = '<div class="card err">' + esc(e.message) + '</div>'; }
+    BUSY = false; $('#sb').disabled = $('#near').disabled = false;
+  }
+  $('#sf').addEventListener('submit', (e) => { e.preventDefault(); const q = $('#q').value.trim(); if (q.length < 2) { $('#smsg').innerHTML = '<div class="card warn">Type a course name or a city.</div>'; return; } doSearch({ q }); });
+  $('#near').addEventListener('click', () => {
+    if (!navigator.geolocation) { $('#smsg').innerHTML = '<div class="card warn">This phone\'s browser does not share its location. Search by name or city instead.</div>'; return; }
+    $('#smsg').innerHTML = '<div class="card">Finding where you are…</div>';
+    navigator.geolocation.getCurrentPosition((p) => doSearch({ lat: p.coords.latitude, lon: p.coords.longitude }), (e) => { $('#smsg').innerHTML = '<div class="card warn">' + (e && e.code === 1 ? 'Location is turned off for this page. Allow it in your browser settings, or search by name or city.' : 'Could not get your location. Try again outside, or search by name or city.') + '</div>'; }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 });
+  });
+  document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-course]'); if (b) go(b.getAttribute('data-course'), 0, true); });
+
+  // ================= routing: golfgps.html?course=<id>&hole=<n> =================
+  function setUrl(push) { const u = C ? '?course=' + encodeURIComponent(C.id).replace(/%2F/g, '/') + '&hole=' + N : location.pathname; try { history[push ? 'pushState' : 'replaceState'](null, '', u); } catch (e) {} }
+  function showPick() { stopGps(); releaseWake(); clearInterval(TICK); TICK = null; C = null; closeSheet(); $('#hv').hidden = true; $('#pv').hidden = false; document.querySelector('header .sub').hidden = false; showRecent(); }
+  async function go(id, n, push) {
+    $('#pv').hidden = true; $('#hv').hidden = false; $('#hole').hidden = true; $('#cname').textContent = ''; document.querySelector('header .sub').hidden = true;
+    $('#cmsg').innerHTML = '<div class="card">Loading the course… The free map can take up to a minute the first time.</div>';
+    let c; try { c = await G.loadCourse(id); } catch (e) { $('#cmsg').innerHTML = '<div class="card err">' + esc(e.message) + '</div><button class="btn wide" id="retry" type="button">Try again</button>'; $('#retry').onclick = () => go(id, n, false); return; }
+    C = c; R = G.round(C.id); N = n >= 1 && n <= C.holeCount ? n : 1; MODE = 'measure'; MEAS = null; NOSUG = {}; SUG = 0; TEEST = null;
+    $('#cname').textContent = C.name;
+    let m = ''; if (C.offline) m += '<div class="card warn">No signal: showing the copy of this course saved on this phone' + (C.savedAt ? ' on ' + esc(new Date(C.savedAt).toLocaleDateString([], { month: 'short', day: 'numeric' })) : '') + '.</div>';
+    if (C.note) m += '<div class="note">' + esc(C.note) + '</div>';
+    $('#cmsg').innerHTML = m; $('#hole').hidden = false;
+    const s = $('#hsel'); s.innerHTML = ''; for (let i = 1; i <= C.holeCount; i++) { const h = G.hole(C, i), o = document.createElement('option'); o.value = i; o.textContent = 'Hole ' + i + (h.par ? ' · Par ' + h.par : '') + (h.green ? '' : ' · not mapped'); s.appendChild(o); }
+    setUrl(push); initMap(); setHole(N, true); autoGps(); wantWake();
+    if (!TICK) TICK = setInterval(tick, 2000);
+  }
+  function setHole(n, first) { N = Math.max(1, Math.min(C.holeCount, n)); MODE = 'measure'; MEAS = null; USERVIEW = false; VIEWED = null; SUG = 0; $('#hsel').value = String(N); $('#prev').disabled = N <= 1; $('#next').disabled = N >= C.holeCount; if (!first) setUrl(false); render(); }
+  $('#hsel').addEventListener('change', () => setHole(+$('#hsel').value));
+  $('#prev').addEventListener('click', () => setHole(N - 1)); $('#next').addEventListener('click', () => setHole(N + 1));
+  $('#railc').addEventListener('click', () => $('#back').click());
+  $('#back').addEventListener('click', () => { showPick(); try { history.pushState(null, '', location.pathname); } catch (e) {} });
+  function route() { const q = new URLSearchParams(location.search), id = q.get('course') || ''; if (/^(way|relation|node)\/[1-9]\d{0,14}$/.test(id)) go(id, +q.get('hole') || 0, false); else showPick(); }
+  window.addEventListener('popstate', route);
+
+  // ================= the hole screen =================
+  const hole = () => G.hole(C, N), from = () => FIX || hole().tee || null;
+  function render() { drawDist(); drawFlags(); drawGps(); drawMore(); drawMap(); drawMode(); drawSug(); }
+  function drawDist() {
+    const h = hole(), P = G.pin(C, N, R), f = from(), d = P ? G.distances(f, h, P.point) : { pin: null, front: null, center: null, back: null }, sel = G.selFor(R, N), off = !P || P.noOutline || P.by === 'you';
+    const on = (pl) => (P && P.by !== 'you' && sel && !P.noOutline && P.shown === pl ? ' class="on" aria-pressed="true"' : ' aria-pressed="false"');
+    $('#dist').innerHTML = '<div class="dist"><div class="lab">To the pin · Hole ' + N + (h.par ? ' · Par ' + h.par : '') + '</div><div class="big"><span id="dpin">' + G.fmtYd(d.pin) + '</span><small>yd</small></div>' +
+      '<div class="why"><span id="dwhy">' + esc(P ? P.label : 'This green is not on the map yet') + '</span> · <span id="dfrom">' + (FIX ? 'from you' : h.tee ? 'from the tee' : 'no starting point yet') + '</span></div>' +
+      '<div class="lab" style="margin-bottom:5px">Pin today</div><div class="scl">' + G.PLACES.map((pl) => '<button type="button" data-place="' + pl + '"' + on(pl) + (!P || P.noOutline ? ' disabled' : '') + '><span>' + G.LABEL[pl] + '</span><b id="d' + pl + '">' + G.fmtYd(d[pl]) + '</b></button>').join('') + '</div>' +
+      (P && P.by === 'you' ? '<div class="row2"><button class="btn" type="button" id="unpin">Remove my pin</button></div>' : '') + '</div>';
+    void off;
+  }
+  function drawFlags() {
+    const P = G.pin(C, N, R), sel = G.selFor(R, N), fm = G.flagMap(C), dis = !P || P.noOutline;
+    let h = '<div class="fl"><div class="lab">Flag today' + (R.allDay ? ' · all 18 holes' : ' · this hole only') + '</div><div class="fbs">';
+    G.COLORS.forEach((c) => { const on = sel && sel.color === c; h += '<button type="button" class="' + c + (on ? ' on' : '') + '" data-color="' + c + '" aria-pressed="' + !!on + '"' + (dis ? ' disabled' : '') + '>' + G.CNAME[c] + '<small>' + G.LABEL[fm.map[c]] + '</small></button>'; });
+    h += '<button type="button" class="none' + (!sel ? ' on' : '') + '" data-color="" aria-pressed="' + !sel + '" aria-label="No flag colour, use the centre"' + (dis ? ' disabled' : '') + '>None<small>Center</small></button></div>';
+    if (dis) h += '<div class="note">' + (P ? 'This green has no outline on the map yet, showing centre.' : 'This green is not on the map yet. Mark it below and the distance appears.') + '</div>';
+    else if (P.by === 'you') h += '<div class="note">Pin placed by you on this hole. The flag colour is not used here until you remove your pin.</div>';
+    $('#flags').innerHTML = h + '</div>';
+  }
+  function drawGps() {
+    const s = G.gpsState(FIX, GERR, C), need = !WATCH && s.kind !== 'ok' && s.kind !== 'far' && s.kind !== 'poor';
+    $('#gps').innerHTML = '<div class="gps ' + (s.kind === 'ok' ? 'ok' : 'bad') + '"><div><span class="dot"></span><span id="gpst">' + esc(!WANT && !FIX && !GERR ? 'GPS is off. Distances are from the tee.' : s.text) + '</span></div>' + (need && GERR !== 'unsupported' ? '<button class="btn" type="button" id="gpson">Turn on GPS</button>' : '') + '</div>';
+  }
+  function drawMore() {
+    const h = hole(), fm = G.flagMap(C), g = h.green, signed = G.signedIn();
+    let o = '<div class="card"><div class="opt"><label for="allday">Same colour all day<small style="display:block;font-weight:500;color:var(--muted)">Off = each hole remembers its own colour today</small></label><input type="checkbox" id="allday"' + (R.allDay ? ' checked' : '') + '></div>';
+    o += '<div class="row2"><button class="btn" type="button" id="placepin"' + (g ? '' : ' disabled') + '>Tap the green to place the pin</button></div></div>';
+    // what the colours mean at this course
+    o += '<div class="card"><div class="cfl">' + (fm.locked ? 'Course flag colours' : 'Flag colours') + ': ' + esc(G.mapText(fm.map)) + (fm.locked ? ' 🔒' : '') + '<small>' + (fm.locked ? 'Set for this course. Everyone playing here gets the same.' : fm.src === 'phone' ? 'Saved on this phone only.' : 'The usual meaning. Not set for this course yet.') + '</small></div>';
+    if (fm.review) o += '<div class="card warn" id="review" style="margin:8px 0 0"><b>Proposed change from ' + esc(fm.review.from) + ':</b> ' + esc(G.mapText(fm.review.map)) + (fm.review.note ? '<div class="note">"' + esc(fm.review.note) + '"</div>' : '') + '<div class="row2"><button class="btn pri" type="button" id="rvacc">Accept</button><button class="btn" type="button" id="rvdis">Dismiss</button></div></div>';
+    else if (fm.pending) o += '<div class="note" id="pend">Change reported, waiting for review.</div>';
+    o += '<div class="row2">' + (!fm.locked || fm.canChange ? '<button class="btn" type="button" id="fset">' + (fm.locked ? 'Change' : 'This course\'s flag colours') + '</button>' : signed ? '<button class="btn" type="button" id="frep">Report a change</button>' : '') + '</div>';
+    if (fm.locked && !fm.canChange) o += '<div class="note">' + (signed ? 'Has the course changed its colours? Report it and the organizer will review it.' : 'Ask the organizer to change it. Sign in to Oddable to report a change yourself.') + '</div>';
+    o += '</div>';
+    // marking
+    const needG = !g || g.approx, needT = !h.tee;
+    o += '<div class="card' + (needG ? ' warn' : '') + '"><h2>' + (needG ? (g ? 'This green is not drawn on the map' : 'This green is not on the map yet') : 'Green or tee in the wrong place?') + '</h2>' +
+      '<div class="note">' + (needG ? (g ? 'The distance goes to the end of the hole line, which is only close. ' : '') + 'Stand on the green and tap Mark, or tap the spot on the map.' : 'Stand on it and tap Mark, or tap the spot on the map.') + (g && g.marked ? ' Marked ' + (g.marked === 'phone' ? 'on this phone.' : 'by a player.') : '') + '</div>' +
+      '<div class="row2"><button class="btn" type="button" data-mark="green">Mark green: I\'m standing on it</button><button class="btn" type="button" data-tapmark="green">Tap the map to mark the green</button></div>' +
+      '<div class="row2"><button class="btn" type="button" data-mark="tee">Mark tee: I\'m standing on it</button><button class="btn" type="button" data-tapmark="tee">Tap the map to mark the tee</button></div>' +
+      (needT ? '<div class="note">This hole has no tee on the map, so there is no "from the tee" distance until you mark one or GPS locks on.</div>' : '') +
+      '<div class="note">' + (signed ? 'Marks are shared with everyone who plays this course.' : 'Not signed in: marks stay on this phone only.') + '</div></div>';
+    // screen + honesty
+    const wl = 'wakeLock' in navigator;
+    o += '<div class="card"><div class="opt"><label for="wake">Keep the screen on<small style="display:block;font-weight:500;color:var(--muted)" id="waket">' + (wl ? (WAKE ? 'On while this page is open.' : 'Off.') : 'This browser cannot keep the screen on. Set your phone\'s auto-lock to a longer time.') + '</small></label><input type="checkbox" id="wake"' + (lsg('ggps-wake') !== '0' && wl ? ' checked' : '') + (wl ? '' : ' disabled') + '></div>' +
+      '<div class="note">Live GPS with the screen on uses the battery faster than normal. Start the round with a full charge. GPS stops when this page is not on screen.</div>' +
+      '<div class="note">Phone GPS is usually within 3 to 5 yards. Not a rangefinder. Short and Long are ' + G.cfg.PIN_IN_YD + ' yards in from the front and back edge of the green along the line of play.</div>' +
+      '<div class="note">Tap anywhere on the map for the yards to that spot and from there to the pin. Tap again to clear.</div></div>';
+    $('#more').innerHTML = o;
+    $('#attr').textContent = G.cfg.TILES.attribution + ' · Course map © OpenStreetMap contributors' + (TILEERR > 3 ? ' · The satellite picture is not loading; the shapes are still right.' : '');
+  }
+  function drawMode() {
+    const t = { pin: 'Tap the green where the pin is.', green: 'Tap the middle of the green for hole ' + N + '.', tee: 'Tap the tee for hole ' + N + '.' }[MODE];
+    const m = $('#mmode'); m.hidden = !t; if (t) { m.innerHTML = '<span>' + t + '</span><button type="button" id="mcancel">Cancel</button>'; }
+    const r = $('#mread'), f = from(), P = G.pin(C, N, R);
+    if (MEAS && MODE === 'measure') { const a = f ? G.yards(f, MEAS) : null, b = P ? G.yards(MEAS, P.point) : null; r.hidden = false; r.innerHTML = '<span id="m1">' + (a != null ? 'To that spot: ' + G.fmtYd(a) + ' yd' : 'No starting point yet') + '</span> · <span id="m2">' + (b != null ? 'From there to the pin: ' + G.fmtYd(b) + ' yd' : 'no pin on this hole yet') + '</span>'; } else r.hidden = true;
+    $('#mnorth').hidden = !!(MEAS && MODE === 'measure');
+  }
+  function drawSug() { const s = $('#sug'); s.hidden = !SUG; if (SUG) s.innerHTML = '<span>Looks like you\'re on the ' + G.ord(SUG) + ' tee. Switch?</span><button class="btn pri" type="button" id="sugy">Switch</button><button class="btn" type="button" id="sugn">No</button>'; }
+  // numbers only (called on every GPS reading): never rebuilds the buttons under a finger
+  function tick() {
+    if (!C || $('#hv').hidden) return;
+    if (FIX) { const w = G.teeWatch(TEEST, FIX, C, N, Date.now()); TEEST = w.st; if (!w.st) NOSUG = {}; const s = w.suggest && !NOSUG[w.suggest] ? w.suggest : 0; if (s !== SUG) { SUG = s; drawSug(); } }
+    const h = hole(), P = G.pin(C, N, R), f = from(), d = P ? G.distances(f, h, P.point) : null, set = (id, v) => { const e = document.getElementById(id); if (e && e.textContent !== v) e.textContent = v; };
+    set('dpin', G.fmtYd(d && d.pin)); G.PLACES.forEach((pl) => set('d' + pl, G.fmtYd(d && d[pl]))); set('dfrom', FIX ? 'from you' : h.tee ? 'from the tee' : 'no starting point yet');
+    const s = G.gpsState(FIX, GERR, C), gt = document.getElementById('gpst'); if (gt && (WANT || FIX || GERR)) { gt.textContent = s.text; gt.closest('.gps').className = 'gps ' + (s.kind === 'ok' ? 'ok' : 'bad'); }
+    if (MEAS) drawMode();
+  }
+
+  // ---- taps on the panels ----
+  document.addEventListener('click', async (e) => {
+    const t = e.target.closest && e.target.closest('button,[data-place]'); if (!t || !C) return;
+    if (t.hasAttribute('data-place')) { G.setSel(R, N, { place: t.getAttribute('data-place') }); render(); return; }
+    if (t.hasAttribute('data-color')) { const c = t.getAttribute('data-color'); G.setSel(R, N, c ? { color: c } : null); render(); return; }
+    if (t.id === 'unpin') { G.clearPin(R, N); render(); return; }
+    if (t.id === 'gpson') { startGps(true); return; }
+    if (t.id === 'placepin') { MODE = 'pin'; MEAS = null; drawMode(); drawMap(); $('#mapbox').scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+    if (t.id === 'mcancel') { MODE = 'measure'; USERVIEW = false; VIEWED = null; drawMode(); drawMap(); return; }
+    if (t.hasAttribute('data-tapmark')) { MODE = t.getAttribute('data-tapmark'); MEAS = null; USERVIEW = false; VIEWED = null; drawMode(); drawMap(); /* the map pulls back to about 280 m so the spot to tap is on screen */ $('#mapbox').scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+    if (t.hasAttribute('data-mark')) {
+      const what = t.getAttribute('data-mark');
+      if (!FIX) { toast('No GPS fix yet. Turn on GPS and wait for it to lock on, or tap the map instead.'); return; }
+      if (FIX.acc > G.cfg.POOR_M) { toast('GPS is only good to ±' + Math.round(FIX.acc / 0.9144) + ' yd right now. Wait a few seconds in the open, or tap the map instead.'); return; }
+      doMark(what, { lat: FIX.lat, lon: FIX.lon }); return;
+    }
+    if (t.id === 'sugy') { const n = SUG; SUG = 0; setHole(n); return; }
+    if (t.id === 'sugn') { NOSUG[SUG] = 1; SUG = 0; drawSug(); return; }
+    if (t.id === 'fset') { openSheet('set'); return; }
+    if (t.id === 'frep') { openSheet('report'); return; }
+    if (t.id === 'rvacc' || t.id === 'rvdis') { t.disabled = true; try { const r = await G.reviewFlags(C, t.id === 'rvacc' ? 'accept' : 'dismiss'); toast(r.msg); } catch (er) { toast(er.message); } render(); return; }
+    if (t.id === 'zin' || t.id === 'zout') { USERVIEW = true; map.setZoom(map.getZoom() + (t.id === 'zin' ? 0.5 : -0.5), { animate: false }); return; }
+    if (t.id === 'fit') { USERVIEW = false; VIEWED = null; viewHole(); return; }
+    if (t.id === 'ori') { HOLEUP = !HOLEUP; USERVIEW = false; VIEWED = null; viewHole(); return; }
+  });
+  document.addEventListener('change', (e) => {
+    if (!C) return;
+    if (e.target.id === 'allday') { G.setAllDay(R, e.target.checked, N); render(); }
+    if (e.target.id === 'wake') { lss('ggps-wake', e.target.checked ? '1' : '0'); if (e.target.checked) wantWake(); else releaseWake(); }
+  });
+  async function doMark(what, p) {
+    try { const r = await G.mark(C, N, what, p); toast((what === 'green' ? 'Green' : 'Tee') + ' marked for hole ' + N + '. ' + r.msg); const o = $('#hsel').options[N - 1]; if (o) o.textContent = 'Hole ' + N + (hole().par ? ' · Par ' + hole().par : ''); }
+    catch (e) { toast(e.message); }
+    MODE = 'measure'; VIEWED = null; render();
+  }
+
+  // ---- sheets: this course's flag colours / report a change ----
+  function openSheet(kind) {
+    const fm = G.flagMap(C), rep = kind === 'report', def = G.defColor(C.id);
+    let h = '<button class="bk" type="button" id="shback">‹ Back</button><h2 style="margin:4px 0">' + (rep ? 'What do the flags mean at this course now?' : 'This course\'s flag colours') + '</h2><div class="note">' + esc(C.name) + '</div>' +
+      '<div class="note">' + (rep ? 'Now: ' + esc(G.mapText(fm.map)) + '. Set what they mean today and send it. The organizer reviews it before it changes for everyone.' : 'Short = pin at the front of the green, Long = at the back.' + (G.signedIn() ? ' Once saved, this is locked for the course and everyone playing here gets it.' : ' Not signed in: saved on this phone only.')) + '</div><div class="sgrid">';
+    G.COLORS.forEach((c) => { h += '<label class="f"><span class="sw" style="background:' + FLAGHEX[c] + '"></span>' + G.CNAME[c] + ' flag means<select data-fc="' + c + '">' + G.PLACES.map((p) => '<option value="' + p + '"' + (fm.map[c] === p ? ' selected' : '') + '>' + G.LABEL[p] + '</option>').join('') + '</select></label>'; });
+    h += '</div>';
+    if (rep) h += '<label class="f">Note (optional)<input id="fnote" type="text" maxlength="100" placeholder="e.g. new flags since the spring" autocomplete="off"></label>';
+    else h += '<label class="f">Colour to start each round with at this course (this phone)<select id="fdef"><option value="">None (center)</option>' + G.COLORS.map((c) => '<option value="' + c + '"' + (def === c ? ' selected' : '') + '>' + G.CNAME[c] + '</option>').join('') + '</select></label>';
+    h += '<div id="shmsg" aria-live="polite"></div><div class="row2"><button class="btn pri" type="button" id="shsave">' + (rep ? 'Send' : 'Save') + '</button><button class="btn" type="button" id="shcancel">Cancel</button></div>';
+    $('#sheetin').innerHTML = h; $('#sheet').hidden = false; $('#sheet').scrollTop = 0;
+    $('#shback').onclick = $('#shcancel').onclick = closeSheet;
+    $('#shsave').onclick = async () => {
+      const m = {}; document.querySelectorAll('#sheet [data-fc]').forEach((s) => { m[s.getAttribute('data-fc')] = s.value; }); $('#shsave').disabled = true;
+      try {
+        let r; if (rep) r = await G.reportFlags(C, m, $('#fnote').value); else { G.setDefColor(C.id, $('#fdef').value); r = await G.saveFlagMap(C, m); }
+        closeSheet(); toast(r.msg); render();
+      } catch (e) { $('#shmsg').innerHTML = '<div class="card err">' + esc(e.message) + '</div>'; const b = $('#shsave'); if (b) b.disabled = false; if (e.locked) { render(); } }
+    };
+  }
+  function closeSheet() { $('#sheet').hidden = true; $('#sheetin').innerHTML = ''; }
+
+  // ================= map =================
+  function initMap() {
+    if (map) return;
+    const T = G.cfg.TILES;
+    map = L.map('map', { zoomControl: false, attributionControl: false, zoomSnap: 0, zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false, inertia: false, maxZoom: T.maxZoom, minZoom: 3, dragging: false, touchZoom: false, doubleClickZoom: false, scrollWheelZoom: false, boxZoom: false, keyboard: false, tap: false });
+    if (T.kind === 'xyz') L.tileLayer(T.url, { maxNativeZoom: T.maxNativeZoom, maxZoom: T.maxZoom, keepBuffer: 1, crossOrigin: true }).on('tileerror', () => { if (++TILEERR === 4) { const a = $('#attr'); if (a) a.textContent += ' · The satellite picture is not loading; the shapes are still right.'; } }).addTo(map);
+    LYR = L.layerGroup().addTo(map); MEL = L.layerGroup().addTo(map); map.createPane('me').style.zIndex = 640; // the player's dot is drawn over the tee and flag markers map.on('dragstart zoomstart', (e) => { if (e.type === 'dragstart' || map.touchZoom.enabled()) USERVIEW = USERVIEW || e.type === 'dragstart'; });
+    map.setView([0, 0], 3, { animate: false });
+    const box = $('#mapbox'); let down = null;
+    box.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY }; });
+    box.addEventListener('click', (e) => { if (e.target.closest('.mtools')) return; if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 10) return; onTap(pointAt(e.clientX, e.clientY)); });
+    window.addEventListener('resize', () => { sizeMap(); VIEWED = null; if (C && !USERVIEW) viewHole(); });
+  }
+  // The square that holds the map is as wide as the window's diagonal, so turning it never shows an empty corner.
+  function sizeMap() { const b = $('#mapbox'), s = Math.ceil(Math.hypot(b.clientWidth, b.clientHeight)) + 2, r = $('#maprot'); r.style.width = r.style.height = s + 'px'; r.style.marginLeft = r.style.marginTop = -s / 2 + 'px'; map.invalidateSize({ animate: false }); }
+  function setRot(deg) { ROT = deg; const r = $('#maprot'); r.style.transform = 'rotate(' + -deg + 'deg)'; r.style.setProperty('--rot', deg + 'deg'); $('#mnorth').style.transform = 'rotate(' + -deg + 'deg)'; $('#ori').textContent = HOLEUP ? 'North up' : 'Hole up';
+    const free = !HOLEUP && deg === 0; ['dragging', 'touchZoom', 'scrollWheelZoom'].forEach((k) => { if (map[k]) map[k][free ? 'enable' : 'disable'](); }); $('#mapbox').classList.toggle('free', free); } // North up = the player may drag and pinch; turned = the map frames the hole itself
+  // screen point -> place on the ground, and back (the map is turned, so Leaflet's own click position cannot be used)
+  function pointAt(cx, cy) { const b = $('#mapbox').getBoundingClientRect(), dx = cx - (b.left + b.width / 2), dy = cy - (b.top + b.height / 2), a = ROT * Math.PI / 180, s = map.getSize(), x = dx * Math.cos(a) - dy * Math.sin(a), y = dx * Math.sin(a) + dy * Math.cos(a), ll = map.containerPointToLatLng([s.x / 2 + x, s.y / 2 + y]); return { lat: ll.lat, lon: ll.lng }; }
+  function screenOf(p) { const b = $('#mapbox').getBoundingClientRect(), s = map.getSize(), c = map.latLngToContainerPoint([p.lat, p.lon]), x = c.x - s.x / 2, y = c.y - s.y / 2, a = -ROT * Math.PI / 180; return { x: b.left + b.width / 2 + x * Math.cos(a) - y * Math.sin(a), y: b.top + b.height / 2 + x * Math.sin(a) + y * Math.cos(a) }; }
+  // Frame the hole: from the player (when within 700 yd of the green) or the tee, to the green; line of play up when HOLEUP.
+  function viewHole() {
+    if (!map || !C) return; sizeMap();
+    const h = hole(), g = h.green ? h.green.center : null, b = $('#mapbox');
+    let a = FIX && g && G.yards(FIX, g) < 700 ? FIX : h.tee || (FIX && C.center && G.yards(FIX, C.center) < 3520 ? FIX : null);
+    if (!g && !a) { setRot(0); if (C.center) map.setView([C.center.lat, C.center.lon], 16, { animate: false }); else map.setView([0, 0], 3, { animate: false }); return; }
+    const p1 = a || g, p2 = g || a, wide = MODE === 'green' || MODE === 'tee', len = Math.max(wide ? 280 : 0, a && g ? Math.max(40, (G.yards(p1, p2) || 0) * 0.9144) : 160), mid = { lat: (p1.lat + p2.lat) / 2, lon: (p1.lon + p2.lon) / 2 };
+    const up = HOLEUP && a && g && G.yards(a, g) > 3; setRot(up ? G.bearing(a, g) : 0);
+    const px = (up ? b.clientHeight : Math.min(b.clientWidth, b.clientHeight)) * 0.68, mpp = len / px, z = Math.log2(156543.03392 * Math.cos(mid.lat * Math.PI / 180) / mpp);
+    map.setView([mid.lat, mid.lon], Math.max(13, Math.min(G.cfg.TILES.maxZoom, z)), { animate: false });
+    VIEWED = { from: a ? { lat: a.lat, lon: a.lon } : null, n: N };
+  }
+  const icon = (html, size, anchor) => L.divIcon({ html, className: 'leaflet-div-icon', iconSize: size, iconAnchor: anchor });
+  const flagSvg = (fill, mine) => '<div class="gi flag"><svg width="30" height="40" viewBox="0 0 30 40" aria-hidden="true"><line x1="5" y1="3" x2="5" y2="38" stroke="#111" stroke-width="4"/><line x1="5" y1="3" x2="5" y2="38" stroke="#fff" stroke-width="2"/><path d="M6 4 L27 11 L6 18 Z" fill="' + fill + '" stroke="#111" stroke-width="1.5"/>' + (mine ? '<circle cx="13" cy="11" r="3" fill="#111"/>' : '') + '<circle cx="5" cy="38" r="2.5" fill="#fff" stroke="#111"/></svg></div>';
+  function drawMap() {
+    if (!map || !C) return; LYR.clearLayers(); MEL.clearLayers();
+    const h = hole(), g = h.green, P = G.pin(C, N, R), ll = (p) => [p.lat, p.lon];
+    (h.hazards || []).forEach((z) => { if (z.outline && z.outline.length >= 3) L.polygon(z.outline, { color: z.type === 'water' ? '#5ab0ff' : '#f2e2a0', weight: 1.5, fillOpacity: 0.12, interactive: false }).addTo(LYR); });
+    if (h.line && h.line.length > 1) L.polyline(h.line, { color: '#fff', weight: 1.5, opacity: 0.55, dashArray: '4 6', interactive: false }).addTo(LYR);
+    if (g && g.outline) L.polygon(g.outline, { color: '#fff', weight: 2.5, fillColor: '#4fd18b', fillOpacity: 0.18, interactive: false }).addTo(LYR);
+    else if (g) L.circle(ll(g.center), { radius: 9, color: '#fff', weight: 2, dashArray: '4 4', fillOpacity: 0.08, interactive: false }).addTo(LYR);
+    if (g && g.front && g.back) [g.front, g.center, g.back].forEach((p) => L.circleMarker(ll(p), { radius: 3, color: '#111', weight: 1, fillColor: '#fff', fillOpacity: 1, interactive: false }).addTo(LYR));
+    if (h.tee) L.marker(ll(h.tee), { icon: icon('<div class="gi tee">T</div>', [22, 22], [11, 11]), interactive: false, keyboard: false }).addTo(LYR);
+    if (P) L.marker(ll(P.point), { icon: icon(flagSvg(P.by === 'you' ? '#ff8a1f' : P.color ? FLAGHEX[P.color] : '#cfd6df', P.by === 'you'), [30, 40], [5, 38]), interactive: false, keyboard: false, zIndexOffset: 500 }).addTo(LYR);
+    drawMe(); drawMeas();
+    if (!USERVIEW && (!VIEWED || VIEWED.n !== N)) viewHole();
+  }
+  function drawMe() {
+    if (!map) return; if (ME) { ME.remove(); ME = null; } if (MEACC) { MEACC.remove(); MEACC = null; } if (!FIX) return;
+    MEACC = L.circle([FIX.lat, FIX.lon], { radius: Math.max(1, FIX.acc || 1), color: '#3b9dff', weight: 1, fillColor: '#3b9dff', fillOpacity: 0.18, interactive: false, pane: 'me' }).addTo(map);
+    ME = L.circleMarker([FIX.lat, FIX.lon], { radius: 8, color: '#fff', weight: 3, fillColor: '#1a73e8', fillOpacity: 1, interactive: false, pane: 'me' }).addTo(map);
+  }
+  function drawMeas() {
+    if (!MEL) return; MEL.clearLayers(); if (!MEAS || MODE !== 'measure') return;
+    const f = from(), P = G.pin(C, N, R), pts = []; if (f) pts.push([f.lat, f.lon]); pts.push([MEAS.lat, MEAS.lon]); if (P) pts.push([P.point.lat, P.point.lon]);
+    if (pts.length > 1) L.polyline(pts, { color: '#f5c542', weight: 2.5, interactive: false }).addTo(MEL);
+    L.circleMarker([MEAS.lat, MEAS.lon], { radius: 7, color: '#111', weight: 2, fillColor: '#f5c542', fillOpacity: 1, interactive: false }).addTo(MEL);
+    const a = f ? G.yards(f, MEAS) : null, b = P ? G.yards(MEAS, P.point) : null;
+    L.marker([MEAS.lat, MEAS.lon], { icon: icon('<div class="gi lbl">' + (a != null ? G.fmtYd(a) : '–') + ' · ' + (b != null ? G.fmtYd(b) : '–') + '</div>', [90, 22], [45, -10]), interactive: false, keyboard: false }).addTo(MEL);
+  }
+  function onTap(p) {
+    if (!C) return;
+    if (MODE === 'pin') { const g = hole().green; if (!g || G.yards(p, g.center) > G.cfg.PIN_TAP_YD) { toast('That is not on the green. Tap the green itself' + (g ? '' : ' (this hole has no green yet: mark it first)') + '.'); return; } G.setPin(R, N, p); MODE = 'measure'; render(); return; }
+    if (MODE === 'green' || MODE === 'tee') { doMark(MODE, p); return; }
+    MEAS = MEAS ? null : p; drawMeas(); drawMode();
+  }
+
+  // ================= GPS: only while the page is on screen =================
+  function onFix(p) { const c = p.coords; FIX = { lat: c.latitude, lon: c.longitude, acc: c.accuracy || 0, t: Date.now() }; const had = GERR; GERR = ''; drawMe(); if (had || !document.getElementById('gpst') || document.getElementById('gpson')) { drawGps(); drawDist(); } tick();
+    if (map && !USERVIEW && (!VIEWED || !VIEWED.from || G.yards(VIEWED.from, FIX) > 12)) { const g = hole().green; if (!VIEWED || (g && G.yards(FIX, g.center) < 700) || !hole().tee) viewHole(); } }
+  function onErr(e) { if (e && e.code === 1) { GERR = 'denied'; FIX = null; stopGps(); } else if (!FIX) GERR = 'unavailable'; if (C) { drawGps(); drawDist(); drawMe(); tick(); } }
+  function startGps(asked) {
+    if (asked) WANT = true; if (!navigator.geolocation) { GERR = 'unsupported'; if (C) drawGps(); return; }
+    if (WATCH != null || document.hidden || !C || $('#hv').hidden) return;
+    if (GERR === 'denied') GERR = '';
+    WATCH = navigator.geolocation.watchPosition(onFix, onErr, { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 }); if (C) drawGps();
+  }
+  function stopGps() { if (WATCH != null && navigator.geolocation) navigator.geolocation.clearWatch(WATCH); WATCH = null; }
+  // GPS starts by itself only when the browser already has permission; otherwise the player taps "Turn on GPS" (so the permission question never appears unasked).
+  async function autoGps() {
+    if (!navigator.geolocation) { GERR = 'unsupported'; drawGps(); return; }
+    if (WANT) { startGps(); return; }
+    try { const s = await navigator.permissions.query({ name: 'geolocation' }); if (s.state === 'granted') startGps(true); else if (s.state === 'denied') { GERR = 'denied'; drawGps(); } } catch (e) {}
+  }
+  async function wantWake() { if (!('wakeLock' in navigator) || lsg('ggps-wake') === '0' || document.hidden || !C || WAKE) return; try { WAKE = await navigator.wakeLock.request('screen'); WAKE.addEventListener('release', () => { WAKE = null; const t = document.getElementById('waket'); if (t) t.textContent = 'Off.'; }); const t = document.getElementById('waket'); if (t) t.textContent = 'On while this page is open.'; } catch (e) { WAKE = null; } }
+  function releaseWake() { try { if (WAKE) WAKE.release(); } catch (e) {} WAKE = null; }
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { stopGps(); } else if (C && !$('#hv').hidden) { if (WANT) startGps(); wantWake(); } });
+
+  window.GolfGPSPage = { screenOf, pointAt, state: () => ({ course: C && C.id, hole: N, fix: FIX, rot: ROT, mode: MODE, meas: MEAS, watching: WATCH != null, wake: !!WAKE, holeUp: HOLEUP }) }; // read by the Playwright checks; nothing else uses it
+  route();
+})();
+</script>
+<script src="gate.js?v=264"></script>
+</body>
+</html>

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<!-- PGA v262 (part of Oddable; scores only from ESPN, no picks, no lines) -->
+<!-- PGA v264 (part of Oddable; scores only from ESPN, no picks, no lines) -->
 <script>try{if(localStorage.getItem('pics-theme')!=='violet')document.documentElement.classList.add('cb')}catch(e){document.documentElement.classList.add('cb')}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>PGA Tour · Oddable</title>
@@ -68,10 +68,10 @@ main{max-width:760px;margin:0 auto;padding:0 12px}
 </head>
 <body>
 <header>
-  <a class="home" href="index.html">‹ Oddable</a>
+  <a class="home" href="index.html">‹ Oddable</a> <a class="home" id="gpslink" href="golfgps.html" style="min-height:44px">📍 Golf GPS (your round)</a>
   <h1>⛳ PGA Tour</h1>
   <div class="sub">Live leaderboard. Scores only.</div>
-  <div class="mrow"><label><span>League</span><select id="lgsel" aria-label="League" autocomplete="off"><option value="nfl">🏈 NFL</option><option value="cfb">🎓 NCAA</option><option value="pga">⛳ PGA Tour</option><option value="pickleball">🏓 Pickleball</option><option value="nba">🏀 NBA</option><option value="mlb">⚾ MLB</option><option value="nhl">🏒 NHL</option><option value="ncaab">🏀 NCAAB</option></select></label><label><span>View</span><select id="vwsel" aria-label="View" autocomplete="off"><option value="week">This week</option><option value="sched">Schedule</option></select></label></div>
+  <div class="mrow"><label><span>League</span><select id="lgsel" aria-label="League" autocomplete="off"><option value="nfl">🏈 NFL</option><option value="cfb">🎓 NCAA</option><option value="pga">⛳ PGA Tour</option><option value="golfgps">📍 Golf GPS</option><option value="pickleball">🏓 Pickleball</option><option value="nba">🏀 NBA</option><option value="mlb">⚾ MLB</option><option value="nhl">🏒 NHL</option><option value="ncaab">🏀 NCAAB</option></select></label><label><span>View</span><select id="vwsel" aria-label="View" autocomplete="off"><option value="week">This week</option><option value="sched">Schedule</option></select></label></div>
 </header>
 <main>
   <div class="nomoney">Scores only. Oddable makes no golf picks.</div>
@@ -86,9 +86,9 @@ main{max-width:760px;margin:0 auto;padding:0 12px}
   </div>
   <div id="sch" hidden></div>
 </main>
-<div class="foot">Oddable v262 · PGA Tour · scores from ESPN · no picks, no betting lines</div>
+<div class="foot">Oddable v264 · PGA Tour · scores from ESPN · no picks, no betting lines</div>
 <script>try{if(localStorage.getItem('pics-dark')!=='0')document.body.classList.add('dark')}catch(e){document.body.classList.add('dark')}</script>
-<script src="pga.js?v=262"></script>
+<script src="pga.js?v=264"></script>
 <script>
 (function () {
   'use strict';
@@ -272,6 +272,7 @@ main{max-width:760px;margin:0 auto;padding:0 12px}
   function lgPick(s) {
     const v = s.value; s.value = 'pga'; if (v === 'pga') return;
     if (v === 'nfl' || v === 'cfb') { lss('pics-lg', v); location.href = './'; return; }
+    if (v === 'golfgps') { location.href = 'golfgps.html'; return; } // v264
     if (v === 'pickleball') { location.href = 'pickleball.html'; return; }
     if (!['nba', 'mlb', 'nhl', 'ncaab'].includes(v)) return;
     const go = () => { location.href = 'sports.html?lg=' + v; }; if (window.oddWarn) window.oddWarn(go); else go();
@@ -281,6 +282,6 @@ main{max-width:760px;margin:0 auto;padding:0 12px}
   render(); tick();
 })();
 </script>
-<script src="gate.js?v=262"></script>
+<script src="gate.js?v=264"></script>
 </body>
 </html>

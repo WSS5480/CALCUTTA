@@ -2,6 +2,14 @@
 
 Start here if you are a new AI session picking up this repo. Update this file in the same commit as every change.
 
+## OWNER INSTRUCTION (Nov 17, 9:04 AM CT): THIS SESSION DOES NOT BUILD THE CALCUTTA AUCTION OR GROUP PICKLEBALL
+- Steve: "Leave the Calcutta auction and group pickleball alone. Another session is building those two on live. Keep going on everything else."
+- So the manager session that shipped v270 to v273 must NOT touch: the live Calcutta auction (weekly NFL, PGA tournament / season Calcuttas, buy back half) and pickleball as a group game. Do not create auction files, do not edit pickleball group code, do not review or merge that other session's work unless Steve asks.
+- A v274 auction coder had been started at 8:57 AM and was STOPPED at 9:05 AM. Nothing of it was committed or pushed; its unfinished files were removed from the checkout (a copy sits in the session scratch folder `stopped-auction/`, not in the repo, and is not to be used unless Steve says so).
+- TWO SESSIONS NOW PUSH TO `main`. Before every push: `git fetch origin`, rebase or merge onto `origin/main`, re-run every test, run the static build command (DEPLOY RULE below), take the NEXT FREE version number after whatever is on `origin/main` (never reuse one), and keep both sessions' HANDOFF sections.
+- Still this session's work, in order: owner's Golf day follow-ups when he answers; Groups catalog / lifetime stats; Groups public (H1 / H2 / H4 decisions); PowerPoints + My Apps listings; the open owner to-dos.
+- Agents: Steve wants every build agent on Opus 5.5 (said Nov 17).
+
 ## DEPLOY RULE (Nov 17): NO FOLDERS INSIDE pics/
 - The static site `steves-pics` builds with `rm -rf dist && mkdir -p dist && cp -r public/data public/model.js dist/ && cp pics/* dist/` (set in Render, not in the repo). `cp pics/*` has no `-r`: any DIRECTORY inside `pics/` makes the build exit 1 and the deploy fail.
 - That happened from v264 (the vendored `pics/leaflet/` folder) through v271: every static deploy failed and the phones stayed on v263 while the server (ODDABLE) kept deploying. Fixed Nov 17 by moving Leaflet flat into `pics/` (`leaflet.js`, `leaflet.css`, `leaflet-LICENSE.txt`).

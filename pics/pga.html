@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- PGA v262 (part of Oddable; scores only from ESPN, no picks, no lines) -->
+<script>try{if(localStorage.getItem('pics-theme')!=='violet')document.documentElement.classList.add('cb')}catch(e){document.documentElement.classList.add('cb')}</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PGA Tour · Oddable</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#041e42">
+<style>
+:root{--bg:#f6f4fb;--panel:#fff;--panel2:#ece6fb;--line:#d9d0ee;--ink:#2b2b2b;--muted:#5d5873;--blue:#7c3aed;--green:#16915a;--red:#d93a2e;--gold:#b7791f}
+body.dark{--bg:#0a0c10;--panel:#13161d;--panel2:#1b1f29;--line:#272c38;--ink:#eef0f4;--muted:#8b93a3;--blue:#a78bfa;--green:#4fd18b;--red:#ff5a4d;--gold:#f5c542}
+html.cb body,html.cb body.dark{--bg:#050c17;--panel:#0b1a30;--panel2:#10264a;--line:#1f3d69;--ink:#f3f6fa;--muted:#9aabbf;--blue:#c6cbd7;--green:#4fd18b;--red:#ff5a4d;--gold:#f5c542}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:40px;overflow-wrap:anywhere}
+header{position:relative;margin:0 0 6px;padding:max(16px,env(safe-area-inset-top)) max(16px,calc((100% - 728px)/2)) 14px;background:linear-gradient(135deg,#7c3aed 0%,#4c1d95 55%,#1b1f29 100%);border-radius:0 0 26px 26px;color:#fff}
+html.cb header{background:linear-gradient(135deg,#003594 0%,#002b5c 38%,#041e42 74%,#08111f 100%);border-bottom:3px solid #869397}
+header h1{margin:6px 0 2px;font-size:28px;color:#fff}
+header .sub{color:#ede4ff;font-size:13px}html.cb header .sub{color:#c6cbd7}
+.home{display:inline-flex;align-items:center;min-height:40px;padding:6px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.12);color:#fff;text-decoration:none;font:700 14px system-ui}
+.mrow{display:flex;gap:8px;align-items:flex-end;margin:12px 0 2px;max-width:100%}.mrow label{flex:1 1 0;min-width:0;max-width:260px;display:block}.mrow label>span{display:block;font:700 10px/1 system-ui;letter-spacing:.12em;text-transform:uppercase;color:#fff;opacity:.78;margin:0 0 4px 3px}
+.mrow select{display:block;width:100%;min-height:44px;margin:0;padding:9px 10px;border:1px solid rgba(255,255,255,.55);border-radius:12px;background:rgba(0,0,0,.28);color:#fff;font:700 15px system-ui;cursor:pointer;text-overflow:ellipsis}.mrow select option{color:#111;background:#fff}html.cb .mrow select{background:rgba(4,30,66,.55);border-color:rgba(198,203,215,.5)}
+main{max-width:760px;margin:0 auto;padding:0 12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:8px 0}
+.card.err{border-color:var(--red)}.card.warn{border-color:var(--gold)}
+.card h2{margin:0 0 2px;font-size:20px;line-height:1.25;letter-spacing:-.01em}
+.tag{display:inline-block;font:800 11px/1 system-ui;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.sub2{color:var(--muted);font-size:13px;margin-top:3px}
+.stl{margin-top:8px;font-weight:800;font-size:16px}.stl .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--red);margin-right:7px;vertical-align:1px}
+.nomoney{margin:10px 0;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);font-size:13px}
+.updrow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:8px 0;color:var(--muted);font-size:13px}.updrow span{min-width:0}
+.pill{display:inline-flex;align-items:center;justify-content:center;text-align:center;min-height:44px;padding:8px 16px;border-radius:999px;border:1px solid var(--blue);background:var(--panel);color:var(--ink);font:700 14px system-ui;cursor:pointer;flex:none}
+.pill:disabled{opacity:.5;cursor:default}
+.sums{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:8px;margin:10px 0 0}
+.sum{display:block;position:relative;text-align:left;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:9px 22px 9px 11px;color:inherit;font:inherit;min-width:0;min-height:56px;cursor:pointer}
+.sum b{display:block;font-size:19px;line-height:1.2}.sum span{display:block;color:var(--muted);font-size:12px}.sum::after{content:'›';position:absolute;right:9px;top:6px;font-size:20px;opacity:.55}.sum:active{opacity:.75}
+.ctl{display:grid;grid-template-columns:minmax(0,150px) minmax(0,1fr);gap:8px;margin:12px 0 4px}.ctl label{display:block;font-weight:700;font-size:12px;color:var(--muted);min-width:0}
+.ctl select,.ctl input{display:block;width:100%;min-height:44px;margin-top:3px;padding:9px 10px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);font:500 16px system-ui}
+.bk{display:inline-flex;align-items:center;min-height:44px;padding:0 4px;background:none;border:0;color:var(--blue);font:700 15px system-ui;cursor:pointer}
+.gh{margin:16px 2px 4px;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}.gh small{display:block;text-transform:none;letter-spacing:0;font-weight:500;margin-top:2px}
+/* leaderboard: wrapped rows on one fixed column grid, so every header sits over its column (text left, numbers right) */
+.lh,.pr{display:grid;grid-template-columns:40px minmax(0,1fr);gap:6px;align-items:center}
+.lh>div,.pm{display:grid;grid-template-columns:34px minmax(0,1fr) 50px 42px 56px;gap:6px;align-items:center}
+.lh{padding:4px 9px 4px 3px;font:700 11px/1.2 system-ui;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}.lh .r{text-align:right}
+.pr{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:2px 8px 2px 2px;margin:5px 0}
+.pr.open{border-color:var(--blue);border-radius:12px 12px 0 0;margin-bottom:0}
+.star{width:40px;height:44px;border:0;background:none;color:var(--muted);font-size:21px;line-height:1;cursor:pointer;padding:0}.star.on{color:var(--gold)}
+.pm{min-height:44px;cursor:pointer;padding:5px 0}.pm:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:8px}
+.ps{font-weight:800;color:var(--muted)}.pn{font-weight:700;min-width:0;line-height:1.25}.pn small{display:block;font-weight:500;font-size:11px;color:var(--muted)}
+.tp{font-size:20px;font-weight:800;text-align:right}.tp.u{color:var(--green)}.tp.o{color:var(--muted)}
+.td,.th{text-align:right;font-variant-numeric:tabular-nums}.th.tee{font-size:11px;color:var(--muted)}
+.pd{background:var(--panel);border:1px solid var(--blue);border-top:0;border-radius:0 0 12px 12px;padding:10px 12px 12px;margin:0 0 5px}
+.rds{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.rds>div{background:var(--panel2);border-radius:10px;padding:7px 8px;text-align:right}.rds span{display:block;font:700 11px/1.2 system-ui;letter-spacing:.06em;color:var(--muted)}.rds b{display:block;font-size:19px;line-height:1.2}.rds small{display:block;font-size:12px;color:var(--muted)}
+.pd .pill{margin-top:10px;width:100%}
+@keyframes pgaflash{0%{background:rgba(245,197,66,.45)}100%{background:var(--panel)}}
+.pr.chg{animation:pgaflash 2.4s ease-out;border-color:var(--gold)}
+@media (prefers-reduced-motion:reduce){.pr.chg{animation:none}}
+.se{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;align-items:center}.se b{font-size:16px;min-width:0}.se .b{font-size:12px;font-weight:700;padding:3px 8px;border-radius:999px;border:1px solid var(--line);white-space:nowrap;color:var(--muted)}.se .b.now{color:var(--green);border-color:var(--green)}.se small{grid-column:1/-1;color:var(--muted);font-size:13px}
+.card.now{border-color:var(--green);border-width:2px}button.card{display:block;width:100%;text-align:left;color:inherit;font:inherit;cursor:pointer}
+.note{color:var(--muted);font-size:13px;margin:8px 2px}
+.foot{color:var(--muted);font-size:12px;margin:24px 0 8px;text-align:center}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <a class="home" href="index.html">‹ Oddable</a>
+  <h1>⛳ PGA Tour</h1>
+  <div class="sub">Live leaderboard. Scores only.</div>
+  <div class="mrow"><label><span>League</span><select id="lgsel" aria-label="League" autocomplete="off"><option value="nfl">🏈 NFL</option><option value="cfb">🎓 NCAA</option><option value="pga">⛳ PGA Tour</option><option value="pickleball">🏓 Pickleball</option><option value="nba">🏀 NBA</option><option value="mlb">⚾ MLB</option><option value="nhl">🏒 NHL</option><option value="ncaab">🏀 NCAAB</option></select></label><label><span>View</span><select id="vwsel" aria-label="View" autocomplete="off"><option value="week">This week</option><option value="sched">Schedule</option></select></label></div>
+</header>
+<main>
+  <div class="nomoney">Scores only. Oddable makes no golf picks.</div>
+  <div class="updrow"><span id="updt" aria-live="polite">Loading scores from ESPN…</span><button class="pill" id="rf" type="button">↻ Refresh</button></div>
+  <div id="warn"></div>
+  <div id="week">
+    <div id="hd"></div>
+    <div class="ctl" id="ctl" hidden><label>Show<select id="flt" autocomplete="off"><option value="all">All players</option><option value="top">Top 10</option><option value="cut">Made cut</option><option value="my">My players</option></select></label><label>Find a player<input id="q" type="search" placeholder="Name" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"></label></div>
+    <button class="bk" id="bk" type="button" hidden>‹ Back to all players</button>
+    <div id="lb"></div>
+    <div id="last"></div>
+  </div>
+  <div id="sch" hidden></div>
+</main>
+<div class="foot">Oddable v262 · PGA Tour · scores from ESPN · no picks, no betting lines</div>
+<script>try{if(localStorage.getItem('pics-dark')!=='0')document.body.classList.add('dark')}catch(e){document.body.classList.add('dark')}</script>
+<script src="pga.js?v=262"></script>
+<script>
+(function () {
+  'use strict';
+  const P = window.PGA, $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const lsg = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const lss = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+  const setH = (el, h) => { if (el && el.__h !== h) { el.innerHTML = h; el.__h = h; } };
+  const LIVE_MS = 60000, IDLE_MS = 600000;
+  let D = null, ERR = '', ERRAT = 0, BUSY = false, VIEW = 'week', FILT = 'all', Q = '', OPEN = '', LAST = null, LASTST = '', LASTALL = false, FLASH = {}, TRIED = 0, T = null, FT = null;
+  let STARS = {}; try { (JSON.parse(lsg('pga-stars')) || []).forEach((id) => { STARS[String(id)] = 1; }); } catch (e) {}
+
+  // ---- dates. Event days are read in US Eastern time (ESPN stamps the day at midnight Eastern/Pacific); tee times show in the phone's own time. ----
+  const ET = (ms, o) => { try { return new Intl.DateTimeFormat('en-US', Object.assign({ timeZone: 'America/New_York' }, o)).format(new Date(ms)); } catch (e) { return new Date(ms).toDateString(); } };
+  const tm = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const wd = (ms) => new Date(ms).toLocaleDateString([], { weekday: 'short' });
+  const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
+  function range(s, e) {
+    if (s == null) return ''; const y = ET(e != null ? e - 60000 : s, { year: 'numeric' });
+    if (e == null || e - 60000 <= s) return ET(s, { month: 'short', day: 'numeric' }) + ', ' + y;
+    const a = ET(s, { month: 'short', day: 'numeric' }), bm = ET(e - 60000, { month: 'short' }), bd = ET(e - 60000, { day: 'numeric' });
+    return a + ' – ' + (bm === ET(s, { month: 'short' }) ? bd : bm + ' ' + bd) + ', ' + y;
+  }
+  const stamp = (ms) => (sameDay(ms, Date.now()) ? '' : new Date(ms).toLocaleDateString([], { month: 'short', day: 'numeric' }) + ', ') + tm(ms);
+  const isLive = () => !!(D && D.event && D.event.status === 'in');
+
+  function statusLine(e) {
+    const r = e.round ? 'Round ' + e.round : '';
+    if (e.status === 'final') return 'Final' + (e.playoff ? ' · decided in a playoff' : '');
+    if (e.status === 'canceled') return 'Canceled or postponed';
+    if (e.status === 'suspended') return (r ? r + ' suspended' : 'Play suspended');
+    if (e.status === 'in') return '<span class="dot"></span>' + (r || 'Play') + (/complete/i.test(e.statusText) ? ' complete' : ' in progress');
+    if (e.firstTee) return 'Starts ' + wd(e.firstTee) + ' ' + tm(e.firstTee) + ' <small style="font-weight:500;color:var(--muted)">your time</small>';
+    if (e.dates.start != null) return 'Starts ' + ET(e.dates.start, { weekday: 'short', month: 'short', day: 'numeric' });
+    return 'Not started';
+  }
+  function headHtml(d) {
+    const e = d.event, ps = d.players, act = ps.filter((p) => p.status === 'active'), out = ps.filter((p) => p.status === 'cut').length, lead = act.find((p) => p.toPar != null);
+    const tag = e.status === 'final' ? 'Last event' : e.status === 'pre' ? 'Next event' : 'This week';
+    let h = '<div class="card" id="evc"><span class="tag">' + tag + '</span><h2>' + esc(e.name) + '</h2>';
+    const where = [e.course, e.location].filter(Boolean).join(' · '); if (where) h += '<div class="sub2">' + esc(where) + '</div>';
+    const dr = range(e.dates.start, e.dates.end); if (dr) h += '<div class="sub2">' + esc(dr) + (e.purse ? ' · Purse $' + Math.round(e.purse).toLocaleString('en-US') : '') + '</div>';
+    h += '<div class="stl">' + statusLine(e) + '</div>';
+    if (e.cutLine != null) h += '<div class="sub2">Cut line ' + P.fmtPar(e.cutLine) + (e.cutLineSrc === 'field' ? ' <small>(worked out from the rounds played; ESPN does not send it)</small>' : '') + '</div>';
+    let s = '';
+    if (lead) s += '<button class="sum" type="button" data-dr="lead" data-id="' + esc(lead.id) + '"><b>' + P.fmtPar(lead.toPar) + '</b><span>' + (e.status === 'final' ? 'Winner' : act.filter((p) => p.toPar === lead.toPar).length > 1 ? 'Co-leader' : 'Leader') + ': ' + esc(lead.short || lead.name) + '</span></button>';
+    if (out) s += '<button class="sum" type="button" data-dr="cut"><b>' + act.length + '</b><span>Played the weekend</span></button>';
+    if (ps.length) s += '<button class="sum" type="button" data-dr="all"><b>' + ps.length + '</b><span>Players</span></button>';
+    if (s) h += '<div class="sums">' + s + '</div>';
+    h += '</div>';
+    if (e.status === 'final' || e.status === 'canceled') { const nx = (d.schedule || []).find((x) => x.state === 'next'); h += '<div class="card"><span class="tag">Next event</span>' + (nx ? '<h2>' + esc(nx.name) + '</h2><div class="sub2">' + esc(range(nx.start, nx.end)) + '</div>' + (nx.start != null ? '<div class="stl">Starts ' + ET(nx.start, { weekday: 'short', month: 'short', day: 'numeric' }) + '</div>' : '') : '<div class="sub2">No later event on ESPN\'s calendar yet.</div>') + '</div>'; }
+    return h;
+  }
+  function thruCell(p) {
+    if (p.thru) return '<span class="th">' + esc(p.thru) + '</span>';
+    if (p.teeTime && p.status === 'active') return '<span class="th tee">' + (sameDay(p.teeTime, Date.now()) ? '' : wd(p.teeTime) + ' ') + tm(p.teeTime) + '</span>';
+    return '<span class="th">–</span>';
+  }
+  const STXT = { cut: 'Did not play the weekend', wd: 'Withdrew', dq: 'Disqualified', ns: 'No score posted' };
+  function rowHtml(p, sec, ev) {
+    const k = sec + ':' + p.id, open = OPEN === k, on = !!STARS[p.id];
+    const tag = p.status === 'active' ? p.country : (p.statusSrc === 'feed' ? { cut: 'Missed the cut', wd: 'Withdrew', dq: 'Disqualified' }[p.status] : STXT[p.status]) || '';
+    let h = '<div class="pr' + (open ? ' open' : '') + (FLASH[p.id] ? ' chg' : '') + '" data-pid="' + esc(p.id) + '"><button type="button" class="star' + (on ? ' on' : '') + '" data-star="' + esc(p.id) + '" aria-pressed="' + on + '" aria-label="' + (on ? 'Stop following ' : 'Follow ') + esc(p.name) + '">' + (on ? '★' : '☆') + '</button>' +
+      '<div class="pm" role="button" tabindex="0" aria-expanded="' + open + '" data-open="' + esc(k) + '"><span class="ps">' + esc(p.pos || '–') + '</span><span class="pn">' + esc(p.name) + (tag ? '<small>' + esc(tag) + '</small>' : '') + '</span>' +
+      '<b class="tp' + (p.toPar == null ? '' : p.toPar < 0 ? ' u' : p.toPar > 0 ? ' o' : '') + '">' + (p.toPar == null ? '–' : P.fmtPar(p.toPar)) + '</b><span class="td">' + (p.today == null ? '–' : P.fmtPar(p.today)) + '</span>' + thruCell(p) + '</div></div>';
+    if (open) {
+      let r = '';
+      for (let i = 1; i <= 4; i++) { const x = p.rounds.find((y) => y.n === i); r += '<div><span>R' + i + '</span><b>' + (x && x.strokes != null ? x.strokes : '–') + '</b><small>' + (x ? (x.toPar != null ? P.fmtPar(x.toPar) : '') + (x.complete ? '' : x.holes ? ' thru ' + x.holes : ' in play') : (ev && ev.status === 'final') || p.status !== 'active' ? 'no round' : 'not yet') + '</small></div>'; }
+      let s = p.status !== 'active' ? (p.statusSrc === 'feed' ? { cut: 'Missed the cut.', wd: 'Withdrew.', dq: 'Disqualified.' }[p.status] : p.status === 'cut' ? 'Did not play the weekend. ESPN\'s feed has no cut flag, so this is worked out from the rounds played.' : 'No score posted.')
+        : ev && ev.status === 'final' ? 'Finished' + (p.pos ? ' ' + esc(p.pos) : '') + '.' : p.thru === 'F' ? 'Round ' + ev.round + ' finished.' : p.thru ? 'Playing round ' + ev.round + ', through ' + esc(p.thru) + '.' : p.teeTime ? 'Tees off ' + wd(p.teeTime) + ' ' + tm(p.teeTime) + ' (your time).' : ev && ev.status === 'pre' ? 'Not started.' : 'Waiting to tee off.';
+      if (p.playoff) s += ' Played in the playoff.';
+      h += '<div class="pd" data-pd="' + esc(k) + '"><div class="rds">' + r + '</div><div class="sub2">' + s + (p.total != null ? ' Total strokes: ' + p.total + '.' : '') + (p.country ? ' ' + esc(p.country) + '.' : '') + '</div><button type="button" class="pill" data-close="1">▲ Close ' + esc(p.short || p.name) + '</button></div>';
+    }
+    return h;
+  }
+  const LH = '<div class="lh" aria-hidden="true"><span></span><div><span>Pos</span><span>Player</span><span class="r">To par</span><span class="r">Today</span><span class="r">Thru</span></div></div>';
+  function boardHtml(d) {
+    const e = d.event, q = Q.trim().toLowerCase(); let ps = d.players;
+    if (q) ps = ps.filter((p) => p.name.toLowerCase().includes(q));
+    if (FILT === 'my') ps = ps.filter((p) => STARS[p.id]);
+    else if (FILT === 'cut') ps = ps.filter((p) => p.status === 'active');
+    else if (FILT === 'top') { const a = ps.filter((p) => p.status === 'active' && p.pos); ps = a.filter((p) => parseInt(p.pos.replace(/\D/g, ''), 10) <= 10); if (!a.length) ps = d.players.filter((p) => p.status === 'active').slice(0, 10).filter((p) => !q || p.name.toLowerCase().includes(q)); }
+    if (!d.players.length) return '<div class="card"><b>No players listed yet.</b><div class="sub2">ESPN has not posted the field for this event.</div></div>';
+    if (!ps.length) return '<div class="card"><b>' + (FILT === 'my' && !q ? 'You are not following anyone yet.' : 'No players match.') + '</b><div class="sub2">' + (FILT === 'my' && !q ? 'Tap the ☆ next to a player to follow him. Your players are kept on this phone.' : 'Change the search or the Show menu.') + '</div></div>';
+    let h = '';
+    const mine = FILT === 'all' && !q ? ps.filter((p) => STARS[p.id]) : [];
+    if (mine.length) h += '<div class="gh">⭐ My players</div>' + LH + mine.map((p) => rowHtml(p, 'm', e)).join('');
+    const act = ps.filter((p) => p.status === 'active'), out = ps.filter((p) => p.status !== 'active');
+    if (act.length) h += '<div class="gh">' + (e.status === 'pre' ? 'Field' : e.status === 'final' ? 'Final leaderboard' : 'Leaderboard') + (FILT === 'top' ? ' · top 10' : FILT === 'my' ? ' · my players' : '') + '</div>' + LH + act.map((p) => rowHtml(p, 'a', e)).join('');
+    if (out.length) { const fed = out.some((p) => p.statusSrc === 'feed'); h += '<div class="gh">' + (fed ? 'Missed the cut / withdrew' : out.every((p) => p.status === 'ns') ? 'No score posted' : 'Did not play the weekend') + (fed ? '' : '<small>ESPN\'s feed does not flag the cut or withdrawals. These players have no weekend round.</small>') + '</div>' + LH + out.map((p) => rowHtml(p, 'o', e)).join(''); }
+    return h;
+  }
+  function lastHtml() {
+    if (!D || !D.event || D.event.status !== 'pre') return '';
+    if (LASTST === 'load') return '<div class="gh">Last event</div><div class="note">Loading the last event\'s final leaderboard…</div>';
+    if (LASTST === 'none') return '';
+    if (LASTST === 'fail' || !LAST) return '<div class="gh">Last event</div><div class="card"><b>The last event\'s leaderboard did not load.</b><div class="sub2">ESPN did not answer for it. This week\'s event above is not affected.</div><button type="button" class="pill" id="lastgo" style="margin-top:10px">Try again</button></div>';
+    const e = LAST.event, act = LAST.players.filter((p) => p.status === 'active'), show = LASTALL ? LAST.players : act.slice(0, 10);
+    const out = show.filter((p) => p.status !== 'active');
+    return '<div class="gh">Last event · ' + (e.status === 'final' ? 'final leaderboard' : 'leaderboard') + '<small>' + esc(e.name) + (range(e.dates.start, e.dates.end) ? ' · ' + esc(range(e.dates.start, e.dates.end)) : '') + '</small></div>' + LH + show.filter((p) => p.status === 'active').map((p) => rowHtml(p, 'l', e)).join('') +
+      (out.length ? '<div class="gh">Did not play the weekend</div>' + out.map((p) => rowHtml(p, 'l', e)).join('') : '') +
+      (LAST.players.length > 10 ? '<button type="button" class="pill" id="lastall" style="width:100%;margin-top:6px">' + (LASTALL ? '▲ Show the top 10 only' : 'Show all ' + LAST.players.length + ' players') + '</button>' : '');
+  }
+  function schedHtml() {
+    const s = (D && D.schedule) || [];
+    if (!s.length) return '<div class="card"><b>No schedule on ESPN\'s feed right now.</b></div>';
+    const cur = D.event && D.event.id;
+    return '<div class="note">Season schedule from ESPN\'s calendar: names and dates. ESPN\'s feed does not list past winners.</div>' + s.map((x) => {
+      const mine = cur && x.id === cur, lab = x.state === 'done' ? 'Finished' : x.state === 'now' ? 'This week' : 'Upcoming';
+      const inner = '<div class="se"><b>' + esc(x.name) + '</b><span class="b' + (x.state === 'now' ? ' now' : '') + '">' + lab + '</span><small>' + esc(range(x.start, x.end)) + (mine ? ' · tap for the leaderboard' : '') + '</small></div>';
+      return mine ? '<button type="button" class="card' + (x.state === 'now' ? ' now' : '') + '" data-week="1" id="schcur">' + inner + '</button>' : '<div class="card' + (x.state === 'now' ? ' now' : '') + '"' + (x.state === 'now' ? ' id="schcur"' : '') + '>' + inner + '</div>';
+    }).join('');
+  }
+  function render() {
+    const up = $('#updt'), rf = $('#rf'); rf.disabled = BUSY; rf.textContent = BUSY ? 'Checking…' : '↻ Refresh';
+    if (D) up.textContent = 'Updated ' + stamp(D.at) + ' · Scores from ESPN' + (ERR ? '' : isLive() ? ' · checks every minute' : ' · checks every 10 minutes');
+    else up.textContent = BUSY ? 'Loading scores from ESPN…' : 'Scores from ESPN';
+    let w = '';
+    if (ERR && D) w = '<div class="card warn"><b>ESPN did not answer at ' + esc(tm(ERRAT)) + '.</b><div class="sub2">Showing the last scores read, from ' + esc(stamp(D.at)) + '. They may be out of date.</div><button type="button" class="pill" data-retry="1" style="margin-top:10px"' + (BUSY ? ' disabled' : '') + '>' + (BUSY ? 'Trying…' : 'Try again') + '</button></div>';
+    else if (ERR) w = '<div class="card err"><b>Could not load PGA Tour scores.</b><div class="sub2">ESPN did not answer. No scores are shown rather than guessed.</div><button type="button" class="pill" data-retry="1" style="margin-top:10px"' + (BUSY ? ' disabled' : '') + '>' + (BUSY ? 'Trying…' : 'Try again') + '</button></div>';
+    setH($('#warn'), w);
+    $('#week').hidden = VIEW !== 'week'; $('#sch').hidden = VIEW !== 'sched'; $('#vwsel').value = VIEW;
+    if (VIEW === 'sched') { setH($('#sch'), D ? schedHtml() : ERR ? '' : '<div class="note">Loading…</div>'); return; }
+    const has = !!(D && D.event);
+    $('#ctl').hidden = !has || !D.players.length; $('#flt').value = FILT; $('#bk').hidden = !has || (FILT === 'all' && !Q.trim());
+    if (!D) { setH($('#hd'), ERR ? '' : '<div class="card"><b>Loading the leaderboard…</b><div class="sub2">Reading this week\'s event from ESPN.</div></div>'); setH($('#lb'), ''); setH($('#last'), ''); return; }
+    if (!D.event) { setH($('#hd'), '<div class="card"><b>No PGA Tour event on ESPN\'s feed right now.</b><div class="sub2">Check the Schedule in the View menu for what is next.</div></div>'); setH($('#lb'), ''); setH($('#last'), ''); return; }
+    setH($('#hd'), headHtml(D)); setH($('#lb'), boardHtml(D)); setH($('#last'), lastHtml());
+  }
+
+  // ---- loading and live updates: every minute only while this page is showing AND play is in progress; every 10 minutes otherwise; nothing while hidden ----
+  function plan() { clearTimeout(T); T = null; if (document.hidden) return; const every = isLive() ? LIVE_MS : IDLE_MS; T = setTimeout(tick, Math.max(1000, TRIED + every - Date.now())); }
+  async function tick() {
+    if (BUSY) return; BUSY = true; TRIED = Date.now(); render();
+    const old = {}; if (D) D.players.forEach((p) => { old[p.id] = p.pos + '|' + p.toPar; });
+    const hadEv = D && D.event && D.event.id;
+    try {
+      const d = await P.load(); ERR = '';
+      if (hadEv && d.event && d.event.id === hadEv) d.players.forEach((p) => { if (old[p.id] != null && old[p.id] !== p.pos + '|' + p.toPar) FLASH[p.id] = 1; });
+      D = d;
+      if (Object.keys(FLASH).length) { clearTimeout(FT); FT = setTimeout(() => { FLASH = {}; document.querySelectorAll('.pr.chg').forEach((x) => x.classList.remove('chg')); const lb = $('#lb'); if (lb) lb.__h = null; }, 3000); }
+    } catch (e) { ERR = String((e && e.message) || e); ERRAT = Date.now(); if (!D) D = P.current(); }
+    BUSY = false; render(); plan(); lastLoad();
+  }
+  // Between tournaments (this week's event has not started): the last finished event's final leaderboard, read once. One attempt; "Try again" makes one more.
+  async function lastLoad(force) {
+    if (!D || !D.event || D.event.status !== 'pre' || (LASTST && !force) || LASTST === 'load') return;
+    const prev = (D.schedule || []).filter((x) => x.state === 'done' && x.start != null && x.id && x.id !== D.event.id).pop();
+    if (!prev) { LASTST = 'none'; return; }
+    LASTST = 'load'; render();
+    try { LAST = await P.loadEvent(prev.id, prev.start); LASTST = LAST.players.length ? 'ok' : 'fail'; } catch (e) { LASTST = 'fail'; }
+    render();
+  }
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { clearTimeout(T); T = null; return; } if (Date.now() - TRIED >= (isLive() ? LIVE_MS : IDLE_MS)) tick(); else plan(); });
+
+  // ---- taps ----
+  function toggle(k) { OPEN = OPEN === k ? '' : k; render(); }
+  document.addEventListener('click', (ev) => {
+    const t = ev.target; let b;
+    if ((b = t.closest('[data-star]'))) { const id = b.dataset.star; if (STARS[id]) delete STARS[id]; else STARS[id] = 1; lss('pga-stars', JSON.stringify(Object.keys(STARS))); render(); return; }
+    if ((b = t.closest('[data-close]'))) { const k = OPEN; OPEN = ''; render(); const r = document.querySelector('[data-open="' + (window.CSS && CSS.escape ? CSS.escape(k) : k) + '"]'); if (r) r.focus({ preventScroll: true }); return; }
+    if ((b = t.closest('[data-open]'))) { toggle(b.dataset.open); return; }
+    if ((b = t.closest('[data-retry]')) || (b = t.closest('#rf'))) { tick(); return; }
+    if ((b = t.closest('[data-dr]'))) {
+      const k = b.dataset.dr; Q = ''; $('#q').value = '';
+      if (k === 'cut') { FILT = 'cut'; OPEN = ''; render(); $('#ctl').scrollIntoView({ block: 'start' }); return; }
+      if (k === 'all') { FILT = 'all'; OPEN = ''; render(); $('#ctl').scrollIntoView({ block: 'start' }); return; }
+      FILT = 'all'; OPEN = 'a:' + b.dataset.id; render(); const r = document.querySelector('#lb [data-open="' + (window.CSS && CSS.escape ? CSS.escape(OPEN) : OPEN) + '"]'); if (r) r.scrollIntoView({ block: 'center' }); return;
+    }
+    if (t.closest('#bk')) { FILT = 'all'; Q = ''; $('#q').value = ''; OPEN = ''; render(); return; }
+    if (t.closest('#lastall')) { LASTALL = !LASTALL; render(); return; }
+    if (t.closest('#lastgo')) { lastLoad(true); return; }
+    if (t.closest('[data-week]')) { VIEW = 'week'; render(); window.scrollTo(0, 0); return; }
+  });
+  document.addEventListener('keydown', (ev) => { const b = ev.target.closest && ev.target.closest('[data-open]'); if (b && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); const k = b.dataset.open; toggle(k); const r = document.querySelector('[data-open="' + (window.CSS && CSS.escape ? CSS.escape(k) : k) + '"]'); if (r) r.focus({ preventScroll: true }); } });
+  $('#flt').addEventListener('change', (e) => { FILT = e.target.value; OPEN = ''; render(); });
+  $('#q').addEventListener('input', (e) => { Q = e.target.value; OPEN = ''; render(); });
+  $('#vwsel').addEventListener('change', (e) => { VIEW = e.target.value === 'sched' ? 'sched' : 'week'; render(); if (VIEW === 'sched') { const c = $('#schcur') || document.querySelector('#sch .card'); const nx = $('#schcur') || [...document.querySelectorAll('#sch .card')].find((x) => /Upcoming/.test(x.textContent)); if (nx || c) (nx || c).scrollIntoView({ block: 'center' }); } });
+
+  // League menu (same list and behaviour as index.html / sports.html). The menu always shows PGA Tour on this page.
+  function lgPick(s) {
+    const v = s.value; s.value = 'pga'; if (v === 'pga') return;
+    if (v === 'nfl' || v === 'cfb') { lss('pics-lg', v); location.href = './'; return; }
+    if (v === 'pickleball') { location.href = 'pickleball.html'; return; }
+    if (!['nba', 'mlb', 'nhl', 'ncaab'].includes(v)) return;
+    const go = () => { location.href = 'sports.html?lg=' + v; }; if (window.oddWarn) window.oddWarn(go); else go();
+  }
+  { const s = $('#lgsel'); s.value = 'pga'; s.addEventListener('change', () => lgPick(s)); window.addEventListener('pageshow', () => { s.value = 'pga'; }); }
+
+  render(); tick();
+})();
+</script>
+<script src="gate.js?v=262"></script>
+</body>
+</html>

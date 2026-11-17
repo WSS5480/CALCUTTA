@@ -211,7 +211,9 @@
      "mode": "pro",
      "status": "soon",
      "results": "scorer",
-     "name": "Pro tour pick'em (PPA, MLP)"
+     "name": "Pro tour pick'em (PPA, MLP)",
+     "line": "Pick the winner of each pro pickleball match (PPA Tour, Major League Pickleball).",
+     "info": "For each pro pickleball match on the card (PPA Tour tournaments, Major League Pickleball team matches), members pick the winner before the match starts. Picks lock when each match starts. Every right pick scores a point; most points wins."
     }
    ],
    "feedNote": "No public feed: scores are entered on court."

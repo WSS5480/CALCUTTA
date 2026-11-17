@@ -73,6 +73,7 @@
   const qAdd = (b) => { const q = Q().filter((x) => !(x.b.id === b.id && x.b.m === b.m)); q.push({ b, at: Date.now() }); Qset(q); };
   const qDrop = (id, mid) => { const q = Q(), k = q.filter((x) => !(x.b.id === id && x.b.m === mid)); if (k.length !== q.length) Qset(k); };
   const QMSG = 'No connection: the score is saved on this phone and will be sent.';
+  const qOf = (e, m) => (m.state === 'ready' || m.state === 'disputed' ? Q().find((x) => x.b.id === e.id && x.b.m === m.id && !x.fail) : null); // L3: a score still on this phone for this match
   let FLUSHING = false;
   async function flush() { const q = Q(); if (!q.length || !navigator.onLine || FLUSHING) return; FLUSHING = true; const keep = []; let sent = 0, ev = null;
     try { for (const it of q) { if (it.fail) { keep.push(it); continue; } try { const j = await post('score', it.b); ev = j.event || ev; sent++; } catch (e) { if (netErr(e)) { keep.push(it); continue; } let cur0 = null; try { cur0 = (await post('get', { id: it.b.id })).event; } catch (x) {} if (already(cur0, it)) { sent++; ev = cur0; continue; } keep.push(Object.assign(it, { fail: 'A saved score was not accepted: ' + errText(e) })); } }
@@ -204,10 +205,11 @@
     return h;
   }
   function matchCard(e, m) {
-    const pill = '<span class="epill' + (m.state === 'confirmed' ? ' eok' : m.state === 'disputed' ? ' ebad' : m.state === 'pending' || m.state === 'offered' ? ' ewait' : '') + '">' + esc(m.state === 'ready' && m.live ? 'Playing' : stateTxt[m.state] || m.state) + '</span>';
+    let pill = '<span class="epill' + (m.state === 'confirmed' ? ' eok' : m.state === 'disputed' ? ' ebad' : m.state === 'pending' || m.state === 'offered' ? ' ewait' : '') + '">' + esc(m.state === 'ready' && m.live ? 'Playing' : stateTxt[m.state] || m.state) + '</span>';
     const where = (m.court ? 'Court ' + m.court + (m.wave > 1 ? ', wave ' + m.wave : '') : '') + (m.exp && m.state === 'ready' ? (m.court ? ' · ' : '') + 'play by ' + fmtTime(m.exp) : '');
     const nm = (x, side) => '<span class="' + (m.win === side ? 'ewin' : '') + '">' + esc(x || 'To be decided') + (m.mine === side ? ' <i class="emut">· you</i>' : '') + '</span>';
     let sc = m.state === 'confirmed' ? (m.forfeit ? 'Forfeit' : scoreTxt(m)) : m.sub && (m.state === 'pending' || m.state === 'disputed') ? scoreTxt(m, m.sub.games) + ' (entered)' : '';
+    const wq = qOf(e, m); if (wq) { pill = '<span class="epill ewait">Waiting to send</span>'; sc = scoreTxt(m, wq.b.games); } // L3
     return '<button class="ematch' + (m.mine ? ' mine' : '') + (m.mine && m.state === 'confirmed' ? (m.win === m.mine ? ' hit' : ' miss') : '') + (m.canConfirm || m.needsComm ? ' act' : '') + '" data-a="match" data-m="' + att(m.id) + '"><span class="emw"><small>' + esc(label(m) + (where ? ' · ' + where : '')) + '</small>' + nm(m.an, 'a') + nm(m.bn, 'b') + '</span><span class="er">' + pill + (sc ? '<b>' + esc(sc) + '</b>' : '') + '</span></button>';
   }
   const label = (m) => (m.st === 'pool' ? 'Round ' + m.r : m.st === 'po' ? 'Playoff round ' + m.r : m.st === 'w' ? 'Round ' + m.r : m.st === 'l' ? 'Losers round ' + m.r : m.st === 'gf' ? (m.reset ? 'Final (reset)' : 'Final') : m.st === 'lad' ? 'Ladder challenge' : m.st === 'side' ? 'Side match' : m.st === 'tb' ? 'Tiebreak playoff' : 'Heads-up');
@@ -309,11 +311,12 @@
   function voiceBtn(kind) { return window.VoiceLog && typeof window.VoiceLog.open === 'function' ? '<button class="evoice efull" data-a="voice" data-k="' + kind + '">🎤 Log my score</button>' : ''; }
   function matchV() {
     const s = cur(), e = s.ev, m = e && e.matches.find((x) => x.id === s.m); if (!m) return '<div class="ecard">Match not found.</div>';
-    const r = m.rule ? Object.assign({}, e.rules, m.rule, { tset: false }) : e.rules, n = r.bestOf, g = s.g || (m.sub && m.state !== 'ready' ? m.sub.games : null) || [];
+    const wq = qOf(e, m), r = m.rule ? Object.assign({}, e.rules, m.rule, { tset: false }) : e.rules, n = r.bestOf, g = s.g || (wq ? wq.b.games : null) || (m.sub && m.state !== 'ready' ? m.sub.games : null) || [];
     let h = '<h1>' + esc(m.an || 'TBD') + ' v ' + esc(m.bn || 'TBD') + '</h1><div class="emeta">' + esc(label(m) + (m.court ? ' · Court ' + m.court : '') + ' · ' + gameRule(r, e.sport)) + '</div>';
     if (m.rule) h += '<div class="enote">Bracket reset: both sides have one loss, so this final is one game to ' + m.rule.to + ', win by ' + m.rule.winBy + ' (pickleball rulebook).</div>';
-    h += '<div class="ecard"><div class="erow"><b>' + esc(stateTxt[m.state] || m.state) + '</b>' + (m.state === 'confirmed' ? '<b>' + esc(m.forfeit ? 'Forfeit' : scoreTxt(m)) + '</b>' : '') + '</div>';
+    h += '<div class="ecard"><div class="erow"><b' + (wq ? ' class="eyel"' : '') + '>' + esc(wq ? 'Waiting to send: ' + scoreTxt(m, wq.b.games) : stateTxt[m.state] || m.state) + '</b>' + (m.state === 'confirmed' ? '<b>' + esc(m.forfeit ? 'Forfeit' : scoreTxt(m)) + '</b>' : '') + '</div>';
     if (m.sub && m.state !== 'ready') h += '<div class="enote">Entered by ' + esc(m.sub.by) + ': ' + esc(scoreTxt(m, m.sub.games)) + (m.sub.note ? ' · Dispute: ' + esc(m.sub.note) : '') + '</div>';
+    if (wq) h += '<div class="enote">Saved on this phone. It is sent as soon as the phone is back online. Saving again replaces it.</div>'; // L3
     if (m.needsComm) h += '<div class="eyel">' + (m.state === 'disputed' ? 'Disputed. The commissioner enters the right score.' : 'The other side has no account here, so the commissioner confirms.') + '</div>';
     h += '</div>';
     if (m.state === 'offered' && (m.mine === 'b' || e.role === 'comm')) h += '<div class="e2"><button class="epri" data-a="accept">Accept</button><button class="esec" data-a="decline">Decline</button></div>';
@@ -381,10 +384,10 @@
     h += '<div class="echips">' + CAT.sports.map((x) => '<button class="esec' + (x.key === sp.key ? ' on' : '') + '" aria-pressed="' + (x.key === sp.key) + '" data-csp="' + att(x.key) + '">' + esc(x.name) + (x.key === 'pickleball' ? '' : ' <small>Coming soon</small>') + '</button>').join('') + '</div>';
     h += '<div class="enote">' + esc(sp.leagues) + ' · ' + esc(CAT.results[sp.feed]) + (sp.feedNote ? '. ' + esc(sp.feedNote) : '') + '</div><div class="egrid">';
     sp.games.forEach((g, i) => { const nm = g.name || CAT.games[g.key].name;
-      h += '<button class="ecard ebtn' + (g.gold ? ' egoldc' : g.status !== 'now' ? ' esoon' : '') + '" data-cg="' + i + '"><div class="erow"><b class="ename">' + esc(nm) + '</b><span class="ebadge ' + (g.status === 'now' ? 'eg' : 'ey') + '">' + esc(CAT.status[g.status]) + '</span></div><div class="emut">' + esc(CAT.games[g.key].line) + '</div><div class="eyel">How it works ›</div></button>'; });
+      h += '<button class="ecard ebtn' + (g.gold ? ' egoldc' : g.status !== 'now' ? ' esoon' : '') + '" data-cg="' + i + '"><div class="erow"><b class="ename">' + esc(nm) + '</b><span class="ebadge ' + (g.status === 'now' ? 'eg' : 'ey') + '">' + esc(CAT.status[g.status]) + '</span></div><div class="emut">' + esc(g.line || CAT.games[g.key].line) + '</div><div class="eyel">How it works ›</div></button>'; });
     return h + '</div><p class="enote">' + esc(CAT.potLine) + '</p><p class="enote">' + esc(CAT.capLine) + '</p>';
   }
-  function catInfo(g, sport) { const base = CAT.games[g.key], k = CAT.localInfoKey[g.key]; let t = base.info || (k ? infoFor(k, sport) : '') || base.line; if (g.key === 'elim') t = infoFor('se', sport) + ' Double elimination: ' + infoFor('de', sport); return t + (g.note ? ' ' + g.note : ''); }
+  function catInfo(g, sport) { const base = CAT.games[g.key], k = CAT.localInfoKey[g.key]; let t = g.info || base.info || (k ? infoFor(k, sport) : '') || g.line || base.line; /* L2: a sport's own entry can give its own wording */ if (g.key === 'elim') t = infoFor('se', sport) + ' Double elimination: ' + infoFor('de', sport); return t + (g.note ? ' ' + g.note : ''); }
   function catGameV() {
     const s = cur(), sp = CAT.sports.find((x) => x.key === s.sp) || CAT.sports[0], g = sp.games[s.i], nm = g.name || CAT.games[g.key].name, comm = GR && GR.role === 'comm', st = g.start || {};
     let h = '<h1>' + esc(nm) + '</h1><div class="emeta">' + esc(sp.long) + '</div><div class="erow" style="justify-content:flex-start;margin:8px 0"><span class="ebadge ' + (g.status === 'now' ? 'eg' : 'ey') + '">' + esc(CAT.status[g.status]) + '</span><span class="ebadge ep">' + esc(CAT.results[g.results]) + '</span></div>';

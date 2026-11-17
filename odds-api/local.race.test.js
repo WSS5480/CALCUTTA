@@ -1,6 +1,7 @@
 // Run: node odds-api/local.race.test.js   (no network: in-memory fakes)
 // Review fix S1 (Nov 17 2026): the shared index row lock:evtidx under concurrent writes (the reviewer's S3c / S3d), a failed index write after the game row
 // was written (no orphan game, no error, repaired later), retried joins and claims are successes, unchanged entries are not rewritten.
+// Review 2 follow-up N1 / N2 / N3: no request waits for the index repair; the entry is written before the row (a restart loses nothing); only engine texts are reworded.
 const assert = require('assert'), http = require('http');
 Object.assign(process.env, { SUPABASE_URL: 'https://fake.supabase.co', SUPABASE_KEY: 'k', MYAPPS_URL: 'https://fake.myapps', MYAPPS_SECRET: 's3cret', OWNER_PIN: '4321', OWNER_PHONE: '(956) 555-0001', OWNER_NAME: 'Steve' });
 ['GROUPS_ENABLED', 'GROUPS_OWNER_ONLY', 'GROUPS_TESTERS', 'GATE_OFF', 'GATE_KEY', 'EVENTS_ENABLED'].forEach((k) => delete process.env[k]);
@@ -64,21 +65,53 @@ srv.listen(0, '127.0.0.1', async () => {
     const lst = (await lc('list', { g: gid }, bo.token)).j.events.map((x) => x.title); assert.ok(['Par1', 'Par6', 'Idx0'].every((x) => lst.includes(x)));
     t('S3d: 6 creates and 20 joins at once: all 200, every game row in the index, no duplicates, one pickleball_start per game, all listed');
 
-    // ---- 3. the index write fails outright: the game still counts (200, listed, found by code, event sent), and is re-indexed later ----
+    // ---- 3. the index cannot be written ----
     const S0 = L._deps.S; let block = true; L._deps.S = Object.assign({}, S0, { dbPatchIf: async (id, ...a) => (block && id === 'lock:evtidx' ? false : S0.dbPatchIf(id, ...a)) }); L._deps.sleep = async () => {};
-    L._reset(); r = await lc('create', L8({ title: 'Lost index', entrants: [{ name: 'Gus' }] }), steve.token); assert.strictEqual(r.s, 200, 'create answers 200 although the index write failed: ' + r.txt); const lost = r.j.event;
-    assert.ok(!idx()[lost.id], 'not in the index yet'); assert.deepStrictEqual(L._idxQueue(), [lost.id], 'waiting to be re-indexed');
-    assert.ok((await lc('list', { g: gid }, bo.token)).j.events.some((x) => x.id === lost.id), 'listed for members meanwhile');
-    assert.strictEqual((await lc('preview', { g: gid, id: lost.id }, bo.token)).s, 200); assert.strictEqual((await lc('preview', { g: gid, code: lost.code }, bo.token)).s, 200, 'found by its code meanwhile');
+    // N2: at create the index entry is written BEFORE the game row: with the index stuck, create writes nothing at all (no game the index cannot list)
+    L._reset(); const nRows = rows().length, nEv = EVENTS.length; r = await lc('create', L8({ title: 'No index' }), steve.token); assert.strictEqual(r.s, 409, r.txt); assert.strictEqual(r.j.error, 'Busy, try again');
+    assert.strictEqual(rows().length, nRows, 'no game row written'); await sleep(300); assert.strictEqual(EVENTS.length, nEv, 'no pickleball_start for a game that was not made');
+    // after create, the index gets stuck: every later write still answers 200, the game stays listed and found by code, and is re-indexed later
+    block = false; L._reset(); r = await lc('create', L8({ title: 'Lost index', entrants: [{ name: 'Gus' }] }), steve.token); assert.strictEqual(r.s, 200, r.txt); const lost = r.j.event; assert.ok(idx()[lost.id], 'indexed at create'); block = true;
     for (let w = 0; w < 50 && !EVENTS.some((e) => e.type === 'pickleball_start' && e.key === lost.id); w++) await sleep(200); assert.ok(EVENTS.some((e) => e.type === 'pickleball_start' && e.key === lost.id), 'pickleball_start sent');
-    r = await lc('join', { g: gid, id: lost.id, as: 'player', entryName: 'Bo' }, bo.token); assert.strictEqual(r.s, 200, 'a join while the index is stuck still answers 200');
+    r = await lc('join', { g: gid, id: lost.id, as: 'player', entryName: 'Bo' }, bo.token); assert.strictEqual(r.s, 200, 'a join while the index is stuck still answers 200'); assert.deepStrictEqual(L._idxQueue(), [lost.id], 'waiting to be re-indexed');
     r = await lc('join', { g: gid, id: lost.id, as: 'player', entryName: 'Bo' }, bo.token); assert.strictEqual(r.s, 200, 'the same join again (a retry) = 200, no second entry'); assert.strictEqual(r.j.event.entrants.filter((e) => e.name === 'Bo').length, 1);
+    assert.ok((await lc('list', { g: gid }, bo.token)).j.events.some((x) => x.id === lost.id), 'listed for members meanwhile');
+    assert.strictEqual((await lc('preview', { g: gid, id: lost.id }, cy.token)).s, 200); assert.strictEqual((await lc('preview', { g: gid, code: lost.code }, cy.token)).s, 200, 'found by its code meanwhile');
     const gus = lost.entrants.find((e) => e.name === 'Gus').players[0].claim;
     r = await lc('claim', { g: gid, claim: gus }, cy.token); assert.strictEqual(r.s, 200, r.txt); r = await lc('claim', { g: gid, claim: gus }, cy.token); assert.strictEqual(r.s, 200, 'the same claim again (a retry after a lost answer) = 200: ' + r.txt);
     assert.strictEqual((await lc('claim', { g: gid, claim: gus }, dee.token)).s, 404, 'someone else cannot use a used claim code');
-    block = false; await lc('list', { g: gid }, bo.token); assert.ok(idx()[lost.id] && idx()[lost.id].mk.length === 3, 'repaired from the CURRENT game row (3 members) once the index is writable'); assert.deepStrictEqual(L._idxQueue(), []);
-    L._deps.S = S0; delete L._deps.sleep; L._deps.sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
-    t('the index write fails: create / join / claim still answer 200, the game is listed and found by code, pickleball_start is sent; a retried join or claim is a success, not an error; the index is repaired from the current row');
+    block = false; await L._idxRepairNow(); assert.ok(idx()[lost.id] && idx()[lost.id].mk.length === 3, 'repaired from the CURRENT game row (3 members) once the index is writable'); assert.deepStrictEqual(L._idxQueue(), []);
+    L._deps.S = S0; L._deps.sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
+    t('the index cannot be written: create writes nothing (409, no row, no notice); after a create, join / claim still answer 200, the game is listed and found by code; a retried join or claim is a success; the index is repaired from the current row');
+
+    // ---- 5. N1: while the index stays unwritable, list / code lookup / join never wait for the repair (real back-off, DB latency on) ----
+    L._deps.S = Object.assign({}, S0, { dbPatchIf: async (id, ...a) => (id === 'lock:evtidx' ? false : S0.dbPatchIf(id, ...a)) }); LAT = 30; L._reset();
+    const timed = async (f) => { const t0 = Date.now(); const x = await f(); return [Date.now() - t0, x]; }, slow = [];
+    for (const [nm, f] of [['join', () => lc('join', { g: gid, id: gs[1].id, as: 'spectator' }, fay.token)], ['list', () => lc('list', { g: gid }, bo.token)], ['code lookup', () => lc('preview', { g: gid, code: lost.code }, eve.token)], ['join 2', () => lc('join', { g: gid, id: gs[2].id, as: 'spectator' }, fay.token)], ['list 2', () => lc('list', { g: gid }, cy.token)], ['code lookup 2', () => lc('preview', { g: gid, code: gs[3].code }, fay.token)]]) {
+      const [ms, x] = await timed(f); assert.strictEqual(x.s, 200, nm + ' ' + x.txt); if (ms > 1500) slow.push(nm + ' ' + ms + ' ms'); console.log('    ' + nm + ': ' + ms + ' ms'); }
+    assert.deepStrictEqual(slow, [], 'each answer under 1.5 s while the index is unwritable');
+    assert.ok((await lc('list', { g: gid }, bo.token)).j.events.some((x) => x.id === gs[1].id), 'still listed');
+    // N2: a restart forgets the repair queue: every game is still listed and found by its code (its entry was written at create)
+    L._idxRestart(); assert.deepStrictEqual(L._idxQueue(), []); const after = (await lc('list', { g: gid }, bo.token)).j.events.map((x) => x.id);
+    assert.ok(rows().every((id) => !DB['lock:evt:' + id].data.group || DB['lock:evt:' + id].data.group.gid !== gid || after.includes(id)), 'every game of the group still listed after a restart');
+    assert.strictEqual((await lc('preview', { g: gid, code: gs[3].code }, eve.token)).s, 200, 'found by code after a restart');
+    L._deps.S = S0; LAT = 0; r = await lc('join', { g: gid, id: gs[1].id, as: 'spectator' }, eve.token); assert.strictEqual(r.s, 200); assert.ok(idx()[gs[1].id].mk.length === DB['lock:evt:' + gs[1].id].data.members.length, 'the next write brings the entry up to date');
+    t('N1 / N2: with the index unwritable, list, code lookup and join answer in under 1.5 s (never waiting for the repair); after a restart every game is still listed and found by code');
+
+    // ---- 6. N2: the game row write fails after its index entry was written: the entry is taken out again ----
+    const nIdx = Object.keys(idx()).length; L._deps.S = Object.assign({}, S0, { dbPut: async (row, ...a) => { if (String(row.id).startsWith('lock:evt:')) throw new Error('db write 503'); return S0.dbPut(row, ...a); } }); L._reset();
+    r = await lc('create', L8({ title: 'Row fails' }), steve.token); assert.notStrictEqual(r.s, 200); L._deps.S = S0; assert.strictEqual(Object.keys(idx()).length, nIdx, 'no entry left behind for a game that was never written');
+    t('N2: a game row that could not be written leaves no index entry behind');
+
+    // ---- 7. N3: only the engine's own sentences say "game"; what people typed is never reworded ----
+    L._reset(); r = await lc('create', L8({ title: 'Spring Event', entrants: [{ name: 'Big Event' }] }), steve.token); assert.strictEqual(r.s, 200); assert.strictEqual(r.j.event.title, 'Spring Event');
+    const sp = r.j.event; assert.strictEqual(sp.audit[sp.audit.length - 1].s, 'Game created'); r = await lc('join', { g: gid, id: sp.id, as: 'player', entryName: 'Wrong event' }, bo.token); assert.strictEqual(r.s, 200, r.txt);
+    assert.ok(r.j.event.audit.some((a) => a.s === 'Joined as Wrong event'), 'typed entry name kept: ' + J(r.j.event.audit.map((a) => a.s)));
+    const o = { error: 'You already have an entry in this event (Big Event). One account, one entry: a claim code cannot add a second.', event: { cap: 8, audit: [{ s: 'Event created' }, { s: 'Event finished' }, { s: 'Disputed: wrong event, the event was 11-9' }, { s: 'Joined as Spring Event' }] } }; L.groupScrub(o, 8);
+    assert.strictEqual(o.error, 'You already have an entry in this game (Big Event). One account, one entry: a claim code cannot add a second.');
+    assert.deepStrictEqual(o.event.audit.map((a) => a.s), ['Game created', 'Game finished', 'Disputed: wrong event, the event was 11-9', 'Joined as Spring Event']);
+    const o2 = { error: 'Not in the event' }; L.groupScrub(o2, 8); assert.strictEqual(o2.error, 'Not in the game'); const o3 = { error: 'A tie for a prize or a playoff spot is still open. Settle it first (Standings).' }; L.groupScrub(o3, 8); assert.ok(/top place/.test(o3.error) && !/prize/.test(o3.error));
+    t('N3: engine texts say "game" (errors, "Game created"); typed titles, names and notes with "event" in them are left exactly as typed');
 
     // ---- 4. an unchanged index entry is not rewritten ----
     const before = DB['lock:evtidx'].updated; r = await lc('join', { g: gid, id: gs[0].id, as: 'spectator' }, bo.token); assert.strictEqual(r.s, 200); assert.strictEqual(DB['lock:evtidx'].updated, before, 'a join that changes nothing does not touch the index row');

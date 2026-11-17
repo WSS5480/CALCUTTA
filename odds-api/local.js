@@ -393,8 +393,8 @@ const codeBlocked = (k) => (RL.get(k) || []).filter((x) => D.now() - x < 900e3).
 async function load(id) { if (!/^[A-Z2-9]{10}$/.test(String(id || ''))) return null; const r = await D.S.dbGet(ROW(id)); return r && r.data && !r.data.deleted ? r : null; } // review fix 10a: a deleted event is gone
 // Review fix S1 (Nov 17 2026): 16 tries with a growing, jittered back-off (like limits.js rmw), so many phones writing the same row at once (the shared
 // index row above all) take turns instead of all failing after six instant retries.
-async function mutateRow(rowId, init, fn) {
-  for (let i = 0; i < 16; i++) {
+async function mutateRow(rowId, init, fn, tries) {
+  for (let i = 0, n = tries || 16; i < n; i++) {
     if (i) await D.sleep(2 + Math.random() * Math.min(120, 8 * i));
     let row = await D.S.dbGet(rowId);
     if (!row) { if (!init) throw bad(404, 'Event not found'); await D.S.dbPut({ id: rowId, salt: 'x', pinhash: 'x', data: init(), updated: 1 }, true); row = await D.S.dbGet(rowId); if (!row) continue; }
@@ -424,12 +424,22 @@ async function prepRatings(evt) {
 const mutate = (id, fn) => mutateRow(ROW(id), null, async (data) => { const now = D.now(); await prepRatings(data); const t = tick(data, now); const out = await fn(data, now); if (out && out.nochange) { if (t) { data.u = now; return out.v; } return out; } tick(data, now); data.u = now; return out; });
 // S1: the game row is the truth; the index only lists it (an unchanged entry is not rewritten). Once a game row is written the call has succeeded: a failed index write never turns it into an
 // error (that left orphan games and made a retry duplicate them). The id waits in IDXQ and is re-indexed from its CURRENT row (never from a stale copy)
-// on a timer and before every list / code lookup; until then list and code lookups also read the waiting rows themselves.
-const IDXQ = new Set(); let IDXT = null;
-async function idxFix(id) { await mutateRow(IDX, () => ({ ev: {} }), async (data) => { data.ev = data.ev || {}; const r = await D.S.dbGet(ROW(id)), live = r && r.data && !r.data.deleted ? r.data : null, was = data.ev[id] || null, nx = live ? idxEntry(live) : null; /* read the game row INSIDE the index write: a stale copy can never overwrite a newer entry */ if ((!nx && !was) || (nx && was && JSON.stringify(nx) === JSON.stringify(was))) return { nochange: true }; if (nx) data.ev[id] = nx; else delete data.ev[id]; return {}; }); IDXQ.delete(id); }
-async function idxRepair() { for (const id of [...IDXQ]) { try { await idxFix(id); } catch (e) { /* stays queued */ } } if (IDXQ.size && !IDXT) { IDXT = setTimeout(() => { IDXT = null; idxRepair(); }, 2000); if (IDXT.unref) IDXT.unref(); } }
-async function idxSafe(id) { try { await idxFix(id); } catch (e) { if (e && e.status && e.status !== 409) throw e; IDXQ.add(id); if (!e.status) console.error('local index:', e.message); idxRepair(); } }
-async function idxQueued() { if (IDXQ.size) await idxRepair(); const out = {}; for (const id of IDXQ) { const r = await D.S.dbGet(ROW(id)); if (r && r.data && !r.data.deleted) out[id] = idxEntry(r.data); } return out; }
+// in the background; until then list and code lookups also read the waiting rows themselves.
+// N1 (review 2, Nov 17 2026): a request never waits for that repair. In the request path the index gets a few quick tries (IDX_TRIES), then the id is
+// queued; one repairer runs at a time (single flight), on a timer, with the full 16 tries.
+// N2 (review 2): a game's index entry is written BEFORE its row, so a restart (which empties IDXQ) can never leave a game the index does not list. Every
+// later change (join, leave, finish...) only refreshes an entry that already exists: in a group the list filters by the group and reads each row itself,
+// so a stale entry still shows the game correctly. If the index cannot be written at create, nothing is written and create answers "Busy, try again".
+const IDXQ = new Set(), IDX_TRIES = 4; let IDXT = null, IDXRUN = null;
+async function idxFix(id, tries) { await mutateRow(IDX, () => ({ ev: {} }), async (data) => { data.ev = data.ev || {}; const r = await D.S.dbGet(ROW(id)), live = r && r.data && !r.data.deleted ? r.data : null, was = data.ev[id] || null, nx = live ? idxEntry(live) : null; /* read the game row INSIDE the index write: a stale copy can never overwrite a newer entry */ if ((!nx && !was) || (nx && was && JSON.stringify(nx) === JSON.stringify(was))) return { nochange: true }; if (nx) data.ev[id] = nx; else delete data.ev[id]; return {}; }, tries); IDXQ.delete(id); }
+async function idxPre(evt) { await mutateRow(IDX, () => ({ ev: {} }), async (data) => { data.ev = data.ev || {}; data.ev[evt.id] = idxEntry(evt); return {}; }); } // N2: before the row
+function idxRepair() { // N1: single flight; callers never await it in a request
+  if (IDXRUN) return IDXRUN;
+  IDXRUN = (async () => { for (const id of [...IDXQ]) { try { await idxFix(id); } catch (e) { /* stays queued */ } } })().finally(() => { IDXRUN = null; if (IDXQ.size && !IDXT) { IDXT = setTimeout(() => { IDXT = null; idxRepair(); }, 2000); if (IDXT.unref) IDXT.unref(); } });
+  return IDXRUN;
+}
+async function idxSafe(id) { try { await idxFix(id, IDX_TRIES); } catch (e) { if (e && e.status && e.status !== 409) throw e; IDXQ.add(id); if (!e.status) console.error('local index:', e.message); idxRepair(); } }
+async function idxQueued() { if (IDXQ.size) idxRepair(); const out = {}; for (const id of [...IDXQ]) { const r = await D.S.dbGet(ROW(id)); if (r && r.data && !r.data.deleted) out[id] = idxEntry(r.data); } return out; } // N1: reads the waiting rows, never waits for the repair
 const idxEntry = (evt) => ({ c: evt.code, t: evt.title, mk: evt.members.map((m) => m.mk), s: evt.start, e: evt.endDay || null, f: evt.fin || 0, g: evt.group ? evt.group.gid : null });
 async function byCode(code) { const ix = await D.S.dbGet(IDX), ev = Object.assign({}, (ix && ix.data && ix.data.ev) || {}, await idxQueued()); let hit = null; Object.keys(ev).forEach((id) => { if (ev[id].c && sameCode(ev[id].c, code)) hit = id; }); return hit; }
 
@@ -579,7 +589,7 @@ async function core(req, res) { // the engine's own routes; on main reached ONLY
       if (people(evt) > cap) throw bad(403, fullMsg(cap));
       ENTF.set(id, isEnt); if (isEnt && usesOdd(evt)) { try { await D.rt().eventSetup(u.e, id, { title: evt.title, sport: ratingSport(evt), lockAt: evt.start }); } catch (x) { if (!x.status) console.error('local eventSetup:', x.message); } } // E-H: register the Enterprise tournament with the rating module
       await prepRatings(evt); audit(evt, now, nm, 'create', null, 'Event created'); tick(evt, now);
-      await D.S.dbPut({ id: ROW(id), salt: 'x', pinhash: 'x', data: evt, updated: now }, true); await idxSafe(id); req._lout = evt;
+      await idxPre(evt); /* N2: the index lists the game before its row exists */ try { await D.S.dbPut({ id: ROW(id), salt: 'x', pinhash: 'x', data: evt, updated: now }, true); } catch (x) { await idxSafe(id).catch(() => {}); throw x; } await idxSafe(id); req._lout = evt;
       send(res, 200, { event: full(evt, u.mk, now, cap) }); return true;
     }
     if (op === 'preview' || op === 'join') {
@@ -955,11 +965,17 @@ const G = {
 };
 const gsend = (res, code, o) => { res.statusCode = code; res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json'); res.setHeader('Cache-Control', 'no-store'); res.end(JSON.stringify(o)); };
 // In a group: the Enterprise price sentence is never shown (v272 decision: more than 8 people is not offered on the phone) and money fields are empty.
+const GERR = [['A tie for a prize or a playoff spot is still open', 'A tie for a top place or a playoff spot is still open'], ['Entries closed when the event started', 'Entries closed when the game started'], ['Event not found', 'Game not found'], ['Give the event a name', 'Give the game a name'], ['No event with that code', 'No game with that code'], ['Not a doubles or team event', 'Not a doubles or team game'], ['Not a solo event', 'Not a solo game'], ['Not in the event', 'Not in the game'],
+  ['Partner suggestions are for doubles and team events', 'Partner suggestions are for doubles and team games'], ['locked. The event has started.', 'locked. The game has started.'], ['Scores open when the event starts', 'Scores open when the game starts'], ['Sign in to run or join an event', 'Sign in to run or join a game'], ['already in the event', 'already in the game'], ['player is not in the event', 'player is not in the game'],
+  ['The commissioner adds the players in this event.', 'The commissioner adds the players in this game.'], ['Delete the event instead', 'Delete the game instead'], ['The event has started. Players stay to the end.', 'The game has started. Players stay to the end.'], ['The event is finished', 'The game is finished'], ['This event does not use', 'This game does not use'], ["This event has no pick'em", "This game has no pick'em"],
+  ['This event has no side matches', 'This game has no side matches'], ['This event has no spectators', 'This game has no spectators'], ['Too many matches in this event', 'Too many matches in this game'], ['for Enterprise events (courses', 'for Enterprise games (courses'], ['You already have an entry in this event (', 'You already have an entry in this game ('], ['every score in this event', 'every score in this game']];
+const gWords = (t) => GERR.reduce((x, [a, b]) => x.split(a).join(b), String(t)); // N3: the engine's exact error fragments only
+const GAUD = { 'Event created': 'Game created', 'Event finished': 'Game finished', 'Event finished: challenge cancelled': 'Game finished: challenge cancelled' }; // N3: whole audit lines only
 function groupScrub(o, n) { // n = the people limit limits.maxPeople gives this account (S2); a game's own cap wins for that game
   if (!o || typeof o !== 'object') return; const strip = (s) => String(s).split(limits.ENTERPRISE_TEXT).join('').split(ENT_TEXT).join('').replace(/\s+/g, ' ').trim();
-  // P8: group screens say "game", never "event" (the engine's own words are kept for its tests; the group sees them reworded here)
-  const words = (t) => String(t).replace(/\b([Aa])n event\b/g, (x, a) => a + ' game').replace(/\bEvents\b/g, 'Games').replace(/\bevents\b/g, 'games').replace(/\bEvent\b/g, 'Game').replace(/\bevent\b/g, 'game').replace(/\ba prize or a playoff spot\b/g, 'a top place or a playoff spot');
-  if (typeof o.error === 'string') o.error = words(strip(o.error)); if (o.event && Array.isArray(o.event.audit)) o.event.audit.forEach((a) => { if (a && typeof a.s === 'string') a.s = words(a.s); }); const std = Number(n) >= 1 ? Number(n) : Number(D.limits().STANDARD) || 8, one = (e) => { if (e && typeof e === 'object') { e.entText = G.capText(Number(e.cap) >= 1 ? Number(e.cap) : std); e.inGroup = true; } };
+  // P8 / N3 (review 2): group screens say "game", never "event". Only the engine's OWN sentences are reworded (the exact error texts and audit lines below);
+  // anything people typed (a title "Spring Event", a dispute note "wrong event", a name) is never touched. The engine keeps its words for its tests.
+  if (typeof o.error === 'string') o.error = gWords(strip(o.error)); if (o.event && Array.isArray(o.event.audit)) o.event.audit.forEach((a) => { if (a && typeof a.s === 'string' && GAUD[a.s]) a.s = GAUD[a.s]; }); const std = Number(n) >= 1 ? Number(n) : Number(D.limits().STANDARD) || 8, one = (e) => { if (e && typeof e === 'object') { e.entText = G.capText(Number(e.cap) >= 1 ? Number(e.cap) : std); e.inGroup = true; } };
   one(o.event); (o.events || []).forEach(one); if (Array.isArray(o.events)) o.capText = G.capText(std);
 }
 const signedIn = (req) => { try { return D.acct().who(req) || null; } catch (e) { return null; } };
@@ -1009,4 +1025,4 @@ async function handle(req, res) {
   return true;
 }
 
-module.exports = { handle, _core: core, GROUP: G, groupRules, groupScrub, PICKLEBALL_FORMATS: FMTS.slice(), statsFor, ratingFor, STAND, LIMSTAND, openTies, pickPoints, _billed: () => BILLQ, snapRatings, moneyFor, pairHistory, ADAPTER, limits, SPORTS, FMTN, cleanRules, checkGames, roundRobin, buildElim, seedOrder, poolTable, places, potSummary, people, _deps: D, _mkOf: mkOf, _reset: () => { RL.clear(); RC.clear(); ENTF.clear(); BILL.clear(); }, _idxQueue: () => [...IDXQ] };
+module.exports = { handle, _core: core, GROUP: G, groupRules, groupScrub, PICKLEBALL_FORMATS: FMTS.slice(), statsFor, ratingFor, STAND, LIMSTAND, openTies, pickPoints, _billed: () => BILLQ, snapRatings, moneyFor, pairHistory, ADAPTER, limits, SPORTS, FMTN, cleanRules, checkGames, roundRobin, buildElim, seedOrder, poolTable, places, potSummary, people, _deps: D, _mkOf: mkOf, _reset: () => { RL.clear(); RC.clear(); ENTF.clear(); BILL.clear(); }, _idxQueue: () => [...IDXQ], _idxRepairNow: async () => { if (IDXRUN) await IDXRUN; await idxRepair(); }, _idxRestart: () => { IDXQ.clear(); if (IDXT) clearTimeout(IDXT); IDXT = null; } /* tests: what a server restart forgets */ };

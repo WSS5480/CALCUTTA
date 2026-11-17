@@ -175,7 +175,7 @@ srv.listen(0, '127.0.0.1', async () => {
 
     // ---- 7. what another member can read; no money anywhere a member sees ----
     const seen = J([okk(await lc('list', { g: gid }, bo.token)), okk(await lc('get', { g: gid, id: rrId }, bo.token)), okk(await lc('preview', { g: gid, id: seId }, cy.token)), okk(await lc('get', { g: gid, id: hId }, cy.token)), EVENTS.filter((e) => e.type === 'pickleball_start').map((e) => [e.title, e.detail, e.key])]);
-    for (const [what, re] of [['a phone number', /956\D?555\D?000\d/], ['an account id', /@phone\.oddable/], ['a PIN', /112233|445566|778899|991122|335577|224466|4321/], ['an email', /[\w.]+@[\w.]+\.[a-z]{2,}/i], ['a member key', /"mk"|"ak"|"ce"|pinhash|salt/], ['a price', PRICE]]) assert.ok(!re.test(seen), 'another member\'s view holds ' + what);
+    for (const [what, re] of [['a phone number', /956\D?555\D?000\d/], ['an account id', /@phone\.oddable/], ['a PIN', /(^|[^A-Za-z0-9])(112233|445566|778899|991122|335577|224466|4321)([^A-Za-z0-9]|$)/] /* whole values only: a random game id or a timestamp can hold these digits */, ['an email', /[\w.]+@[\w.]+\.[a-z]{2,}/i], ['a member key', /"mk"|"ak"|"ce"|pinhash|salt/], ['a price', PRICE]]) assert.ok(!re.test(seen), 'another member\'s view holds ' + what);
     assert.ok(!/"entry":[1-9]|"total":[1-9]|"pool":[1-9]/.test(seen), 'no money amount');
     assert.ok(!/claim":"/.test(J(okk(await lc('get', { g: gid, id: rrId }, bo.token)))), 'claim codes are for the commissioner only');
     t('a member sees names, scores and the history: no phone number, account id, email, PIN, member key, claim code, price or money amount');

@@ -156,7 +156,8 @@ srv.listen(0, async () => {
     let guard = 0; while (!ev.matches.find((m) => m.st === 'gf' && !m.reset && m.state === 'ready') && guard++ < 20) await play(fav);
     const gf = ev.matches.find((m) => m.st === 'gf' && !m.reset); assert.strictEqual(nm(ev, gf.a), 'D1'); assert.strictEqual(nm(ev, gf.b), 'D2');
     ev = ok(await call('ann', 'score', { id: de, m: gf.id, games: win('b') })).event; let gf2 = ev.matches.find((m) => m.reset); assert.strictEqual(gf2.state, 'ready', 'bracket reset match is live'); assert.ok(!ev.fin);
-    ev = ok(await call('ann', 'score', { id: de, m: gf2.id, games: [[12, 15]] })).event; assert.ok(ev.fin); // the reset is one game to 15 (pickleball default; see events.rev2.test.js) assert.strictEqual(ev.placeRows[0].name, 'D2'); assert.strictEqual(ev.placeRows[1].name, 'D1'); assert.strictEqual(ev.placeRows.find((x) => x.name === 'D3').place, 3);
+    ev = ok(await call('ann', 'score', { id: de, m: gf2.id, games: [[12, 15]] })).event; assert.ok(ev.fin); // the reset is one game to 15 (pickleball default; see local.rev2.test.js)
+    assert.strictEqual(ev.placeRows[0].name, 'D2'); assert.strictEqual(ev.placeRows[1].name, 'D1'); assert.strictEqual(ev.placeRows.find((x) => x.name === 'D3').place, 3);
     t('double elimination 4: losers-bracket champion wins the first final -> bracket reset, wins the reset -> champion; places');
     // no reset when the winners-bracket champion wins the first final; property test 2..16 entries (enterprise account lifts the 8-person cap)
     for (let n = 2; n <= 16; n++) {

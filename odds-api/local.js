@@ -25,6 +25,7 @@ const D = {
   S: require('./sync'),
   acct: () => require('./acct'),
   now: () => Date.now(),
+  sleep: (ms) => new Promise((r) => setTimeout(r, ms)), // back-off between write retries (tests may stub it)
   ip: (req) => require('./ip').clientIp(req),
   enterprise: async (accountKey) => false, // used only by LIMSTAND / STAND (this branch on its own); the real flag is limits.isEnterprise
   limits: () => { const m = realMod('./limits'); return m && typeof m.maxPeople === 'function' && typeof m.keyOf === 'function' ? m : LIMSTAND; },
@@ -60,11 +61,12 @@ async function capFor(accountId, gameId) { const L = D.limits(), n = Math.round(
 async function entFor(accountId) { const L = D.limits(); try { return typeof L.isEnterprise === 'function' ? !!(await L.isEnterprise(L.keyOf(accountId))) : false; } catch (e) { return false; } }
 const fullMsg = (cap) => 'This game is full: ' + cap + ' people max, counting the organizer, players and spectators. ' + limits.ENTERPRISE_TEXT; // owner: "8 people per group, all games"
 const ROW = (id) => 'lock:evt:' + id, IDX = 'lock:evtidx', DAY = 864e5;
-const send = (res, code, o) => { if (o && o.event && o.event.id && o.event._bill) { bill(o.event._bill); delete o.event._bill; } if (res._lg) groupScrub(o); res.statusCode = code; res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json'); res.setHeader('Cache-Control', 'no-store'); res.end(JSON.stringify(o)); };
+const send = (res, code, o) => { if (o && o.event && o.event.id && o.event._bill) { bill(o.event._bill); delete o.event._bill; } if (res._lg) groupScrub(o, res._lgcap); res.statusCode = code; res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json'); res.setHeader('Cache-Control', 'no-store'); res.end(JSON.stringify(o)); };
 const bad = (status, error) => Object.assign(new Error(error), { status });
 const body = (req) => new Promise((ok, no) => { let n = 0; const c = []; req.on('data', (d) => { n += d.length; if (n <= 30000) c.push(d); }); req.on('end', () => { if (n > 30000) return no(bad(413, 'Too big')); try { ok(JSON.parse(Buffer.concat(c).toString() || '{}')); } catch (e) { no(bad(400, 'Bad request')); } }); req.on('error', no); });
 const clone = (o) => JSON.parse(JSON.stringify(o));
-const cleanName = (n, max) => String(n == null ? '' : n).replace(/[<>&"'`\\\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, max || 30);
+// P8: "&" is kept ("Tess & Bo"): the phone escapes every name on output, and "&" alone cannot open a tag (< > are still removed)
+const cleanName = (n, max) => String(n == null ? '' : n).replace(/[<>"'`\\\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, max || 30);
 const chiDay = (ms) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date(ms));
 const okDay = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && new Date(s + 'T12:00:00Z').toISOString().slice(0, 10) === s;
 function chiStart(day) { for (const off of ['-05:00', '-06:00']) { const t = Date.parse(day + 'T00:00:00' + off); if (chiDay(t) === day && chiDay(t - 1) !== day) return t; } return Date.parse(day + 'T06:00:00Z'); }
@@ -389,8 +391,11 @@ const codeBlocked = (k) => (RL.get(k) || []).filter((x) => D.now() - x < 900e3).
 
 // ---------- storage ----------
 async function load(id) { if (!/^[A-Z2-9]{10}$/.test(String(id || ''))) return null; const r = await D.S.dbGet(ROW(id)); return r && r.data && !r.data.deleted ? r : null; } // review fix 10a: a deleted event is gone
+// Review fix S1 (Nov 17 2026): 16 tries with a growing, jittered back-off (like limits.js rmw), so many phones writing the same row at once (the shared
+// index row above all) take turns instead of all failing after six instant retries.
 async function mutateRow(rowId, init, fn) {
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 16; i++) {
+    if (i) await D.sleep(2 + Math.random() * Math.min(120, 8 * i));
     let row = await D.S.dbGet(rowId);
     if (!row) { if (!init) throw bad(404, 'Event not found'); await D.S.dbPut({ id: rowId, salt: 'x', pinhash: 'x', data: init(), updated: 1 }, true); row = await D.S.dbGet(rowId); if (!row) continue; }
     const data = clone(row.data || {}); const out = await fn(data);
@@ -417,9 +422,16 @@ async function prepRatings(evt) {
   entryRatings(evt);
 }
 const mutate = (id, fn) => mutateRow(ROW(id), null, async (data) => { const now = D.now(); await prepRatings(data); const t = tick(data, now); const out = await fn(data, now); if (out && out.nochange) { if (t) { data.u = now; return out.v; } return out; } tick(data, now); data.u = now; return out; });
-const idxSet = (id, f) => mutateRow(IDX, () => ({ ev: {} }), async (data) => { data.ev = data.ev || {}; const r = f(data.ev[id] ? clone(data.ev[id]) : null); if (r === undefined) return { nochange: true }; if (r === null) delete data.ev[id]; else data.ev[id] = r; return {}; });
+// S1: the game row is the truth; the index only lists it (an unchanged entry is not rewritten). Once a game row is written the call has succeeded: a failed index write never turns it into an
+// error (that left orphan games and made a retry duplicate them). The id waits in IDXQ and is re-indexed from its CURRENT row (never from a stale copy)
+// on a timer and before every list / code lookup; until then list and code lookups also read the waiting rows themselves.
+const IDXQ = new Set(); let IDXT = null;
+async function idxFix(id) { await mutateRow(IDX, () => ({ ev: {} }), async (data) => { data.ev = data.ev || {}; const r = await D.S.dbGet(ROW(id)), live = r && r.data && !r.data.deleted ? r.data : null, was = data.ev[id] || null, nx = live ? idxEntry(live) : null; /* read the game row INSIDE the index write: a stale copy can never overwrite a newer entry */ if ((!nx && !was) || (nx && was && JSON.stringify(nx) === JSON.stringify(was))) return { nochange: true }; if (nx) data.ev[id] = nx; else delete data.ev[id]; return {}; }); IDXQ.delete(id); }
+async function idxRepair() { for (const id of [...IDXQ]) { try { await idxFix(id); } catch (e) { /* stays queued */ } } if (IDXQ.size && !IDXT) { IDXT = setTimeout(() => { IDXT = null; idxRepair(); }, 2000); if (IDXT.unref) IDXT.unref(); } }
+async function idxSafe(id) { try { await idxFix(id); } catch (e) { if (e && e.status && e.status !== 409) throw e; IDXQ.add(id); if (!e.status) console.error('local index:', e.message); idxRepair(); } }
+async function idxQueued() { if (IDXQ.size) await idxRepair(); const out = {}; for (const id of IDXQ) { const r = await D.S.dbGet(ROW(id)); if (r && r.data && !r.data.deleted) out[id] = idxEntry(r.data); } return out; }
 const idxEntry = (evt) => ({ c: evt.code, t: evt.title, mk: evt.members.map((m) => m.mk), s: evt.start, e: evt.endDay || null, f: evt.fin || 0, g: evt.group ? evt.group.gid : null });
-async function byCode(code) { const ix = await D.S.dbGet(IDX), ev = (ix && ix.data && ix.data.ev) || {}; let hit = null; Object.keys(ev).forEach((id) => { if (ev[id].c && sameCode(ev[id].c, code)) hit = id; }); return hit; }
+async function byCode(code) { const ix = await D.S.dbGet(IDX), ev = Object.assign({}, (ix && ix.data && ix.data.ev) || {}, await idxQueued()); let hit = null; Object.keys(ev).forEach((id) => { if (ev[id].c && sameCode(ev[id].c, code)) hit = id; }); return hit; }
 
 // ---------- views (what each person may see) ----------
 const nameOf = (evt, eid) => { if (eid === 'BYE') return 'Bye'; const e = evt.entrants.find((x) => x.eid === eid); return e ? e.name : null; };
@@ -444,7 +456,7 @@ const pickLocked = (evt, m, now) => locked(m, now) || roundLock(evt, m, now) || 
 const groupEntrants = (evt) => evt.entrants.map((e) => ({ eid: e.eid, name: e.name, players: (e.players || []).map((p) => ({ name: isBlank(p) ? '' : p.name, guest: !p.pid, blank: isBlank(p) })) }));
 function pub(evt, now) {
   return { id: evt.id, title: evt.title, sport: evt.sport, fmt: evt.fmt, fmtName: FMTN[evt.fmt], start: evt.start, endDay: evt.endDay, rules: evt.rules, money: evt.money, join: evt.join, takeText: takeText(evt.money), pot: potSummary(evt),
-    entries: evt.entrants.length, people: people(evt), commName: (evt.members.find((m) => m.mk === evt.comm) || {}).name || '', started: now >= evt.start, drawn: !!evt.drawn, locked: now >= evt.start || !!evt.drawn, fin: evt.fin || 0, inGroup: !!evt.group, entText: limits.ENTERPRISE_TEXT };
+    entries: evt.entrants.length, people: people(evt), commName: (evt.members.find((m) => m.mk === evt.comm) || {}).name || '', started: now >= evt.start || !!evt.drawn, drawn: !!evt.drawn, /* P2: an early draw counts as the start everywhere */ locked: now >= evt.start || !!evt.drawn, fin: evt.fin || 0, inGroup: !!evt.group, entText: limits.ENTERPRISE_TEXT };
 }
 function full(evt, mk, now, cap) {
   const o = pub(evt, now), me = memberOf(evt, mk), comm = isComm(evt, mk); o.role = comm ? 'comm' : me ? me.role : 'none'; o.me = me ? me.pid : null; o.code = evt.code; o.cap = cap; o.u = evt.u || 0;
@@ -552,7 +564,7 @@ async function core(req, res) { // the engine's own routes; on main reached ONLY
     }
     const u = await me(req), now = D.now();
     if (op === 'mine') {
-      const ix = await D.S.dbGet(IDX), ev = (ix && ix.data && ix.data.ev) || {}, out = [];
+      const ix = await D.S.dbGet(IDX), ev = Object.assign({}, (ix && ix.data && ix.data.ev) || {}, await idxQueued()), out = [];
       for (const id of Object.keys(ev)) { if (req._lg && ev[id].g !== req._lg.gid) continue; if (!req._lg && !(ev[id].mk || []).includes(u.mk)) continue; /* in a group: every game of the group (a member who is not in one sees it with role none and can join it) */ const r = await load(id); if (!r) continue; const evt = r.data; tick(evt, now); const o = pub(evt, now), m = memberOf(evt, u.mk); o.role = isComm(evt, u.mk) ? 'comm' : m ? m.role : 'none'; const mp = m && evt.places ? evt.entrants.filter((e) => pidsOf(e).includes(m.pid)).map((e) => evt.places[e.eid]).filter(Boolean)[0] : null; o.myPlace = mp || null; o.todo = evt.matches.filter((x) => canConfirm(evt, u.mk, x).ok || (x.state === 'ready' && canScore(evt, u.mk, x, now).ok && sideOf(evt, u.mk, x))).length; out.push(o); if (out.length >= 40) break; }
       out.sort((a, c) => (a.fin ? 1 : 0) - (c.fin ? 1 : 0) || a.start - c.start); send(res, 200, { events: out, now }); return true;
     }
@@ -567,7 +579,7 @@ async function core(req, res) { // the engine's own routes; on main reached ONLY
       if (people(evt) > cap) throw bad(403, fullMsg(cap));
       ENTF.set(id, isEnt); if (isEnt && usesOdd(evt)) { try { await D.rt().eventSetup(u.e, id, { title: evt.title, sport: ratingSport(evt), lockAt: evt.start }); } catch (x) { if (!x.status) console.error('local eventSetup:', x.message); } } // E-H: register the Enterprise tournament with the rating module
       await prepRatings(evt); audit(evt, now, nm, 'create', null, 'Event created'); tick(evt, now);
-      await D.S.dbPut({ id: ROW(id), salt: 'x', pinhash: 'x', data: evt, updated: now }, true); await idxSet(id, () => idxEntry(evt)); req._lout = evt;
+      await D.S.dbPut({ id: ROW(id), salt: 'x', pinhash: 'x', data: evt, updated: now }, true); await idxSafe(id); req._lout = evt;
       send(res, 200, { event: full(evt, u.mk, now, cap) }); return true;
     }
     if (op === 'preview' || op === 'join') {
@@ -592,7 +604,7 @@ async function core(req, res) { // the engine's own routes; on main reached ONLY
         if (people(evt) > cap) throw bad(403, fullMsg(cap));
         return evt;
       });
-      await idxSet(id, () => idxEntry(evt)); send(res, 200, { event: full(evt, u.mk, now, cap) }); return true;
+      await idxSafe(id); send(res, 200, { event: full(evt, u.mk, now, cap) }); return true;
     }
     if (op === 'claim') { // a guest typed in by name claims their seat (and every result it has) into this account: code + the guest's claim token
       if (codeBlocked('ec|a|' + u.mk) || codeBlocked('ec|i|' + ip)) throw bad(429, 'Too many wrong codes. Wait 15 minutes.'); rate('join', u.mk, ip);
@@ -600,12 +612,12 @@ async function core(req, res) { // the engine's own routes; on main reached ONLY
       if (!eid0) { codeFail('ec|a|' + u.mk); codeFail('ec|i|' + ip); throw bad(404, 'That claim code does not match'); }
       const nm = cleanName(b.myName, 24) || 'Player';
       const evt = await mutate(eid0, (evt, now) => { let seat = null, ent = null; evt.entrants.forEach((e) => (e.players || []).forEach((p) => { if (!p.pid && p.ct && sameCode(p.ct, ct)) { seat = p; ent = e; } }));
-        if (!seat) { codeFail('ec|a|' + u.mk); codeFail('ec|i|' + ip); throw bad(404, 'That claim code does not match (or was already used)'); }
+        if (!seat) { const m1 = memberOf(evt, u.mk); let mineAlready = false; evt.entrants.forEach((e) => (e.players || []).forEach((p) => { if (m1 && p.pid === m1.pid && p.ct && sameCode(p.ct, ct)) mineAlready = true; })); if (mineAlready) return { nochange: true, v: evt }; /* S1: the same claim again (a retry after a lost answer) = success */ codeFail('ec|a|' + u.mk); codeFail('ec|i|' + ip); throw bad(404, 'That claim code does not match (or was already used)'); }
         let m = memberOf(evt, u.mk); if (m && pidsOf(ent).includes(m.pid)) throw bad(409, 'You are already in ' + ent.name);
         const mine = m && evt.entrants.find((e) => pidsOf(e).includes(m.pid)); if (mine) throw bad(409, 'You already have an entry in this event (' + mine.name + '). One account, one entry: a claim code cannot add a second.');
         if (!m) { m = { pid: newPid(evt), mk: u.mk, ak: u.e, name: nm, role: 'player', joined: now, paid: false }; evt.members.push(m); restorePicks(evt, m); } else if (m.role === 'spectator') m.role = 'player';
         seat.orig = seat.orig || seat.name; seat.pid = m.pid; seat.claimed = now; if (seat.paid) m.paid = true; /* the organizer had marked the typed-in player paid */ audit(evt, now, m.name, 'claim', null, 'Claimed the guest seat "' + seat.name + '" in ' + ent.name); return evt; });
-      await idxSet(eid0, () => idxEntry(evt)); send(res, 200, { event: full(evt, u.mk, now, await capOf(evt)) }); return true;
+      await idxSafe(eid0); send(res, 200, { event: full(evt, u.mk, now, await capOf(evt)) }); return true;
     }
     const id = String(b.id || ''); const r0 = await load(id); if (!r0) throw bad(404, 'Event not found');
     const known = memberOf(r0.data, u.mk); if (!known) throw bad(404, 'Event not found'); // private: members only (non-members use the invite code)
@@ -617,7 +629,7 @@ async function core(req, res) { // the engine's own routes; on main reached ONLY
     const ok = (evt) => { send(res, 200, { event: full(evt, u.mk, D.now(), cap) }); return true; };
     const comm = (evt) => { if (!isComm(evt, u.mk)) throw bad(403, 'Only the commissioner can do that'); };
     const notLocked = (evt, now) => { if (now >= evt.start || evt.drawn) throw bad(409, 'Rules are locked. The event has started.'); };
-    if (op === 'edit') { const evt = await mutate(id, (evt, now) => { comm(evt); notLocked(evt, now); const R = cleanRules(b, now); Object.assign(evt, R); if (people(evt) > cap) throw bad(403, fullMsg(cap)); audit(evt, now, 'Commissioner', 'edit', null, 'Rules changed'); return evt; }); if (isEnt && usesOdd(evt)) { try { await D.rt().eventSetup(u.e, id, { title: evt.title, sport: ratingSport(evt), lockAt: evt.start }); } catch (x) {} } await idxSet(id, () => idxEntry(evt)); return ok(evt); }
+    if (op === 'edit') { const evt = await mutate(id, (evt, now) => { comm(evt); notLocked(evt, now); const R = cleanRules(b, now); Object.assign(evt, R); if (people(evt) > cap) throw bad(403, fullMsg(cap)); audit(evt, now, 'Commissioner', 'edit', null, 'Rules changed'); return evt; }); if (isEnt && usesOdd(evt)) { try { await D.rt().eventSetup(u.e, id, { title: evt.title, sport: ratingSport(evt), lockAt: evt.start }); } catch (x) {} } await idxSafe(id); return ok(evt); }
     if (op === 'entrant') { // commissioner adds / renames / re-rates / removes / moves an entry, before the draw
       const evt = await mutate(id, (evt, now) => { comm(evt);
         // At the start a pair with an empty partner spot holds the draw: until it is made the commissioner may only name the missing partner or remove that entry.
@@ -637,13 +649,13 @@ async function core(req, res) { // the engine's own routes; on main reached ONLY
       const early = !r0.data.drawn && now < r0.data.start; const evt = await mutate(id, (evt, now) => { comm(evt); if (evt.drawn) return { nochange: true, v: evt }; draw(evt, now); return evt; });
       if (early && evt.drawn && isEnt && usesOdd(evt)) { try { await D.rt().eventSetup(u.e, id, { title: evt.title, sport: ratingSport(evt), lockAt: evt.drawn }); } catch (x) { if (!x.status) console.error('local eventSetup (draw):', x.message); } }
       return ok(evt); }
-    if (op === 'leave') { const evt = await mutate(id, (evt, now) => { const m = memberOf(evt, u.mk); if (isComm(evt, u.mk)) throw bad(409, 'The commissioner cannot leave. Delete the event instead (before it starts).'); const inE = evt.entrants.some((e) => pidsOf(e).includes(m.pid)); if (inE && (now >= evt.start || evt.drawn)) throw bad(409, 'The event has started. Players stay to the end.'); evt.entrants.forEach((e) => (e.players || []).forEach((p, i) => { if (p.pid === m.pid) { p.pid = null; p.name = p.orig || (p.blank ? 'Partner ' + (i + 1) : 'Open seat'); p.ct = rnd(10); if (p.orig && m.paid) p.paid = true; else if (!p.orig) delete p.paid; delete p.claimed; delete p.orig; } })); /* review fix 9: the guest gets its name back and a NEW claim code */ evt.entrants = evt.entrants.filter((e) => !(e.by === u.mk && !pidsOf(e).length && !isComm(evt, e.by))); evt.members = evt.members.filter((x) => x !== m); if (evt.picks[m.pid]) { evt.pk = evt.pk || {}; evt.pk[m.mk] = evt.picks[m.pid]; delete evt.picks[m.pid]; } /* G16: picks belong to the account; rejoining brings them back, still locked */ return evt; }); await idxSet(id, () => idxEntry(evt)); send(res, 200, { ok: true }); return true; }
-    if (op === 'delete') { await mutate(id, (evt, now) => { comm(evt); notLocked(evt, now); evt.deleted = now; evt.code = ''; return evt; }); await idxSet(id, () => null); send(res, 200, { ok: true }); return true; }
+    if (op === 'leave') { const evt = await mutate(id, (evt, now) => { const m = memberOf(evt, u.mk); if (isComm(evt, u.mk)) throw bad(409, 'The commissioner cannot leave. Delete the event instead (before it starts).'); const inE = evt.entrants.some((e) => pidsOf(e).includes(m.pid)); if (inE && (now >= evt.start || evt.drawn)) throw bad(409, 'The event has started. Players stay to the end.'); evt.entrants.forEach((e) => (e.players || []).forEach((p, i) => { if (p.pid === m.pid) { p.pid = null; p.name = p.orig || (p.blank ? 'Partner ' + (i + 1) : 'Open seat'); p.ct = rnd(10); if (p.orig && m.paid) p.paid = true; else if (!p.orig) delete p.paid; delete p.claimed; delete p.orig; } })); /* review fix 9: the guest gets its name back and a NEW claim code */ evt.entrants = evt.entrants.filter((e) => !(e.by === u.mk && !pidsOf(e).length && !isComm(evt, e.by))); evt.members = evt.members.filter((x) => x !== m); if (evt.picks[m.pid]) { evt.pk = evt.pk || {}; evt.pk[m.mk] = evt.picks[m.pid]; delete evt.picks[m.pid]; } /* G16: picks belong to the account; rejoining brings them back, still locked */ return evt; }); await idxSafe(id); send(res, 200, { ok: true }); return true; }
+    if (op === 'delete') { await mutate(id, (evt, now) => { comm(evt); notLocked(evt, now); evt.deleted = now; evt.code = ''; return evt; }); await idxSafe(id); send(res, 200, { ok: true }); return true; }
     if (op === 'paid') { const evt = await mutate(id, (evt, now) => { comm(evt);
       if (b.gid) { let seat = null; evt.entrants.forEach((e) => (e.players || []).forEach((p) => { if (p.gid === String(b.gid) && !p.pid && !isBlank(p)) seat = p; })); if (!seat) throw bad(404, 'That typed-in player is not in the event'); if (!!seat.paid === !!b.paid) return { nochange: true, v: evt }; seat.paid = !!b.paid; audit(evt, now, 'Commissioner', 'paid', null, seat.name + ' (typed-in player)' + (seat.paid ? ' marked paid' : ' marked not paid')); return evt; }
       const m = evt.members.find((x) => x.pid === String(b.pid || '')); if (!m) throw bad(404, 'Not in the event'); if (b.paid && !evt.entrants.some((e) => pidsOf(e).includes(m.pid))) throw bad(409, m.name + ' is not playing, so no entry is owed'); if (!!m.paid === !!b.paid) return { nochange: true, v: evt }; m.paid = !!b.paid; audit(evt, now, 'Commissioner', 'paid', null, m.name + (m.paid ? ' marked paid' : ' marked not paid')); return evt; }); return ok(evt); }
     if (op === 'finish') { const evt = await mutate(id, (evt, now) => { comm(evt); if (evt.fmt === 'se' || evt.fmt === 'de') throw bad(409, 'A bracket finishes when its last match is confirmed'); if (now < evt.start && !evt.drawn) throw bad(409, 'Not started yet');
-      if (evt.fmt === 'rr' && !places(evt, now)) throw bad(409, openTies(evt).length ? 'A tie for a prize or a playoff spot is still open. Settle it first (Standings).' : evt.poHold ? 'The playoff was reset. Redraw it first (Standings).' : 'Every match needs a confirmed score before the round robin can finish.'); if (evt.done) return { nochange: true, v: evt }; evt.done = now; audit(evt, now, 'Commissioner', 'finish', null, 'Event finished'); tick(evt, now); return evt; }); await idxSet(id, () => idxEntry(evt)); return ok(evt); }
+      if (evt.fmt === 'rr' && !places(evt, now)) throw bad(409, openTies(evt).length ? 'A tie for a prize or a playoff spot is still open. Settle it first (Standings).' : evt.poHold ? 'The playoff was reset. Redraw it first (Standings).' : 'Every match needs a confirmed score before the round robin can finish.'); if (evt.done) return { nochange: true, v: evt }; evt.done = now; audit(evt, now, 'Commissioner', 'finish', null, 'Event finished'); tick(evt, now); return evt; }); await idxSafe(id); return ok(evt); }
     if (op === 'solo') { // solo / skills score for one entry
       rate('score', u.mk, ip); const evt = await mutate(id, (evt, now) => { if (evt.fmt !== 'solo') throw bad(409, 'Not a solo event'); if (!evt.drawn) throw bad(409, 'Scores open when the event starts'); if (evt.fin || evt.done) throw bad(409, 'The event is finished');
         const e = evt.entrants.find((x) => x.eid === String(b.eid)), pm = memberOf(evt, u.mk), cm = isComm(evt, u.mk); if (!e) throw bad(404, 'That entry is gone'); if (!cm && !pidsOf(e).includes(pm.pid)) throw bad(403, 'Enter your own score');
@@ -688,7 +700,7 @@ async function core(req, res) { // the engine's own routes; on main reached ONLY
         else { const order = shuffle(t.eids), txt = order.map((e) => nameOf(evt, e)).join(', then ');
           evt.tb[t.key] = { how, order, at: now, by, text: 'Coin flip: ' + txt }; audit(evt, now, by + ' (commissioner)', 'tiebreak', null, 'Tie between ' + names.join(', ') + why + ': the organizer chose a coin flip. Oddable flipped: ' + txt); }
         return evt; });
-      await idxSet(id, () => idxEntry(evt)); return ok(evt);
+      await idxSafe(id); return ok(evt);
     }
     // P1 (owner Nov 16 2026): "Suggest partners" for doubles / team events. Any member may look; only the commissioner applies a split, before the start.
     if (op === 'partners') {
@@ -751,7 +763,7 @@ async function core(req, res) { // the engine's own routes; on main reached ONLY
         const pm = memberOf(evt, u.mk), cm = isComm(evt, u.mk), A = evt.entrants.find((e) => e.eid === String(b.a)), B = evt.entrants.find((e) => e.eid === String(b.b));
         if (!A || !B || A === B) throw bad(400, 'Pick two different entries');
         if (!cm && !pidsOf(A).includes(pm.pid)) throw bad(403, 'Challenge from your own entry');
-        if (now < evt.start) throw bad(409, 'Challenges open when the event starts'); if (evt.fin || evt.done) throw bad(409, 'The event is finished');
+        if (now < evt.start && !evt.drawn) throw bad(409, 'Challenges open when the game starts'); /* P2: an early draw is the start (the ladder is set, the phone shows it live) */ if (evt.fin || evt.done) throw bad(409, 'The event is finished');
         const open = (e) => evt.matches.some((m) => (m.st === 'lad' || m.st === 'h2h' || m.st === 'side') && ['offered', 'ready', 'pending', 'disputed'].includes(m.state) && (m.a === e.eid || m.b === e.eid) && (m.st === 'lad') === (evt.fmt === 'ladder' && !b.side));
         let st = 'h2h';
         if (evt.fmt === 'ladder' && !b.side) { st = 'lad'; if (!evt.drawn) throw bad(409, 'The ladder is not set yet'); const o = evt.ladder.order, ia = o.indexOf(A.eid), ib = o.indexOf(B.eid); if (!(ib < ia && ia - ib <= evt.rules.reach)) throw bad(409, 'You can challenge up to ' + evt.rules.reach + ' spot' + (evt.rules.reach > 1 ? 's' : '') + ' above you'); if (open(A) || open(B)) throw bad(409, 'One of you already has a challenge open'); }
@@ -894,7 +906,7 @@ function matchLabel(m) { return m.st === 'pool' ? 'Pool round ' + m.r : m.st ===
 const ADAPTER = {
   type: 'local-event',
   attachToGroup: (evtId, ctx) => ADAPTER.attach(evtId, ctx), // alias (name used in OWNER-DECISIONS / the Groups contests[] plan)
-  attach: (evtId, ctx) => mutate(evtId, (evt) => { evt.group = { gid: String(ctx.gid).slice(0, 20), cid: String(ctx.cid).slice(0, 20) }; evt.money.pot = ctx.pot === 'side' ? 'side' : 'main'; return evt; }).then((evt) => idxSet(evtId, () => idxEntry(evt)).then(() => evt)),
+  attach: (evtId, ctx) => mutate(evtId, (evt) => { evt.group = { gid: String(ctx.gid).slice(0, 20), cid: String(ctx.cid).slice(0, 20) }; evt.money.pot = ctx.pot === 'side' ? 'side' : 'main'; return evt; }).then((evt) => idxSafe(evtId).then(() => evt)),
   summary: async (evtId) => { const r = await load(evtId); if (!r) return null; const evt = r.data, now = D.now(); tick(evt, now); const pl = evt.places || places(evt, now); return { id: evt.id, title: evt.title, fmt: evt.fmt, status: evt.fin ? 'final' : evt.drawn ? 'live' : 'upcoming', start: evt.start, leader: pl ? nameOf(evt, Object.keys(pl).find((e) => pl[e] === 1)) : null, places: pl ? Object.entries(pl).map(([e, p]) => ({ lot: e, name: nameOf(evt, e), place: p })) : null }; },
   potSummary: async (evtId) => { const r = await load(evtId); return r ? potSummary(r.data) : null; },
   // Calcutta `lots` source: one lot per entry (player or pair). result(lotId) tells the Calcutta engine how far that lot went.
@@ -936,16 +948,19 @@ const G = {
   OFF_MSG: 'Groups is not open for this account yet.', LAPSED_MSG: 'Your time has ended. Pay to use Groups again.',
   NOT_MEMBER: 'Pickleball games are for members of this group', NOT_FOUND: 'Game not found', NOT_COMM: "Only the group's commissioner can start a pickleball game",
   SOON: 'Only pickleball games can be started in a group for now. Other sports are coming soon.', NO_MONEY: 'Oddable does not track money in group games.',
-  CAP: 'Up to 8 people per game, counting the organizer, players, spectators and typed-in players.',
+  capText: (n) => 'Up to ' + n + ' people per game, counting the organizer, players, spectators and typed-in players.', // S2: the real limits.maxPeople number
+  get CAP() { return G.capText(Number(D.limits().STANDARD) || 8); },
   // the engine's routes a group member may use (peek = the public invite peek, mine = every event of the account, paid = money: not on main)
   OPS: new Set(['list', 'create', 'preview', 'join', 'claim', 'get', 'edit', 'entrant', 'draw', 'leave', 'delete', 'finish', 'solo', 'score', 'confirm', 'dispute', 'live', 'pick', 'picklock', 'challenge', 'accept', 'decline', 'tiebreak', 'poreset', 'poredraw', 'partners', 'teams', 'trate']),
 };
 const gsend = (res, code, o) => { res.statusCode = code; res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json'); res.setHeader('Cache-Control', 'no-store'); res.end(JSON.stringify(o)); };
 // In a group: the Enterprise price sentence is never shown (v272 decision: more than 8 people is not offered on the phone) and money fields are empty.
-function groupScrub(o) {
+function groupScrub(o, n) { // n = the people limit limits.maxPeople gives this account (S2); a game's own cap wins for that game
   if (!o || typeof o !== 'object') return; const strip = (s) => String(s).split(limits.ENTERPRISE_TEXT).join('').split(ENT_TEXT).join('').replace(/\s+/g, ' ').trim();
-  if (typeof o.error === 'string') o.error = strip(o.error); const one = (e) => { if (e && typeof e === 'object') { e.entText = G.CAP; e.inGroup = true; } };
-  one(o.event); (o.events || []).forEach(one);
+  // P8: group screens say "game", never "event" (the engine's own words are kept for its tests; the group sees them reworded here)
+  const words = (t) => String(t).replace(/\b([Aa])n event\b/g, (x, a) => a + ' game').replace(/\bEvents\b/g, 'Games').replace(/\bevents\b/g, 'games').replace(/\bEvent\b/g, 'Game').replace(/\bevent\b/g, 'game').replace(/\ba prize or a playoff spot\b/g, 'a top place or a playoff spot');
+  if (typeof o.error === 'string') o.error = words(strip(o.error)); if (o.event && Array.isArray(o.event.audit)) o.event.audit.forEach((a) => { if (a && typeof a.s === 'string') a.s = words(a.s); }); const std = Number(n) >= 1 ? Number(n) : Number(D.limits().STANDARD) || 8, one = (e) => { if (e && typeof e === 'object') { e.entText = G.capText(Number(e.cap) >= 1 ? Number(e.cap) : std); e.inGroup = true; } };
+  one(o.event); (o.events || []).forEach(one); if (Array.isArray(o.events)) o.capText = G.capText(std);
 }
 const signedIn = (req) => { try { return D.acct().who(req) || null; } catch (e) { return null; } };
 const allowed = (e) => { try { return !!D.grp().onFor(e); } catch (er) { return false; } };
@@ -961,7 +976,7 @@ async function handle(req, res) {
   if (!allowed(e)) { req.resume(); gsend(res, 403, { error: G.OFF_MSG, off: true }); return true; }            // Groups off, or not on for this account: nothing is read
   if (await lapsed(e)) { req.resume(); gsend(res, 403, { error: G.LAPSED_MSG, expired: true }); return true; } // time ended: locked until paid, nothing deleted
   if (req.method !== 'POST') { req.resume(); gsend(res, 405, { error: 'POST only' }); return true; }
-  res._lg = true; // from here on every answer goes through the group scrub (core's send and the errors below)
+  res._lg = true; if (e) { try { res._lgcap = await capFor(e, ''); } catch (x) { res._lgcap = null; } } // from here on every answer goes through the group scrub (core's send and the errors below)
   try {
     if (!e) throw bad(401, 'Sign in to use Groups');
     const b = await body(req); if (!b || typeof b !== 'object' || Array.isArray(b)) throw bad(400, 'Bad request');
@@ -994,4 +1009,4 @@ async function handle(req, res) {
   return true;
 }
 
-module.exports = { handle, _core: core, GROUP: G, groupRules, groupScrub, PICKLEBALL_FORMATS: FMTS.slice(), statsFor, ratingFor, STAND, LIMSTAND, openTies, pickPoints, _billed: () => BILLQ, snapRatings, moneyFor, pairHistory, ADAPTER, limits, SPORTS, FMTN, cleanRules, checkGames, roundRobin, buildElim, seedOrder, poolTable, places, potSummary, people, _deps: D, _mkOf: mkOf, _reset: () => { RL.clear(); RC.clear(); ENTF.clear(); BILL.clear(); } };
+module.exports = { handle, _core: core, GROUP: G, groupRules, groupScrub, PICKLEBALL_FORMATS: FMTS.slice(), statsFor, ratingFor, STAND, LIMSTAND, openTies, pickPoints, _billed: () => BILLQ, snapRatings, moneyFor, pairHistory, ADAPTER, limits, SPORTS, FMTN, cleanRules, checkGames, roundRobin, buildElim, seedOrder, poolTable, places, potSummary, people, _deps: D, _mkOf: mkOf, _reset: () => { RL.clear(); RC.clear(); ENTF.clear(); BILL.clear(); }, _idxQueue: () => [...IDXQ] };

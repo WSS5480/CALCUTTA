@@ -2,7 +2,7 @@
  "v": 2,
  "updated": "2026-11-17",
  "capLine": "Up to 8 people per game, counting the organizer, players, spectators and typed-in players.",
- "potLine": "No money moves through Oddable: no entry, no pot, nothing collected, held or paid.",
+ "potLine": "No money moves through Oddable: nothing is collected, held or paid.",
  "invite": "Members of the group open each game from the group page.",
  "status": {
   "now": "Available now",
@@ -27,8 +27,8 @@
  "games": {
   "group-picks": {
    "name": "Picks contest vs the group",
-   "line": "Everyone bets or picks real games; best winnings or record takes the pot.",
-   "info": "Members compete with the real bets they already track in My Bets (or verified Kalshi bets only). The commissioner sets the rules before the first kickoff: which bets count, how the winner is decided (winnings, units, return % or win %), a per-bet cap, minimum bets a week, entry, split and take. Other members’ bets stay hidden until their game starts."
+   "line": "Everyone picks or tracks real games; the best record wins.",
+   "info": "Members compete with the real bets they already track in My Bets (or verified Kalshi bets only). The commissioner sets the rules before the first kickoff: which bets count, how the winner is decided (units, return % or win %), a per-bet cap and minimum bets a week. Other members’ bets stay hidden until their game starts. Bragging rights only: no money moves through Oddable."
   },
   "pickem": {
    "name": "Pick'em / confidence pool",
@@ -47,8 +47,8 @@
   },
   "calcutta": {
    "name": "Calcutta auction",
-   "line": "Bid on teams before it starts. Owners get paid by how far their team goes.",
-   "info": "Before the event, members bid on each team (or player) in a live auction. The money bid makes the pot (information only). Each team’s owner is paid a set share for every round the team wins, and the most for the champion."
+   "line": "Bid on teams before it starts. Owners score by how far their team goes.",
+   "info": "Before it starts, members bid on each team (or player) in a live auction. Bids are for the standings only: no money moves through Oddable. Each team’s owner scores for every round the team wins, and the most for the champion."
   },
   "squares": {
    "name": "Squares",
@@ -62,8 +62,8 @@
   },
   "oad": {
    "name": "One-and-done",
-   "line": "Pick one player per event all season; you can use each player only once.",
-   "info": "For every event in the season each member picks one player. You earn that player’s prize money (or points). You cannot pick the same player twice in the season. Most earned at the end wins."
+   "line": "Pick one player per tournament all season; you can use each player only once.",
+   "info": "For every tournament in the season each member picks one player and scores that player’s result. You cannot pick the same player twice in the season. Most points at the end wins."
   },
   "props": {
    "name": "Props pool",
@@ -107,13 +107,13 @@
   },
   "team-calcutta": {
    "name": "Team Calcutta",
-   "line": "Auction the players or pairs before play starts. Owners get paid by how far they go.",
-   "info": "Before play, members bid on each player or pair of your own event. Owners are paid by how far their entry goes. Uses the Calcutta engine with this event’s entries as the lots."
+   "line": "Auction the players or pairs before play starts. Owners score by how far they go.",
+   "info": "Before play, members bid on each player or pair of your own game (for the standings only; no money moves through Oddable). Owners score by how far their entry goes. Uses the Calcutta engine with this game’s entries as the lots."
   },
   "golf-day": {
-   "name": "Golf day formats",
-   "line": "Scramble, best ball, skins, Stableford, match play: scores entered by hole.",
-   "info": "For your own round: the group picks a format (scramble, best ball, skins, Stableford, match play, Nassau). A scorer in each foursome enters scores hole by hole; the leaderboard and skins update for everyone."
+   "name": "Golf day",
+   "line": "Stroke play gross or net, or Stableford: each player logs their own score hole by hole.",
+   "info": "For a round your group plays together: the commissioner starts a Golf day at a course and picks stroke play gross, stroke play net (each player types their own strokes) or Stableford, over 18, the front 9 or the back 9. Each player logs their own score hole by hole and the leaderboard updates for everyone. Golf GPS shows the course. Skins and match play are not in Golf days yet."
   }
  },
  "localInfoKey": {
@@ -129,7 +129,7 @@
    "key": "pickleball",
    "name": "Pickleball",
    "long": "Pickleball",
-   "leagues": "Your own events; pro tours (PPA, MLP)",
+   "leagues": "Your own games; pro tours (PPA, MLP)",
    "feed": "scorer",
    "games": [
     {
@@ -695,7 +695,7 @@
    "key": "bar",
    "name": "Bar & backyard",
    "long": "Bar & backyard (cornhole, darts, bowling, pool)",
-   "leagues": "Your own events",
+   "leagues": "Your own games",
    "feed": "scorer",
    "games": [
     {

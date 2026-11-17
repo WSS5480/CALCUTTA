@@ -113,6 +113,10 @@ srv.listen(0, '127.0.0.1', async () => {
     assert.match(r.error, /8 people max/); assert.ok(!PRICE.test(r.error), 'no price sentence: ' + r.error); assert.ok(r.error.length > 20);
     r = no(await lc('create', L8({ g: gid, entrants: 'ABCDEFGH'.split('').map((x) => ({ name: x })) }), steve.token), 403); assert.ok(!PRICE.test(r.error), r.error);
     okk(await lc('delete', { g: gid, id: cap.id }, steve.token));
+    assert.strictEqual(cap.entText, 'Up to 8 people per game, counting the organizer, players, spectators and typed-in players.');
+    { const L0 = L._deps.limits; L._deps.limits = () => Object.assign({}, LIM, { maxPeople: async () => 12 }); // S2: an account limits.js allows 12 (owner-granted seats / enterprise)
+      const big = okk(await lc('create', L8({ g: gid, title: 'Twelve', entrants: [{ name: 'Tess & Bo' }, { name: '<b>Kim</b>' }] }), steve.token)).event; assert.deepStrictEqual(big.entrants.map((x) => x.name).slice(0, 2), ['Tess & Bo', 'bKim/b'], 'P8: "&" is kept in names, tags are still removed'); assert.strictEqual(big.cap, 12); assert.match(big.entText, /^Up to 12 people per game/, 'the real number, not a fixed 8');
+      assert.match(okk(await lc('list', { g: gid }, steve.token)).capText, /^Up to 12 people per game/); L._deps.limits = L0; okk(await lc('delete', { g: gid, id: big.id }, steve.token)); }
     t('limits.js caps a group game at 8 people (the organizer, spectators and typed-in players count); the refusal never carries the price sentence');
 
     // ---- 6. every format, end to end through the gate ----
@@ -137,9 +141,11 @@ srv.listen(0, '127.0.0.1', async () => {
     L._reset(); // the engine allows 6 new games an hour per account; this test starts more
     // ladder: challenge up, accept, play, swap; the commissioner finishes
     ev = okk(await lc('create', L8({ g: gid, title: 'Ladder', fmt: 'ladder', endDay: new Date(Date.now() + CLOCK + 10 * 864e5).toISOString().slice(0, 10), playIn: false, seeding: 'manual', entrants: guests(4) }), steve.token)).event; const ldId = ev.id;
-    okk(await lc('join', { g: gid, id: ldId, as: 'player', entryName: 'Bo' }, bo.token)); ev = okk(await lc('draw', { g: gid, id: ldId }, steve.token)).event;
+    ev = okk(await lc('join', { g: gid, id: ldId, as: 'player', entryName: 'Bo' }, bo.token)).event; assert.strictEqual(ev.started, false);
+    { const e0 = ev.entrants; no(await lc('challenge', { g: gid, id: ldId, a: e0.find((x) => x.name === 'Bo').eid, b: e0[0].eid }, bo.token), 409, 'no challenge before the start or the draw'); }
+    ev = okk(await lc('draw', { g: gid, id: ldId }, steve.token)).event; assert.strictEqual(ev.started, true, 'P2: an early draw counts as the start');
     const lad = ev.ladder, boE = ev.entrants.find((x) => x.name === 'Bo').eid, boRank = lad.find((x) => x.eid === boE).rank, target = lad.find((x) => x.rank === boRank - 1);
-    no(await lc('challenge', { g: gid, id: ldId, a: boE, b: target.eid }, bo.token), 409, 'challenges open at the start time'); CLOCK += 2 * 3600e3;
+    assert.ok(Date.now() + CLOCK < ev.start, 'still before the start time'); // P2 (review): after an early draw challenges are open at once, as the phone shows
     ev = okk(await lc('challenge', { g: gid, id: ldId, a: boE, b: target.eid }, bo.token)).event; const lm = ev.matches.find((m) => m.st === 'lad' && m.state === 'ready'); assert.ok(lm, 'a ladder challenge is on at once'); assert.ok(lm.exp > Date.now() + CLOCK, 'with a play-by date');
     no(await lc('challenge', { g: gid, id: ldId, a: boE, b: lad.find((x) => x.rank === 1).eid === target.eid ? lad[lad.length - 1].eid : lad.find((x) => x.rank === 1).eid }, bo.token), 409, 'one open challenge at a time, or out of reach');
     const boSide = lm.a === boE ? 'a' : 'b'; ev = okk(await lc('score', { g: gid, id: ldId, m: lm.id, games: [boSide === 'a' ? [11, 4] : [4, 11]], v: lm.v, op: 'lad1' }, steve.token)).event;

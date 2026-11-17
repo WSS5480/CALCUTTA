@@ -937,3 +937,16 @@ The independent reviewer's verdict on the Groups server code was DEPLOY AFTER FI
 - `merge()` fuzz, Groups off: main's `sync.js` `merge(a, b)` vs the result's `merge(a, b[, upd, was])` and `mergeBase(a, b)` on 200,000 random pairs (2 seeds x 100,000; bets with `t` / `res` / `gl` / `sa` / legs, tombstones, pins, logs, locks, junk and wrong types): **0 different**, inputs left the same. (With `GROUPS_ENABLED=1` the same fuzz differs in 4,388 of 5,000, so it can tell.)
 - The scripts are NOT in the repo (session scratch folder: `diff/mock.js`, `diff/diff.js`, `mergefuzz.js`); ask the manager if they should be kept for Phase 2.
 - NOT covered: the real Supabase, My Apps, ESPN and Render; a real phone; timing races between two real server instances.
+
+## Manager notes, Nov 16 2026 evening: owner requirements not yet built (no app change in this entry)
+- Weekly Calcuttas wanted (Groups). Open Q: auction resets weekly vs season auction paid weekly.
+- PGA: "Add golf pga to the oddable with live updates. Groups can Calcutta the tournament or the year." Leaderboard = v262 (branch pga-live). Calcutta on a tournament and on the season = Groups/Calcutta phase.
+- ALL Calcuttas: bidding is a LIVE EVENT. Everyone must join; the commissioner starts it, sets the bidding (which lot is up, opening bid/increments/timer), and locks the winner of each lot. (9:20 PM CT)
+- Subscription: free for now stays. My Apps: owner alerts (push), free-time requests, Cash App handle ($cashtag) per account + on each payment. Oddable side (Request free time button, cashtag box) still to build against My Apps contract.
+- Golf rule questions doc: build with suggested answers unless he changes them. https://claude.ai/artifact/E7yUmCBCLeUyJegv7R34nA
+- Open owner Qs: phone notifications with app closed (item 9); team page yards -> official net; H1/H2/H4; PGA Calcutta field vs individual lots; year Calcutta scoring.
+- Live auction open Qs (suggested: each bids on own phone; countdown that resets, commissioner can pause; be there, no proxy bids; commissioner can undo a lock until he closes the auction). Free Render plan sleeps: move ODDABLE to a paid instance before a real live auction.
+- Owner said "Go" on the whole plan (9:26 PM CT), incl. phone notifications with the app closed. Order: Groups dark (this push) -> v263 request free time + cashtag (branch time-request) and v262 PGA leaderboard (branch pga-live), both in worktrees, manager merges and fixes version lines -> Groups phase 2 owner-only on phone -> Golf days (suggested rule answers) -> live Calcutta auction + weekly + PGA Calcutta -> pickleball as group game -> notifications -> catalog/invites/stats -> Groups public -> decks.
+- My Apps build 2026-11-16.32 is live-pending: owner alerts (env VAPID_PUBLIC / VAPID_PRIVATE), Activity, Requests, cashtag. Owner has not yet confirmed a test alert arrives.
+- Decisions taken by the manager at this push: sync.js id encoding ships (byte-identical for normal ids); unused `sa` stamp stays until Phase 2; differential/fuzz scripts not committed (scratch only).
+- Still unverified live: /courts returning real McAllen courts (Overpass was at capacity Nov 16 ~8:30 PM); v260 pop-up on a real phone; /appcfg reading card_theme from My Apps.

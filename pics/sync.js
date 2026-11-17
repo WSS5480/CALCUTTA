@@ -7,7 +7,10 @@
   const escH = (x) => String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const J = (k, d) => { try { const v = JSON.parse(g(k)); return v == null ? d : v; } catch (e) { return d; } };
   const stable = (o) => JSON.stringify(o, (k, v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.keys(v).sort().reduce((a, x) => ((a[x] = v[x]), a), {}) : v));
-  const creds = () => { const p = g('sync-phone'), n = g('sync-pin'); return p && n ? { phone: p, pin: n } : null; };
+  // v271: a phone that signed in with email + password (or just reset its PIN by email) has no PIN saved. gate.js sets 'odd-stok' for it and the bets sync with
+  // the sign-in token instead: the server opens the same row the cell number + PIN opens (odds-api/sync.js tokenRow). Cell number + PIN, when saved, always wins.
+  const creds = () => { const p = g('sync-phone'), n = g('sync-pin'); if (p && n) return { phone: p, pin: n }; const t = g('odd-tok'); return t && g('odd-stok') === '1' ? { token: t } : null; };
+  const still = (c) => (c.token ? g('odd-tok') === c.token && g('odd-stok') === '1' : g('sync-phone') === c.phone); // same person as when the call started
   let BUSY = false;
 
   function gather() {
@@ -32,17 +35,17 @@
   async function call(path, body) {
     const r = await fetch(API + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     let j = {}; try { j = await r.json(); } catch (e) {}
-    if (!r.ok) throw new Error(j.error || 'Sync failed (' + r.status + ')');
+    if (!r.ok) { const e = new Error(j.error || 'Sync failed (' + r.status + ')'); e.status = r.status; e.code = j.code; throw e; }
     return j;
   }
   const editing = () => { const a = document.activeElement; return a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName); };
-  let LASTHASH = '';
+  let LASTHASH = '', RAN = 0;
   async function syncNow(o) {
-    o = o || {}; const c = creds(); if (!c || BUSY) return; if (window.__oddLock === 'expired') return; /* v268: time has ended = no push and no pull, so the saved bets on this phone and the row on the server both stay exactly as they are until the account is paid */ BUSY = true;
+    o = o || {}; const c = creds(); if (!c || BUSY) return; RAN = Date.now(); if (window.__oddLock === 'expired') return; /* v268: time has ended = no push and no pull, so the saved bets on this phone and the row on the server both stay exactly as they are until the account is paid */ BUSY = true;
     try {
       const local = gather(), lh = hashOf(local);
       const j = await call('/push', { ...c, data: local });
-      if (g('sync-phone') !== c.phone) return false; // signed out or switched person while waiting: never write the old account's data here
+      if (!still(c)) return false; // signed out or switched person while waiting: never write the old account's data here
       const merged = j.data || {};
       s('sync-last', String(Date.now()));
       // the server can be slow (cold start): if bets changed while we waited, applying the older merged copy would wipe the new bet, so push again instead
@@ -60,7 +63,15 @@
         }
       } else { s('sync-ids', JSON.stringify(local.bets.map((b) => String(b.id)))); s('sync-tomb', JSON.stringify(merged.tomb || local.tomb)); LASTHASH = lh; }
       paint(); return true;
-    } catch (e) { s('sync-err', e.message); paint(); if (/Wrong PIN|No account/.test(e.message)) { s('sync-pin', ''); } return false; }
+    } catch (e) {
+      s('sync-err', e.message); paint(); if (/Wrong PIN|No account/.test(e.message)) { s('sync-pin', ''); }
+      // v271: the PIN was changed somewhere else (lost-PIN reset), or this phone's sign-in was ended by a reset: the gate asks the person to sign in again. Nothing saved here is cleared.
+      try {
+        if (c.token) { if (e.status === 401 && e.code === 'token' && g('odd-tok') === c.token && window.oddReauth) window.oddReauth('Sign in again.', true); }
+        else if (e.status === 401 && /Wrong PIN/.test(e.message) && g('odd-tok') && g('sync-phone') === c.phone && window.oddReauth) window.oddReauth('Your PIN was changed. Sign in again.', true);
+      } catch (x) {}
+      return false;
+    }
     finally { BUSY = false; }
   }
 
@@ -73,7 +84,7 @@
   const mask = (p) => '(•••) •••-' + String(p || '').slice(-4);
   function box() {
     const c = creds(), err = g('sync-err');
-    if (c) return `<p style="margin:0 0 8px">Signed in as <b>${mask(c.phone)}</b>. Last sync ${last()}.</p>${err ? `<p style="color:#ff9a90;margin:0 0 8px">${escH(err)}</p>` : ''}<div style="display:flex;gap:8px"><button class="sbtn" onclick="OddSync.now()">Sync now</button><button class="sbtn x" onclick="OddSync.out()">Sign out</button></div><p class="sn">Your bets, watch list, daily logs and locked picks sync across every device you sign in on. Kalshi keys stay on each device.</p>`;
+    if (c) return `<p style="margin:0 0 8px">Signed in ${c.token ? 'with your <b>email</b>' : 'as <b>' + mask(c.phone) + '</b>'}. Last sync ${last()}.</p>${err ? `<p style="color:#ff9a90;margin:0 0 8px">${escH(err)}</p>` : ''}<div style="display:flex;gap:8px"><button class="sbtn" onclick="OddSync.now()">Sync now</button><button class="sbtn x" onclick="OddSync.out()">Sign out</button></div><p class="sn">Your bets, watch list, daily logs and locked picks sync across every device you sign in on. Kalshi keys stay on each device.</p>`;
     return `<label>Cell number<input id="sph" type="tel" inputmode="tel" autocomplete="tel" placeholder="(956) 555-1234"></label><label>PIN (4–10 digits)<input id="spn" type="password" inputmode="numeric" autocomplete="off" placeholder="PIN"></label>${err ? `<p style="color:#ff9a90;margin:0 0 8px">${escH(err)}</p>` : ''}<div style="display:flex;gap:8px"><button class="sbtn" onclick="OddSync.go('/login')">Sign in</button><button class="sbtn x" onclick="OddSync.go('/signup')">Create account</button></div><p class="sn">First time? Use <b>Create account</b> on the device that has your bets. On your other devices use <b>Sign in</b>. Pick a PIN you don't use anywhere else.</p>`;
   }
   function open() {
@@ -89,7 +100,7 @@
   window.OddSync = {
     open,
     now: async () => { s('sync-err', ''); const ok = await syncNow({ apply: true }); if (ok) { const m = document.getElementById('syncmsg'); if (m) m.insertAdjacentHTML('afterbegin', '<p style="color:#7ee8ae;margin:0 0 8px">✓ Synced</p>'); } },
-    out: () => { s('sync-phone', ''); s('sync-pin', ''); s('sync-owner', ''); if (window.oddWipe) window.oddWipe(); s('sync-ids', '[]'); s('sync-tomb', '[]'); location.reload(); },
+    out: () => { s('sync-phone', ''); s('sync-pin', ''); s('sync-owner', ''); s('odd-stok', ''); if (window.oddWipe) window.oddWipe(); s('sync-ids', '[]'); s('sync-tomb', '[]'); location.reload(); },
     go: async (path) => {
       const ph = (document.getElementById('sph') || {}).value || '', pn = (document.getElementById('spn') || {}).value || '', m = document.getElementById('syncmsg');
       s('sync-err', ''); if (m) m.insertAdjacentHTML('afterbegin', '<p class="sn" id="sbusy">Working…</p>');
@@ -113,9 +124,17 @@
   }
   mountPill(); setTimeout(mountPill, 800);
   // background: push local changes; pull when the tab is shown again; one pull at load
+  // v271: the two background jobs are started once (start()), at load on a page that opened signed in, exactly as before, or by OddSync.kick() right after a
+  // sign-in that did not reload the page (gate.js). Before, a person who signed up without a reload was only synced again on the next app open.
+  let STARTED = false;
+  function start() {
+    if (STARTED) return; STARTED = true;
+    setInterval(() => { if (document.hidden || !creds()) return; try { if (hashOf(gather()) !== LASTHASH) syncNow({ apply: false }); } catch (e) {} }, 10000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden && !editing() && creds()) syncNow({ apply: true }); });
+  }
+  window.OddSync.kick = () => { if (!creds()) return; start(); if (Date.now() - RAN < 5000) return; return syncNow({ apply: true }); }; // the page's own "pulled once after sign-in" (index.html) may have just run: not twice
   if (creds()) {
     setTimeout(() => syncNow({ apply: true }), 2500);
-    setInterval(() => { if (document.hidden || !creds()) return; try { if (hashOf(gather()) !== LASTHASH) syncNow({ apply: false }); } catch (e) {} }, 10000);
-    document.addEventListener('visibilitychange', () => { if (!document.hidden && !editing()) syncNow({ apply: true }); });
+    start();
   }
 })();

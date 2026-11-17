@@ -25,8 +25,36 @@ function verify(t) {
   const [p, s] = String(t || '').split('.'); if (!p || !s) return null;
   const want = sig(p); if (s.length !== want.length || !crypto.timingSafeEqual(Buffer.from(s), Buffer.from(want))) return null;
   try { const o = JSON.parse(Buffer.from(p, 'base64url').toString()); if (o.e === 'owner' && o.v !== pinVer()) return null; // changing OWNER_PIN signs the old owner tokens out
+    if (o.x > Date.now() && REV[o.e] && o.x - TOK_DAYS * 864e5 < REV[o.e]) return null; // v271: signed before this account's PIN / password was last reset (see revoke)
     return o.x > Date.now() ? o.e : null; } catch (e) { return null; }
 }
+// ---- v271: sign every device out after a lost-PIN or lost-password reset ----
+// A token carries no issue time, but it is always signed for TOK_DAYS, so it was issued at (x - TOK_DAYS). revoke(account) stamps "now" for the account; verify()
+// then refuses that account's tokens issued before the stamp, on this server at once and for good: the stamps are kept in the row 'lock:pinrev' of oddable_sync
+// (the 'lock:' prefix keeps it out of every player list) and read back at most once a minute (revLoad), so a restart does not forget them. A stamp older than
+// TOK_DAYS is dropped (those tokens have expired anyway). If the row cannot be read or written the reset still goes through; the stamp then lives in memory only.
+let REV = {}, revAt = 0;
+const revClean = (m) => { const o = {}, lim = Date.now() - (TOK_DAYS + 1) * 864e5; Object.keys(m || {}).forEach((k) => { const t = Number(m[k]); if (t > lim) o[k] = t; }); return o; };
+async function revLoad(force) {
+  if (!syncMod.ready() || (!force && Date.now() - revAt < 60e3)) return; revAt = Date.now();
+  try { const r = await syncMod.dbGet('lock:pinrev'), m = revClean(r && r.data && r.data.rev); Object.keys(REV).forEach((k) => { if (!(m[k] >= REV[k])) m[k] = REV[k]; }); REV = revClean(m); } catch (e) {}
+}
+async function revoke(account) {
+  const t = Date.now(); REV[account] = t;
+  if (!syncMod.ready()) return;
+  for (let i = 0; i < 4; i++) {
+    try {
+      let r = await syncMod.dbGet('lock:pinrev'); if (!r) { await syncMod.dbPut({ id: 'lock:pinrev', salt: 'x', pinhash: 'x', data: { rev: {} }, updated: 1 }, true); r = await syncMod.dbGet('lock:pinrev'); if (!r) continue; }
+      const rev = revClean(Object.assign({}, r.data && r.data.rev, { [account]: t }));
+      if (await syncMod.dbPatchIf('lock:pinrev', r.updated, { rev }, Math.max(Date.now(), Number(r.updated || 0) + 1))) return;
+    } catch (e) { return; }
+  }
+}
+// Was this a good token of ours that a reset has since signed out? (so the phone can say "sign in again" instead of treating it as a stranger)
+function revoked(t) { try { const [p, s] = String(t || '').split('.'); if (!p || !s) return false; const w = sig(p); if (s.length !== w.length || !crypto.timingSafeEqual(Buffer.from(s), Buffer.from(w))) return false; const o = JSON.parse(Buffer.from(p, 'base64url').toString()); return !!(REV[o.e] && o.x > Date.now() && o.x - TOK_DAYS * 864e5 < REV[o.e]); } catch (e) { return false; } }
+// For sync.js and recover.js: the account inside a good token (never the owner-PIN token), or null. The gate must be on: with it off the signing key is guessable.
+async function tokenAcct(t) { if (!on()) return null; await revLoad(); const e = verify(t); return e && e !== 'owner' ? e : null; }
+// ---- end v271 ----
 const MAX = 20000;
 const body = (req) => new Promise((res, rej) => { let n = 0; const c = []; req.on('data', (d) => { n += d.length; if (n > MAX) { rej(new Error('too big')); req.destroy(); } else c.push(d); }); req.on('end', () => { try { res(JSON.parse(Buffer.concat(c).toString() || '{}')); } catch (e) { rej(e); } }); req.on('error', rej); });
 const send = (res, code, o) => { res.statusCode = code; res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(o)); };
@@ -41,6 +69,7 @@ const OWNER_PIN = () => String(process.env.OWNER_PIN || '').trim();
 const OWNER_ME = { email: 'owner', role: 'owner', plan: 'pro', expires_on: null, source: 'owner', allowed: true, pending: false, price: 99, link: null, tag: null, payReady: true };
 const chiToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date());
 // v263. A customer's Cash App handle as My Apps stores it (optional $, 1-20 letters, digits, _ or -); anything else is not passed on to the phone.
+const okHint = (h) => (typeof h === 'string' && h.length <= 80 && !/[<>&"'\u0000-\u001f]/.test(h) ? h : ''); // v271: a masked address like "s•••@gmail.com", never the address itself
 const okTag = (t) => (typeof t === 'string' && /^\$?[A-Za-z0-9_-]{1,20}$/.test(t.trim()) ? t.trim() : '');
 // v263. Free-time request note: plain text, control characters and line breaks become spaces, runs of spaces collapse, trimmed. null = not text.
 const cleanNote = (n) => (n == null ? '' : typeof n !== 'string' ? null : n.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim());
@@ -60,7 +89,11 @@ async function shape(email, fresh) {
   const info = await ma('/api/v1/pay/info', { account: email });
   const p = info.ok ? info.j : {};
   return { email: a.email, role: a.role, plan: a.plan, expires_on: a.expires_on, source: a.source, allowed: !!allowed(a), pending: !!a.pending || !!p.pending,
-    price: p.price || a.price || 99, link: p.link || null, tag: p.tag || null, payReady: !!p.configured, cashtag: okTag(p.cashtag) }; // tag = the OWNER's tag (where to pay); cashtag = this customer's own saved handle (v263)
+    price: p.price || a.price || 99, link: p.link || null, tag: p.tag || null, payReady: !!p.configured, cashtag: okTag(p.cashtag), // tag = the OWNER's tag (where to pay); cashtag = this customer's own saved handle (v263)
+    // v271, from My Apps /api/v1/account (builds .38 and .41), at the END so every older field is where it was. An older My Apps does not send them: then
+    // has_email_login is null ("not known": the phone offers nothing) and ref_locked is true (the phone never sends a code).
+    has_contact: a.has_contact === true, contact_verified: a.contact_verified === true, contact_hint: okHint(a.contact_hint),
+    has_email_login: a.has_email_login === true ? true : a.has_email_login === false ? false : null, influencer: a.influencer === true, ref_locked: a.ref_locked !== false };
 }
 // For other routes (AI): returns true if the request carries a valid token for an allowed account (or the gate is off).
 async function check(req) {
@@ -97,6 +130,7 @@ async function handle(req, res) {
       const nm0 = cleanName(b.name); if (b.create && nm0.length < 2) { send(res, 400, { error: 'Enter a name or handle to create your account' }); return true; }
       let v; try { v = await syncMod.verifyLogin(b.phone, b.pin, ip, !!b.create); } catch (er) { send(res, er.status || 500, { error: er.message }); return true; }
       const pe = phoneEmail(v.id), pw = crypto.createHmac('sha256', KEY()).update('phone|' + v.id).digest('hex').slice(0, 32);
+      syncMod.noteRow(pe, v.id); // v271: remembered so a token for this account can find its bets row (sync.js rowIdFor)
       const rf = b.create ? cleanRef(b.ref) : ''; // v268: the sharing code goes along only when an account is being created
       let r = await ma('/api/v1/auth/register', Object.assign({ email: pe, password: pw, name: b.create && nm0 ? nm0 : 'Phone ' + v.id.slice(0, 4) }, rf ? { ref: rf } : {}));
       if (b.create && nm0) { try { await namesSet(String(v.id).slice(0, 8), nm0); } catch (er) {} }
@@ -112,12 +146,18 @@ async function handle(req, res) {
       const rf = path === '/acct/register' ? cleanRef(b.ref) : ''; // v268: sharing code, sign-up only
       const r = await ma(path === '/acct/login' ? '/api/v1/auth/login' : '/api/v1/auth/register', Object.assign({ email, password: b.password, name: cleanName(b.name) }, rf ? { ref: rf } : {}));
       if (!r.ok) { send(res, r.status === 401 || r.status === 409 || r.status === 400 ? r.status : 502, { error: r.j.error || 'Could not sign in' }); return true; }
-      CACHE.delete(email);
-      const me = await shape(email, true);
-      send(res, 200, { token: mint(email), me }); return true;
+      // v271 (My Apps contract 5i): "Use `account` from the login answer, never the email the person typed." An email + password that is LINKED to a phone account
+      // answers with that phone account's id, so the token, the plan and the bets row are the same ones the cell number + PIN opens. For an ordinary email
+      // account `account` is the email itself, and an older My Apps sends none: both give exactly what this line did before.
+      const ja = typeof r.j.account === 'string' ? r.j.account.trim().toLowerCase() : '';
+      const acct = ja && (ja === email || /^[0-9a-f]{20}@phone\.oddable$/.test(ja)) ? ja : email;
+      CACHE.delete(acct);
+      const me = await shape(acct, true); if (me && acct !== email && isOwnerPhone(acct)) me.ownerDash = true;
+      send(res, 200, { token: mint(acct), me }); return true;
     }
+    await revLoad(); // v271: at most one small read a minute (the reset stamps)
     const e = verify(b.token || req.headers['x-token']);
-    if (!e) { send(res, 401, { error: 'Sign in again' }); return true; }
+    if (!e) { send(res, 401, revoked(b.token || req.headers['x-token']) ? { error: 'Your PIN or password was changed. Sign in again.', code: 'resign' } : { error: 'Sign in again' }); return true; }
     if (path === '/acct/dunlock') {
       if (!isOwnerPhone(e) || !OWNER_PIN()) { send(res, 403, { error: 'Not an owner account' }); return true; }
       if (throttled(ip + '|dunlock') || throttled(e + '|dunlock')) { send(res, 429, { error: 'Too many tries, wait a few minutes' }); return true; }
@@ -208,4 +248,5 @@ const phoneEmail = (id) => crypto.createHmac('sha256', KEY()).update('phoneid|' 
 function ownerOk(req) { const e = verify(req.headers['x-token']); return !!e && dashOk(e, req); }
 // Groups (groups.js): who is signed in (the account id inside a valid token, or null). Never sent to other players.
 function who(req) { if (!on()) return null; const e = verify(req.headers['x-token']); if (!e) return null; if (e === 'owner' && !OWNER_PIN()) return null; return e; }
-module.exports = { guestMode, expired, handle, check, on, phoneEmail, ownerOk, ma, maReady: () => !!(URL_() && SECRET()), who, isOwnerPhone, namesGet, ownerName: OWNER_NAME }; // ma / maReady: courts.js reads the app settings from My Apps; who / isOwnerPhone / namesGet / ownerName: groups.js
+module.exports = { guestMode, expired, handle, check, on, phoneEmail, ownerOk, ma, maReady: () => !!(URL_() && SECRET()), who, isOwnerPhone, namesGet, ownerName: OWNER_NAME,
+  tokenAcct, revoke, revLoad, mint, shape, cleanRef, uncache: (e) => CACHE.delete(e) }; // v271 (second line): for sync.js (token sync) and recover.js // ma / maReady: courts.js reads the app settings from My Apps; who / isOwnerPhone / namesGet / ownerName: groups.js

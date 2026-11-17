@@ -118,6 +118,14 @@ async function handle(req, res) {
       if (!want || got.length !== want.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(want))) { send(res, 401, { error: 'no' }); return true; }
       send(res, 200, { users: await adminUsers(require('./acct').phoneEmail) }); return true;
     }
+    // v271: a device that signed in with email + password (or just reset its PIN by email) has no PIN to send. It sends its signed-in token instead (in the body:
+    // the /sync CORS header list is unchanged) and gets the SAME row the cell number + PIN opens. See tokenRow() below. Only pull / login / push; never signup.
+    if (typeof b.token === 'string' && b.token && b.phone == null && b.pin == null) {
+      const t = await tokenRow(b.token); if (t.status) { send(res, t.status, { error: t.error, code: t.code }); return true; }
+      if (path === '/sync/login' || path === '/sync/pull') { send(res, 200, { ok: true, data: t.row.data || {}, updated: t.row.updated }); return true; }
+      if (path === '/sync/push') return await pushRow(res, t.id, t.row, b);
+      send(res, 404, { error: 'not found' }); return true;
+    }
     const phone = normPhone(b.phone), pin = String(b.pin || '');
     if (phone.length !== 10) { send(res, 400, { error: 'Enter a 10-digit cell number' }); return true; }
     if (!/^\d{4,10}$/.test(pin)) { send(res, 400, { error: 'PIN must be 4 to 10 digits' }); return true; }
@@ -137,18 +145,55 @@ async function handle(req, res) {
     }
     if (!row || !same(hashPin(pin, row.salt), row.pinhash)) { fail(id); fail('ip:' + ip); send(res, 401, { error: row ? 'Wrong PIN' : 'No account for that number. Use Create account.' }); return true; }
     if (path === '/sync/login' || path === '/sync/pull') { send(res, 200, { ok: true, data: row.data || {}, updated: row.updated }); return true; }
-    if (path === '/sync/push') {
-      let cur = row;
-      for (let i = 0; i < 4; i++) { // never overwrite a write that landed since we read: patch only if `updated` is unchanged, else re-read and merge again
-        const upd = Math.max(Date.now(), Number(cur.updated || 0) + 1), data = merge(cur.data || {}, b.data || {}, upd, Number(cur.updated) || 0);
-        if (await dbPatchIf(id, cur.updated, data, upd)) { send(res, 200, { ok: true, data, updated: upd }); betEvents(id, cur.data, data); return true; }
-        cur = await dbGet(id) || cur;
-      }
-      send(res, 409, { error: 'Busy, try again' }); return true;
-    }
+    if (path === '/sync/push') return await pushRow(res, id, row, b);
     send(res, 404, { error: 'not found' }); return true;
   } catch (e) { send(res, e.status || 500, { error: e.status ? e.message : 'Sync error: ' + e.message }); return true; }
 }
+// The push itself (v271: moved out of handle() unchanged, so the cell number + PIN path and the token path store a push the very same way).
+async function pushRow(res, id, row, b) {
+  let cur = row;
+  for (let i = 0; i < 4; i++) { // never overwrite a write that landed since we read: patch only if `updated` is unchanged, else re-read and merge again
+    const upd = Math.max(Date.now(), Number(cur.updated || 0) + 1), data = merge(cur.data || {}, b.data || {}, upd, Number(cur.updated) || 0);
+    if (await dbPatchIf(id, cur.updated, data, upd)) { send(res, 200, { ok: true, data, updated: upd }); betEvents(id, cur.data, data); return true; }
+    cur = await dbGet(id) || cur;
+  }
+  send(res, 409, { error: 'Busy, try again' }); return true;
+}
+// ---------- v271: the bets row of a signed-in ACCOUNT (email + password sign-in, lost-PIN reset) ----------
+// A row is keyed by the cell number alone (id = sha256 of it); the PIN is only checked against `salt` + `pinhash` and is not part of the key or of the data.
+// The My Apps account id of a phone account is a one-way code of the row id (acct.phoneEmail), so the row of an account is found by trying the row ids:
+// acct.js notes the pair on every cell number + PIN sign-in (noteRow), anything else is found with one read of the ids (at most once in 30 s for a miss).
+const ROWS = new Map(); let rowsAt = 0;
+const noteRow = (acct, id) => { if (acct && id) { if (ROWS.size > 20000) ROWS.clear(); ROWS.set(String(acct), String(id)); } };
+async function rowIdFor(acct) {
+  acct = String(acct || ''); if (!/^[0-9a-f]{20}@phone\.oddable$/.test(acct)) return null;
+  if (ROWS.has(acct)) return ROWS.get(acct);
+  if (Date.now() - rowsAt < 30e3) return null; rowsAt = Date.now();
+  const pe = require('./acct').phoneEmail; (await dbIds()).forEach((id) => { if (/^[0-9a-f]{64}$/.test(id)) noteRow(pe(id), id); });
+  return ROWS.get(acct) || null;
+}
+// Who may use a token here: only a token acct.js signed for a phone account (tokenAcct: gate on, signature good, not expired, not the owner-PIN token, and not
+// signed before that account's PIN or password was last reset). With the gate off no token is accepted at all (its signing key would be guessable).
+async function tokenRow(tok) {
+  const A = require('./acct'); let e = null; try { e = await A.tokenAcct(tok); } catch (er) {}
+  if (!e) return { status: 401, code: 'token', error: 'Sign in again' };
+  const id = await rowIdFor(e), row = id ? await dbGet(id) : null;
+  if (!row) return { status: 404, code: 'norow', error: 'No saved bets for this account' };
+  return { id, row };
+}
+// A new PIN for an existing row (lost-PIN reset, recover.js, after My Apps has said who proved their email). ONE write that touches only `salt` and `pinhash`:
+// the id, the data (bets, log, pins, locks) and `updated` are not in it, so a push landing at the same moment cannot be lost and nothing is re-keyed.
+// The old PIN stops working at once (its hash no longer matches); the wrong-PIN lock-out of that row is cleared so the owner of the new PIN can sign in.
+async function setPin(id, pin) {
+  id = String(id || ''); pin = String(pin || '');
+  if (!/^[0-9a-f]{64}$/.test(id) || !/^\d{6,10}$/.test(pin)) return false; // same rule as a new account: 6 to 10 digits
+  const { url, key } = cfg(); if (!url || !key) return false;
+  const salt = crypto.randomBytes(16).toString('hex');
+  const r = await fetch(`${url}/rest/v1/oddable_sync?id=eq.${qid(id)}`, { method: 'PATCH', headers: { ...hdr(key), Prefer: 'return=representation' }, body: JSON.stringify({ salt, pinhash: hashPin(pin, salt) }), signal: AbortSignal.timeout(15000) });
+  if (!r.ok) throw new Error('db write ' + r.status);
+  const ok = (await r.json()).length === 1; if (ok) FAILS.delete(id); return ok;
+}
+const ready = () => !!(cfg().url && cfg().key);
 // Activity events (events.js): AFTER a push is stored and answered, My Apps is told when it added new bets. Runs later (setImmediate), only reads the two
 // objects, can never throw into the request, and does nothing at all with EVENTS_ENABLED=0 or when My Apps is not set up.
 function betEvents(id, before, after) { setImmediate(() => { try { const EV = require('./events'); if (EV.enabled()) EV.betsPushed(require('./acct').phoneEmail(id), before || {}, after); } catch (e) {} }); }
@@ -218,4 +263,4 @@ async function dbIds() {
   return (await r.json()).map((x) => String(x.id)).filter((id) => !id.startsWith('lock:'));
 }
 // (1e47e93 also added dbList(prefix); nothing in Groups calls it, so it was not ported.)
-module.exports = { handle, merge, mergeBase, groupsOn, normPhone, verifyLogin, adminUsers, dbGet, dbPut, dbPatchIf, dbIds };
+module.exports = { handle, merge, mergeBase, groupsOn, normPhone, verifyLogin, adminUsers, dbGet, dbPut, dbPatchIf, dbIds, ready, noteRow, rowIdFor, setPin, idOf }; // v271: ready / noteRow / rowIdFor / setPin / idOf (acct.js, recover.js)

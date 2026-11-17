@@ -286,7 +286,7 @@ async function confCtx(recs, meRef, now) {
       const e = await refAcct(ref); if (!e) continue;
       let c = BYC.get(e); if (!c || t - c.at > 60e3 || c.at > t) {
         const si = await sinceOf(e, t), v = await cached(e), own = oppKeyFor(mkOf(e));
-        c = { at: t, v: { key: own, name: (await nameOf(e).catch(() => '')) || '', since: si.known ? si.t : null, sinceKnown: si.known, acts: v.recs.filter((r) => ownPlay(r, own)).length, vouched: vouchedBy(VO, mkOf(e)) } }; BYC.set(e, c); if (BYC.size > 2000) BYC.delete(BYC.keys().next().value);
+        c = { at: t, v: { key: own, name: (await nameOf(e).catch(() => '')) || '', since: si.known ? si.t : null, sinceKnown: si.known, acts: v.recs.filter((r) => ownPlay(r, own)).length, vouched: vouchedBy(VO, mkOf(e)), vouchIds: vouchIdsOf(VO, mkOf(e)) } }; BYC.set(e, c); if (BYC.size > 2000) BYC.delete(BYC.keys().next().value);
       }
       by.set(ref, c.v); keys.set(c.v.key, c.v);
     } catch (er) { /* a confirmer that cannot be read does not count */ }
@@ -294,10 +294,12 @@ async function confCtx(recs, meRef, now) {
   return { by, keys, now: t };
 }
 // One confirmer of one record, at the time it confirmed -> { ok, key, known, name, why }.
-function byCheck(ctx, ref, at, name) {
+// Review 6: a vouch counts only in THAT club's games (the record's clubId / courseId is the vouching club's id); elsewhere "vouched by" is information only.
+const recClub = (r) => { const x = (r && r.extra) || {}; return okCid(x.clubId) || okCid(x.courseId) || ''; };
+function byCheck(ctx, ref, at, name, club) {
   const c = ctx && ctx.by && ctx.by.get(ref), nm = (c && c.name) || name || 'The confirmer';
   if (!c) return { ok: false, known: false, key: ref, name: name || '', why: 'confirmer not checked: ' + nm + ' has no Oddable account on file for this confirmation' };
-  const vouched = c.vouched && c.vouched.length; // review 5 (E): a member a club director vouched for counts whatever the account's age
+  const vouched = !!club && (c.vouchIds || []).includes(club); // review 5 (E) + review 6: vouched by THIS game's club: counts whatever the account's age
   if (!vouched && c.since == null) return { ok: false, known: true, key: c.key, name: nm, why: 'confirmer not checked: ' + nm + '\'s join date is not on file yet' };
   if (!vouched && at - c.since < CONF.byAgeDays * DAY) return { ok: false, known: true, key: c.key, name: nm, why: 'confirmer too new: ' + nm + ' joined Oddable less than ' + CONF.byAgeDays + ' days before confirming' };
   if (c.acts < CONF.byActs) return { ok: false, known: true, key: c.key, name: nm, why: 'confirmer too new: ' + nm + ' has fewer than ' + CONF.byActs + ' rounds or matches scored in Oddable games (finished, confirmed by another account)' };
@@ -316,7 +318,7 @@ function confirmMarks(list, meRef, ctx) {
   sorted.forEach((r) => {
     const c = confInfo(r, meRef), m = { cand: c.ok, confirmed: false, by: null, name: c.name, typed: c.typed, how: c.how, why: c.why, recBy: null, date: r.date, at: c.at || 0, ent: entryOf(r) };
     out.set(r.id, m); if (!c.ok) return;
-    const chk = c.by.map((b) => byCheck(ctx, b, c.at, c.name)).filter((k) => k.key !== meRef), good = chk.filter((k) => k.ok), first = chk.find((k) => k.known) || chk[0];
+    const chk = c.by.map((b) => byCheck(ctx, b, c.at, c.name, recClub(r))).filter((k) => k.key !== meRef), good = chk.filter((k) => k.ok), first = chk.find((k) => k.known) || chk[0];
     if (!first) { m.cand = false; m.why = 'No account on another team confirmed the card'; return; }
     m.recBy = first.key; if (first.known) m.name = first.name;
     if (!good.length) { m.why = 'Recorded, not counted (' + first.why + ')'; return; }
@@ -724,7 +726,7 @@ async function nameOf(e) {
 //   3. BOOT GUARD: until that marker row exists nothing is stamped "on first look". An account with no stamp then reads as known: false ("join date not on
 //      file yet"); its age is not checked and its entries are never marked as dated before it joined. After the backfill, an account with no stamp is one
 //      that first reached Oddable after it (every new account is stamped at sign-up), so it is stamped now, once.
-const BFROW = 'lock:acctsince:done'; let BF = { at: 0, v: null }, BFWARN = false;
+const BFROW = 'lock:acctsince:done'; let BF = { at: 0, v: null }, BFWARN = false, EMWARN = false;
 async function backfilled() {
   if (BF.v && BF.v.at) return BF.v; if (D.now() - BF.at < 30e3 && BF.at <= D.now()) return null;
   const r = await D.S.dbGet(BFROW).catch(() => null); BF = { at: D.now(), v: (r && r.data && r.data.at) ? r.data : null };
@@ -736,7 +738,15 @@ async function sinceOf(e, now) {
   const t = now || D.now(); if (/^guest:/.test(String(e || ''))) return { t, known: false };
   const A = D.acct(); let stamp = null; try { if (typeof A.since === 'function') stamp = Number(await A.since(e)) || null; } catch (er) {}
   if (stamp && stamp > 1.4e12) return { t: Math.min(stamp, t), known: true };
-  if (!(await backfilled())) return { t, known: false };
+  const bf = await backfilled(); if (!bf) return { t, known: false };
+  if (e !== 'owner' && !/@phone\.oddable$/.test(String(e))) { // review 6: an EMAIL account (made on My Apps) with no stamp. Its start is the My Apps creation time
+    // (server-stamped, never earlier than Oddable's launch); never "joined today". Without acct.createdAt (the main-line session supplies it) it stays "not on file".
+    let c = 0; if (typeof A.createdAt === 'function') { try { c = Number(await A.createdAt(e)) || 0; } catch (er) {} }
+    if (!(c > 1.4e12)) { if (!EMWARN) { EMWARN = true; console.error('stats: acct.createdAt(account) missing or empty: email accounts with no sign-up stamp read "join date not on file"'); } return { t, known: false }; }
+    const at = Math.min(t, Math.max(c, N(bf.launch)));
+    if (typeof A.sinceSet === 'function') { try { const got = Number(await A.sinceSet(e, at)); if (got > 1.4e12) return { t: Math.min(got, t), known: true }; } catch (er) {} }
+    return { t, known: false };
+  }
   if (typeof A.sinceSet === 'function') { try { const got = Number(await A.sinceSet(e, t)); if (got > 1.4e12) return { t: Math.min(got, t), known: true }; } catch (er) {} }
   return { t, known: false };
 }
@@ -779,6 +789,7 @@ async function entLinks(e) { // -> { ent: bool, courses: [{id, name}] } for one 
 // Row 'lock:vouch' { c: { <courseId>: { name, m: { <member key>: { at, by } } } }, log: [{ at, club, by, player, on }] }. Server only.
 const VOUCH = 'lock:vouch'; let VOC = { at: 0, v: null };
 async function vouchRow() { if (VOC.v && D.now() - VOC.at < 30e3 && VOC.at <= D.now()) return VOC.v; const r = await D.S.dbGet(VOUCH).catch(() => null); VOC = { at: D.now(), v: (r && r.data) || { c: {} } }; return VOC.v; }
+const vouchIdsOf = (VO, mk) => Object.keys((VO && VO.c) || {}).filter((cid) => VO.c[cid].m && VO.c[cid].m[mk]).slice(0, 20);
 const vouchedBy = (VO, mk) => Object.keys((VO && VO.c) || {}).filter((cid) => VO.c[cid].m && VO.c[cid].m[mk]).map((cid) => clean(VO.c[cid].name, 60) || 'Club').slice(0, 5);
 async function vouch(courseOrClubId, playerRef, directorE, on) {
   const cid = okCid(courseOrClubId); if (!cid) throw bad(400, 'Pick a club');
@@ -787,11 +798,11 @@ async function vouch(courseOrClubId, playerRef, directorE, on) {
   const mk = mkOf(playerRef), by = (await nameOf(directorE)) || 'Club director', player = (await nameOf(playerRef)) || 'Player', yes = on !== false;
   await rowMutate(VOUCH, () => ({ c: {}, log: [] }), (d) => { d.c = d.c || {}; d.log = d.log || []; const c = d.c[cid] = d.c[cid] || { name: club.name, m: {} }; c.name = club.name || c.name; c.m = c.m || {};
     if (yes === !!c.m[mk]) return { nochange: true }; if (yes) c.m[mk] = { at: D.now(), by }; else delete c.m[mk];
-    d.log.push({ at: D.now(), club: c.name, by, player, on: yes }); if (d.log.length > 2000) d.log = d.log.slice(-2000); return {}; });
+    d.log.push({ at: D.now(), cid, club: c.name, by, player, on: yes }); if (d.log.length > 2000) d.log = d.log.slice(-2000); return {}; });
   VOC = { at: 0, v: null }; BYC.clear(); CACHE.clear(); return { ok: true, club: club.name, player, vouched: yes };
 }
 const unvouch = (courseOrClubId, playerRef, directorE) => vouch(courseOrClubId, playerRef, directorE, false);
-async function vouchLog(directorE, courseOrClubId) { const cid = okCid(courseOrClubId); if (!(await ownedCourses(directorE)).some((c) => c.id === cid)) throw bad(403, 'Not your club'); const v = await vouchRow(), club = v.c && v.c[cid]; return { ok: true, log: ((v.log) || []).filter((l) => club && l.club === club.name).slice(-200) }; }
+async function vouchLog(directorE, courseOrClubId) { const cid = okCid(courseOrClubId); if (!(await ownedCourses(directorE)).some((c) => c.id === cid)) throw bad(403, 'Not your club'); const v = await vouchRow(), club = v.c && v.c[cid]; return { ok: true, log: ((v.log) || []).filter((l) => (l.cid ? l.cid === cid : !!club && l.club === club.name)).slice(-200).map((l) => ({ at: l.at, club: l.club, by: l.by, player: l.player, on: l.on })) }; } // review 6: by club id
 async function ownedCourses(e) { return (await entLinks(e)).courses; }
 async function courseOwner(cid) { // does any enterprise account run this course? -> { name } | null (the consent prompt asks only then)
   if (typeof D.golf().courseOwner === 'function') { const o = await D.golf().courseOwner(cid); if (o) return o; }
@@ -878,6 +889,10 @@ async function courseAdmin(b) {
 //   role keys = limits keyOf(account); player key = groups member key (mkOf) for an account, 'g:<gid>' for a guest player (userKey 'guest:<gid>').
 const EVR = (id) => 'lock:evr:' + id;
 const okEid = (v) => { const x = String(v || ''); return /^[\w.:-]{1,60}$/.test(x) ? x : ''; };
+// Review 6, M5: an event id is '<engine prefix>:<random>' (golf: golf engine, evt: local events / pickleball, grp: group contests), 8 to 48 random
+// letters / digits / _ / - after the prefix. Engines make a FRESH random id per game (never reuse one: approvals belong to one id). Unprefixed ids: 400.
+const EID_RE = /^(golf|evt|grp):[A-Za-z0-9_-]{8,48}$/;
+const eidOf = (v) => { const x = String(v == null ? '' : v); if (!EID_RE.test(x)) throw bad(400, 'Bad event id: engines pass golf:<random>, evt:<random> or grp:<random> (8 to 48 random letters or digits after the prefix)'); return x; };
 const pkeyOf = (userKey) => { const m = /^guest:([a-z0-9]{6,24})$/.exec(String(userKey || '')); return m ? 'g:' + m[1] : mkOf(userKey); };
 async function recsOf(userKey) { // a player's validated records (an account through every provider; a guest from the guest row)
   const m = /^guest:([a-z0-9]{6,24})$/.exec(String(userKey || ''));
@@ -887,14 +902,18 @@ async function recsOf(userKey) { // a player's validated records (an account thr
 async function evRow(eventId) { const id = okEid(eventId); if (!id) return null; const r = await D.S.dbGet(EVR(id)).catch(() => null); return (r && r.data) || null; }
 const evLocked = (ev) => !!(ev && ev.lockAt && D.now() >= ev.lockAt);
 const KINDS_EV = ['game', 'flight', 'tournament', 'season'];
-const evSport = (v) => { const x = String(v == null ? '' : v).toLowerCase().trim(); if (!x || x === 'golf') return 'golf'; try { return normSport(x); } catch (er) { return 'golf'; } };
+// sport left out = golf; a name that is not a sport or a game name is refused (review 6, M4: it used to become golf and play handicaps)
+const evSport = (v) => { if (v == null) return 'golf'; const x = String(v).toLowerCase().trim(); if (x === 'golf') return 'golf'; try { if (!x) throw bad(400, 'x'); return normSport(x); } catch (er) { throw bad(400, 'Unknown sport: pass golf, a rating sport or the game\'s name'); } };
+// Review 6, H3: money events, flights and tournaments need a start (lockAt, or eventStart at the first tee) before any approval can be relied on.
+// A season has no single start: each game in it is started with eventStart(seasonId, account, {gameId}) and keeps the numbers in force then.
+const needsStart = (ev) => !!ev && ev.kind !== 'season' && (ev.money === true || ev.kind === 'flight' || ev.kind === 'tournament');
 const fieldOf = (ev) => ((ev && ev.sport) && ev.sport !== 'golf' ? 'rating' : 'hcp');
 async function pname(userKey, fallback) { const gm = /^guest:([a-z0-9]{6,24})$/.exec(String(userKey || '')); if (gm) { const gr = await D.S.dbGet(GROW(gm[1])).catch(() => null); return clean(gr && gr.data && gr.data.name, 30) || clean(fallback, 30) || 'Guest'; } return (await nameOf(userKey).catch(() => '')) || clean(fallback, 30) || 'Player'; }
 // The caller's role in an event: 'org' | 'co' | 'dir' | null. A director (and the creator of an Enterprise TOURNAMENT) must still be Enterprise.
 async function roleOf(ev, e) {
   if (!ev || !e || /^guest:/.test(String(e))) return null; const k = D.limits().keyOf(e), entNow = async () => (await entLinks(e)).ent;
   if (ev.org === k || (!ev.org && ev.dir === k)) { if ((ev.kind === 'tournament' || !ev.org) && !(await entNow())) return null; return 'org'; }
-  if ((ev.co || []).includes(k)) return 'co';
+  if ((ev.co || []).includes(k) && ev.coInfo && ev.coInfo[k] && ev.coInfo[k].acc) return 'co'; // review 6, H2: active only after accepting on their own phone (eventAccept)
   if ((ev.dirs || []).includes(k) && (await entNow())) return 'dir';
   return null;
 }
@@ -909,12 +928,13 @@ const NOROLE = 'Only this event\'s organizer, a co-organizer or its Enterprise d
 const EVT = { aheadDays: 366, moves: 5, slipDays: 14 };
 async function eventSetup(organizerE, eventId, o, from) {
   const fromRoute = from === ROUTE;
-  const id = okEid(eventId); if (!id) throw bad(400, 'Bad event'); const L = D.limits(), dk = L.keyOf(organizerE), x = o || {};
+  const id = eidOf(eventId), L = D.limits(), dk = L.keyOf(organizerE), x = o || {};
   if (!organizerE || /^guest:/.test(String(organizerE))) throw bad(403, 'Sign in first');
+  const sport = x.sport != null && !fromRoute ? evSport(x.sport) : null;
   const ent = (await entLinks(organizerE)).ent, cur = await evRow(id);
   if (!cur) { if (fromRoute) throw bad(404, 'Event not found'); const kind = KINDS_EV.includes(x.kind) ? x.kind : ent ? 'tournament' : 'game'; if (kind === 'tournament' && !ent) throw bad(403, 'Only Enterprise tournaments can set handicaps (an Enterprise account creates a tournament)'); }
   const lockAt = Number(x.lockAt) > 0 ? Math.round(Number(x.lockAt)) : null, by = (await nameOf(organizerE)) || 'Organizer';
-  const keysOf = (list, max) => (Array.isArray(list) ? list : []).filter((v) => v && !/^guest:/.test(String(v))).slice(0, max).map((v) => L.keyOf(v));
+  const coIn = []; if (!fromRoute) for (const v of (Array.isArray(x.coOrganizers) ? x.coOrganizers : []).slice(0, 10)) { if (!v || /^guest:/.test(String(v)) || L.keyOf(v) === dk) continue; coIn.push({ k: L.keyOf(v), name: (await nameOf(v).catch(() => '')) || 'Co-organizer' }); }
   const dirsOk = []; if (!fromRoute) for (const de of (Array.isArray(x.directors) ? x.directors : []).slice(0, 5)) { if (de && (await entLinks(de)).ent) dirsOk.push(L.keyOf(de)); else throw bad(403, 'A director must be an Enterprise account'); }
   const pls = []; if (!fromRoute) for (const p of (Array.isArray(x.players) ? x.players : []).slice(0, 400)) { const u = typeof p === 'string' ? p : p && p.key; if (!u) continue; pls.push({ pk: pkeyOf(u), u: String(u), team: clean(p && p.team, 30), name: await pname(u, p && p.name) }); }
   if (cur && (!(await roleOf(cur, organizerE)) || (fromRoute && (cur.org || cur.dir) !== dk))) throw bad(403, 'Not your event (only its organizer or Enterprise director)');
@@ -930,81 +950,212 @@ async function eventSetup(organizerE, eventId, o, from) {
       d.log.push({ at: now, by, player: '', field: 'lockAt', old: d.lockAt || null, new: lockAt, oddable: null, reason: clean(x.reason, 120) || (d.lockAt ? 'Start moved later' : 'Start set') }); d.lockAt = lockAt;
     }
     if (!fromRoute && d.org === dk) {
-      d.co = [...new Set((d.co || []).concat(keysOf(x.coOrganizers, 10)))].filter((k) => k !== d.org).slice(0, 10); d.dirs = [...new Set((d.dirs || []).concat(dirsOk))].slice(0, 5);
-      pls.forEach((p) => { d.pl[p.pk] = { u: p.u, name: p.name, team: p.team || (d.pl[p.pk] && d.pl[p.pk].team) || '' }; });
+      // review 6, H2: a co-organizer is PENDING until they accept on their own phone (eventAccept); the log says who added them
+      d.coInfo = d.coInfo || {}; coIn.forEach((c) => { if (c.k === d.org || d.coInfo[c.k] || (d.co || []).length >= 10) return; d.co = (d.co || []).concat(c.k); d.coInfo[c.k] = { by: dk, byName: by, name: c.name, at: now };
+        d.log.push({ at: now, by, player: c.name, field: 'role', kind: 'co', old: null, new: null, oddable: null, reason: 'co-organizer added by ' + by + ' (active after ' + c.name + ' accepts)' }); });
+      d.dirs = [...new Set((d.dirs || []).concat(dirsOk))].slice(0, 5);
+      pls.forEach((p) => { const was = d.pl[p.pk], team = p.team || (was && was.team) || ''; d.pl[p.pk] = { u: p.u, name: p.name, team, acc: was && was.team === team ? was.acc : undefined }; }); // a seat moved to another team must be accepted again
       if (Object.keys(d.pl).length > 400) throw bad(400, 'At most 400 players in one event');
       if (x.money != null) d.money = !!x.money;
     }
-    d.title = clean(x.title, 60) || d.title || 'Tournament'; if (x.sport != null && !fromRoute) d.sport = evSport(x.sport); d.sport = d.sport || 'golf'; d.lockAt = d.lockAt || null; return {}; });
+    d.title = clean(x.title, 60) || d.title || 'Tournament'; if (sport) d.sport = sport; d.sport = d.sport || 'golf'; d.lockAt = d.lockAt || null; return {}; });
   return { ok: true };
 }
-// Who may co-sign when the approver is the player himself: a different organizer / co-organizer / director, or a player on ANOTHER team in this event.
-async function cosignOk(ev, approverE, playerKey, cosignE) {
-  if (!cosignE || pkeyOf(cosignE) === playerKey || pkeyOf(cosignE) === pkeyOf(approverE)) return null;
-  if (await roleOf(ev, cosignE)) return (await nameOf(cosignE)) || 'Organizer';
-  const me = ev.pl && ev.pl[pkeyOf(approverE)], them = ev.pl && ev.pl[pkeyOf(cosignE)];
-  if (me && them && me.team && them.team && me.team !== them.team) return (await nameOf(cosignE)) || them.name || 'Player';
+// ---------- WHO MAY SIGN A NUMBER (review 6, H1 + H2) ----------
+// A co-organizer is the organizer's appointee: neither ever approves, sets or co-signs the other's number in that event. And no mutual approval: once A
+// approved, set or co-signed B's number in an event, B cannot approve, set or co-sign A's there.
+const rkOf = (e) => (/^guest:/.test(String(e || '')) ? '' : D.limits().keyOf(e));
+function signBlock(ev, signerE, playerRef) {
+  const sk = rkOf(signerE), pk0 = rkOf(playerRef), ci = ev.coInfo || {}, spk = pkeyOf(signerE), ppk = pkeyOf(playerRef);
+  if (sk && pk0 && ci[sk] && ci[sk].by === pk0) return 'A co-organizer cannot approve, set or co-sign the number of the organizer who added them';
+  if (sk && pk0 && ci[pk0] && ci[pk0].by === sk) return 'You added this co-organizer, so you cannot approve, set or co-sign their number. A director or another organizer approves it, or they approve it themselves with a co-sign from a player on another team';
+  if ((ev.log || []).some((l) => l.pk === spk && l.new != null && (l.kind === 'approve' || l.kind === 'set') && (l.bpk === ppk || l.cpk === ppk))) return 'No mutual approval: this player already approved or co-signed your number in this event';
   return null;
 }
-const SELF = 'You cannot approve or set your own number. A different organizer or director, or a player on another team, has to co-sign it';
+// Who may co-sign when the player approves or sets HIS OWN number (review 6, H1): a real Oddable account with a sign-up stamp (never a guest), that is
+// either another organizer / accepted co-organizer / director of this event, or a player on ANOTHER team who ACCEPTED their seat on their own phone; and
+// that is not blocked by signBlock. -> the co-signer's name, or null.
+async function cosignOk(ev, playerE, cosignE) {
+  if (!cosignE || /^guest:/.test(String(cosignE)) || pkeyOf(cosignE) === pkeyOf(playerE)) return null;
+  if (!(await sinceOf(cosignE)).known) return null;
+  if (signBlock(ev, cosignE, playerE)) return null;
+  if (await roleOf(ev, cosignE)) return (await nameOf(cosignE)) || 'Organizer';
+  const me = ev.pl && ev.pl[pkeyOf(playerE)], them = ev.pl && ev.pl[pkeyOf(cosignE)];
+  if (me && them && them.acc && me.team && them.team && me.team !== them.team) return (await nameOf(cosignE)) || them.name || 'Player';
+  return null;
+}
+const SELF = 'You cannot approve or set your own number alone. A player on another team (who accepted their seat) or another organizer or director confirms it on their own phone and gives you a co-sign code';
+const NOTOKEN = 'A co-sign is a code the co-signer gets on their own phone (Co-sign), not an account';
 const nowNumber = async (userKey, ev) => (fieldOf(ev) === 'hcp' ? await handicapFor(userKey) : await ratingFor(userKey, ev.sport));
-// eventApprove(eventId, playerRef, value, approverAccount, {cosign, reason}): the organizer approves the number he was shown (`value`, or null = the
-// player's suggested number now). If the suggested number changed since the screen was drawn, nothing is approved (409: look again).
+const sameVal = (a, b) => (a == null && b == null) || (a != null && b != null && Math.abs(Number(a) - Number(b)) < 1e-9);
+// CO-SIGN CODES (review 6, H4). cosignToken(eventId, playerRef, value, account): `account` is the CO-SIGNER, and it must be the caller's own signed-in
+// session (the route /stats/event/cosign passes the token's account; engines never call this for someone else). The code is good for 10 minutes, once,
+// for this event + this player + this exact value. Stored hashed in the event row ('tok'); eventApprove / eventOverride take it as opts.cosign.
+const CS = { ttl: 10 * 60e3, max: 50 };
+const tokRe = /^cs[a-z0-9]{10}$/;
+async function cosignToken(eventId, playerRef, value, account) {
+  const id = eidOf(eventId), ev = await evRow(id); if (!ev) throw bad(404, 'Event not found');
+  if (!account || /^guest:/.test(String(account))) throw bad(403, 'Sign in first');
+  if (evLocked(ev)) throw bad(409, 'The event has started; numbers are locked');
+  const pk = pkeyOf(playerRef), p = ev.pl && ev.pl[pk]; if (!p) throw bad(404, 'Not a player in this event');
+  const field = fieldOf(ev), v = value == null || value === '' ? null : Number(value); if (v != null && !Number.isFinite(v)) throw bad(400, 'Bad number');
+  const name = await cosignOk(ev, p.u, account); if (!name) throw bad(403, 'You cannot co-sign this number: a co-signer is another organizer or director, or a player on another team who accepted their seat, with an Oddable account');
+  const code = 'cs' + rnd(10), now = D.now();
+  await rowMutate(EVR(id), null, (d) => { d.tok = d.tok || {}; Object.keys(d.tok).forEach((h) => { if (d.tok[h].exp <= now) delete d.tok[h]; }); if (Object.keys(d.tok).length >= CS.max) throw bad(429, 'Too many open co-sign codes. Wait a few minutes.');
+    d.tok[sha('oddable-cosign|' + code)] = { pk, ce: String(account), field, value: v, exp: now + CS.ttl }; return {}; });
+  return { ok: true, code, exp: now + CS.ttl, player: p.name, field, value: v, by: name };
+}
+// Checks a code before the write (so the caller gets a clear error) -> { name, h }; useTok inside the write deletes it (single use).
+async function tokCheck(ev, code, pk, field, value) {
+  if (code == null || code === '') return null; if (!tokRe.test(String(code))) throw bad(403, NOTOKEN);
+  const h = sha('oddable-cosign|' + code), t = ev.tok && ev.tok[h];
+  if (!t || t.exp <= D.now()) throw bad(403, 'That co-sign code is not valid (wrong, used or older than 10 minutes). Ask for a new one.');
+  if (t.pk !== pk || t.field !== field || !sameVal(t.value, value)) throw bad(403, 'That co-sign code was given for a different player or number');
+  const p = ev.pl && ev.pl[pk], name = p && (await cosignOk(ev, p.u, t.ce)); if (!name) throw bad(403, 'That co-signer can no longer co-sign this number');
+  return { name, h, cpk: pkeyOf(t.ce) };
+}
+const useTok = (d, tk) => { if (!tk) return; const t = d.tok && d.tok[tk.h]; if (!t || t.exp <= D.now()) throw bad(403, 'That co-sign code was already used or has run out. Ask for a new one.'); delete d.tok[tk.h]; };
+const byLine = async (ev, e, role) => { const nm = (await nameOf(e)) || (role === 'dir' ? 'Tournament director' : 'Organizer'), ci = ev.coInfo && ev.coInfo[rkOf(e)]; return role === 'co' && ci ? nm + ' (co-organizer added by ' + (ci.byName || 'the organizer') + ')' : nm; };
+// eventApprove(eventId, playerRef, value, approverAccount, {cosign: <co-sign code>, reason}): the organizer approves the number he was shown (`value`, or
+// null = the player's suggested number now). If the suggested number changed since the screen was drawn, nothing is approved (409: look again).
 async function eventApprove(eventId, playerRef, value, approverE, opts) {
-  const id = okEid(eventId); if (!id) throw bad(400, 'Bad event'); const ev0 = await evRow(id); if (!ev0) throw bad(404, 'Event not found'); const o = opts || {};
+  const id = eidOf(eventId), ev0 = await evRow(id); if (!ev0) throw bad(404, 'Event not found'); const o = opts || {};
   const role = await roleOf(ev0, approverE); if (!role) throw bad(403, NOROLE); if (evLocked(ev0)) throw bad(409, 'The event has started; numbers are locked');
-  const field = fieldOf(ev0), pk = pkeyOf(playerRef); let cosign = null;
-  if (pk === pkeyOf(approverE)) { cosign = await cosignOk(ev0, approverE, pk, o.cosign); if (!cosign) throw bad(403, SELF); }
+  const field = fieldOf(ev0), pk = pkeyOf(playerRef); if (!(ev0.pl && ev0.pl[pk])) throw bad(404, 'Not a player in this event: the engine registers players with eventSetup first');
+  if (pk !== pkeyOf(approverE)) { const sb = signBlock(ev0, approverE, playerRef); if (sb) throw bad(403, sb); }
   const f = await nowNumber(playerRef, ev0), sug = f.suggested || {}, real = field === 'hcp' ? f.oddable.index : f.oddable.rating;
   if (sug.value == null) throw bad(409, 'No Oddable number for this player yet. Set one for this event.');
   const want = value == null || value === '' ? sug.value : Number(value); if (!Number.isFinite(want) || Math.abs(want - sug.value) > 1e-9) throw bad(409, 'The number changed (now ' + (field === 'hcp' ? R.fmtIdx(sug.value) : sug.value) + '). Look at it again before approving.');
-  const by = (await nameOf(approverE)) || 'Organizer', name = await pname(playerRef);
+  let tk = null; if (pk === pkeyOf(approverE)) { if (!o.cosign) throw bad(403, SELF); tk = await tokCheck(ev0, o.cosign, pk, field, want); }
+  const by = await byLine(ev0, approverE, role), name = await pname(playerRef), cosign = tk ? tk.name : null;
   await rowMutate(EVR(id), null, (d) => { if (evLocked(d)) throw bad(409, 'The event has started; numbers are locked'); d.ap = d.ap || {}; d.pl = d.pl || {}; d.log = d.log || [];
+    if (!d.pl[pk]) throw bad(404, 'Not a player in this event'); useTok(d, tk);
     const old = d.ap[pk] && d.ap[pk][field] != null ? d.ap[pk][field] : null;
     d.ap[pk] = Object.assign({}, d.ap[pk], { [field]: want, base: sug.value, confirmed: !!sug.confirmed, at: D.now(), name, by, cosign: cosign || undefined });
-    if (!d.pl[pk]) d.pl[pk] = { u: String(playerRef), name, team: '' };
-    d.log.push({ at: D.now(), by, cosign: cosign || undefined, player: name, pk, field, kind: 'approve', old, new: want, oddable: real == null ? null : real, reason: clean(o.reason, 120) || (sug.confirmed ? 'Oddable number approved (confirmed)' : 'Oddable number approved (UNCONFIRMED)') }); if (d.log.length > 2000) d.log = d.log.slice(-2000);
+    d.log.push({ at: D.now(), by, cosign: cosign || undefined, player: name, pk, bpk: pkeyOf(approverE), cpk: tk ? tk.cpk : undefined, field, kind: 'approve', old, new: want, oddable: real == null ? null : real, reason: clean(o.reason, 120) || (sug.confirmed ? 'Oddable number approved (confirmed)' : 'Oddable number approved (UNCONFIRMED)') }); if (d.log.length > 2000) d.log = d.log.slice(-2000);
     return {}; });
-  await evIndexAdd(pk, id); CACHE.clear();
+  await evIndexAdd(pk, id); if (!o._batch) CACHE.clear(); // review 6, M3: approve-all clears the cache once, at the end
   return { ok: true, player: name, value: want, confirmed: !!sug.confirmed, by, cosign: cosign || undefined };
 }
 // "Use everyone's Oddable index": approves the suggested number of every registered player who has no number yet. The approver's own number is left for
 // a co-sign; a player with no Oddable number is left for a typed one. -> { ok, approved: [{name, value, confirmed}], skipped: [{name, why}] }
 async function eventApproveAll(eventId, approverE, opts) {
-  const ev = await evRow(eventId); if (!ev) throw bad(404, 'Event not found'); if (!(await roleOf(ev, approverE))) throw bad(403, NOROLE);
+  const ev = await evRow(eidOf(eventId)); if (!ev) throw bad(404, 'Event not found'); if (!(await roleOf(ev, approverE))) throw bad(403, NOROLE);
   const field = fieldOf(ev), out = { ok: true, approved: [], skipped: [] };
-  for (const pk of Object.keys(ev.pl || {})) {
-    const p = ev.pl[pk], cur = await nowNumber(p.u, ev);
-    if (ev.set && ev.set[pk] && ev.set[pk][field] != null) { out.skipped.push({ name: p.name, why: 'set by the organizer' }); continue; }
-    if (pk === pkeyOf(approverE)) { out.skipped.push({ name: p.name, why: 'your own number: another organizer or director, or a player on another team, co-signs it' }); continue; }
-    if (!cur.suggested || cur.suggested.value == null) { out.skipped.push({ name: p.name, why: 'no Oddable number yet: set one' }); continue; }
-    try { const r = await eventApprove(eventId, p.u, cur.suggested.value, approverE, opts); out.approved.push({ name: r.player, value: r.value, confirmed: r.confirmed }); } catch (er) { out.skipped.push({ name: p.name, why: er.message }); }
-  }
+  try {
+    for (const pk of Object.keys(ev.pl || {})) {
+      const p = ev.pl[pk], cur = await nowNumber(p.u, ev);
+      if (ev.set && ev.set[pk] && ev.set[pk][field] != null) { out.skipped.push({ name: p.name, why: 'set by the organizer' }); continue; }
+      if (pk === pkeyOf(approverE)) { out.skipped.push({ name: p.name, why: 'your own number: a player on another team, or another organizer or director, co-signs it from their phone' }); continue; }
+      if (!cur.suggested || cur.suggested.value == null) { out.skipped.push({ name: p.name, why: 'no Oddable number yet: set one' }); continue; }
+      try { const r = await eventApprove(eventId, p.u, cur.suggested.value, approverE, Object.assign({}, opts, { cosign: undefined, _batch: true })); out.approved.push({ name: r.player, value: r.value, confirmed: r.confirmed }); } catch (er) { out.skipped.push({ name: p.name, why: er.message }); }
+    }
+  } finally { CACHE.clear(); }
   return out;
 }
 // Director / organizer adds, changes or clears (value null) one player's number for this event only. A reason is required. A tournament (E-H) needs its
-// start time first. The log's "by" and the player's name come from the accounts themselves (nameOf), never from text the caller sent.
+// start time first. The log's "by" and the player's name come from the accounts themselves (nameOf), never from text the caller sent. His own number
+// needs a co-sign code (opts.cosign) bound to the exact value being set.
 async function eventOverride(directorE, eventId, userKey, o) {
-  const id = okEid(eventId); if (!id) throw bad(400, 'Bad event'); const x = o || {}, ev0 = await evRow(id);
-  if (!ev0) throw bad(404, 'Event not found'); if (!(await roleOf(ev0, directorE))) throw bad(403, NOROLE);
+  const id = eidOf(eventId), x = o || {}, ev0 = await evRow(id);
+  if (!ev0) throw bad(404, 'Event not found'); const role = await roleOf(ev0, directorE); if (!role) throw bad(403, NOROLE);
   const field = x.rating !== undefined ? 'rating' : 'hcp', raw = x[field];
   const val = raw == null || raw === '' ? null : field === 'hcp' ? numOpt(raw, -10, 54, 'Handicap must be +10 to 54.0', 1) : numOpt(raw, 100, 3500, 'Rating must be 100 to 3500', 0);
   const reason = clean(x.reason, 120); if (!reason) throw bad(400, 'Enter a reason for the change');
-  const pk = pkeyOf(userKey); let cosign = null; if (pk === pkeyOf(directorE)) { cosign = await cosignOk(ev0, directorE, pk, x.cosign); if (!cosign) throw bad(403, SELF); }
+  const pk = pkeyOf(userKey); let tk = null; if (pk === pkeyOf(directorE)) { if (!x.cosign) throw bad(403, SELF); tk = await tokCheck(ev0, x.cosign, pk, field, val); } else { const sb = signBlock(ev0, directorE, userKey); if (sb) throw bad(403, sb); }
   const real = field === 'hcp' ? (await handicapFor(userKey, { casual: true })).oddable.index : (await ratingFor(userKey, x.sport == null || x.sport === 'golf' ? (ev0.sport && ev0.sport !== 'golf' ? ev0.sport : 'pickleball') : x.sport, { casual: true })).oddable.rating;
-  const by = (await nameOf(directorE)) || 'Tournament director', name = await pname(userKey, x.name || (ev0.pl && ev0.pl[pk] && ev0.pl[pk].name));
+  const by = await byLine(ev0, directorE, role), name = await pname(userKey, x.name || (ev0.pl && ev0.pl[pk] && ev0.pl[pk].name)), cosign = tk ? tk.name : null;
   const res = await rowMutate(EVR(id), null, (d) => {
     if (ev0.kind === 'tournament' && !d.lockAt) throw bad(409, 'Set the tournament start time first. Handicaps can be set until the start.'); if (evLocked(d)) throw bad(409, 'The tournament has started; handicaps are locked');
     d.set = d.set || {}; d.log = d.log || []; d.pl = d.pl || {}; const cur = d.set[pk] || {}, old = cur[field] != null ? cur[field] : real;
     if ((cur[field] == null && val == null) || cur[field] === val) return { nochange: true, v: { ok: true, changed: false } };
+    useTok(d, tk);
     const nx = Object.assign({}, cur, { at: D.now(), reason, name: name || cur.name || '', by, cosign: cosign || undefined }); if (val == null) delete nx[field]; else nx[field] = val;
     if (nx.hcp == null && nx.rating == null) delete d.set[pk]; else d.set[pk] = nx;
     if (!d.pl[pk]) d.pl[pk] = { u: String(userKey), name: nx.name, team: '' };
-    d.log.push({ at: D.now(), by, cosign: cosign || undefined, player: nx.name || 'Player', pk, field, kind: 'set', old: old == null ? null : old, new: val, oddable: real == null ? null : real, reason }); if (d.log.length > 2000) d.log = d.log.slice(-2000); // pk = the player's key (server only, stripped by logOut)
+    d.log.push({ at: D.now(), by, cosign: cosign || undefined, player: nx.name || 'Player', pk, bpk: pkeyOf(directorE), cpk: tk ? tk.cpk : undefined, field, kind: 'set', old: old == null ? null : old, new: val, oddable: real == null ? null : real, reason }); if (d.log.length > 2000) d.log = d.log.slice(-2000); // pk / bpk / cpk = player keys (server only, stripped by logOut)
     return { ok: true, changed: true, old: old == null ? null : old, new: val };
   });
   if (res && res.changed) await evIndexAdd(pk, id);
   CACHE.clear(); return res;
+}
+// eventAccept(eventId, account): the person accepts, from THEIR OWN signed-in session (route /stats/event/accept), the co-organizer role and / or the
+// team seat the organizer gave them (review 6, H2). Until then a co-organizer has no role and a seat cannot co-sign. Logged "accepted by <name>".
+async function eventAccept(eventId, account) {
+  const id = eidOf(eventId); if (!account || /^guest:/.test(String(account))) throw bad(403, 'Sign in first');
+  const ev = await evRow(id); if (!ev) throw bad(404, 'Event not found'); const k = rkOf(account), pk = pkeyOf(account), name = (await nameOf(account)) || 'Player';
+  const co = (ev.co || []).includes(k) && ev.coInfo && ev.coInfo[k], seat = ev.pl && ev.pl[pk]; if (!co && !seat) throw bad(404, 'Event not found');
+  const out = await rowMutate(EVR(id), null, (d) => { if (evLocked(d)) throw bad(409, 'The event has started'); const now = D.now(), r = { ok: true, coOrganizer: false, seat: false }; let n = 0; d.log = d.log || [];
+    if (d.coInfo && d.coInfo[k] && (d.co || []).includes(k)) { r.coOrganizer = true; if (!d.coInfo[k].acc) { d.coInfo[k].acc = now; n++; d.log.push({ at: now, by: name, player: name, field: 'role', kind: 'accept', old: null, new: null, oddable: null, reason: 'co-organizer role accepted by ' + name + ' (added by ' + (d.coInfo[k].byName || 'the organizer') + ')' }); } }
+    if (d.pl && d.pl[pk]) { r.seat = true; r.team = d.pl[pk].team || ''; if (!d.pl[pk].acc) { d.pl[pk].acc = now; n++; d.log.push({ at: now, by: name, player: name, field: 'role', kind: 'accept', old: null, new: null, oddable: null, reason: 'seat' + (d.pl[pk].team ? ' on team ' + d.pl[pk].team : '') + ' accepted by ' + name }); } }
+    return n ? r : { nochange: true, v: r }; });
+  return out;
+}
+// eventRemove(eventId, organizerAccount, playerRef, reason): a player who dropped out leaves the event before the start (seat, approval and set number
+// go; the log keeps the lines and says who removed them), so `ready` can become true.
+async function eventRemove(eventId, organizerE, playerRef, reason) {
+  const id = eidOf(eventId), ev = await evRow(id); if (!ev) throw bad(404, 'Event not found'); if (!(await roleOf(ev, organizerE))) throw bad(403, NOROLE);
+  const pk = pkeyOf(playerRef); if (!(ev.pl && ev.pl[pk])) throw bad(404, 'Not a player in this event'); const by = (await nameOf(organizerE)) || 'Organizer', why = clean(reason, 120) || 'Dropped out';
+  await rowMutate(EVR(id), null, (d) => { if (evLocked(d)) throw bad(409, 'The event has started'); const p = d.pl && d.pl[pk]; if (!p) return { nochange: true };
+    delete d.pl[pk]; if (d.ap) delete d.ap[pk]; if (d.set) delete d.set[pk]; Object.keys(d.tok || {}).forEach((h) => { if (d.tok[h].pk === pk) delete d.tok[h]; });
+    d.log = d.log || []; d.log.push({ at: D.now(), by, player: p.name || 'Player', pk, field: 'role', kind: 'remove', old: null, new: null, oddable: null, reason: 'removed by ' + by + ': ' + why }); return {}; });
+  CACHE.clear(); return { ok: true, removed: true };
+}
+// The numbers every player plays off, one line per player (server only: carries userKey for the engine). -> { ready, why, numbers: [...] }
+async function evNumbers(ev, eventId) {
+  const field = fieldOf(ev), numbers = [];
+  for (const pk of Object.keys(ev.pl || {})) { const p = ev.pl[pk], f = field === 'hcp' ? await handicapFor(p.u, { eventId }) : await ratingFor(p.u, ev.sport, { eventId });
+    numbers.push({ name: p.name, userKey: p.u, team: p.team || '', field, use: f.use, setBy: f.setBy, by: f.by || '', cosign: f.cosign || '', lapsed: !!f.lapsed, oddable: field === 'hcp' ? f.oddable.index : f.oddable.rating, confirmed: !!(f.suggested && f.suggested.confirmed), shown: f.shown || '' }); }
+  const missing = numbers.filter((n) => n.use == null).map((n) => n.name), noStart = needsStart(ev) && !ev.lockAt;
+  return { ready: numbers.length > 0 && !missing.length && !noStart, why: noStart ? 'no start time' : !numbers.length ? 'no players' : missing.length ? 'no approved number: ' + missing.slice(0, 10).join(', ') : '', missing, numbers };
+}
+// eventStart(eventId, account, {gameId}): the organizer / director starts the event at the first tee (H3). Refused unless every player has an approved or
+// set number. A game / flight / tournament locks NOW (after this every approve / set / override is 409) and its numbers are kept as the snapshot. A
+// SEASON is not locked: each game in it is started with its own gameId, and that game keeps the numbers in force when it started (a lapse later in the
+// week changes the next game, never one already started).
+async function eventStart(eventId, account, opts) {
+  const id = eidOf(eventId), ev = await evRow(id); if (!ev) throw bad(404, 'Event not found'); if (!(await roleOf(ev, account))) throw bad(403, NOROLE);
+  if (evLocked(ev)) throw bad(409, 'The event has already started'); const season = ev.kind === 'season', gid = season ? clean((opts || {}).gameId, 40).replace(/[^\w.:-]/g, '') : '';
+  if (season && !gid) throw bad(400, 'A season starts one game at a time: pass {gameId}');
+  if (season && ev.games && ev.games[gid]) throw bad(409, 'That game has already started');
+  const n = await evNumbers(Object.assign({}, ev, { lockAt: ev.lockAt || 1 }), id); if (!n.ready) throw bad(409, 'Not ready to start: ' + (n.why || 'numbers missing'));
+  const now = D.now(), by = (await nameOf(account)) || 'Organizer', snap = { at: now, numbers: n.numbers };
+  await rowMutate(EVR(id), null, (d) => { if (evLocked(d)) throw bad(409, 'The event has already started'); d.log = d.log || [];
+    if (season) { d.games = d.games || {}; if (d.games[gid]) throw bad(409, 'That game has already started'); d.games[gid] = snap; const ks = Object.keys(d.games); if (ks.length > 60) delete d.games[ks[0]]; }
+    else { d.log.push({ at: now, by, player: '', field: 'lockAt', kind: 'start', old: d.lockAt || null, new: now, oddable: null, reason: 'Started by ' + by }); d.lockAt = now; d.snap = snap; }
+    return {}; });
+  CACHE.clear(); return { ok: true, startedAt: now, gameId: gid || undefined, numbers: n.numbers };
+}
+// eventNumbers(eventId, {gameId}): what each player plays off. After the start: the snapshot taken at eventStart (or, when the start time simply passed,
+// the numbers as they were locked). A season game: the snapshot of that game. Before the start: the live numbers with started: false.
+async function eventNumbers(eventId, opts) {
+  const id = eidOf(eventId), ev = await evRow(id); if (!ev) throw bad(404, 'Event not found'); const gid = clean((opts || {}).gameId, 40);
+  if (ev.kind === 'season' && gid && ev.games && ev.games[gid]) { const s = ev.games[gid]; return { ok: true, started: true, startedAt: s.at, gameId: gid, ready: true, numbers: s.numbers }; }
+  if (ev.snap && evLocked(ev)) return { ok: true, started: true, startedAt: ev.snap.at, ready: true, numbers: ev.snap.numbers };
+  const n = await evNumbers(ev, id); return Object.assign({ ok: true, started: evLocked(ev), startedAt: evLocked(ev) ? ev.lockAt : null, gameId: gid || undefined }, n);
+}
+// ROUTE /stats/event/cosign (review 6, H4), the co-signer's own phone. {eventId} -> the numbers in this event the caller may co-sign (players who also run
+// the event), each with an event-only id `pid` and the suggested number; {eventId, pid, value} -> a 10-minute single-use code for that exact value, which
+// the co-signer shows / sends to the organizer. Only someone in the event (an organizer / director, or a player who accepted their seat) gets an answer;
+// anyone else gets 404. No account id, player key or other player's data leaves.
+const evPid = (id, pk) => sha('oddable-evpid|' + id + '|' + pk).slice(0, 12);
+async function cosignRoute(e, b) {
+  const id = eidOf(b.eventId), ev = await evRow(id), pk = pkeyOf(e); if (!ev) throw bad(404, 'Event not found');
+  if (!(await roleOf(ev, e)) && !(ev.pl && ev.pl[pk] && ev.pl[pk].acc)) throw bad(404, 'Event not found');
+  if (b.pid == null || b.pid === '') {
+    const out = []; for (const k of Object.keys(ev.pl || {})) { const p = ev.pl[k]; if (k === pk || /^guest:/.test(String(p.u)) || !(await roleOf(ev, p.u))) continue; if (!(await cosignOk(ev, p.u, e))) continue;
+      const f = await nowNumber(p.u, ev); out.push({ pid: evPid(id, k), name: p.name, team: p.team || '', field: fieldOf(ev), suggested: f.suggested ? f.suggested.value : null, confirmed: !!(f.suggested && f.suggested.confirmed) }); }
+    return { ok: true, title: clean(ev.title, 60), locked: evLocked(ev), players: out };
+  }
+  const k = Object.keys(ev.pl || {}).find((x) => evPid(id, x) === String(b.pid)); if (!k) throw bad(404, 'Player not found');
+  const r = await cosignToken(id, ev.pl[k].u, b.value, e); return { ok: true, code: r.code, exp: r.exp, player: r.player, field: r.field, value: r.value };
+}
+// ROUTE /stats/vouch {courseId, pid, on}: the Enterprise owner of that course / club vouches for (or un-vouches) one of its consenting members, picked by
+// the course view's pid (course/players). /stats/vouch/log {courseId}: that club's vouch log.
+async function vouchRoute(e, b) {
+  const cid = okCid(b.courseId); if (!cid || !(await ownedCourses(e)).some((c) => c.id === cid)) throw bad(403, 'Only that club\'s Enterprise director can vouch for its members');
+  const m = Object.entries((((await cshare())[cid] || {}).m) || {}).find(([mk, x]) => x.on && x.e && cpid(cid, mk) === String(b.pid || '')); if (!m) throw bad(404, 'Player not found');
+  const r = await vouch(cid, m[1].e, e, b.on !== false); return { ok: true, club: r.club, player: r.player, vouched: r.vouched };
 }
 // The event log. Organizers / directors read all of it; EVERY PLAYER IN THE EVENT reads every approval and set value too (manager D: "12.6 approved by
 // Coach Mo" is visible to all the players), next to the real Oddable number. Anyone else gets 404. Player keys never leave.
@@ -1012,7 +1163,7 @@ const logOut = (l) => ({ at: l.at, by: l.by, cosign: l.cosign || undefined, play
 const logMine = (ev, pk) => (ev.log || []).filter((l) => l.field !== 'lockAt' && l.pk === pk); // a player's own lines (the "Set by tournament" card)
 const inEvent = (ev, pk) => !!((ev.pl && ev.pl[pk]) || (ev.set && ev.set[pk]) || (ev.ap && ev.ap[pk]));
 async function eventLog(callerE, eventId) {
-  const ev = await evRow(eventId); if (!ev) throw bad(404, 'Tournament not found'); const base = { ok: true, title: clean(ev.title, 60) || 'Tournament', sport: ev.sport || 'golf', kind: ev.kind || 'tournament', locked: evLocked(ev), lockAt: ev.lockAt || null };
+  const ev = await evRow(eidOf(eventId)); if (!ev) throw bad(404, 'Tournament not found'); const base = { ok: true, title: clean(ev.title, 60) || 'Tournament', sport: ev.sport || 'golf', kind: ev.kind || 'tournament', locked: evLocked(ev), lockAt: ev.lockAt || null };
   const field = fieldOf(ev), shown = (pk, x) => ({ name: x.name || 'Player', hcp: x.hcp != null ? x.hcp : null, rating: x.rating != null ? x.rating : null, reason: x.reason || '', by: x.by || '', cosign: x.cosign || undefined, at: x.at });
   const lines = (ev.log || []).slice(-500).map(logOut), approvals = Object.keys(ev.ap || {}).filter((pk) => ev.ap[pk][field] != null).map((pk) => Object.assign(shown(pk, ev.ap[pk]), { confirmed: !!ev.ap[pk].confirmed }));
   const set = Object.keys(ev.set || {}).map((pk) => shown(pk, ev.set[pk]));
@@ -1024,10 +1175,13 @@ async function eventLog(callerE, eventId) {
 // The organizer's approval screen, one row per registered player: the real Oddable number, the suggested one (confirmed or UNCONFIRMED), the make-up and
 // its flags, and what is approved or set. `ready` = every player has a number to play off (engines block Start in a money game until it is true).
 async function eventReview(eventId, callerE) {
-  const ev = await evRow(eventId); if (!ev) throw bad(404, 'Event not found'); if (!(await roleOf(ev, callerE))) throw bad(403, NOROLE);
+  const ev = await evRow(eidOf(eventId)); if (!ev) throw bad(404, 'Event not found'); if (!(await roleOf(ev, callerE))) throw bad(403, NOROLE);
   const rows = []; for (const pk of Object.keys(ev.pl || {})) { const p = ev.pl[pk], f = fieldOf(ev) === 'hcp' ? await handicapFor(p.u, { eventId }) : await ratingFor(p.u, ev.sport, { eventId });
-    rows.push({ name: p.name, team: p.team || '', you: pk === pkeyOf(callerE), oddable: fieldOf(ev) === 'hcp' ? f.oddable.index : f.oddable.rating, suggested: f.suggested, makeup: f.makeup, flags: f.flags, vouched: f.vouched, use: f.use, setBy: f.setBy, by: f.by, cosign: f.cosign, shown: f.shown, why: f.why }); }
-  return { ok: true, title: clean(ev.title, 60), kind: ev.kind || 'game', sport: ev.sport || 'golf', field: fieldOf(ev), locked: evLocked(ev), players: rows, ready: rows.length > 0 && rows.every((r) => r.use != null), unconfirmed: rows.filter((r) => r.suggested && r.suggested.value != null && !r.suggested.confirmed).map((r) => r.name), noNumber: rows.filter((r) => !r.suggested || r.suggested.value == null).map((r) => r.name) };
+    rows.push({ name: p.name, team: p.team || '', accepted: !!p.acc, you: pk === pkeyOf(callerE), oddable: fieldOf(ev) === 'hcp' ? f.oddable.index : f.oddable.rating, suggested: f.suggested, makeup: f.makeup, flags: f.flags, vouched: f.vouched, use: f.use, setBy: f.setBy, by: f.by, cosign: f.cosign, shown: f.shown, why: f.why }); }
+  const noStart = needsStart(ev) && !ev.lockAt, missing = rows.filter((r) => r.use == null).map((r) => r.name); // review 6, H3: money / flight / tournament: no start time = not ready
+  const co = (ev.co || []).map((k) => { const c = (ev.coInfo || {})[k] || {}; return { name: c.name || 'Co-organizer', addedBy: c.byName || '', accepted: !!c.acc }; });
+  return { ok: true, title: clean(ev.title, 60), kind: ev.kind || 'game', sport: ev.sport || 'golf', field: fieldOf(ev), money: !!ev.money, locked: evLocked(ev), lockAt: ev.lockAt || null, needsStart: needsStart(ev), coOrganizers: co, players: rows,
+    ready: rows.length > 0 && !missing.length && !noStart, why: noStart ? 'no start time' : !rows.length ? 'no players' : missing.length ? 'no approved number: ' + missing.slice(0, 10).join(', ') : '', unconfirmed: rows.filter((r) => r.suggested && r.suggested.value != null && !r.suggested.confirmed).map((r) => r.name), noNumber: rows.filter((r) => !r.suggested || r.suggested.value == null).map((r) => r.name) };
 }
 // What the player plays off in one event. -> { use, setBy, by, cosign, event, lapsed, at, reason }
 function evUse(ev, userKey, field, sug) {
@@ -1099,13 +1253,13 @@ async function pairingProfile(accountId, sport) {
 const EVP = (pk) => 'lock:evp:' + sha('oddable-evp|' + pk).slice(0, 32);
 async function evIndexAdd(pk, id) { try { await rowMutate(EVP(pk), () => ({ ev: [] }), (d) => { d.ev = d.ev || []; if (d.ev.includes(id)) return { nochange: true }; d.ev = d.ev.concat(id).slice(-100); return {}; }); } catch (er) {} }
 async function markEvents(userKey, recs) {
-  const ids = new Set(), pk = pkeyOf(userKey); recs.forEach((r) => { const x = r.extra || {}; [x.eventId, r.contestId, String(r.id).split(':')[0]].forEach((v) => { if (okEid(v) && v !== 'golf' && v !== 'b' && v !== 'g' && v !== 'log') ids.add(v); }); });
+  const ids = new Set(), pk = pkeyOf(userKey); recs.forEach((r) => { const x = r.extra || {}; [x.eventId, r.contestId, String(r.id).split(':')[0], String(r.id).split(':').slice(0, 2).join(':')].forEach((v) => { if (okEid(v) && v !== 'golf' && v !== 'b' && v !== 'g' && v !== 'log') ids.add(v); }); });
   const ix = await D.S.dbGet(EVP(pk)).catch(() => null); ((ix && ix.data && ix.data.ev) || []).slice(-60).forEach((v) => { if (okEid(v)) ids.add(v); });
   const found = {}; let n = 0; for (const id of ids) { if (++n > 120) break; const ev = await evRow(id); if (!ev) continue; const s = ev.set && ev.set[pk]; if (s) found[id] = { title: clean(ev.title, 60), sport: ev.sport, hcp: s.hcp != null ? s.hcp : null, rating: s.rating != null ? s.rating : null, reason: s.reason || '', at: s.at, locked: evLocked(ev), lockAt: ev.lockAt || null,
     log: logMine(ev, pk).slice(-10).map((l) => ({ at: l.at, by: l.by, field: l.field, old: l.old, new: l.new, oddable: l.oddable, reason: l.reason })) }; }
   if (!Object.keys(found).length) return { recs, events: [] };
   const ctx = await confCtx(recs, meRefOf(userKey)), HH = golfHcp(recs.filter((r) => r.sport === 'golf'), meRefOf(userKey), ctx), H = HH.index, E = eloAll(recs, meRefOf(userKey), ctx), EK = (r) => E[rateKey(r)] || E[r.sport];
-  const out = recs.map((r) => { const x = r.extra || {}, id = [x.eventId, r.contestId, String(r.id).split(':')[0]].find((v) => found[v]); if (!id) return r; const f = found[id];
+  const out = recs.map((r) => { const x = r.extra || {}, id = [x.eventId, r.contestId, String(r.id).split(':')[0], String(r.id).split(':').slice(0, 2).join(':')].find((v) => found[v]); if (!id) return r; const f = found[id];
     return Object.assign({}, r, { extra: Object.assign({}, x, { setBy: 'tournament', eventHcp: f.hcp, eventRating: f.rating, oddableHcp: H, oddableRating: EK(r) ? EK(r).rating : null }) }); });
   return { recs: out, events: Object.keys(found).map((id) => Object.assign({ eventId: id, oddableHcp: H, oddableText: HH.text, oddableRating: found[id].rating != null && E[found[id].sport] ? E[found[id].sport].rating : null }, found[id])) };
 }
@@ -1203,6 +1357,9 @@ async function handle(req, res) {
     }
     if (op === 'event/log') { if (limited('r|' + mk, 120, 600e3)) throw bad(429, 'Too many tries. Wait a few minutes.'); send(res, 200, await eventLog(e, b.eventId)); return true; } // E-H: the ONE tournament change log (director: all of it; a player: their own lines)
     if (op === 'event/setup') { if (limited('w|' + mk, 60, 600e3)) throw bad(429, 'Too many changes. Wait a few minutes.'); send(res, 200, await eventSetup(e, b.eventId, { title: b.title, sport: b.sport, lockAt: b.lockAt, reason: b.reason }, ROUTE)); return true; } // the director's own account only (e from the token)
+    if (op === 'event/accept') { if (limited('w|' + mk, 60, 600e3)) throw bad(429, 'Too many changes. Wait a few minutes.'); send(res, 200, await eventAccept(b.eventId, e)); return true; } // review 6, H2: from the person's own session only
+    if (op === 'event/cosign') { if (limited('w|' + mk, 60, 600e3)) throw bad(429, 'Too many changes. Wait a few minutes.'); send(res, 200, await cosignRoute(e, b)); return true; } // review 6, H4
+    if (op === 'vouch' || op === 'vouch/log') { if (limited('w|' + mk, 60, 600e3)) throw bad(429, 'Too many changes. Wait a few minutes.'); send(res, 200, op === 'vouch' ? await vouchRoute(e, b) : await vouchLog(e, b.courseId)); return true; } // review 6: the club's Enterprise owner
     if (op === 'member') { send(res, 200, await memberView(e, mk, String(b.groupId || ''), String(b.pid || ''), now, today)); return true; }
     if (op === 'consent/get') { if (limited('r|' + mk, 120, 600e3)) throw bad(429, 'Too many tries. Wait a few minutes.'); const cid = okCid(b.courseId), own = cid ? await courseOwner(cid) : null; const m = own ? (((await cshare())[cid] || {}).m || {})[mk] : null;
       send(res, 200, { ok: true, ask: !!own, course: own ? { id: cid, name: own.name } : null, on: m ? !!m.on : null, text: own ? 'Share my handicap and rounds with ' + own.name + '?' : '' }); return true; }
@@ -1427,7 +1584,7 @@ async function ownerView(today) {
   OWN = { at: D.now(), v: { today, from: Object.fromEntries(PERIODS.map((p) => [p, periodFrom(p, today)])), users } }; return OWN.v;
 }
 
-module.exports = { handle, register, statsFor, handicapFor, ratingFor, courseHandicapFor, pairingProfile, courseMembers, isConfirmed, confInfo, confirmMarks, confCtx, makeupOf, linkRef, acctRef, myCourses, myCourseUse, myCourseHome, CONF, EVT, rateKey, acctSince, moneyOf, playState, nameOf, eventSetup, eventOverride, eventLog, eventApprove, eventApproveAll, eventReview, vouch, unvouch, vouchLog, sinceOf, backfilled, ownPlay, BFROW, HCP_LABEL, HCP_METHOD, RATING_LABEL, guestAdd, guestRemove, consentOnJoin, coursePrefill, ownedCourses, golfHcp, eloAll, validate, tot, tree, periods, periodFrom, publicTree, betRecords, selfRecord, chiDay, mkOf, selfKey, SRC, SPORTS, KINDS, _deps: D,
+module.exports = { handle, register, statsFor, handicapFor, ratingFor, courseHandicapFor, pairingProfile, courseMembers, isConfirmed, confInfo, confirmMarks, confCtx, makeupOf, linkRef, acctRef, myCourses, myCourseUse, myCourseHome, CONF, EVT, rateKey, acctSince, moneyOf, playState, nameOf, eventSetup, eventOverride, eventLog, eventApprove, eventApproveAll, eventReview, eventAccept, eventStart, eventNumbers, eventRemove, cosignToken, vouch, unvouch, vouchLog, sinceOf, backfilled, ownPlay, BFROW, HCP_LABEL, HCP_METHOD, RATING_LABEL, guestAdd, guestRemove, consentOnJoin, coursePrefill, ownedCourses, golfHcp, eloAll, validate, tot, tree, periods, periodFrom, publicTree, betRecords, selfRecord, chiDay, mkOf, selfKey, SRC, SPORTS, KINDS, _deps: D,
   // Tests: _isolate() makes this module ignore whatever other engines sit next to it in a merged build (auto providers off, Enterprise / course-owner
   // stand-ins on), so the stats suite checks stats alone and runs the same on the stats branch and on the merged preview.
   _isolate: () => { Object.keys(MODS).forEach((k) => { AUTO[k] = null; }); D.limits = () => LIMSTAND; D.golf = () => GOLFSTAND; },

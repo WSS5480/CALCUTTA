@@ -174,11 +174,11 @@ srv.listen(0, async () => {
 
   await check('M4. /stats/event/log filters by account key: two players with the same name never see each other\'s lines', async () => {
     ent('dir'); NAMES[SID.bob.slice(0, 8)] = 'Sam Smith'; NAMES[SID.cat.slice(0, 8)] = 'Sam Smith';
-    await S.eventSetup(K('dir'), 'T1', { title: 'Open', sport: 'golf', lockAt: NOW + DAY });
-    await S.eventOverride(K('dir'), 'T1', K('bob'), { hcp: 9.1, reason: 'bob reason' }); await S.eventOverride(K('dir'), 'T1', K('cat'), { hcp: 22.2, reason: 'cat reason' });
-    j = ok(await call('bob', 'event/log', { eventId: 'T1' })); assert.deepStrictEqual(j.log.map((l) => l.reason).sort(), ['bob reason', 'cat reason'], 'review 5 (manager D): every player in the event reads every set value');
+    await S.eventSetup(K('dir'), 'golf:T1xxxxxx', { title: 'Open', sport: 'golf', lockAt: NOW + DAY });
+    await S.eventOverride(K('dir'), 'golf:T1xxxxxx', K('bob'), { hcp: 9.1, reason: 'bob reason' }); await S.eventOverride(K('dir'), 'golf:T1xxxxxx', K('cat'), { hcp: 22.2, reason: 'cat reason' });
+    j = ok(await call('bob', 'event/log', { eventId: 'golf:T1xxxxxx' })); assert.deepStrictEqual(j.log.map((l) => l.reason).sort(), ['bob reason', 'cat reason'], 'review 5 (manager D): every player in the event reads every set value');
     j = ok(await call('cat', 'me')); assert.deepStrictEqual(j.tournaments[0].log.map((l) => l.reason), ['cat reason'], 'the My handicap card too');
-    j = ok(await call('dir', 'event/log', { eventId: 'T1' })); assert.strictEqual(j.log.filter((l) => l.field === 'hcp').length, 2); assert.ok(!/"pk"/.test(JSON.stringify(j)), 'the key itself is never sent');
+    j = ok(await call('dir', 'event/log', { eventId: 'golf:T1xxxxxx' })); assert.strictEqual(j.log.filter((l) => l.field === 'hcp').length, 2); assert.ok(!/"pk"/.test(JSON.stringify(j)), 'the key itself is never sent');
   });
 
   await check('M5. a typed total is capped: par + 5 a hole with no index, net double bogey (par + 2 a hole + Course Handicap) once an index exists', async () => {
@@ -217,13 +217,13 @@ srv.listen(0, async () => {
 
   await check('L4. tournaments: the phone route cannot create one (no taking an unused id); the start must be within a year and can slip 14 days at most', async () => {
     ent('dir'); ent('dan');
-    no(await call('dan', 'event/setup', { eventId: 'FREE1', title: 'Mine now', lockAt: NOW + DAY }), 404, null, 'an Enterprise account cannot register an unused id over the route');
-    await assert.rejects(S.eventSetup(K('dir'), 'T9', { title: 'Far', lockAt: Z('3237-01-01T00:00:00Z') }), /within a year/);
-    await S.eventSetup(K('dir'), 'T9', { title: 'Open', lockAt: NOW + 5 * DAY });
-    ok(await call('dir', 'event/setup', { eventId: 'T9', lockAt: NOW + 6 * DAY, reason: 'rain' }), 'the director moves it a day over the route'); no(await call('dan', 'event/setup', { eventId: 'T9', lockAt: NOW + 7 * DAY }), 403, /Not your event/);
-    await assert.rejects(S.eventSetup(K('dir'), 'T9', { lockAt: NOW + 20 * DAY }), /14 days past the first start/);
-    for (let i = 0; i < 4; i++) await S.eventSetup(K('dir'), 'T9', { lockAt: NOW + 6 * DAY + (i + 1) * 3600e3 });
-    await assert.rejects(S.eventSetup(K('dir'), 'T9', { lockAt: NOW + 7 * DAY }), /moved 5 times/);
+    no(await call('dan', 'event/setup', { eventId: 'golf:FREE1xxx', title: 'Mine now', lockAt: NOW + DAY }), 404, null, 'an Enterprise account cannot register an unused id over the route');
+    await assert.rejects(S.eventSetup(K('dir'), 'golf:T9xxxxxx', { title: 'Far', lockAt: Z('3237-01-01T00:00:00Z') }), /within a year/);
+    await S.eventSetup(K('dir'), 'golf:T9xxxxxx', { title: 'Open', lockAt: NOW + 5 * DAY });
+    ok(await call('dir', 'event/setup', { eventId: 'golf:T9xxxxxx', lockAt: NOW + 6 * DAY, reason: 'rain' }), 'the director moves it a day over the route'); no(await call('dan', 'event/setup', { eventId: 'golf:T9xxxxxx', lockAt: NOW + 7 * DAY }), 403, /Not your event/);
+    await assert.rejects(S.eventSetup(K('dir'), 'golf:T9xxxxxx', { lockAt: NOW + 20 * DAY }), /14 days past the first start/);
+    for (let i = 0; i < 4; i++) await S.eventSetup(K('dir'), 'golf:T9xxxxxx', { lockAt: NOW + 6 * DAY + (i + 1) * 3600e3 });
+    await assert.rejects(S.eventSetup(K('dir'), 'golf:T9xxxxxx', { lockAt: NOW + 7 * DAY }), /moved 5 times/);
   });
 
   await check('L5. course sharing: a phone can only switch its own existing share; it cannot join a course\'s list or name an event', async () => {

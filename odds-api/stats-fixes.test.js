@@ -193,25 +193,25 @@ srv.listen(0, async () => {
 
   await check('5. E-H: reason required; a start time is needed first; lockAt only moves later, before it passes, logged; "who" is the signed-in account; Enterprise re-checked on every edit', async () => {
     ent('dir'); const dir = K('dir'), ann = K('ann'), bob = K('bob');
-    await S.eventSetup(dir, 'ev2', { title: 'No lock yet' }); await assert.rejects(S.eventOverride(dir, 'ev2', ann, { hcp: 1, reason: 'x' }), /start time first/, 'no lockAt: no overrides');
-    await assert.rejects(S.eventSetup(dir, 'ev3', { lockAt: NOW - 1000 }), /future/, 'a start in the past is refused');
-    await S.eventSetup(dir, 'ev1', { title: 'Club champs', sport: 'golf', lockAt: NOW + 3600e3 });
-    await assert.rejects(S.eventOverride(dir, 'ev1', ann, { hcp: 10 }), /reason/, 'no reason'); await assert.rejects(S.eventOverride(dir, 'ev1', ann, { hcp: 10, reason: '   ' }), /reason/, 'a blank reason'); await assert.rejects(S.eventOverride(dir, 'ev1', ann, { hcp: null }), /reason/, 'clearing needs one too');
-    await S.eventOverride(dir, 'ev1', bob, { hcp: 18, reason: 'new player', name: 'Fake Name', byName: '<b>Somebody Else</b>' });
-    await assert.rejects(S.eventSetup(dir, 'ev1', { lockAt: NOW + 1800e3 }), /later/, 'the start cannot move earlier'); await S.eventSetup(dir, 'ev1', { lockAt: NOW + 7200e3, reason: 'Frost delay' });
-    j = ok(await call('dir', 'event/log', { eventId: 'ev1' })); assert.deepStrictEqual(j.log.map((l) => [l.field, l.by, l.player, l.old, l.new, l.reason]), [['lockAt', 'Dir Real', '', null, T0 + 3600e3, 'Start set'], ['hcp', 'Dir Real', 'Bob Real', null, 18, 'new player'], ['lockAt', 'Dir Real', '', T0 + 3600e3, T0 + 7200e3, 'Frost delay']], 'who = the director\'s own account name; the player by their account name; start changes logged');
-    entOff('dir'); S._reset(); await assert.rejects(S.eventOverride(dir, 'ev1', ann, { hcp: 3, reason: 'not enterprise any more' }), /Enterprise/, 'Enterprise switched off: no more edits'); await assert.rejects(S.eventSetup(dir, 'ev1', { lockAt: NOW + 9e6 }), /Enterprise/);
-    ent('dir'); S._reset(); NOW = T0 + 7200e3; await assert.rejects(S.eventOverride(dir, 'ev1', ann, { hcp: 5, reason: 'late' }), /locked/, 'at the start: locked'); await assert.rejects(S.eventSetup(dir, 'ev1', { lockAt: NOW + 9e9 }), /locked/, 'after it passes the start can never move');
-    assert.strictEqual(db['lock:evr:ev1'].data.lockAt, T0 + 7200e3);
+    await S.eventSetup(dir, 'golf:ev2xxxxx', { title: 'No lock yet' }); await assert.rejects(S.eventOverride(dir, 'golf:ev2xxxxx', ann, { hcp: 1, reason: 'x' }), /start time first/, 'no lockAt: no overrides');
+    await assert.rejects(S.eventSetup(dir, 'golf:ev3xxxxx', { lockAt: NOW - 1000 }), /future/, 'a start in the past is refused');
+    await S.eventSetup(dir, 'golf:ev1xxxxx', { title: 'Club champs', sport: 'golf', lockAt: NOW + 3600e3 });
+    await assert.rejects(S.eventOverride(dir, 'golf:ev1xxxxx', ann, { hcp: 10 }), /reason/, 'no reason'); await assert.rejects(S.eventOverride(dir, 'golf:ev1xxxxx', ann, { hcp: 10, reason: '   ' }), /reason/, 'a blank reason'); await assert.rejects(S.eventOverride(dir, 'golf:ev1xxxxx', ann, { hcp: null }), /reason/, 'clearing needs one too');
+    await S.eventOverride(dir, 'golf:ev1xxxxx', bob, { hcp: 18, reason: 'new player', name: 'Fake Name', byName: '<b>Somebody Else</b>' });
+    await assert.rejects(S.eventSetup(dir, 'golf:ev1xxxxx', { lockAt: NOW + 1800e3 }), /later/, 'the start cannot move earlier'); await S.eventSetup(dir, 'golf:ev1xxxxx', { lockAt: NOW + 7200e3, reason: 'Frost delay' });
+    j = ok(await call('dir', 'event/log', { eventId: 'golf:ev1xxxxx' })); assert.deepStrictEqual(j.log.map((l) => [l.field, l.by, l.player, l.old, l.new, l.reason]), [['lockAt', 'Dir Real', '', null, T0 + 3600e3, 'Start set'], ['hcp', 'Dir Real', 'Bob Real', null, 18, 'new player'], ['lockAt', 'Dir Real', '', T0 + 3600e3, T0 + 7200e3, 'Frost delay']], 'who = the director\'s own account name; the player by their account name; start changes logged');
+    entOff('dir'); S._reset(); await assert.rejects(S.eventOverride(dir, 'golf:ev1xxxxx', ann, { hcp: 3, reason: 'not enterprise any more' }), /Enterprise/, 'Enterprise switched off: no more edits'); await assert.rejects(S.eventSetup(dir, 'golf:ev1xxxxx', { lockAt: NOW + 9e6 }), /Enterprise/);
+    ent('dir'); S._reset(); NOW = T0 + 7200e3; await assert.rejects(S.eventOverride(dir, 'golf:ev1xxxxx', ann, { hcp: 5, reason: 'late' }), /locked/, 'at the start: locked'); await assert.rejects(S.eventSetup(dir, 'golf:ev1xxxxx', { lockAt: NOW + 9e9 }), /locked/, 'after it passes the start can never move');
+    assert.strictEqual(db['lock:evr:golf:ev1xxxxx'].data.lockAt, T0 + 7200e3);
   });
 
   await check('5b. ONE tournament override store and log: the "Set by tournament" card is filled as soon as a director sets a number; /stats/event/log answers for the director and the player', async () => {
     ent('dir'); const dir = K('dir'); for (let i = 1; i <= 3; i++) ok(await call('ann', 'self/save', { item: golfItem('2026-11-0' + i, 88) }));
-    await S.eventSetup(dir, 'MG26', { title: 'Member-Guest', sport: 'golf', lockAt: NOW + 864e5 }); ok(await call('dir', 'event/setup', { eventId: 'MG26', title: 'Member-Guest', sport: 'golf' }), 'the director reaches the tournament the engine registered, over HTTP'); no(await call('bob', 'event/setup', { eventId: 'X1', title: 'x', lockAt: NOW + 864e5 }), 404, /not found/, 'the phone route never creates an event');
-    await S.eventOverride(dir, 'MG26', K('ann'), { hcp: 9, reason: 'Club handicap' });
-    j = ok(await call('ann', 'me')); assert.deepStrictEqual(j.tournaments.map((x) => [x.eventId, x.title, x.hcp, x.oddableHcp, x.reason, x.log.length, x.log[0].by]), [['MG26', 'Member-Guest', 9, j.golfHcp.index, 'Club handicap', 1, 'Dir Real']], 'the card has the tournament number, the real Oddable number and the log line, with no round played in it yet');
-    j = ok(await call('ann', 'event/log', { eventId: 'MG26' })); assert.deepStrictEqual([j.director, j.mine.hcp, j.log.length], [false, 9, 1]); j = ok(await call('dir', 'event/log', { eventId: 'MG26' })); assert.deepStrictEqual([j.director, j.set.length, j.log.length], [true, 1, 2]);
-    no(await call('bob', 'event/log', { eventId: 'MG26' }), 404, null, 'someone with no number there'); const h = await S.handicapFor(K('ann'), { eventId: 'MG26' }); assert.deepStrictEqual([h.use, h.setBy, h.event, h.oddable.index != null], [9, 'tournament', 9, true]);
+    await S.eventSetup(dir, 'golf:MG26xxxx', { title: 'Member-Guest', sport: 'golf', lockAt: NOW + 864e5 }); ok(await call('dir', 'event/setup', { eventId: 'golf:MG26xxxx', title: 'Member-Guest', sport: 'golf' }), 'the director reaches the tournament the engine registered, over HTTP'); no(await call('bob', 'event/setup', { eventId: 'golf:X1xxxxxx', title: 'x', lockAt: NOW + 864e5 }), 404, /not found/, 'the phone route never creates an event');
+    await S.eventOverride(dir, 'golf:MG26xxxx', K('ann'), { hcp: 9, reason: 'Club handicap' });
+    j = ok(await call('ann', 'me')); assert.deepStrictEqual(j.tournaments.map((x) => [x.eventId, x.title, x.hcp, x.oddableHcp, x.reason, x.log.length, x.log[0].by]), [['golf:MG26xxxx', 'Member-Guest', 9, j.golfHcp.index, 'Club handicap', 1, 'Dir Real']], 'the card has the tournament number, the real Oddable number and the log line, with no round played in it yet');
+    j = ok(await call('ann', 'event/log', { eventId: 'golf:MG26xxxx' })); assert.deepStrictEqual([j.director, j.mine.hcp, j.log.length], [false, 9, 1]); j = ok(await call('dir', 'event/log', { eventId: 'golf:MG26xxxx' })); assert.deepStrictEqual([j.director, j.set.length, j.log.length], [true, 1, 2]);
+    no(await call('bob', 'event/log', { eventId: 'golf:MG26xxxx' }), 404, null, 'someone with no number there'); const h = await S.handicapFor(K('ann'), { eventId: 'golf:MG26xxxx' }); assert.deepStrictEqual([h.use, h.setBy, h.event, h.oddable.index != null], [9, 'tournament', 9, true]);
   });
 
   const mixed = () => [

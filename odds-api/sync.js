@@ -182,4 +182,11 @@ async function dbIds() {
   if (!r.ok) throw new Error('db read ' + r.status);
   return (await r.json()).map((x) => String(x.id)).filter((id) => !id.startsWith('lock:'));
 }
-module.exports = { handle, merge, normPhone, verifyLogin, adminUsers, settledPL, dbGet, dbPut, dbPatchIf, dbIds };
+// Every row id in the table, one page at a time (stats backfill, review 6: no 5,000 cap). Shared 'lock:' rows included; the caller filters.
+async function dbIdsPage(offset, limit) {
+  const { url, key } = cfg(), off = Math.max(0, Math.floor(Number(offset) || 0)), lim = Math.min(1000, Math.max(1, Math.floor(Number(limit) || 1000)));
+  const r = await fetch(`${url}/rest/v1/oddable_sync?select=id&order=id.asc&offset=${off}&limit=${lim}`, { headers: hdr(key), signal: AbortSignal.timeout(15000) });
+  if (!r.ok) throw new Error('db read ' + r.status);
+  return (await r.json()).map((x) => String(x.id));
+}
+module.exports = { handle, merge, normPhone, verifyLogin, adminUsers, settledPL, dbGet, dbPut, dbPatchIf, dbIds, dbIdsPage };

@@ -66,12 +66,12 @@ srv.listen(0, async () => {
     db[SID.bob].data = { bets: [], log: { [S.chiDay(twoY)]: { w: 1 }, '2026-01-01': {} } }; // first daily-log day two years ago, no bets
     db[SID.cat].data = { bets: [{ id: 'b' + (twoY + 9000) }] }; db[SID.dir].data = { bets: [{ id: 'b' + (twoY + 1) }] };
     stampSet(K('zed'), T0 - 3 * DAY); // an account that already has a real sign-up stamp: never moved
-    const deploy = T0, rep = await BF.run({ db: FDB, phoneEmail: pe, sinceKey: skey, now: T0, deploy });
+    const deploy = T0, launch = T0 - 1000 * DAY, rep = await BF.run({ db: FDB, phoneEmail: pe, sinceKey: skey, now: T0, deploy, launch });
     assert.deepStrictEqual([rep.write, !!db['lock:acctsince:done'], stampGet(K('ann'))], [false, false, null], 'dry run by default: nothing written');
-    const w = await BF.run({ db: FDB, phoneEmail: pe, sinceKey: skey, now: T0, deploy, write: true });
+    const w = await BF.run({ db: FDB, phoneEmail: pe, sinceKey: skey, now: T0, deploy, launch, write: true });
     assert.deepStrictEqual([stampGet(K('ann')), S.chiDay(stampGet(K('bob'))), stampGet(K('cat')), stampGet(K('eve')), stampGet(K('zed')), stampGet('owner')], [twoY + 5000, S.chiDay(twoY), twoY + 9000, deploy - 30 * DAY, T0 - 3 * DAY, deploy - 30 * DAY], 'first bet / first log day / deploy minus 30 / an existing stamp kept / the owner account');
     assert.ok(w.marker && db['lock:acctsince:done'].data.at === T0 && w.bet >= 3 && w.log === 1 && w.kept === 1, JSON.stringify(w));
-    const snap = JSON.stringify(db['lock:acctsince'].data); await BF.run({ db: FDB, phoneEmail: pe, sinceKey: skey, now: T0 + DAY, deploy: T0 + DAY, write: true });
+    const snap = JSON.stringify(db['lock:acctsince'].data); await BF.run({ db: FDB, phoneEmail: pe, sinceKey: skey, now: T0 + DAY, deploy: T0 + DAY, launch, write: true });
     assert.strictEqual(JSON.stringify(db['lock:acctsince'].data), snap, 'running it again changes nothing (idempotent)'); assert.strictEqual(db['lock:acctsince:done'].data.runs, 2);
     // a round played Saturday and logged Tuesday by a 2-year user is confirmable; his 2-year friend's confirmation counts; nobody shows "joined today"
     ['bob', 'cat', 'dir'].forEach((n) => { GAMES[K(n)] = [0, 1, 2].map((i) => cardRound('own' + n + i, S.chiDay(T0 - (300 + i) * DAY), 88, 'a:0000000000ff', { rating: null, slope: null })); }); S._reset();
@@ -118,57 +118,59 @@ srv.listen(0, async () => {
     for (let i = 0; i < 5; i++) await logRound('eve', day(10 + i), 95 + i, []); // Eve: solo rounds only (unconfirmed)
     h = await S.handicapFor(K('ann')); assert.deepStrictEqual([h.use, h.needsSet, h.suggested.confirmed, h.suggested.value], [null, true, true, h.confirmedIndex], 'no event: nothing is used, the confirmed index is SUGGESTED');
     ['oddable', 'confirmedIndex', 'rounds', 'confirmedRounds', 'makeup', 'flags', 'suggested', 'event', 'setBy', 'use'].forEach((k) => assert.ok(k in h, 'handicapFor has ' + k));
-    await S.eventSetup(K('mo'), 'SKINS1', { title: 'Saturday skins', sport: 'golf', kind: 'game', money: true, players: [{ key: K('ann'), team: 'A' }, { key: K('eve'), team: 'B' }, { key: 'guest:zzzzzz111111', team: 'B', name: 'Walk-on' }] });
-    h = await S.handicapFor(K('ann'), { eventId: 'SKINS1' }); assert.deepStrictEqual([h.use, h.needsSet], [null, true], 'registered but not approved: the engine blocks Start');
-    let rv = await review('SKINS1', K('mo')); assert.deepStrictEqual([rv.ready, rv.unconfirmed], [false, ['Eve Real']], 'the approval screen shows who is unconfirmed before the tap: ' + JSON.stringify(rv.unconfirmed));
+    await S.eventSetup(K('mo'), 'golf:SKINS1xx', { title: 'Saturday skins', sport: 'golf', kind: 'game', money: true, lockAt: NOW + DAY, players: [{ key: K('ann'), team: 'A' }, { key: K('eve'), team: 'B' }, { key: 'guest:zzzzzz111111', team: 'B', name: 'Walk-on' }] });
+    h = await S.handicapFor(K('ann'), { eventId: 'golf:SKINS1xx' }); assert.deepStrictEqual([h.use, h.needsSet], [null, true], 'registered but not approved: the engine blocks Start');
+    let rv = await review('golf:SKINS1xx', K('mo')); assert.deepStrictEqual([rv.ready, rv.unconfirmed], [false, ['Eve Real']], 'the approval screen shows who is unconfirmed before the tap: ' + JSON.stringify(rv.unconfirmed));
     assert.ok(rv.players.find((p) => p.name === 'Eve Real').flags.some((f) => /^unconfirmed: needs 3 confirmed rounds/.test(f)));
-    await assert.rejects(approve('SKINS1', K('ann'), null, K('bob')), /organizer/, 'a stranger cannot approve'); await assert.rejects(approveAll('SKINS1', K('ann')), /organizer/, 'nor can a player');
-    const all = await approveAll('SKINS1', K('mo')); assert.deepStrictEqual([all.approved.map((x) => x.name).sort(), all.skipped.map((x) => x.name)], [['Ann Real', 'Eve Real'], ['Walk-on']], JSON.stringify(all));
-    assert.ok(/no Oddable number yet/.test(all.skipped[0].why)); await S.eventOverride(K('mo'), 'SKINS1', 'guest:zzzzzz111111', { hcp: 24, reason: 'Walk-on, no rounds' });
-    h = await S.handicapFor(K('ann'), { eventId: 'SKINS1' }); assert.deepStrictEqual([h.use, h.setBy, h.by, h.needsSet], [h.suggested.value, 'approved', 'Coach Mo', false]); assert.strictEqual(h.shown, h.suggested.value.toFixed(1) + ' approved by Coach Mo · Oddable ' + h.oddable.index.toFixed(1) + ' (real results)');
-    const e = await S.handicapFor(K('eve'), { eventId: 'SKINS1' }); assert.deepStrictEqual([e.use, e.suggested.confirmed, e.use === e.oddable.index], [e.oddable.index, false, true], 'Eve plays her full index, approved as UNCONFIRMED');
-    rv = await review('SKINS1', K('mo')); assert.strictEqual(rv.ready, true, 'every player has a number: Start is allowed');
-    assert.strictEqual((await S.courseHandicapFor(K('ann'), { slope: 128, cr: 71.2, par: 72 }, { eventId: 'SKINS1' })).courseHandicap != null, true);
-    j = ok(await call('eve', 'event/log', { eventId: 'SKINS1' })); assert.ok(j.approvals.length === 2 && j.log.some((l) => l.player === 'Ann Real' && l.by === 'Coach Mo' && l.kind === 'approve' && l.oddable != null) && j.log.some((l) => l.player === 'Walk-on' && l.kind === 'set'), 'every player reads every approval and set value: ' + JSON.stringify(j.log));
-    assert.ok(j.log.some((l) => /UNCONFIRMED/.test(l.reason) && l.player === 'Eve Real'), 'and that Eve was approved unconfirmed'); assert.strictEqual((await call('gus', 'event/log', { eventId: 'SKINS1' })).s, 404, 'someone not in the event: 404');
+    await assert.rejects(approve('golf:SKINS1xx', K('ann'), null, K('bob')), /organizer/, 'a stranger cannot approve'); await assert.rejects(approveAll('golf:SKINS1xx', K('ann')), /organizer/, 'nor can a player');
+    const all = await approveAll('golf:SKINS1xx', K('mo')); assert.deepStrictEqual([all.approved.map((x) => x.name).sort(), all.skipped.map((x) => x.name)], [['Ann Real', 'Eve Real'], ['Walk-on']], JSON.stringify(all));
+    assert.ok(/no Oddable number yet/.test(all.skipped[0].why)); await S.eventOverride(K('mo'), 'golf:SKINS1xx', 'guest:zzzzzz111111', { hcp: 24, reason: 'Walk-on, no rounds' });
+    h = await S.handicapFor(K('ann'), { eventId: 'golf:SKINS1xx' }); assert.deepStrictEqual([h.use, h.setBy, h.by, h.needsSet], [h.suggested.value, 'approved', 'Coach Mo', false]); assert.strictEqual(h.shown, h.suggested.value.toFixed(1) + ' approved by Coach Mo · Oddable ' + h.oddable.index.toFixed(1) + ' (real results)');
+    const e = await S.handicapFor(K('eve'), { eventId: 'golf:SKINS1xx' }); assert.deepStrictEqual([e.use, e.suggested.confirmed, e.use === e.oddable.index], [e.oddable.index, false, true], 'Eve plays her full index, approved as UNCONFIRMED');
+    rv = await review('golf:SKINS1xx', K('mo')); assert.strictEqual(rv.ready, true, 'every player has a number: Start is allowed');
+    assert.strictEqual((await S.courseHandicapFor(K('ann'), { slope: 128, cr: 71.2, par: 72 }, { eventId: 'golf:SKINS1xx' })).courseHandicap != null, true);
+    j = ok(await call('eve', 'event/log', { eventId: 'golf:SKINS1xx' })); assert.ok(j.approvals.length === 2 && j.log.some((l) => l.player === 'Ann Real' && l.by === 'Coach Mo' && l.kind === 'approve' && l.oddable != null) && j.log.some((l) => l.player === 'Walk-on' && l.kind === 'set'), 'every player reads every approval and set value: ' + JSON.stringify(j.log));
+    assert.ok(j.log.some((l) => /UNCONFIRMED/.test(l.reason) && l.player === 'Eve Real'), 'and that Eve was approved unconfirmed'); assert.strictEqual((await call('gus', 'event/log', { eventId: 'golf:SKINS1xx' })).s, 404, 'someone not in the event: 404');
     assert.ok(!/"pk"|"u"|@phone|a:[0-9a-f]{12}/.test(JSON.stringify(j)) && !/@phone|"u":/.test(JSON.stringify(rv)), 'no keys or account ids leave');
     // a stale screen: the number moved after the organizer looked
-    await S.eventSetup(K('mo'), 'SKINS2', { title: 'Sunday', sport: 'golf', players: [K('ann')] }); await assert.rejects(approve('SKINS2', K('ann'), 3.3, K('mo')), /changed/);
+    await S.eventSetup(K('mo'), 'golf:SKINS2xx', { title: 'Sunday', sport: 'golf', players: [K('ann')] }); await assert.rejects(approve('golf:SKINS2xx', K('ann'), 3.3, K('mo')), /changed/);
     // casual play: the full index, no approval needed
     assert.strictEqual((await S.handicapFor(K('ann'), { casual: true })).use, h.oddable.index);
     // a co-organizer may approve; an Enterprise director registered on the event may; after the start nothing changes
-    old('gus'); await S.eventSetup(K('mo'), 'SKINS3', { title: 'Mon', sport: 'golf', coOrganizers: [K('gus')], players: [K('ann')], lockAt: NOW + DAY }); assert.strictEqual((await approve('SKINS3', K('ann'), null, K('gus'))).by, 'Gus Real');
-    NOW += DAY + 1; await assert.rejects(approve('SKINS3', K('ann'), null, K('mo')), /locked/);
+    old('gus'); await S.eventSetup(K('mo'), 'golf:SKINS3xx', { title: 'Mon', sport: 'golf', coOrganizers: [K('gus')], players: [K('ann')], lockAt: NOW + DAY }); await S.eventAccept('golf:SKINS3xx', K('gus')); assert.strictEqual((await approve('golf:SKINS3xx', K('ann'), null, K('gus'))).by, 'Gus Real (co-organizer added by Coach Mo)');
+    NOW += DAY + 1; await assert.rejects(approve('golf:SKINS3xx', K('ann'), null, K('mo')), /locked/);
   });
 
   await check('D. An organizer can never approve or set his OWN number: it needs a different organizer / director, or a player on another team, and both names are recorded', async () => {
     const approve = mustHave('eventApprove'); old('mo', 'ann', 'bob', 'cat');
     for (let i = 0; i < 4; i++) await logRound('mo', day(5 + i), 160, []); // Coach Mo logs 160s: a 54.0
     const mo = await S.handicapFor(K('mo')); assert.strictEqual(mo.suggested.value, 54); assert.strictEqual(mo.suggested.confirmed, false);
-    await S.eventSetup(K('mo'), 'NASSAU', { title: 'Nassau', sport: 'golf', money: true, players: [{ key: K('mo'), team: 'A' }, { key: K('ann'), team: 'A' }, { key: K('bob'), team: 'B' }] });
-    await assert.rejects(approve('NASSAU', K('mo'), 54, K('mo')), /cannot approve or set your own number/); await assert.rejects(S.eventOverride(K('mo'), 'NASSAU', K('mo'), { hcp: 54, reason: 'me' }), /own number/);
-    await assert.rejects(S.eventApproveAll('NASSAU', K('mo')).then((x) => { if (x.approved.some((a) => a.name === 'Coach Mo')) throw new Error('approved himself'); throw new Error('ok'); }), /^Error: ok$/);
-    await assert.rejects(approve('NASSAU', K('mo'), 54, K('mo'), { cosign: K('ann') }), /own number/, 'his own teammate cannot co-sign'); await assert.rejects(approve('NASSAU', K('mo'), 54, K('mo'), { cosign: K('cat') }), /own number/, 'nor someone outside the event');
-    const ok2 = await approve('NASSAU', K('mo'), 54, K('mo'), { cosign: K('bob') }); assert.deepStrictEqual([ok2.by, ok2.cosign], ['Coach Mo', 'Bob Real'], 'a player on the other team co-signs');
-    h = await S.handicapFor(K('mo'), { eventId: 'NASSAU' }); assert.ok(/54\.0 approved by Coach Mo with Bob Real · Oddable 54\.0/.test(h.shown), h.shown);
-    j = ok(await call('ann', 'event/log', { eventId: 'NASSAU' })); assert.ok(j.log.some((l) => l.player === 'Coach Mo' && l.by === 'Coach Mo' && l.cosign === 'Bob Real'), 'both names in the log every player reads');
+    await S.eventSetup(K('mo'), 'golf:NASSAUxx', { title: 'Nassau', sport: 'golf', money: true, lockAt: NOW + DAY, players: [{ key: K('mo'), team: 'A' }, { key: K('ann'), team: 'A' }, { key: K('bob'), team: 'B' }] });
+    await assert.rejects(approve('golf:NASSAUxx', K('mo'), 54, K('mo')), /cannot approve or set your own number/); await assert.rejects(S.eventOverride(K('mo'), 'golf:NASSAUxx', K('mo'), { hcp: 54, reason: 'me' }), /own number/);
+    await assert.rejects(S.eventApproveAll('golf:NASSAUxx', K('mo')).then((x) => { if (x.approved.some((a) => a.name === 'Coach Mo')) throw new Error('approved himself'); throw new Error('ok'); }), /^Error: ok$/);
+    await S.eventAccept('golf:NASSAUxx', K('ann')); await S.eventAccept('golf:NASSAUxx', K('bob')); // review 6: seats count once accepted; a co-sign is a code from the co-signer's own phone
+    await assert.rejects(S.cosignToken('golf:NASSAUxx', K('mo'), 54, K('ann')), /cannot co-sign/, 'his own teammate cannot co-sign'); await assert.rejects(S.cosignToken('golf:NASSAUxx', K('mo'), 54, K('cat')), /not a player|cannot co-sign/i, 'nor someone outside the event');
+    await assert.rejects(approve('golf:NASSAUxx', K('mo'), 54, K('mo'), { cosign: K('bob') }), /co-sign/, 'a bare account id is refused');
+    const ok2 = await approve('golf:NASSAUxx', K('mo'), 54, K('mo'), { cosign: (await S.cosignToken('golf:NASSAUxx', K('mo'), 54, K('bob'))).code }); assert.deepStrictEqual([ok2.by, ok2.cosign], ['Coach Mo', 'Bob Real'], 'a player on the other team co-signs');
+    h = await S.handicapFor(K('mo'), { eventId: 'golf:NASSAUxx' }); assert.ok(/54\.0 approved by Coach Mo with Bob Real · Oddable 54\.0/.test(h.shown), h.shown);
+    j = ok(await call('ann', 'event/log', { eventId: 'golf:NASSAUxx' })); assert.ok(j.log.some((l) => l.player === 'Coach Mo' && l.by === 'Coach Mo' && l.cosign === 'Bob Real'), 'both names in the log every player reads');
     say('Organizer approving his own 54.0: refused alone, refused with his own teammate or an outsider co-signing; allowed only with a player on the other team (or another organizer / director) co-signing; the log every player reads says "54.0 approved by Coach Mo with Bob Real".');
   });
 
   await check('C. SEASON: an approval stands until the suggested number moves by 1.0 or more; a one-off game approval stands for that game', async () => {
     active('bob', 'cat', 'dir'); old('mo', 'ann'); const rounds = (n, s) => Array.from({ length: n }, (_, i) => cardRound('a' + i, day(60 - i), s + (i % 2), ref(['bob', 'cat', 'dir'][i % 3])));
-    setGames('ann', rounds(8, 85)); await S.eventSetup(K('mo'), 'LEAGUE', { title: 'Tuesday league', sport: 'golf', kind: 'season', players: [K('ann')] }); await S.eventSetup(K('mo'), 'ONE', { title: 'One-off', sport: 'golf', players: [K('ann')] });
-    await S.eventApproveAll('LEAGUE', K('mo')); await S.eventApproveAll('ONE', K('mo')); const v0 = (await S.handicapFor(K('ann'), { eventId: 'LEAGUE' })).use; assert.ok(v0 != null);
-    setGames('ann', rounds(8, 85).concat([cardRound('a8', day(5), 87, ref('bob'))])); h = await S.handicapFor(K('ann'), { eventId: 'LEAGUE' }); assert.ok(Math.abs(h.suggested.value - v0) < 1 && h.use === v0, 'a small move: the approval stands (' + v0 + ' -> ' + h.suggested.value + ')');
-    setGames('ann', rounds(8, 91)); h = await S.handicapFor(K('ann'), { eventId: 'LEAGUE' });
+    setGames('ann', rounds(8, 85)); await S.eventSetup(K('mo'), 'golf:LEAGUExx', { title: 'Tuesday league', sport: 'golf', kind: 'season', players: [K('ann')] }); await S.eventSetup(K('mo'), 'golf:ONExxxxx', { title: 'One-off', sport: 'golf', players: [K('ann')] });
+    await S.eventApproveAll('golf:LEAGUExx', K('mo')); await S.eventApproveAll('golf:ONExxxxx', K('mo')); const v0 = (await S.handicapFor(K('ann'), { eventId: 'golf:LEAGUExx' })).use; assert.ok(v0 != null);
+    setGames('ann', rounds(8, 85).concat([cardRound('a8', day(5), 87, ref('bob'))])); h = await S.handicapFor(K('ann'), { eventId: 'golf:LEAGUExx' }); assert.ok(Math.abs(h.suggested.value - v0) < 1 && h.use === v0, 'a small move: the approval stands (' + v0 + ' -> ' + h.suggested.value + ')');
+    setGames('ann', rounds(8, 91)); h = await S.handicapFor(K('ann'), { eventId: 'golf:LEAGUExx' });
     assert.ok(h.suggested.value - v0 >= 1 && h.use === null && h.lapsed === true && /Approval lapsed/.test(h.reason), JSON.stringify([v0, h.suggested.value, h.use, h.reason]));
-    assert.strictEqual((await S.handicapFor(K('ann'), { eventId: 'ONE' })).use, v0, 'the one-off game keeps what was approved for it');
+    assert.strictEqual((await S.handicapFor(K('ann'), { eventId: 'golf:ONExxxxx' })).use, v0, 'the one-off game keeps what was approved for it');
   });
 
   await check('E. VOUCH: a club director vouches for a member; the member shows "vouched by <club>", their confirmations count whatever the account age; logged; revocable; only that club\'s director', async () => {
     const vouch = mustHave('vouch'), unvouch = mustHave('unvouch'); ent('mo', [{ id: 'palm', name: 'Palm View CC' }]); old('mo', 'ann');
     ['bob', 'cat', 'dir'].forEach((n) => { newbie(n); GAMES[K(n)] = [0, 1, 2].map((i) => cardRound('own' + n + i, day(1), 88, 'a:0000000000ff', { rating: null, slope: null })); });
-    setGames('ann', Array.from({ length: 6 }, (_, i) => cardRound('v' + i, day(6 - i), 90 + i, ref(['bob', 'cat', 'dir'][i % 3]), { at: NOW - (6 - i) * DAY })));
+    setGames('ann', Array.from({ length: 6 }, (_, i) => cardRound('v' + i, day(6 - i), 90 + i, ref(['bob', 'cat', 'dir'][i % 3]), { at: NOW - (6 - i) * DAY, courseId: 'palm' }))); // review 6: rounds at the vouching club
     h = await S.handicapFor(K('ann')); assert.deepStrictEqual([h.confirmedRounds, h.suggested.confirmed], [0, false], 'new accounts: not counted');
     await assert.rejects(vouch('palm', K('bob'), K('ann')), /director/, 'not the director'); await assert.rejects(vouch('other', K('bob'), K('mo')), /director/, 'not his club');
     for (const n of ['bob', 'cat', 'dir']) await vouch('palm', K(n), K('mo'));
@@ -191,16 +193,16 @@ srv.listen(0, async () => {
   // ---------------- the scenarios the manager asked for ----------------
   await check('SCENARIO club of 40, all new to Oddable in month one: the organizer approves the whole field in ONE tap after seeing who is unconfirmed; a director vouch makes the numbers read confirmed', async () => {
     ent('mo', [{ id: 'palm', name: 'Palm View CC' }]); old('mo'); CLUB.forEach((n) => stampSet(K(n), T0));
-    const weeks = 4; CLUB.forEach((n, i) => { GAMES[K(n)] = Array.from({ length: weeks }, (_, w) => cardRound('c' + n + 'w' + w, S.chiDay(T0 + (w * 7 + 1) * DAY), 80 + ((i * 7 + w * 3) % 25), ref(CLUB[(i + 4 + w) % 40]), { at: T0 + (w * 7 + 1) * DAY + i * 1000 })); });
+    const weeks = 4; CLUB.forEach((n, i) => { GAMES[K(n)] = Array.from({ length: weeks }, (_, w) => cardRound('c' + n + 'w' + w, S.chiDay(T0 + (w * 7 + 1) * DAY), 80 + ((i * 7 + w * 3) % 25), ref(CLUB[(i + 4 + w) % 40]), { at: T0 + (w * 7 + 1) * DAY + i * 1000, courseId: 'palm' })); });
     NOW = T0 + 28 * DAY; S._reset();
-    await S.eventSetup(K('mo'), 'CLUBDAY5', { title: 'Week 5 club day', sport: 'golf', kind: 'game', money: true, players: CLUB.map((n, i) => ({ key: K(n), team: 'T' + Math.floor(i / 4) })) });
-    let rv = await S.eventReview('CLUBDAY5', K('mo')); const unc = rv.unconfirmed.length, fl = rv.players[0].flags;
+    await S.eventSetup(K('mo'), 'golf:CLUBDAY5', { title: 'Week 5 club day', sport: 'golf', kind: 'game', money: true, lockAt: NOW + DAY, players: CLUB.map((n, i) => ({ key: K(n), team: 'T' + Math.floor(i / 4) })) });
+    let rv = await S.eventReview('golf:CLUBDAY5', K('mo')); const unc = rv.unconfirmed.length, fl = rv.players[0].flags;
     assert.deepStrictEqual([rv.players.length, rv.ready, unc], [40, false, 40], 'month one: all 40 numbers are UNCONFIRMED (every confirmer joined less than 30 days before confirming)');
     assert.ok(fl.some((f) => /^unconfirmed/.test(f)) && rv.players[0].makeup.flags.some((f) => /confirmers joined within a week of each other|joined less than 30 days ago/.test(f)), JSON.stringify(fl));
-    const t = await S.eventApproveAll('CLUBDAY5', K('mo')); rv = await S.eventReview('CLUBDAY5', K('mo'));
+    const t = await S.eventApproveAll('golf:CLUBDAY5', K('mo')); rv = await S.eventReview('golf:CLUBDAY5', K('mo'));
     assert.deepStrictEqual([t.approved.length, t.skipped.length, rv.ready], [40, 0, true], 'one tap: 40 approved, the game can start');
     for (const n of CLUB) await S.vouch('palm', K(n), K('mo'));
-    await S.eventSetup(K('mo'), 'CLUBDAY6', { title: 'Week 6', sport: 'golf', players: CLUB.map((n) => K(n)) }); rv = await S.eventReview('CLUBDAY6', K('mo'));
+    await S.eventSetup(K('mo'), 'golf:CLUBDAY6', { title: 'Week 6', sport: 'golf', players: CLUB.map((n) => K(n)) }); rv = await S.eventReview('golf:CLUBDAY6', K('mo'));
     const conf = rv.players.filter((p) => p.suggested.confirmed).length; assert.ok(conf === 40, 'vouched by the club: ' + conf + ' of 40 read CONFIRMED');
     say('Club of 40, all new in month one (4 weekly golf days, cards confirmed by another team): the approval screen lists all 40 as UNCONFIRMED (flags: "unconfirmed: ...", confirmers "joined less than 30 days ago", "N confirmers joined within a week of each other"); one tap "Use everyone\'s Oddable index" approves all 40 and the game can start. After the director vouches for the members, ' + conf + ' of 40 read CONFIRMED (vouched by Palm View CC).');
   });
@@ -212,7 +214,7 @@ srv.listen(0, async () => {
     setGames('fay', Array.from({ length: 12 }, (_, i) => cardRound('c' + i, day(7 * (12 - i)), 100, ref(['bob', 'cat'][i % 2])))); const couple = await S.handicapFor(K('fay'));
     assert.deepStrictEqual([four.suggested.confirmed, four.makeup.flags.length, friend.suggested.confirmed, couple.suggested.confirmed], [true, 0, false, false]);
     assert.ok(friend.makeup.who[0].flags.some((f) => /^confirmed \d+ of/.test(f)) && /UNCONFIRMED: needs rounds confirmed by 3 different players/.test(couple.ask));
-    await S.eventSetup(K('mo'), 'G1', { title: 'Game', sport: 'golf', players: [K('ann'), K('eve'), K('fay')] }); const t = await S.eventApproveAll('G1', K('mo')); assert.strictEqual(t.approved.length, 3);
+    await S.eventSetup(K('mo'), 'golf:G1xxxxxx', { title: 'Game', sport: 'golf', players: [K('ann'), K('eve'), K('fay')] }); const t = await S.eventApproveAll('golf:G1xxxxxx', K('mo')); assert.strictEqual(t.approved.length, 3);
     say('Honest rotating foursome (12 weekly game rounds, 3 markers): suggested ' + four.suggested.value + ' CONFIRMED, no flags; one tap. One friend (all cards by Bob): suggested ' + friend.suggested.value + ' UNCONFIRMED, Bob flagged "' + friend.makeup.who[0].flags.join(', ') + '". Couple (two markers): suggested ' + couple.suggested.value + ' UNCONFIRMED ("needs rounds confirmed by 3 different players"). The organizer approves all three in one tap, seeing which are unconfirmed.');
   });
 
@@ -220,7 +222,7 @@ srv.listen(0, async () => {
     old('dan', 'mo'); const thr = ['tia', 'tom', 'ted'], four = ['tia', 'tom', 'ted', 'tex']; four.forEach((n) => stampSet(K(n), T0 - 40 * DAY));
     const prep = (crew) => { crew.forEach((n) => { const o = crew.filter((x) => x !== n); GAMES[K(n)] = [0, 1, 2].map((k) => cardRound('own' + n + k, day(25 - k), 90, ref(o[k % o.length]), { rating: null, slope: null })); }); setGames('dan', Array.from({ length: 8 }, (_, i) => cardRound('d' + i, day(8 - i), 200, ref(crew[i % crew.length])))); };
     prep(thr); const h3 = await S.handicapFor(K('dan')); prep(four); const h4 = await S.handicapFor(K('dan'));
-    await S.eventSetup(K('mo'), 'BIG', { title: 'Big money', sport: 'golf', money: true, players: [K('dan')] }); const rv = await S.eventReview('BIG', K('mo'));
+    await S.eventSetup(K('mo'), 'golf:BIGxxxxx', { title: 'Big money', sport: 'golf', money: true, players: [K('dan')] }); const rv = await S.eventReview('golf:BIGxxxxx', K('mo'));
     assert.deepStrictEqual([h3.use, h4.use, rv.ready], [null, null, false], 'nothing is played automatically');
     assert.ok(h3.makeup.flags.includes('3 confirmers joined within a week of each other') && h4.makeup.flags.includes('4 confirmers joined within a week of each other'));
     say('Three / four aged throwaways (40 days old, finished games confirming each other, 8 rounds of 200): suggested ' + h4.suggested.value + ' ' + (h4.suggested.confirmed ? 'CONFIRMED' : 'UNCONFIRMED') + ', use null until the organizer acts. His screen warns: "' + h4.makeup.warn + '" (three: "' + h3.makeup.flags.filter((f) => /within a week/.test(f)).join('') + '"). Each confirmer row shows the same join date and their 2 rounds.');

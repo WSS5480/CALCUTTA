@@ -28,10 +28,16 @@ async function ma(path, data) {
 }
 // Slow-down for password guessing: 8 tries / 10 min per ip+email.
 const TRY = new Map();
-function throttled(k) { if (TRY.size > 5000) { let n = 0; for (const k of TRY.keys()) { TRY.delete(k); if (++n >= 1000) break; } } /* evict the oldest, never wipe every throttle */ const t = Date.now(), a = (TRY.get(k) || []).filter((x) => t - x < 600e3); if (a.length >= 8) { TRY.set(k, a); return true; } a.push(t); TRY.set(k, a); return false; }
+function throttled(k, max) { if (TRY.size > 5000) { let n = 0; for (const k of TRY.keys()) { TRY.delete(k); if (++n >= 1000) break; } } /* evict the oldest, never wipe every throttle */ const t = Date.now(), a = (TRY.get(k) || []).filter((x) => t - x < 600e3); if (a.length >= (max || 8)) { TRY.set(k, a); return true; } a.push(t); TRY.set(k, a); return false; }
 const OWNER_PIN = () => String(process.env.OWNER_PIN || '').trim();
 const OWNER_ME = { email: 'owner', role: 'owner', plan: 'pro', expires_on: null, source: 'owner', allowed: true, pending: false, price: 99, link: null, tag: null, payReady: true };
 const chiToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date());
+// v263. A customer's Cash App handle as My Apps stores it (optional $, 1-20 letters, digits, _ or -); anything else is not passed on to the phone.
+const okTag = (t) => (typeof t === 'string' && /^\$?[A-Za-z0-9_-]{1,20}$/.test(t.trim()) ? t.trim() : '');
+// v263. Free-time request note: plain text, control characters and line breaks become spaces, runs of spaces collapse, trimmed. null = not text.
+const cleanNote = (n) => (n == null ? '' : typeof n !== 'string' ? null : n.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim());
+const TIME_ERR = { limit: [429, 'You have asked 3 times in the last 7 days. Please try again later.'], busy: [429, 'Lots of requests right now. Please try again later.'], note: [400, 'Keep the note to 140 characters or less.'] };
+const isoOrNull = (x) => (typeof x === 'string' && x.length < 40 && !isNaN(Date.parse(x)) ? x : null);
 const allowed = (a) => a && (a.role === 'owner' || (a.plan === 'pro' && !(a.expires_on && String(a.expires_on).slice(0, 10) < chiToday()))); // an ended plan never counts, even if the console still says pro
 // Entitlement cache so every AI call does not hit My Apps.
 const CACHE = new Map();
@@ -46,7 +52,7 @@ async function shape(email, fresh) {
   const info = await ma('/api/v1/pay/info', { account: email });
   const p = info.ok ? info.j : {};
   return { email: a.email, role: a.role, plan: a.plan, expires_on: a.expires_on, source: a.source, allowed: !!allowed(a), pending: !!a.pending || !!p.pending,
-    price: p.price || a.price || 99, link: p.link || null, tag: p.tag || null, payReady: !!p.configured };
+    price: p.price || a.price || 99, link: p.link || null, tag: p.tag || null, payReady: !!p.configured, cashtag: okTag(p.cashtag) }; // tag = the OWNER's tag (where to pay); cashtag = this customer's own saved handle (v263)
 }
 // For other routes (AI): returns true if the request carries a valid token for an allowed account (or the gate is off).
 async function check(req) {
@@ -59,7 +65,7 @@ async function handle(req, res) {
   if (req.method === 'OPTIONS') return false;
   const path = req.url.split('?')[0];
   if (path === '/acct/status') { send(res, 200, { gate: on() }); return true; }
-  if (req.method !== 'POST') return false;
+  if (req.method !== 'POST' && !(req.method === 'GET' && path === '/acct/time/status')) return false; // v263: the time status may also be read with GET (x-token header)
   if (!on()) { send(res, 200, { gate: false }); return true; }
   const ip = require('./ip').clientIp(req); // third from the end of X-Forwarded-For (see ip.js)
   let b; try { b = await body(req); } catch (e) { send(res, 400, { error: 'bad request' }); return true; }
@@ -135,9 +141,28 @@ async function handle(req, res) {
       send(res, r.ok ? 200 : (r.status || 502), r.ok ? { ok: true } : { error: r.j.error || 'Could not turn reminders on' }); return true;
     }
     if (path === '/acct/pay') {
-      const r = await ma('/api/v1/pay/request', { account: e });
-      if (!r.ok) { send(res, 502, { error: r.j.error || 'Could not record your payment' }); return true; }
-      CACHE.delete(e); send(res, 200, { ok: true, ref: r.j.ref, link: r.j.link, amount: r.j.amount }); return true;
+      // v263: optional Cash App handle of the payer, so the owner can match the payment. My Apps owns the rule; its 400 message is passed on.
+      const ct = typeof b.cashtag === 'string' ? b.cashtag.trim().slice(0, 40) : '';
+      const r = await ma('/api/v1/pay/request', ct ? { account: e, cashtag: ct } : { account: e });
+      if (!r.ok) { send(res, r.status === 400 && ct ? 400 : 502, { error: r.j.error || 'Could not record your payment' }); return true; }
+      CACHE.delete(e); send(res, 200, { ok: true, ref: r.j.ref, link: r.j.link, amount: r.j.amount, cashtag: okTag(r.j.cashtag) }); return true;
+    }
+    if (path === '/acct/time/request') { // v263: ask the owner for free time. The account is the signed-in one from the token, never one sent by the phone.
+      if (throttled(ip + '|timereq') || throttled(e + '|timereq')) { send(res, 429, { ok: false, error: 'Too many tries, wait a few minutes' }); return true; }
+      const note = cleanNote(b.note);
+      if (note === null || note.length > 140) { send(res, 400, { ok: false, code: 'note', error: TIME_ERR.note[1] }); return true; }
+      const r = await ma('/api/v1/time/request', note ? { account: e, note } : { account: e });
+      if (r.ok && r.j.ok !== false) { send(res, 200, { ok: true, status: 'pending', already: !!r.j.already }); return true; }
+      const m = TIME_ERR[r.j.error]; // anything else (bad secret, unknown app, My Apps down) gets a plain message, never the upstream text
+      send(res, m ? m[0] : 502, { ok: false, code: m ? r.j.error : 'failed', error: m ? m[1] : 'Could not send your request. Please try again later.' }); return true;
+    }
+    if (path === '/acct/time/status') { // v263: the latest request of the signed-in account
+      if (throttled(e + '|timest', 30)) { send(res, 429, { ok: false, error: 'Too many tries, wait a few minutes' }); return true; }
+      const r = await ma('/api/v1/time/status', { account: e }), st = r.j.status;
+      if (!r.ok || r.j.ok === false || !['none', 'pending', 'granted', 'declined'].includes(st)) { send(res, 502, { ok: false, code: 'failed', error: 'Could not check your request. Please try again later.' }); return true; }
+      const d = Number(r.j.days);
+      if (st === 'granted') CACHE.delete(e); // the days are already on the account: read it fresh next time
+      send(res, 200, { ok: true, status: st, days: st === 'granted' && r.j.days != null && Number.isFinite(d) && d > 0 ? d : null, requested_at: isoOrNull(r.j.requested_at), decided_at: isoOrNull(r.j.decided_at) }); return true;
     }
     if (path === '/acct/redeem') {
       if (throttled(ip + '|redeem') || throttled(e + '|redeem')) { send(res, 429, { error: 'Too many tries, wait a few minutes' }); return true; }

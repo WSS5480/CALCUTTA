@@ -15,7 +15,7 @@
   // One person's data per phone. wipeData() clears everything that belongs to the signed-in person (bets, daily log, pins, locked picks, caches of them);
   // ownerSwitch(id) wipes it when a DIFFERENT person signs in on this phone, so nobody ever sees the previous user's data or uploads it into their own account.
   window.oddWipe = function () {
-    try { const ks = []; for (let i = 0; i < localStorage.length; i++) ks.push(localStorage.key(i)); ks.forEach((k) => { if (/^(bets26|betlog26|logat26|pinsat26|pinned26|kdel26|plbhtml26|surv26|sync-ids|sync-tomb|sync-last|sync-err|sync-rl|odd-ok|odd-dash|odd-dt|odd-push|odd-me|kal-id|kal-pem)$/.test(k) || /^(lk26-|splk-)/.test(k)) localStorage.removeItem(k); }); } catch (e) {}
+    try { const ks = []; for (let i = 0; i < localStorage.length; i++) ks.push(localStorage.key(i)); ks.forEach((k) => { if (/^(bets26|betlog26|logat26|pinsat26|pinned26|kdel26|plbhtml26|surv26|sync-ids|sync-tomb|sync-last|sync-err|sync-rl|odd-ok|odd-dash|odd-dt|odd-push|odd-me|odd-treq|kal-id|kal-pem)$/.test(k) || /^(lk26-|splk-)/.test(k)) localStorage.removeItem(k); }); } catch (e) {}
   };
   window.oddOwner = function (id) { // call right before saving a new sign-in; returns true if the previous person's data was cleared
     const k = String(id || '').toLowerCase().replace(/\s/g, ''); if (!k) return false; const prev = g('sync-owner'); s('sync-owner', k);
@@ -25,11 +25,11 @@
   const GRACE = 72 * 36e5;
   let me = null, el = null, mode = 'in', busy = false;
   const css = document.createElement('style');
-  css.textContent = '#gate{position:fixed;inset:0;z-index:200;background:#0b1220;color:#fff;overflow:auto;-webkit-overflow-scrolling:touch;font:15px/1.4 -apple-system,system-ui,sans-serif;padding:max(20px,env(safe-area-inset-top)) 16px 40px}#gate .gb{max-width:420px;margin:0 auto}#gate h1{font-size:28px;margin:18px 0 4px}#gate p{color:#b8c2d6;margin:6px 0 14px}#gate input{width:100%;box-sizing:border-box;padding:13px;margin:5px 0;border-radius:10px;border:1px solid #33415c;background:#141d30;color:#fff;font-size:16px}#gate button{width:100%;padding:14px;margin:8px 0;border:0;border-radius:11px;font-size:16px;font-weight:700;background:#2f7bff;color:#fff}#gate button.alt{background:#1b2740;color:#cfe0ff;font-weight:600}#gate .er{color:#ff8a8a;min-height:20px;font-size:14px}#gate .ok{color:#7be0a0}#gate .tabs{display:flex;gap:8px;margin:14px 0 6px}#gate .tabs button{margin:0;padding:10px}#gate .tabs button.on{background:#2f7bff;color:#fff}#gate a{color:#8db8ff}#gate .box{background:#141d30;border:1px solid #33415c;border-radius:12px;padding:14px;margin:12px 0}#gtoast{position:fixed;top:max(8px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:95;background:#7a4a00;color:#fff;border-radius:10px;padding:8px 12px;font:600 13px system-ui;max-width:92%}';
+  css.textContent = '#gate{position:fixed;inset:0;z-index:200;background:#0b1220;color:#fff;overflow:auto;-webkit-overflow-scrolling:touch;font:15px/1.4 -apple-system,system-ui,sans-serif;padding:max(20px,env(safe-area-inset-top)) 16px 40px}#gate .gb{max-width:420px;margin:0 auto}#gate h1{font-size:28px;margin:18px 0 4px}#gate p{color:#b8c2d6;margin:6px 0 14px}#gate input{width:100%;box-sizing:border-box;padding:13px;margin:5px 0;border-radius:10px;border:1px solid #33415c;background:#141d30;color:#fff;font-size:16px}#gate button{width:100%;padding:14px;margin:8px 0;border:0;border-radius:11px;font-size:16px;font-weight:700;background:#2f7bff;color:#fff}#gate button.alt{background:#1b2740;color:#cfe0ff;font-weight:600}#gate .er{color:#ff8a8a;min-height:20px;font-size:14px}#gate .ok{color:#7be0a0}#gate .tabs{display:flex;gap:8px;margin:14px 0 6px}#gate .tabs button{margin:0;padding:10px}#gate .tabs button.on{background:#2f7bff;color:#fff}#gate a{color:#8db8ff}#gate .box{background:#141d30;border:1px solid #33415c;border-radius:12px;padding:14px;margin:12px 0}#gate textarea{display:block;width:100%;box-sizing:border-box;min-height:48px;padding:13px;margin:5px 0 2px;border-radius:10px;border:1px solid #33415c;background:#141d30;color:#fff;font:16px/1.3 -apple-system,system-ui,sans-serif;resize:vertical}#gate label{display:block;margin:10px 0 0;font-weight:600}#gate .hl{font-size:13px;color:#8fa0bf;overflow-wrap:anywhere}#gtoast{position:fixed;top:max(8px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:95;background:#7a4a00;color:#fff;border-radius:10px;padding:8px 12px;font:600 13px system-ui;max-width:92%}';
   document.head.appendChild(css);
   async function call(p, body) {
     const r = await fetch(API + p, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': g('odd-tok') || '' }, body: JSON.stringify(body || {}) });
-    const j = await r.json().catch(() => ({})); if (!r.ok) { const e = new Error(j.error || 'Error ' + r.status); e.status = r.status; throw e; } return j;
+    const j = await r.json().catch(() => ({})); if (!r.ok) { const e = new Error(j.error || 'Error ' + r.status); e.status = r.status; e.code = j.code; throw e; } return j;
   }
   const $ = (id) => document.getElementById(id);
   const esc = (x) => String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -60,13 +60,73 @@
       (m.pending ? '<div class="box ok">Payment request received. You will be unlocked as soon as it is confirmed. Tap Check again in a minute.</div>' : '') +
       '<div class="box"><b>Step 1.</b> Send $' + m.price + ' on Cash App' + (m.tag ? ' to <b>' + esc(m.tag) + '</b>' : '') + '.' +
       (/^https:\/\//.test(m.link || '') ? '<button id="gcash">Pay $' + m.price + ' with Cash App</button>' : '<p class="er">Payment is not set up yet. Contact the owner.</p>') +
-      '<b>Step 2.</b> Come back and tap below.<button id="gpaid" class="alt">I paid — unlock me</button></div>' +
+      '<b>Step 2.</b> Come back and tap below.<label for="gtag">Your Cash App $handle</label><input id="gtag" placeholder="$yourtag" maxlength="21" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" aria-describedby="gtaghl gtagerr" value="' + esc(tagDraft != null ? tagDraft : (m.cashtag || '')) + '"><div class="hl" id="gtaghl">So we can match your payment.</div><div class="er" id="gtagerr" role="alert">' + esc(tagErr) + '</div><button id="gpaid" class="alt">I paid — unlock me</button></div>' +
       '<div class="box"><b>Have a code?</b><input id="gcode" placeholder="Access code" autocapitalize="characters"><button id="gred" class="alt">Redeem code</button></div>' +
+      (m.role === 'owner' ? '' : '<div class="box" id="gtime">' + timeHtml('gt', false, true) + '</div>') +
       '<div class="er" id="gerr"></div><button id="gchk" class="alt">Check again</button><button id="gout" class="alt">Sign out</button>' + '<p style="font-size:13px;color:#8fa0bf;margin:14px 0 0">This app is in development. Credit card payments are coming soon.</p>' + '</div>';
     if ($('gcash')) $('gcash').onclick = () => { window.open(m.link, '_blank', 'noopener'); };
-    $('gpaid').onclick = async () => { if (busy) return; busy = true; try { await call('/pay'); await refresh(true); err(''); } catch (e) { err(e.message); } busy = false; draw(); };
+    // v263: the payer's Cash App handle goes with "I paid" so the owner can match the payment. Same rule as My Apps; its own message is shown if it still says no.
+    const tg = $('gtag'), tagSay = (t) => { tagErr = t || ''; const te = $('gtagerr'); if (te) te.textContent = tagErr; if (tg) tg.setAttribute('aria-invalid', t ? 'true' : 'false'); };
+    tg.oninput = () => { tagDraft = tg.value; if (tagErr) tagSay(''); };
+    $('gpaid').onclick = async () => {
+      if (busy) return; const v = String(tg.value || '').trim(); tagDraft = v;
+      if (!v) { tagSay('Enter your Cash App $handle so we can match your payment.'); tg.focus(); return; }
+      if (!TAG_RE.test(v)) { tagSay(TAG_MSG); tg.focus(); return; }
+      busy = true; tagErr = ''; try { await call('/pay', { cashtag: v }); tagDraft = null; await refresh(true); err(''); } catch (e) { tagErr = e.status ? e.message : 'Could not reach the server. Check your connection and try again.'; } busy = false; draw();
+    };
+    timeWire('gt');
     $('gred').onclick = async () => { if (busy) return; busy = true; try { const j = await call('/redeem', { code: $('gcode').value }); setMe(j.me); } catch (e) { err(e.message); } busy = false; if (el) draw(); };
-    $('gchk').onclick = () => refresh(true).catch((e) => err(e.message)); $('gout').onclick = out;
+    $('gchk').onclick = () => refresh(true).then(() => { const t = trGet(); if (t && t.s === 'pending' && me && !me.allowed) timeCheck(me, true); }).catch((e) => err(e.message)); $('gout').onclick = out;
+  }
+  // ---- v263: "Request free time" (the owner is alerted in My Apps and answers there) ----
+  const TAG_RE = /^\$?[A-Za-z0-9_-]{1,20}$/, TAG_MSG = 'That is not a Cash App tag. Use up to 20 letters, numbers, _ or -, like $yourtag.';
+  let tagDraft = null, tagErr = '', noteDraft = '', trMsg = '', trBusy = false, trStop = false, trChecked = false;
+  // The last known answer is kept on the phone in 'odd-treq' ({s: pending|granted|declined, d: days, t: time}); wiped on sign-out / user switch.
+  const trGet = () => { try { const o = JSON.parse(g('odd-treq') || 'null'); return o && typeof o === 'object' && /^(pending|granted|declined)$/.test(o.s) ? o : null; } catch (e) { return null; } };
+  const trSet = (o) => s('odd-treq', o ? JSON.stringify(o) : null);
+  const daysLeft = (m) => { if (!m || !m.expires_on) return null; const n = new Date(), d = Math.round((new Date(String(m.expires_on).slice(0, 10) + 'T00:00:00') - new Date(n.getFullYear(), n.getMonth(), n.getDate())) / 864e5); return isNaN(d) ? null : d; }; // whole calendar days until the last day (0 = ends today)
+  // True when the account's time has ended or ends within 5 days. An account with no end date (everything is free for now) is never "near", so nothing shows.
+  const timeNear = (m) => { if (!m || m.role === 'owner') return false; if (!m.allowed) return true; const d = daysLeft(m); return d != null && d <= 5; };
+  function trLine() {
+    const t = trGet(); if (!t) return ''; if (t.s === 'pending') return '<b>Pending.</b> Request sent. Sir Oddable will answer soon.';
+    if (Date.now() - (Number(t.t) || 0) > 7 * 864e5) return ''; // an old answer is not shown for ever
+    if (t.s === 'granted') { const d = Math.round(Number(t.d)); return d > 0 ? 'You got ' + d + ' day' + (d === 1 ? '' : 's') + '.' : 'You got more time.'; }
+    return 'Not this time.';
+  }
+  // p = id prefix ('gt' on the subscribe screen, 'at' in the Account box); app = inside the app (uses the app's colours); btn = may ask now.
+  function timeHtml(p, app, btn) {
+    const t = trGet(), line = trLine(), can = btn && !(t && t.s === 'pending') && !trStop;
+    const bs = app ? ' style="min-height:44px;margin:4px 0;padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);font:700 14px inherit"' : ' class="alt"';
+    const ts = app ? ' style="display:block;width:100%;max-width:420px;box-sizing:border-box;min-height:48px;margin:6px 0 2px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);font-family:inherit;font-size:16px;line-height:1.3;resize:vertical"' : '';
+    const dim = app ? ' class="sub"' : ' class="hl"';
+    return '<div' + (app ? ' class="sub"' : '') + '><b>' + (can ? 'Need more time?' : 'Free time request') + '</b></div>' +
+      (line ? '<div id="' + p + '-ln" role="status"' + (app ? ' class="sub" style="margin:4px 0"' : ' class="' + (t && t.s === 'declined' ? 'hl' : 'ok') + '" style="margin:6px 0' + (t && t.s === 'declined' ? ';font-size:15px;color:#cfe0ff' : '') + '"') + '>' + line + '</div>' : '') +
+      (can ? '<textarea id="' + p + '-note" maxlength="140" rows="2" placeholder="Add a note (optional)" aria-label="Note for the owner (optional, 140 characters)"' + ts + '>' + esc(noteDraft) + '</textarea>' +
+        '<div id="' + p + '-cnt"' + dim + ' style="text-align:right;font-size:12px' + (app ? ';max-width:420px' : '') + '">' + noteDraft.length + '/140</div>' +
+        '<button id="' + p + '-go"' + bs + (trBusy ? ' disabled' : '') + '>' + (trBusy ? 'Sending…' : 'Request free time') + '</button>' : '') +
+      '<div id="' + p + '-msg" role="status"' + (app ? ' class="sub" style="color:var(--ink);font-weight:600;overflow-wrap:anywhere"' : ' class="er" style="min-height:0"') + '>' + esc(trMsg) + '</div>';
+  }
+  function timeWire(p) {
+    const n = $(p + '-note'), c = $(p + '-cnt'), b = $(p + '-go');
+    if (n) n.oninput = () => { if (n.value.length > 140) n.value = n.value.slice(0, 140); noteDraft = n.value; if (c) c.textContent = n.value.length + '/140'; };
+    if (b) b.onclick = timeSend;
+  }
+  // Repaints only the two request boxes, so nothing else typed on the screen is lost.
+  function timePaint() { const c = $('gtime'); if (c && me) { c.innerHTML = timeHtml('gt', false, true); timeWire('gt'); } drawAcct(); }
+  async function timeSend() {
+    if (trBusy || !g('odd-tok')) return; trBusy = true; trMsg = ''; timePaint(); const note = noteDraft.replace(/\s+/g, ' ').trim().slice(0, 140);
+    try { const j = await call('/time/request', note ? { note: note } : {}); if (j && j.ok) { trSet({ s: 'pending', t: Date.now() }); noteDraft = ''; } else trMsg = 'Requests are not open right now.'; }
+    catch (e) { if (e.code === 'limit') trStop = true; trMsg = !e.status ? 'Could not send your request. Check your connection and try again.' : (e.code || e.status === 429 || e.status === 401) ? e.message : 'Could not send your request. Please try again later.'; }
+    trBusy = false; timePaint(); // one try per tap: no automatic retry
+  }
+  // One status read per app open, and only when this phone has a request waiting or the account is ending / has ended. The answer is kept in 'odd-treq'.
+  async function timeCheck(m, force) {
+    if (!m || m.role === 'owner' || !g('odd-tok')) return; const t = trGet(), was = t && t.s;
+    if (!force && (trChecked || !(was === 'pending' || timeNear(m)))) return; trChecked = true;
+    let j; try { j = await call('/time/status', {}); } catch (e) { return; } if (!j || !j.ok) return;
+    if (j.status === 'none') trSet(null); else if (/^(pending|granted|declined)$/.test(j.status)) trSet({ s: j.status, d: Number(j.days) > 0 ? Number(j.days) : null, t: Date.parse(j.decided_at || j.requested_at || '') || Date.now() }); else return;
+    timePaint();
+    if (was === 'pending' && j.status === 'granted' && m.allowed === false && me === m) refresh().catch(() => {}); // the days are on the account already: re-check once so the app opens without a reload
   }
   async function ownerIn() {
     if (busy) return; busy = true;
@@ -96,7 +156,7 @@
     try { const j = await call('/phone', { phone: ph, pin: pn }); s('odd-tok', j.token); setMe(j.me); return true; } catch (e) { return false; }
   }
   function setMe(m) {
-    me = m; if (!m) return; setTimeout(drawAcct, 0); try { const dg = document.getElementById('odiag'); if (dg) dg.textContent = (m.ownerDash || (m.role === 'owner' && m.source === 'owner')) ? ' · acct ' + (m.role || '?') + (m.ownerDash ? '+dash' : '') + ' ' + String(m.email || '').slice(-8) : ''; s('odd-dash', (m.role === 'owner' && m.source === 'owner') || m.ownerDash ? '1' : null); if (window.navRender) setTimeout(window.navRender, 0); } catch (e) {}
+    me = m; if (!m) return; setTimeout(drawAcct, 0); setTimeout(() => timeCheck(m), 0); try { const dg = document.getElementById('odiag'); if (dg) dg.textContent = (m.ownerDash || (m.role === 'owner' && m.source === 'owner')) ? ' · acct ' + (m.role || '?') + (m.ownerDash ? '+dash' : '') + ' ' + String(m.email || '').slice(-8) : ''; s('odd-dash', (m.role === 'owner' && m.source === 'owner') || m.ownerDash ? '1' : null); if (window.navRender) setTimeout(window.navRender, 0); } catch (e) {}
     if (m.allowed) { s('odd-ok', String(Date.now())); hide(); soon(m); setTimeout(namePrompt, 1200); } else show();
   }
   // Everyone needs a name or handle. New accounts type one at sign-up; accounts made before that get asked once.
@@ -135,8 +195,8 @@
     const owner = (me.role === 'owner' && me.source === 'owner') || !!me.ownerDash;
     box.innerHTML = '<div class="sub"><b>Account</b>: <span id="acct-em"></span></div>' +
       (owner ? '<button id="acct-dash" style="min-height:44px;margin:4px 0;padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:#0b3d91;color:#fff;font:700 14px inherit">📊 Owner dashboard</button>' : (g('odd-push') === '1' ? '<div class="sub">Renewal reminders are on.</div>' : '<button id="acct-push" style="min-height:44px;padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);font:700 14px inherit">Turn on renewal reminders</button>')) +
-      '<div class="sub" id="acct-st"></div><button id="acct-out" style="min-height:44px;margin-top:6px;padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);font:700 14px inherit">Sign out</button>';
-    const em = $('acct-em'); if (em) em.textContent = me.email || ''; const pb = $('acct-push'); if (pb) pb.onclick = pushOn; const db = $('acct-dash'); if (db) db.onclick = () => { if (window.oddDash) window.oddDash(); }; $('acct-out').onclick = out;
+      '<div class="sub" id="acct-st"></div>' + (!owner && (timeNear(me) || trLine()) ? '<div id="acct-time" style="margin:8px 0;padding:8px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)">' + timeHtml('at', true, timeNear(me)) + '</div>' : '') + '<button id="acct-out" style="min-height:44px;margin-top:6px;padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);font:700 14px inherit">Sign out</button>';
+    const em = $('acct-em'); if (em) em.textContent = me.email || ''; const pb = $('acct-push'); if (pb) pb.onclick = pushOn; const db = $('acct-dash'); if (db) db.onclick = () => { if (window.oddDash) window.oddDash(); }; $('acct-out').onclick = out; timeWire('at');
   }
   window.gateAcct = drawAcct;
   // Header fetch hook: attach the token to AI calls.

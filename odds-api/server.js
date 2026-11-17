@@ -1,6 +1,9 @@
 // Tiny proxy: holds the Odds API key (env ODDS_API_KEY), returns Super Bowl odds by team abbreviation.
 // Cached in memory so the free plan's monthly credits last (default 6 hours).
 const http = require('http');
+// Calcutta (calc-live): loaded on the first /calcutta call; this week's PGA Tour event is plugged in as its 'golf' source then (calcutta-pga.js).
+// A failure to plug golf in leaves golf "coming soon" and everything else working.
+let CALC = null; const calcMod = () => { if (CALC) return CALC; CALC = require('./calcutta'); try { require('./calcutta-pga').register(CALC); } catch (e) { console.error('calcutta golf source:', e && e.message); } return CALC; };
 
 // Accept the key under any spelling of ODDS_API / ODDS_API_KEY (env names are case-sensitive on Linux)
 const KEYNAME = Object.keys(process.env).find((k) => /^odds_?api(_?key)?$/i.test(k));
@@ -98,6 +101,8 @@ http.createServer(async (req, res) => {
   if (req.url.startsWith('/groups')) { try { if (await require('./groups').handle(req, res)) return; } catch (e) { console.error('groups:', e && e.message); res.setHeader('Access-Control-Allow-Origin', '*'); if (process.env.GROUPS_ENABLED !== '1' && req.url.split('?')[0] === '/groups/bet/status') return res.end('{"betLock":0,"canBet":false,"saved":false}'); res.statusCode = 500; return res.end('{"error":"groups error"}'); } }
   // v273 Golf days (a group game): behind the SAME switches as /groups (golfday.js asks groups.js onFor). Off = 403 {off:true}, nothing read.
   if (req.url.startsWith('/golfday')) { try { if (await require('./golfday').handle(req, res)) return; } catch (e) { console.error('golfday:', e && e.message); res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"golf day error"}'); } }
+  // Calcutta auction as a group game (calc-live): behind the SAME switches as /groups (calcutta.js asks groups.js onFor). Off = 403 {off:true}, nothing read.
+  if (req.url.startsWith('/calcutta')) { try { if (await calcMod().handle(req, res)) return; } catch (e) { console.error('calcutta:', e && e.message); res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"calcutta error"}'); } }
   if (req.url.startsWith('/locks')) { try { if (await require('./locks').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"lock error"}'); } }
   if (req.url.startsWith('/games')) { res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json'); res.setHeader('Cache-Control', 'public, max-age=120'); try { const g = await require('./games').get('nfl', NAMES); return res.end(JSON.stringify({ updated: g.updated, remaining: g.remaining, games: g.games })); } catch (e) { res.statusCode = 502; return res.end(JSON.stringify({ error: e.message })); } }
   if (req.url.startsWith('/lines')) { res.setHeader('Cache-Control', 'public, max-age=60'); return res.end(JSON.stringify(LINES)); }

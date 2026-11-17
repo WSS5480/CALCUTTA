@@ -83,7 +83,8 @@
     s += '<div class="og3">' + tile('Members', gr.count + ' of ' + gr.join.max, 'data-a="members"', comm && gr.reqCount ? gr.reqCount + ' asking to join' : '')
       + (c ? tile(gr.started ? 'Standings' : 'Contest', esc(c.name), 'data-a="contest" data-cid="' + att(c.cid) + '"', esc(SPORT[c.sport] || c.sportName || '')) : '')
       + (c ? tile('Rules', esc(RUN[c.runs] || 'Dates'), 'data-a="rules" data-cid="' + att(c.cid) + '"', esc(fmtDay(c.startDay) + ' to ' + fmtDay(c.endDay))) : '')
-      + tile('Golf day', '⛳ Golf', 'data-a="golf"', comm ? 'Start one, scores, leaderboard' : 'Join, log my score, leaderboard') + '</div>'; // v273
+      + tile('Golf day', '⛳ Golf', 'data-a="golf"', comm ? 'Start one, scores, leaderboard' : 'Join, log my score, leaderboard') // v273
+      + tile('Calcutta', '🏆 Calcutta', 'data-a="calc"', comm ? 'Start one, run the auction' : 'Join, bid, owners, payouts') + '</div>'; // calc-live
     s += '<div class="oggrid">';
     if (!gr.ended && Date.now() < gr.joinUntil) s += '<div class="ogcard"><b>Invite people</b><div class="ogmeta">' + (comm ? (gr.join.auto ? 'Anyone who opens your link joins straight away.' : 'People who open your link ask to join. You approve each one.') : 'People who open your link ask to join. The commissioner approves each one.') + ' Joining closes when the contest starts.</div><button type="button" class="ogpri" data-a="invite">Invite</button><div id="ginv"></div></div>';
     else s += '<div class="ogcard ogmut">Joining is closed: the contest has started.</div>';
@@ -199,6 +200,15 @@
     if (!GDL) GDL = new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = 'golfday.js?v=' + GDV; sc.onload = ok; sc.onerror = () => { GDL = null; sc.remove(); no(); }; document.head.appendChild(sc); });
     GDL.then(go, () => { err = 'Could not load Golf days. Check your signal and try again.'; paint(); });
   }
+  // Calcutta auction (a group game, calc-live): the screens live in pics/calcutta.js, fetched the first time a member opens the Calcutta tile. Its own
+  // full-screen overlay (#ocalc) opens above this one, beside the tab bar; ‹ Group and Close come back here; closing Groups closes it too.
+  let CDL = null; const CDV = 'c1';
+  function calcOpen(gr) {
+    const go = () => window.oddCalc({ gr: { id: gr.id, name: gr.name, role: gr.role } });
+    if (window.oddCalc) return go();
+    if (!CDL) CDL = new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = 'calcutta.js?v=' + CDV; sc.onload = ok; sc.onerror = () => { CDL = null; sc.remove(); no(); }; document.head.appendChild(sc); });
+    CDL.then(go, () => { err = 'Could not load Calcutta. Check your signal and try again.'; paint(); });
+  }
   function click(ev) {
     const b = ev.target.closest && ev.target.closest('button[data-a]'); if (!b || b.disabled) return; const a = b.getAttribute('data-a'), id = b.getAttribute('data-id'), gr = curGroup();
     if (a === 'close') return close(); if (a === 'back') return back(); if (busy) return;
@@ -217,6 +227,7 @@
     if (a === 'rules') return push({ t: 'rules', gr, cid: b.getAttribute('data-cid') });
     if (a === 'contest') { const cid = b.getAttribute('data-cid'), c = cof(gr, cid); push({ t: 'contest', gr, cid }); if (c && c.started) act('standings', { id: gr.id, cid }, async (j) => { const s = cur(); if (s.t === 'contest') { s.rows = j.rows || []; if (j.group) setGroup(j.group); } paint(); }); return; }
     if (a === 'golf') return gdOpen(gr);
+    if (a === 'calc') return calcOpen(gr);
     if (a === 'invite') return invite();
     if (a === 'decide') return act('decide', { id: gr.id, pid: b.getAttribute('data-pid'), ok: b.getAttribute('data-ok') === '1' }, async (j) => { setGroup(j.group); paint(); });
     if (a === 'leave') { if (!confirm('Leave "' + gr.name + '"? You can ask to join again before it starts.')) return; return act('leave', { id: gr.id }, async () => { stack = [{ t: 'home' }]; H = null; paint(); loadHome(); blStatus(); }); }
@@ -252,9 +263,9 @@
     fit(); try { if (window.navRender) window.navRender(); } catch (x) {} fit();
     if (keep) return; stack = [{ t: 'home' }]; err = ''; paint(); if (!expired()) loadHome();
   }
-  function close() { const e = el(); if (!e) return; if (window.OddGolfDay) { try { window.OddGolfDay.stop(); } catch (x) {} } e.remove(); window.removeEventListener('resize', fit); busy = false; try { if (window.navRender) window.navRender(); } catch (x) {} }
+  function close() { try { if (window.oddCalc && window.oddCalc.close) window.oddCalc.close(); } catch (x) {} const e = el(); if (!e) return; if (window.OddGolfDay) { try { window.OddGolfDay.stop(); } catch (x) {} } e.remove(); window.removeEventListener('resize', fit); busy = false; try { if (window.navRender) window.navRender(); } catch (x) {} }
   // gate.js tells the page when the lock changes (paid, signed out, time ended): the open screen follows without a reload.
-  function lockChanged() { if (!el()) return; if (!g('odd-tok') || g('odd-grp') !== '1') return close(); err = ''; paint(); if (!expired()) { if (cur().t === 'join' && cur().code && !cur().pv) lookup(cur().code); else if (!H) loadHome(); } }
+  function lockChanged() { if (!el()) return; if (!g('odd-tok') || g('odd-grp') !== '1') return close(); if (expired()) { try { if (window.oddCalc && window.oddCalc.close) window.oddCalc.close(); } catch (x) {} } /* calc-live: an ended account sees the lock card, not a Calcutta */ err = ''; paint(); if (!expired()) { if (cur().t === 'join' && cur().code && !cur().pv) lookup(cur().code); else if (!H) loadHome(); } }
 
   // ---------- group bets: a NEW bet of a group member is saved on the server first, then it is locked ----------
   const TK = () => (g('odd-tok') || '').slice(-12);

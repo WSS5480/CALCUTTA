@@ -10,7 +10,7 @@ const wait = () => (slowHi ? new Promise((r) => setTimeout(r, slowLo + Math.rand
 D.S = { dbGet: async (id) => { await wait(); return db[id] ? JSON.parse(JSON.stringify(db[id])) : null; }, dbPut: async (row, ign) => { await wait(); if (db[row.id] && ign) return; db[row.id] = JSON.parse(JSON.stringify(row)); },
   dbPatchIf: async (id, was, data, upd) => { await wait(); if (!db[id] || db[id].updated !== Number(was)) return false; db[id].data = JSON.parse(JSON.stringify(data)); db[id].updated = upd; return true; } };
 const ACC = (w) => w + '@phone.oddable', NEWACCT = new Set();
-D.acct = () => ({ who: (req) => { const x = String(req.headers['x-token'] || ''); return x.startsWith('t-') ? ACC(x.slice(2)) : null; }, since: async (e) => (NEWACCT.has(String(e).split('@')[0]) ? Date.parse('2026-11-17T12:00:00Z') : Date.parse('2025-01-01T00:00:00Z')), /* sign-up stamps: NEWACCT = accounts made this week */ isOwnerPhone: () => false, ownerName: () => 'Sir Oddable' });
+D.acct = () => ({ who: (req) => { const x = String(req.headers['x-token'] || ''); return x.startsWith('t-') ? ACC(x.slice(2)) : null; }, since: async (e) => (NEWACCT.has(String(e).split('@')[0]) ? Date.parse('2026-11-18T12:00:00Z') : Date.parse('2025-01-01T00:00:00Z')), /* sign-up stamps: NEWACCT = accounts made today (the bar is 1 day, owner GOLF-AGE) */ isOwnerPhone: () => false, ownerName: () => 'Sir Oddable' });
 D.ip = () => '1.1.1.' + Math.floor(Math.random() * 250);
 D.limitsMod = () => null; // this file tests golf's own rules: the Enterprise flag comes from the stand-in row 'lock:ent', also in the merged build
 let NOW = Date.parse('2026-11-18T18:00:00Z'); D.now = () => NOW;
@@ -89,7 +89,7 @@ chk('3 OBJECTIONS AND FINAL (X4): a higher score for another team is signed by t
   fresh(); const y = await three({ net: 'gross' }); for (const h of [3, 4]) { r = await call('bob', 'score', { id: y.id, tid: 'T2', hole: h, p: { [y.pid.bob]: PAR[h - 1] - 1 } }); assert.strictEqual(r.s, 202); ok(await call('cat', 'sign', { id: y.id, n: r.j.n })); }
   r = ok(await call('ann', 'final', { id: y.id }), 'a change that helps a team does not hold Final'); const hs = (await call('ann', 'get', { id: y.id })).j.game.harm; assert.strictEqual(hs.length, 2);
   NOW += 10 * M; r = ok(await call('ann', 'object', { id: y.id, h: hs[0].h })); assert.deepStrictEqual([r.j.game.day.status, r.j.game.day.scores.T2[4].p[y.pid.bob]], ['live', PAR[3]], 'reopened and put back');
-  NOW += 30 * M; r = await call('ann', 'object', { id: y.id, h: hs[1].h }); assert.strictEqual(r.s, 409, 'after 30 minutes it is too late'); assert.ok(/30 minutes/.test(r.j.error));
+  NOW += 30 * M; r = await call('ann', 'object', { id: y.id, h: hs[1].h }); assert.strictEqual(r.s, 200, 'round 7 fix 1: the round is open again, so a change to a confirmed hole can still be objected to');
 });
 chk('4 NO REFEREE (X3): 18 fake birdies confirmed by a friend and disputed by another team: the places they decide are CONTESTED, both numbers shown, no winner named; uncontested places still pay; disputes stay open 30 minutes after Final', async () => {
   const x = await four([(h) => PAR[h - 1] - (h <= 5 ? 1 : 0), (h) => PAR[h - 1] - 1, (h) => PAR[h - 1] + (h <= 3 ? 1 : 0), (h) => PAR[h - 1] + (h <= 6 ? 1 : 0)], { pot: { split: '50 30 20' } }), id = x.id, pid = x.pid;
@@ -98,8 +98,8 @@ chk('4 NO REFEREE (X3): 18 fake birdies confirmed by a friend and disputed by an
   r = ok(await call('ann', 'final', { id })); const g = r.j.game; assert.ok(g.payout.contested, 'contested'); assert.ok(/Contested — players settle this themselves/.test(g.payout.contested.note));
   assert.deepStrictEqual(g.payout.paid.map((p) => p.name + ' ' + p.amt), ['Cat 8'], 'X3: no "Bob 20"; the third place is the same either way and pays');
   const row = g.board.rows.find((y) => y.tid === 'T2'); assert.ok(row.contested && row.alt && row.alt.some((a) => a.toParG === 0), 'the board shows both numbers'); assert.ok(g.board.rows.find((y) => y.tid === 'T1').contested);
-  NOW += 20 * M; ok(await call('dan', 'dispute', { id, tid: 'T3', hole: 1, note: 'was a 5', want: { p: { [pid.cat]: PAR[0] + 3 } } }), 'any team can dispute a confirmed hole until 30 minutes after Final');
-  NOW += 11 * M; assert.strictEqual((await call('dan', 'dispute', { id, tid: 'T3', hole: 2, note: 'was a 5', want: { p: { [pid.cat]: PAR[1] + 3 } } })).s, 409, 'not after');
+  NOW += 20 * M; assert.strictEqual((await call('dan', 'dispute', { id, tid: 'T3', hole: 1, note: 'was a 5', want: { p: { [pid.cat]: PAR[0] + 3 } } })).s, 403, 'round 7 fix 5: Dan confirmed that card'); ok(await call('bob', 'dispute', { id, tid: 'T3', hole: 1, note: 'was a 5', want: { p: { [pid.cat]: PAR[0] + 3 } } }), 'any other team can dispute a confirmed hole until 30 minutes after Final');
+  NOW += 11 * M; assert.strictEqual((await call('bob', 'dispute', { id, tid: 'T3', hole: 2, note: 'was a 5', want: { p: { [pid.cat]: PAR[1] + 3 } } })).s, 409, 'not after');
 });
 chk('5 REMOVED PLAYERS AND SIGNERS (X2, X5): removal takes the player\'s own signature (or, unreachable after the expected finish, two other teams); the removed keep a read-only seat and object; signers must be established', async () => {
   const x = await four([(h) => PAR[h - 1], (h) => PAR[h - 1] + 1, (h) => PAR[h - 1] + 2, (h) => PAR[h - 1] + 3], { to: 9 }), id = x.id; let r = await call('ann', 'team', { id, op: 'kick', pid: x.pid.dan, reason: 'rules' });
@@ -112,14 +112,14 @@ chk('5 REMOVED PLAYERS AND SIGNERS (X2, X5): removal takes the player\'s own sig
   await card('ann', y.id, 'T1', y.pid.ann, (h) => PAR[h - 1] + 1, 2); ok(await conf('bob', y.id, 'T1')); r = await call('ann', 'score', { id: y.id, tid: 'T1', hole: 1, p: { [y.pid.ann]: PAR[0] } }); assert.deepStrictEqual(who(r), ['Bob'], 'not the new account');
   r = await call('ann2', 'sign', { id: y.id, n: r.j.n }); assert.strictEqual(r.s, 403); assert.ok(/signer too new/.test(r.j.error), r.j.error);
   // with the stats module: its co-sign test decides (signerCheck)
-  D.stats().signerCheck = async (e) => (/^bob@/.test(e) ? { ok: false, why: 'signer too new: needs 3 finished plays confirmed by another account' } : { ok: true }); G._reset(); r = await call('bob', 'sign', { id: y.id, n: (await board(y.id)).pending[0].n }); delete D.stats().signerCheck;
-  assert.strictEqual(r.s, 403); assert.ok(/3 finished plays/.test(r.j.error));
+  // round 7 fix 3: with the stats module its sign-up stamp (sinceOf) is used, at the ONE bar (1 day, owner GOLF-AGE)
+  D.stats().sinceOf = async (e) => ({ known: true, t: /^bob@/.test(e) ? NOW - 12 * 3600e3 : Date.parse('2025-01-01T00:00:00Z') }); G._reset(); r = await call('bob', 'sign', { id: y.id, n: (await board(y.id)).pending[0].n }); delete D.stats().sinceOf;
+  assert.strictEqual(r.s, 403); assert.ok(/less than 1 day old/.test(r.j.error), r.j.error);
 });
 chk('6 ENTERPRISE: the director who plays nothing sets numbers and settles disputes alone; a playing director cannot; players object before Start (logged, director decides); every number is shown to all, beside the Oddable number', async () => {
   db['lock:ent'] = { id: 'lock:ent', data: { keys: { [ACC('club')]: true } }, updated: 1 }; G._reset(); FS.install(G, {});
   let r = ok(await call('club', 'create', { kind: 'day', title: 'Club day', course: COURSE, day: { fmt: 'stroke', teams: 3, teamSize: 1, net: 'net' }, pot: { entry: 0 } })); const id = r.j.game.id, code = r.j.game.code, me = r.j.game.me;
-  const P = {}; for (const [w, t] of [['bob', 'T1'], ['cat', 'T2']]) { r = ok(await call(w, 'join', { code, tid: t })); P[w] = r.j.game.me; } ok(await call('club', 'team', { id, op: 'assign', pid: me, tid: 'T3' }));
-  r = await call('club', 'team', { id, op: 'hcp', pid: P.bob, hcp: 12, reason: 'club card' }); assert.strictEqual(r.s, 403, 'a director who plays cannot set numbers'); assert.ok(r.j.notNeutral); ok(await call('club', 'team', { id, op: 'assign', pid: me }));
+  const P = {}; for (const [w, t] of [['bob', 'T1'], ['cat', 'T2']]) { r = ok(await call(w, 'join', { code, tid: t })); P[w] = r.j.game.me; } r = await call('club', 'team', { id, op: 'assign', pid: me, tid: 'T3' }); assert.strictEqual(r.s, 409, 'round 7 fix 2: the director never plays'); assert.ok(r.j.director);
   r = ok(await call('club', 'team', { id, op: 'hcp', pid: P.bob, hcp: 12, reason: 'club card' }), 'alone'); ok(await call('club', 'team', { id, op: 'hcp', pid: P.cat, hcp: 20, reason: 'club card' }));
   r = ok(await call('bob', 'team', { id, op: 'hcpobject', pid: P.bob, note: 'I am a 14 now' })); assert.strictEqual(r.j.game.day.hobj[P.bob][0].note, 'I am a 14 now');
   r = (await call('club', 'get', { id })).j.game; assert.ok(r.notices.some((n) => /Bob objects to Bob's tournament handicap: I am a 14 now\. The director decides\./.test(n.text))); assert.ok(r.day.audit.some((a) => a.what === 'handicap objection'));

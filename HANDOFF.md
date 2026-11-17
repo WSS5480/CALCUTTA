@@ -1104,3 +1104,35 @@ START HERE for golf. Base: aa1e60e. Review: /tmp/revgolf6-report.md (X1 to X6). 
 ### Not done / not verified
 - Anything live or on real phones. `GOLF_MONEY_ENABLED`, `inviteInfo` and stats adoption are port tasks. Late-join and contested display are not in the full (non-v16) walk. The objection stalemate in a 3-team game now ends as CONTESTED at Final (players settle), by design.
 
+
+## Golf v1.7 — review round 7: the six must-fix items, last rule round (Nov 17 2026, golf coder 7, branch `golf-v1`, NOT pushed, no version bump)
+Review: /tmp/revgolf7-report.md (verdict SHIP AFTER FIXES). Only the six items were made; the direction rule itself is unchanged. This section supersedes the v1.6 notes on the witness age, the 30-day stats path and `GOLF_MONEY_ENABLED`.
+
+### Decisions (date + reason)
+- 2026-11-17, owner GOLF-AGE ("1 day."): ONE bar for signing a change that helps another team (witness, overrule, uphold, removal's other way): the Oddable account is at least 1 day old by the SERVER's sign-up stamp. One constant, `SIGNER_MIN_DAYS = 1` in odds-api/golf.js (exported); change it there to move the bar. Chosen over the reviewer's 7 days and the stats bar (30 days + 3 plays), which is gone (also `signerCheck`). DECIDED, not an open question.
+- 2026-11-17 (fix 1, reviewer): a change to a CONFIRMED hole (ACT `correct`, or `resolve` of a hole that was confirmed; stored as `harm[].cf`) can be objected to until 30 min after the change OR 30 min after Final, whichever is later; while the round is not final it stays open. Other objectable changes keep 30 minutes. Reason: phones are in the cart; Final is the one moment everyone looks.
+- 2026-11-17 (fix 2): in a tournament the director never plays: `team assign` / `join` onto a team and a pool `pick` by him are refused (409, `director: true`); Start is refused (409, `notNeutral`) unless `dirNeutral` still holds (catches a Calcutta lot bought after the numbers were set).
+- 2026-11-17 (fix 3): `moneySwitch(env)` (exported, async) decides whether `GOLF_MONEY_ENABLED` may turn on: it needs the stats module with `sinceOf(e) -> {known, t}` AND `sinceBackfilled` (true, or a function returning true) saying accounts made before the stamp existed were filled in to their first-seen date. Otherwise `{on:false, why}` and a loud `console.error` ("golf money stays OFF: ..."), never a silent fail-closed 409. Without stats, `acct.since` is still read by the rule (Golf alone), but the switch stays off.
+- 2026-11-17 (fix 4): at Final the payout says "Final at <time>. Open to disputes until <time>. Settle up after that." (`payout.finalAt/settleAt/settled`; settleAt = Final + 30 min, or later if an objection window runs longer); once it passes a "Payout settled" notice shows (cleared by Got it: `member.stSeen`). The Final notice (kind `final`) also carries every team's "X lowered N confirmed holes by S".
+- 2026-11-17 (fix 5): after Final a team cannot dispute a hole its own team confirmed (403, `ownConfirmed`). Before Final it can (honest second thoughts).
+- 2026-11-17 (fix 6, wording): team view of a disputed hole in a money game: "Another team settles it by picking one of the two numbers. If nobody does, it shows as contested at Final and you settle it among yourselves." Bet note: "It needs Bob AND Cat to sign" (`out.grp`, one list per signature still needed). "an established player" -> "a player on another team (Oddable account at least 1 day old)". Objection notice: "<teams> can tap Object until <time> / until 30 minutes after Final to undo it." Rules sheet = the reviewer's 7 short lines + "Tell players" box + one footer line (who may sign; tournament director). Stale benefit-test comments removed. Notices may now be 400 characters (they were cut at 240).
+- Coder's own small calls: the Final notice is written in every money game and tournament (not only when someone lowered holes); the rules sheet keeps one footer line about the tournament director so that information is not lost.
+
+### Accepted limits (reviewer round 7, accept and document; tell players)
+- A friend's team confirming a fake card as it is typed (X3): other teams can dispute hole by hole with public numbered claims; victims elsewhere may not know the true numbers. Players are told to confirm only cards they watched.
+- In 2- and 3-team games a "no" cannot be overruled (needs two other teams); it ends as CONTESTED at Final if it decides a place.
+- A sore loser can contest with public numbered claims until 30 min after Final (but not holes his own team confirmed: fix 5).
+- A disruptive player cannot be removed without his signature before the expected finish.
+- The director's spouse or friend is out of scope.
+
+### Tests
+- New: `node odds-api/golf.round7.test.js` (6 checks: A1, F1, E1, D1, B1, G1 as passing cases). All 6 fail on 04dfcd4 and pass here.
+- Changed expectations (say "round 7"): golf.test.js (director assign refused), round4 H3/H4 (a playing director is now impossible), round6 check 3 (an objection after a reopen stays open), check 4 (Bob, not Dan who confirmed it, disputes after Final), check 5 (stats `sinceOf` at 1 day), check 6 (director assign refused); test stamps for "new" accounts are now hours old.
+- Five runs each: golf.test 98, round3 19, round4 18, round5 10, round6 9, round7 6: all 5/5, no flakes.
+- golf.stats.test.js and golf.calcutta.test.js fail the same way on 04dfcd4 (pre-existing, not part of this round; not touched).
+- Screens: `FLOWSET=v17` walk (harness scene V5 "Lowered then final") at 360 and 430 x navy, violet-light, violet-dark: /tmp/golf-shots7/<size>_<theme>/, report /tmp/golf-shots7/report.txt: 30 screens, 0 problems (no sideways scroll, banner covers nothing, needles present).
+
+### WHAT TO PORT (changes since 04dfcd4)
+- odds-api/golf.js (whole), pics/golf.js, golf.round7.test.js (new) + the changed test files, scripts/golf-shots/{harness.js,walk.py}.
+- Main's server: at boot `const gm = await require('./golf').moneySwitch();` and wrap the `/golf/` money route and the Calcutta registration in `gm.on`. Main's acct.js does not export `since`; that is fine once stats exports `sinceOf` + `sinceBackfilled` (PORT ASK to the stats owner: backfill old accounts to their first-seen date, then set `sinceBackfilled`).
+- New view fields: `board.rows[].low`, `harm[].until` (null = until 30 min after Final), `harm[].afterFinal`, `payout.finalAt/settleAt/settled`, notice kinds `final` and `settled`. New errors: 409 `director`, 409 `notNeutral` on start, 403 `ownConfirmed`. Response `grp` on asks.

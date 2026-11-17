@@ -68,12 +68,22 @@ def flows():
 def flows16():
     S = SEED; O = lambda k: ('open', S[k])
     return [
-      ('ann', [O('dir'), ('shot', 'v16_objection_window', ['Changes you can object to', 'Object: put it back', 'has lowered 2 holes by 2 strokes', 'Take it back']), ('click', '[data-a=info][data-k=rule] >> nth=0'), ('shot', 'v16_rule_sheet', ['THE RULE', 'CONTESTED']), ('back',),
+      ('ann', [O('dir'), ('shot', 'v16_objection_window', ['Changes you can object to', 'Object: put it back', 'has lowered 2 holes by 2 strokes', 'Take it back']), ('click', '[data-a=info][data-k=rule] >> nth=0'), ('shot', 'v16_rule_sheet', ['The rule', 'CONTESTED']), ('back',),
                ('click', '[data-a=hobject] >> nth=0'), ('shot', 'v16_after_objecting', ['put back after']), ('back',), O('rain'), ('shot', 'v16_rain_shorten_to_9', ['shorten the round to 9 holes', 'Sign it']), ('back',)]),
       ('bob', [O('dir'), ('shot', 'v16_worse_for_my_team_sign_or_no', ['Sign it', 'Turn it down', 'worse for', 'Turned down by']), ('back',), O('cst'), ('shot', 'v16_contested_board', ['Contested']), ('click', '[data-a=payv]'), ('shot', 'v16_contested_payouts', ['Contested — players settle this themselves', 'Places nobody disputes still pay']), ('back',), ('back',)]),
       ('dan', [O('dir'), ('shot', 'v16_overrule_a_no', ['Overrule the no']), ('back',), O('ro'), ('shot', 'v16_read_only_seat', ['read-only seat', 'Object: put it back']), ('back',)]),
       ('pro', [O('ent'), ('shot', 'v16_director_sees_objection', ['objects to', 'The director decides']), ('back',)]),
       ('eve', [O('ent'), ('click', '[data-a=hcpv]'), ('shot', 'v16_player_sees_log_and_objects', ['HANDICAP CHANGES', 'Object to my number']), ('back',), ('back',)]),
+    ]
+
+# v1.7 (round 7): the screens the six fixes changed. FLOWSET=v17 python3 scripts/golf-shots/walk.py
+def flows17():
+    S = SEED; O = lambda k: ('open', S[k])
+    return [
+      ('ann', [O('low'), ('shot', 'v17_final_row_lowered', ['lowered 2 confirmed holes by 2', 'Changes you can object to', '30 minutes after Final']), ('click', '[data-a=payv]'), ('shot', 'v17_payout_settle_time', ['Open to disputes until', 'Settle up after that']), ('back',),
+               ('click', '[data-a=team][data-tid=T3]'), ('shot', 'v17_team_disputed_wording', ['Another team settles it by picking one of the two numbers', '!settles it alone']), ('back',),
+               ('click', '[data-a=info][data-k=rule] >> nth=0'), ('shot', 'v17_rule_sheet_7_lines', ['Tap Object (until 30 min after Final)', 'Tell players', 'Confirm only the cards you watched', 'at least 1 day old']), ('back',)]),
+      ('bob', [O('low'), ('shot', 'v17_notice_final_lowered', ['lowered 2 confirmed holes by 2', 'Settle up after that']), ('back',)]),
     ]
 
 async def run(size, theme, pw, rep):
@@ -114,7 +124,7 @@ async def run(size, theme, pw, rep):
         if not await pg.evaluate("typeof window.oddGolf === 'function'"): await pg.add_script_tag(url=WEB + '/golf.js')  # ?mirror=1 pages do not load the overlay themselves
         await pg.evaluate("(()=>{const p=document.getElementById('plb');if(p){p.hidden=false;try{betsRender()}catch(e){}}})()")
         await pg.evaluate("window.oddGolf()"); await pg.wait_for_selector('#ogolf [data-a=newpro]'); await pg.wait_for_timeout(700)
-    for tok, steps in (flows16() if os.environ.get('FLOWSET') == 'v16' else flows()):
+    for tok, steps in (flows17() if os.environ.get('FLOWSET') == 'v17' else flows16() if os.environ.get('FLOWSET') == 'v16' else flows()):
         try:
             await who(tok)
             for st in steps:

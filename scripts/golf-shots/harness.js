@@ -113,6 +113,13 @@ async function seed() {
     { const ws = ['ann', 'bob', 'cat', 'dan'], { id, pid } = await mk1(ws, 'Removed player', { net: 'gross' }, { entry: 10 }, { noNums: true }); out.ro = id; await call('ann', 'start', { id });
       for (const [w, t] of [['ann', 'T1'], ['bob', 'T2'], ['cat', 'T3'], ['dan', 'T4']]) await play(id, w, t, pid[w], (h) => par18[h - 1], 1, 9); const off0 = OFF; OFF += 7 * 3600e3;
       const r = await call('ann', 'team', { id, op: 'kick', pid: pid.dan, reason: 'Went home, phone off' }); await call('bob', 'sign', { id, n: r.n }); await call('cat', 'sign', { id, n: r.n }); OFF = off0; }
+    // ROUND 7 (v1.7). V5: Bob lowered two of his own confirmed holes (Cat signed), then Final: his Final row says so, the objection stays open until
+    //   30 minutes after Final, the payout says when to settle up; Ann disputes Cat's hole 1 after Final (Ann did not confirm Cat's card).
+    { const ws = ['ann', 'bob', 'cat', 'dan'], { id, pid } = await mk1(ws, 'Lowered then final', { net: 'gross' }, { entry: 10 }, { noNums: true }); out.low = id; await call('ann', 'start', { id });
+      for (const [w, t, d] of [['ann', 'T1', 1], ['bob', 'T2', 0], ['cat', 'T3', 2], ['dan', 'T4', 3]]) await play(id, w, t, pid[w], (h) => par18[h - 1] + (h % 4 === 0 ? d : 0));
+      await conf('bob', id, 'T1'); await conf('cat', id, 'T2'); await conf('dan', id, 'T3'); await conf('ann', id, 'T4');
+      for (const h of [3, 4]) { const r = await call('bob', 'score', { id, tid: 'T2', hole: h, p: { [pid.bob]: par18[h - 1] - 1 } }); await call('cat', 'sign', { id, n: r.n }); }
+      await call('ann', 'final', { id }); await call('ann', 'dispute', { id, tid: 'T3', hole: 1, note: 'was a bogey', want: { p: { [pid.cat]: par18[0] + 1 } } }); }
     fs.writeFileSync(OUT + 'seed.json', JSON.stringify(out)); G._reset(); return out; }
 }
 srv.listen(PORT, async () => { try { await seed(); console.log('harness ready on :' + PORT); } catch (e) { console.error('SEED FAIL', e); process.exit(1); } });

@@ -221,7 +221,9 @@ async function rmw1(key, init, fn, tries) {
   throw bad(409, 'Busy, try again');
 }
 const gread = async (id) => { if (!/^[A-Z2-9]{10}$/.test(String(id || ''))) return null; const r = await D.S.dbGet(GK(id)); return r && r.data && r.data.id ? extLoad(r.data) : null; };
-const gmut = (id, fn) => rmw(GK(id), null, async (g) => { if (!g.id) throw bad(404, 'Group not found'); return fn(g); });
+// Review fix (Nov 16 2026): the id comes from the phone, so it is checked exactly like gread above BEFORE it goes into a database key. An id such as "<real id>#"
+// used to reach the database address, where the "#" cut off the `updated=eq.N` guard of the conditional write.
+const gmut = (id, fn) => { if (!/^[A-Z2-9]{10}$/.test(String(id || ''))) return Promise.reject(bad(404, 'Group not found')); return rmw(GK(id), null, async (g) => { if (!g.id) throw bad(404, 'Group not found'); return fn(g); }); };
 // Phase 1 (review H3): this small write is retried (3 tries, short waits), so one failed write no longer leaves a member without their index entry. true = written.
 // If it still fails, the member is not lost: the group row is the truth, and /groups/mine and the bet status rebuild a missing entry (see `repair` there).
 async function memIdx(mk, fn) {
@@ -771,7 +773,7 @@ async function handle(req, res) {
     if (op === 'access/request') { send(res, 200, { ok: true, on: true, text: 'Groups is already open for this account.' }); return true; }
     if (op === 'invite') { // G14 public invite preview: ONLY the title and kind, for the sign-up banner. Rate-limited per IP; one answer for every bad link.
       if (codeBlocked('c|i|' + ip, 150)) throw bad(429, 'Too many tries. Wait a few minutes.');
-      const type = String(b.type || ''), code = String(b.code || '').slice(0, 40), fn = INVITE[type]; rate('invite', '', ip, type + '.' + code);
+      const type = String(b.type || ''), code = String(b.code || '').slice(0, 40), fn = typeof INVITE[type] === 'function' ? INVITE[type] : null; rate('invite', '', ip, type + '.' + code);
       // Round 3: EVERY game type routes. A type whose engine has not registered a title lookup still answers (kind only), so a signed-out person is
       // told to sign in and lands on that game's own join screen (window.OddJoin handler) instead of "coming soon".
       if (!fn && KINDS[type] && /^[A-Za-z0-9-]{4,40}$/.test(code)) { send(res, 200, { type, kind: KINDS[type], title: '' }); return true; }
@@ -992,7 +994,8 @@ async function tick(opt) { // opt.force: read every running contest now (no 5 / 
   return { observed: n };
 }
 // ---------- G14 invite router (server side): each game type registers how to read its invite code -> {kind, title} or null ----------
-const INVITE = {}, KINDS = { c: 'Calcutta', golf: 'golf game', e: 'local event' }; // types whose engines open their own join screen on the phone (window.OddJoin.register)
+// Review fix (Nov 16 2026): both tables have NO prototype, so a `type` of "__proto__" / "constructor" / "toString" finds nothing (it used to find Object's own and answer 500).
+const INVITE = Object.create(null), KINDS = Object.assign(Object.create(null), { c: 'Calcutta', golf: 'golf game', e: 'local event' }); // types whose engines open their own join screen on the phone (window.OddJoin.register)
 const VOID_RULES = 'A bet can be voided only when its game is postponed or cancelled, or when the same bet was added twice by mistake within 2 minutes (the later copy, before the game starts). The reason is shown to every member.';
 function registerInvite(type, fn) { if (!/^[a-z]{1,8}$/.test(type)) throw new Error('bad invite type'); INVITE[type] = fn; }
 registerInvite('g', async (code, now) => { const c = normCode(code); if (!c) return null; const ix = await D.S.dbGet(CK(c)).catch(() => null), id = ix && ix.data && ix.data.id; const g = id ? await gread(id) : null; if (!g || (g.code !== c && g.mcode !== c) || ended(g, now) || now >= joinOpenUntil(g)) return null; return { kind: 'group', title: g.name }; });

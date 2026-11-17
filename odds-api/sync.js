@@ -11,9 +11,13 @@ const normPhone = (p) => { const d = String(p || '').replace(/\D/g, ''); return 
 const hashPin = (pin, salt) => crypto.scryptSync(String(pin), salt, 32).toString('hex');
 const same = (a, b) => { const x = Buffer.from(a), y = Buffer.from(b); return x.length === y.length && crypto.timingSafeEqual(x, y); };
 
+// Review fix (Nov 16 2026): a row id goes into the database address with every unsafe character encoded ("#" used to start the URL fragment and cut the
+// `updated=eq.N` guard off a conditional write; "&" could add a filter). ":" is put back, so every ordinary id (64-hex account ids, `lock:...`, `plog:...`:
+// letters, digits and : - _ . ~) gives the SAME address as before, byte for byte (checked in groups.fix1.test.js F3).
+const qid = (id) => encodeURIComponent(String(id)).replace(/%3A/g, ':');
 async function dbGet(id) {
   const { url, key } = cfg();
-  const r = await fetch(`${url}/rest/v1/oddable_sync?id=eq.${id}&select=*`, { headers: hdr(key), signal: AbortSignal.timeout(15000) });
+  const r = await fetch(`${url}/rest/v1/oddable_sync?id=eq.${qid(id)}&select=*`, { headers: hdr(key), signal: AbortSignal.timeout(15000) });
   if (!r.ok) throw new Error('db read ' + r.status + ' ' + (await r.text()).slice(0, 200));
   const j = await r.json(); return j[0] || null;
 }
@@ -25,7 +29,7 @@ async function dbPut(row, ignoreDup) {
 
 async function dbPatchIf(id, was, data, upd) {
   const { url, key } = cfg();
-  const r = await fetch(`${url}/rest/v1/oddable_sync?id=eq.${id}&updated=eq.${Number(was || 0)}`, { method: 'PATCH', headers: { ...hdr(key), Prefer: 'return=representation' }, body: JSON.stringify({ data, updated: upd }), signal: AbortSignal.timeout(15000) });
+  const r = await fetch(`${url}/rest/v1/oddable_sync?id=eq.${qid(id)}&updated=eq.${Number(was || 0)}`, { method: 'PATCH', headers: { ...hdr(key), Prefer: 'return=representation' }, body: JSON.stringify({ data, updated: upd }), signal: AbortSignal.timeout(15000) });
   if (!r.ok) throw new Error('db write ' + r.status + ' ' + (await r.text()).slice(0, 200));
   return (await r.json()).length > 0;
 }

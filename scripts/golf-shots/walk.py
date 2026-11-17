@@ -9,7 +9,7 @@ OUT = os.environ.get('OUT', '/tmp/golf-shots4').rstrip('/') + '/'; API = 'http:/
 SEED = json.load(open(OUT + 'seed.json'))
 SIZES = {'360': (360, 740), '430': (430, 900), '1280': (1280, 800)}
 THEMES = {'navy': ('', '1'), 'violet-light': ('violet', '0'), 'violet-dark': ('violet', '1')}
-NAMES = {'ann': 'Sir Oddable', 'bob': 'ChalkEater', 'kim': 'Kim Vu', 'lou': "Lou O'Neil", 'pro': 'Palm Valley Pro Shop', 'eve': 'MiddleMan'}
+NAMES = {'ann': 'Sir Oddable', 'bob': 'ChalkEater', 'kim': 'Kim Vu', 'lou': "Lou O'Neil", 'pro': 'Palm Valley Pro Shop', 'eve': 'MiddleMan', 'dan': 'PuntReturn'}
 MEASURE = r"""(vw) => { const o = document.getElementById('ogolf'); if (!o) return { none: true };
   const pb = document.getElementById('plb'); let cov = null; if (pb && !pb.hidden) { const r = pb.getBoundingClientRect(); if (r.width) { const e = document.elementFromPoint(Math.min(vw - 2, r.left + r.width / 2), r.top + r.height / 2); cov = e ? !!e.closest('#ogolf') : null; } }
   const small = [...o.querySelectorAll('button,a,select,input,textarea')].filter(e => { const r = e.getBoundingClientRect(); return r.width && (r.height < 44 || r.width < 44); }).map(e => (e.getAttribute('data-a') || e.className || e.tagName) + ':' + Math.round(r2(e).width) + 'x' + Math.round(r2(e).height));
@@ -45,7 +45,7 @@ def flows():
                O('flt'), ('shot', 'flights_final_board'), ('click', '[data-a=payv]'), ('shot', 'payouts_empty_flight_share_moved', ['its share went to the other flight', '!not won']), ('back',), ('back',),
                O('six'), ('shot', 'pool_final_late_payment_waiting', ['aiting for a second signature']), ('tab', 'mine'), ('shot', 'pool_my_golfers'), ('tab', 'tour'), ('shot', 'pool_tour_board'), ('tab', 'pool'), ('click', '[data-a=payv]'), ('shot', 'pool_payouts'), ('back',), ('back',),
                O('nas'), ('tab', 'mt'), ('click', '[data-a=match] >> nth=0'), ('shot', 'nassau_press_offer'), ('back',), ('back',), ('click', '[data-a=join]'), ('shot', 'join_by_code'), ('back',),
-               O('harm'), ('shot', 'harmed_team_can_object', ['made a team worse off', 'Object: put it back']), ('click', '[data-a=hobject]'), ('shot', 'objection_put_back', ['put back after']), ('back',)]),
+               O('dir'), ('shot', 'direction_rule_waiting', ['Sign it', 'Turned down by']), ('back',)]),
       ('ann', [('shot', 'home_organizer'), O('wait'), ('shot', 'organizer_sees_her_requests_waiting', ['Take it back', '!Sign it']), ('click', '[data-a=team][data-tid="T3"]'), ('shot', 'organizer_team_did_not_finish_waiting'), ('back',),
                ('tab', 'card'), ('select', '#octid', 'T2'), ('click', '[data-a=hole][data-tid="T2"][data-h="5"]'), ('shot', 'ask_to_change_a_confirmed_hole', ['This hole is confirmed', 'Ask to change hole 5']), ('back',), ('tab', 'lb'),
                ('click', '[data-a=final]'), ('shot', 'finish_blocked_disputed'), ('click', '[data-a=payv]'), ('shot', 'organizer_payouts_after_start', ['a change is only asked for']), ('back',), ('click', '[data-a=invite]'), ('shot', 'invite_copy_and_text_it', ['Text it']), ('back',),
@@ -62,6 +62,18 @@ def flows():
       ('lou', [('shot', 'home_player_badge'), O('ask'), ('click', '[data-a=hcpv]'), ('shot', 'setup_player_can_ok_a_raise', ['OK 8.0 for Kim Vu', 'Higher than']), ('click', '[data-a=hcpok]'), ('shot', 'setup_after_ok', ['!OK 8.0 for Kim Vu']), ('back',), ('back',)]),
       ('pro', [O('ent'), ('shot', 'tournament_setup_director_not_playing', ['Tournament handicaps', 'HANDICAP CHANGES', '!Start set']), ('click', '[data-a=plogv]'), ('shot', 'tournament_director_actions', ['signed by']), ('back',), ('back',)]),
       ('eve', [O('ent'), ('shot', 'tournament_player_asks_director', ['Ask the director for this number']), ('back',)]),
+    ]
+
+# v1.6 (round 6): only the screens the direction rule changed. FLOWSET=v16 python3 scripts/golf-shots/walk.py
+def flows16():
+    S = SEED; O = lambda k: ('open', S[k])
+    return [
+      ('ann', [O('dir'), ('shot', 'v16_objection_window', ['Changes you can object to', 'Object: put it back', 'has lowered 2 holes by 2 strokes', 'Take it back']), ('click', '[data-a=info][data-k=rule] >> nth=0'), ('shot', 'v16_rule_sheet', ['THE RULE', 'CONTESTED']), ('back',),
+               ('click', '[data-a=hobject] >> nth=0'), ('shot', 'v16_after_objecting', ['put back after']), ('back',), O('rain'), ('shot', 'v16_rain_shorten_to_9', ['shorten the round to 9 holes', 'Sign it']), ('back',)]),
+      ('bob', [O('dir'), ('shot', 'v16_worse_for_my_team_sign_or_no', ['Sign it', 'Turn it down', 'worse for', 'Turned down by']), ('back',), O('cst'), ('shot', 'v16_contested_board', ['Contested']), ('click', '[data-a=payv]'), ('shot', 'v16_contested_payouts', ['Contested — players settle this themselves', 'Places nobody disputes still pay']), ('back',), ('back',)]),
+      ('dan', [O('dir'), ('shot', 'v16_overrule_a_no', ['Overrule the no']), ('back',), O('ro'), ('shot', 'v16_read_only_seat', ['read-only seat', 'Object: put it back']), ('back',)]),
+      ('pro', [O('ent'), ('shot', 'v16_director_sees_objection', ['objects to', 'The director decides']), ('back',)]),
+      ('eve', [O('ent'), ('click', '[data-a=hcpv]'), ('shot', 'v16_player_sees_log_and_objects', ['HANDICAP CHANGES', 'Object to my number']), ('back',), ('back',)]),
     ]
 
 async def run(size, theme, pw, rep):
@@ -102,7 +114,7 @@ async def run(size, theme, pw, rep):
         if not await pg.evaluate("typeof window.oddGolf === 'function'"): await pg.add_script_tag(url=WEB + '/golf.js')  # ?mirror=1 pages do not load the overlay themselves
         await pg.evaluate("(()=>{const p=document.getElementById('plb');if(p){p.hidden=false;try{betsRender()}catch(e){}}})()")
         await pg.evaluate("window.oddGolf()"); await pg.wait_for_selector('#ogolf [data-a=newpro]'); await pg.wait_for_timeout(700)
-    for tok, steps in flows():
+    for tok, steps in (flows16() if os.environ.get('FLOWSET') == 'v16' else flows()):
         try:
             await who(tok)
             for st in steps:

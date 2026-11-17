@@ -9,7 +9,7 @@ let db = {};
 D.S = { dbGet: async (id) => (db[id] ? JSON.parse(JSON.stringify(db[id])) : null), dbPut: async (row, ign) => { if (db[row.id] && ign) return; db[row.id] = JSON.parse(JSON.stringify(row)); }, dbPatchIf: async (id, was, data, upd) => { if (!db[id] || db[id].updated !== Number(was)) return false; db[id].data = JSON.parse(JSON.stringify(data)); db[id].updated = upd; return true; } };
 const NM = { ann: 'Sir Oddable', bob: 'ChalkEater', cat: 'HookAndLadder', dan: 'PuntReturn', eve: 'MiddleMan', fay: 'OverUnderDog', gus: 'RoadDogRay', hal: 'TeaserTina', ivy: 'Ivy', kim: 'Kim Vu', lou: "Lou O'Neil", max: 'Max Trevino', pro: 'Palm Valley Pro Shop' };
 const WHO = {}; Object.keys(NM).forEach((w) => (WHO[NM[w]] = w));
-D.acct = () => ({ who: (req) => { const w = String(req.headers['x-token'] || '').replace(/^t-/, ''); return NM[w] ? w + '@phone.oddable' : null; }, isOwnerPhone: () => false, ownerName: () => 'Sir Oddable' });
+D.acct = () => ({ who: (req) => { const w = String(req.headers['x-token'] || '').replace(/^t-/, ''); return NM[w] ? w + '@phone.oddable' : null; }, since: async () => Date.parse('2025-01-01T00:00:00Z'), /* v1.6: an established account (signers must be) */ isOwnerPhone: () => false, ownerName: () => 'Sir Oddable' });
 D.ownerOk = () => false; let OFF = 0; D.now = () => Date.now() + OFF; D.ip = () => '1.2.3.' + Math.floor(Math.random() * 200);
 const NOW = Date.now(), TEE = NOW + 2 * 864e5, names = ['Scottie Scheffler', 'Rory McIlroy', 'Xander Schauffele', 'Collin Morikawa', 'Ludvig Aberg', 'Viktor Hovland', 'Patrick Cantlay', 'Tommy Fleetwood', 'Hideki Matsuyama', 'Wyndham Clark', 'Max Homa', 'Sahith Theegala'];
 let LIVE = false, DONE = false;
@@ -75,7 +75,7 @@ async function seed() {
     { db['lock:ent'] = { id: 'lock:ent', data: { keys: { 'pro@phone.oddable': true } }, updated: 1 }; G._reset();
       const g = (await call('pro', 'create', { kind: 'day', title: 'Club Championship', course, day: { fmt: 'stroke', teams: 3, teamSize: 1, net: 'net', teeTime: Date.now() + 9 * 864e5 }, pot: { entry: 0 } })).game; out.ent = g.id;
       for (const [w, t, h] of [['gus', 'T1', 40], ['hal', 'T2', null], ['eve', 'T3', null]]) await call(w, 'join', { code: g.code, tid: t, hcp: h == null ? undefined : h }); const g2 = (await call('pro', 'get', { id: g.id })).game, P = (w) => g2.members.find((m) => m.name === NM[w]).pid;
-      await sg(await call('pro', 'team', { id: g.id, op: 'hcp', pid: P('gus'), hcp: 14.2, reason: 'Club card' }), g.id); await sg(await call('pro', 'team', { id: g.id, op: 'hcp', pid: P('hal'), hcp: 9, reason: 'Committee review' }), g.id); } // round 5 (N6): a raise is signed by a player on another team
+      await sg(await call('pro', 'team', { id: g.id, op: 'hcp', pid: P('gus'), hcp: 14.2, reason: 'Club card' }), g.id); await sg(await call('pro', 'team', { id: g.id, op: 'hcp', pid: P('hal'), hcp: 9, reason: 'Committee review' }), g.id); await call('gus', 'team', { id: g.id, op: 'hcpobject', pid: P('gus'), note: 'My club card says 16' }); } // v1.6 item 6: the director sets numbers alone; a player objects before the start
     // F. NASSAU with a press offered by the side that is down
     { const { id, pid } = await mk1(['ann', 'bob'], 'Nassau with ChalkEater', { hu: { on: true, kind: 'team', type: 'nassau', amt: 5 } }, undefined, { paid: [] }); out.nas = id; await sg(await call('ann', 'match', { id, op: 'add', a: 'T1', b: 'T2' }), id); await nums(['ann', 'bob'], id, pid, {}); await call('ann', 'start', { id });
       await play(id, 'ann', 'T1', pid.ann, (h) => par18[h - 1] + 1, 1, 3); await play(id, 'bob', 'T2', pid.bob, (h) => par18[h - 1], 1, 3); const g = (await call('ann', 'get', { id })).game; await call('ann', 'match', { id, op: 'press', mid: g.day.matches[0].mid, from: 4 }, true); }
@@ -94,10 +94,25 @@ async function seed() {
       await sg(await call('ann', 'score', { id, tid: 'T3', hole: 2, p: { [gp]: 7 }, rev: 1 }, true), id); }
     // O: a $10 game with typed-in guests only: it cannot start as a money game (two accounts on different teams), but it can as a casual game.
     { const g = (await call('ann', 'create', { kind: 'day', title: 'Guests only, $10', course, day: { fmt: 'stroke', teams: 2, teamSize: 1, net: 'gross' }, pot: { entry: 10 } })).game; out.two = g.id; await call('ann', 'team', { id: g.id, op: 'assign', pid: g.me, tid: 'T1' }); await call('ann', 'team', { id: g.id, op: 'guest', name: 'Walk-in Wes', tid: 'T2' }); }
-    // ROUND 5, TEST 2: Ann asked to change Bob's confirmed hole; Cat (another team, gains nothing) signed it; Bob's team is worse off and can object.
-    { const { id, pid } = await mk1(['ann', 'bob', 'cat', 'dan'], 'Objection test', { net: 'gross' }, { entry: 10 }, { noNums: true }); out.harm = id; await call('ann', 'start', { id });
-      await play(id, 'ann', 'T1', pid.ann, (h) => par18[h - 1] + 1); await play(id, 'bob', 'T2', pid.bob, (h) => par18[h - 1]); await play(id, 'cat', 'T3', pid.cat, (h) => par18[h - 1] + 3); await play(id, 'dan', 'T4', pid.dan, (h) => par18[h - 1] + 4);
-      await conf('bob', id, 'T1'); await conf('ann', id, 'T2'); await conf('dan', id, 'T3'); await conf('cat', id, 'T4'); const r = await call('ann', 'score', { id, tid: 'T2', hole: 5, p: { [pid.bob]: 9 } }); await call('cat', 'sign', { id, n: r.n }); }
+    // ROUND 6 (v1.6, THE DIRECTION RULE). V1: Bob lowered two of his own confirmed holes (Cat signed: other teams told with the running total, they can
+    //   object for 30 minutes); Ann asks to raise Bob's hole 5 (only Bob signs); Ann asked to raise Cat's hole 6 and Cat said no (two other teams can overrule).
+    { const ws = ['ann', 'bob', 'cat', 'dan'], { id, pid } = await mk1(ws, 'Direction rule', { net: 'gross' }, { entry: 10 }, { noNums: true }); out.dir = id; await call('ann', 'start', { id });
+      for (const [w, t, d] of [['ann', 'T1', 1], ['bob', 'T2', 0], ['cat', 'T3', 2], ['dan', 'T4', 3]]) await play(id, w, t, pid[w], (h) => par18[h - 1] + (h % 4 === 0 ? d : 0));
+      await conf('bob', id, 'T1'); await conf('cat', id, 'T2'); await conf('dan', id, 'T3'); await conf('ann', id, 'T4');
+      for (const h of [3, 4]) { const r = await call('bob', 'score', { id, tid: 'T2', hole: h, p: { [pid.bob]: par18[h - 1] - 1 } }); await call('cat', 'sign', { id, n: r.n }); }
+      await call('ann', 'score', { id, tid: 'T2', hole: 5, p: { [pid.bob]: par18[4] + 2 } }); const r6 = await call('ann', 'score', { id, tid: 'T3', hole: 6, p: { [pid.cat]: par18[5] + 3 } }); await call('cat', 'sign', { id, n: r6.n, ok: false }); }
+    // V2: CONTESTED at Final: Bob's 18 birdies (confirmed by Cat) disputed hole by hole by Ann; third place pays, first and second are contested.
+    { const ws = ['ann', 'bob', 'cat', 'dan'], { id, pid } = await mk1(ws, 'Contested final', { net: 'gross' }, { entry: 10, split: [50, 30, 20] }, { noNums: true }); out.cst = id; await call('ann', 'start', { id });
+      for (const [w, t, f] of [['ann', 'T1', (h) => par18[h - 1] - (h <= 5 ? 1 : 0)], ['bob', 'T2', (h) => par18[h - 1] - 1], ['cat', 'T3', (h) => par18[h - 1] + (h <= 3 ? 1 : 0)], ['dan', 'T4', (h) => par18[h - 1] + (h <= 6 ? 1 : 0)]]) await play(id, w, t, pid[w], f);
+      await conf('bob', id, 'T1'); await conf('cat', id, 'T2'); await conf('dan', id, 'T3'); await conf('ann', id, 'T4');
+      for (let h = 1; h <= 18; h++) await call('ann', 'dispute', { id, tid: 'T2', hole: h, note: 'he made par', want: { p: { [pid.bob]: par18[h - 1] } } }); await call('ann', 'final', { id }); }
+    // V3: RAIN after nine: Bob asked to shorten to 9 (every team with a card signs).
+    { const ws = ['ann', 'bob', 'cat'], { id, pid } = await mk1(ws, 'Rain day', { net: 'gross' }, { entry: 10 }, { noNums: true }); out.rain = id; await call('ann', 'start', { id });
+      for (const [w, t] of [['ann', 'T1'], ['bob', 'T2'], ['cat', 'T3']]) await play(id, w, t, pid[w], (h) => par18[h - 1] + (h % 3 === 0 ? 1 : 0), 1, 9); await call('bob', 'short9', { id }); }
+    // V4: REMOVED after the expected finish (two other teams signed): Dan keeps a read-only seat and can object.
+    { const ws = ['ann', 'bob', 'cat', 'dan'], { id, pid } = await mk1(ws, 'Removed player', { net: 'gross' }, { entry: 10 }, { noNums: true }); out.ro = id; await call('ann', 'start', { id });
+      for (const [w, t] of [['ann', 'T1'], ['bob', 'T2'], ['cat', 'T3'], ['dan', 'T4']]) await play(id, w, t, pid[w], (h) => par18[h - 1], 1, 9); const off0 = OFF; OFF += 7 * 3600e3;
+      const r = await call('ann', 'team', { id, op: 'kick', pid: pid.dan, reason: 'Went home, phone off' }); await call('bob', 'sign', { id, n: r.n }); await call('cat', 'sign', { id, n: r.n }); OFF = off0; }
     fs.writeFileSync(OUT + 'seed.json', JSON.stringify(out)); G._reset(); return out; }
 }
 srv.listen(PORT, async () => { try { await seed(); console.log('harness ready on :' + PORT); } catch (e) { console.error('SEED FAIL', e); process.exit(1); } });

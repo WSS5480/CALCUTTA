@@ -10,7 +10,7 @@ const wait = () => (slowHi ? new Promise((r) => setTimeout(r, slowLo + Math.rand
 D.S = { dbGet: async (id) => { await wait(); return db[id] ? JSON.parse(JSON.stringify(db[id])) : null; }, dbPut: async (row, ign) => { await wait(); if (db[row.id] && ign) return; db[row.id] = JSON.parse(JSON.stringify(row)); },
   dbPatchIf: async (id, was, data, upd) => { await wait(); if (!db[id] || db[id].updated !== Number(was)) return false; db[id].data = JSON.parse(JSON.stringify(data)); db[id].updated = upd; return true; } };
 const ACC = (w) => w + '@phone.oddable';
-D.acct = () => ({ who: (req) => { const x = String(req.headers['x-token'] || ''); return x.startsWith('t-') ? ACC(x.slice(2)) : null; }, isOwnerPhone: () => false, ownerName: () => 'Sir Oddable' });
+D.acct = () => ({ who: (req) => { const x = String(req.headers['x-token'] || ''); return x.startsWith('t-') ? ACC(x.slice(2)) : null; }, since: async () => Date.parse('2025-01-01T00:00:00Z'), /* v1.6: an established account (signers must be) */ isOwnerPhone: () => false, ownerName: () => 'Sir Oddable' });
 D.ip = () => '1.1.1.' + Math.floor(Math.random() * 250);
 D.limitsMod = () => null; // this file tests golf's own rules: the Enterprise flag comes from the stand-in row 'lock:ent', also in the merged build
 let NOW = Date.parse('2026-11-18T18:00:00Z'); D.now = () => NOW;
@@ -66,7 +66,7 @@ chk('N1 did not finish: never on idle time, never alone (a neutral organizer too
   NOW += 5 * H; r = await call('ann', 'team', { id, op: 'withdraw', tid: 'T1', reason: 'walked off' }); assert.strictEqual(r.s, 202, 'after the expected finish it still needs a signature, even from a neutral organizer');
   assert.ok(!who(r).includes('Cat'), 'Cat gains from it: she cannot sign'); assert.ok(r.j.game.notices.some((n) => n.kind === 'harm' && /Team 1/.test(n.text)), 'the harmed team is told at once');
   r = ok(await call('bob', 'sign', { id, n: r.j.n }), 'the team agrees'); assert.ok(r.j.game.day.wd.T1);
-  r = ok(await call('bob', 'team', { id, op: 'withdraw', tid: 'T1', on: false }), 'the team puts itself back in, alone'); assert.ok(!r.j.game.day.wd.T1); ok(await call('bob', 'score', { id, tid: 'T1', hole: 10, p: { [pid.bob]: 4 } }), 'and keeps scoring');
+  r = await call('bob', 'team', { id, op: 'withdraw', tid: 'T1', on: false }); assert.strictEqual(r.s, 202, 'round 6 (direction rule): did-not-finish undone helps the team, so another team signs'); r = ok(await call('cat', 'sign', { id, n: r.j.n })); assert.ok(!r.j.game.day.wd.T1); ok(await call('bob', 'score', { id, tid: 'T1', hole: 10, p: { [pid.bob]: 4 } }), 'and keeps scoring');
 });
 chk('N2 remove: a playing organizer cannot remove a rival alone 10 minutes in; only an account on no team with no card goes by the 10-minute rule', async () => {
   const N = ['ann', 'bob', 'cat'], x = await mk(N, { net: 'gross' }, { entry: 10 }, { nT: 3 }), id = x.id; ok(await call('zed', 'join', { code: x.code })); ok(await call('ann', 'start', { id })); NOW += 11 * 60e3;
@@ -92,8 +92,8 @@ chk('N5 disputes: a confirmed hole in a money game is never settled by one perso
   ok(await call('cat', 'dispute', { id, tid: 'T1', hole: 1, note: 'wrong score', want: { p: { [pid.bob]: 7 } } }));
   r = await call('ann', 'resolve', { id, tid: 'T1', hole: 1, p: { [pid.bob]: 15 } }); assert.strictEqual(r.s, 409, 'not one of the two numbers');
   r = await call('ann', 'resolve', { id, tid: 'T1', hole: 1, p: { [pid.bob]: 7 } }); assert.strictEqual(r.s, 202, 'no referee alone (was 200)'); assert.strictEqual(r.j.game.day.scores.T1[1].p[pid.bob], PAR[0]);
-  r = ok(await call('cat', 'sign', { id, n: r.j.n })); assert.ok(r.j.partial, 'the neutral organizer plus the disputing team is not enough'); assert.strictEqual(r.j.game.day.scores.T1[1].p[pid.bob], PAR[0]);
-  r = ok(await call('ann', 'final', { id }), 'an unsettled dispute does not block Final'); const h1 = r.j.game.day.scores.T1[1]; assert.deepStrictEqual([h1.st, h1.p[pid.bob], !!h1.unsettled], ['confirmed', PAR[0], true]); assert.strictEqual(paidOut(r.j.game), 'Bob 20');
+  assert.deepStrictEqual(who(r), ['Bob'], 'round 6: a higher number on Team 1\'s card: Team 1\'s own player signs'); assert.strictEqual((await call('cat', 'sign', { id, n: r.j.n })).s, 403, 'round 6: the disputing team cannot sign it'); assert.strictEqual(r.j.game.day.scores.T1[1].p[pid.bob], PAR[0]);
+  r = ok(await call('ann', 'final', { id }), 'an unsettled dispute does not block Final'); const h1 = r.j.game.day.scores.T1[1]; assert.deepStrictEqual([h1.st, h1.p[pid.bob]], ['disputed', PAR[0]], 'round 6 (item 4): it stays disputed'); assert.strictEqual(paidOut(r.j.game), 'Bob 20', 'it decides no place: Bob still wins by 30 either way'); assert.ok(!r.j.game.payout.contested);
 });
 chk('N6 handicaps: a higher number needs a player on another team who does not gain (a neutral organizer cannot OK it); a lower one needs the player; Sign all shows which ones raise', async () => {
   const N = ['ann', 'bob', 'cat'], x = await mk(N, { net: 'net' }, { entry: 10 }, { orgOut: true, nT: 2, tOf: (i) => 'T' + i }), id = x.id;
@@ -110,9 +110,10 @@ chk('TEST 2: the harmed team objects and the change is put back; two non-gaining
   await card('ann', id, 'T1', x.pid.ann, (h) => PAR[h - 1] + 1); await card('bob', id, 'T2', x.pid.bob, (h) => PAR[h - 1]); await card('cat', id, 'T3', x.pid.cat, (h) => PAR[h - 1] + 3); await card('dan', id, 'T4', x.pid.dan, (h) => PAR[h - 1] + 4);
   ok(await conf('bob', id, 'T1')); ok(await conf('ann', id, 'T2')); ok(await conf('dan', id, 'T3')); ok(await conf('cat', id, 'T4'));
   let r = await call('ann', 'score', { id, tid: 'T2', hole: 5, p: { [x.pid.bob]: 9 } }); assert.strictEqual(r.s, 202); assert.ok(r.j.game.pending[0].harm.includes('Team 2'));
-  r = ok(await call('cat', 'sign', { id, n: r.j.n })); assert.strictEqual(r.j.game.day.scores.T2[5].p[x.pid.bob], 9); const e = (await call('bob', 'get', { id })).j.game.harm[0]; assert.deepStrictEqual([e.st, e.canObject, e.sides], ['open', true, ['Team 2']]);
-  assert.strictEqual((await call('cat', 'object', { id, h: e.h })).s, 403, 'only the harmed side objects'); r = ok(await call('bob', 'object', { id, h: e.h })); assert.strictEqual(r.j.game.day.scores.T2[5].p[x.pid.bob], PAR[4], 'put back');
-  assert.strictEqual((await call('ann', 'uphold', { id, h: e.h })).s, 403, 'not the team that asked'); r = ok(await call('cat', 'uphold', { id, h: e.h })); assert.ok(r.j.partial); r = ok(await call('dan', 'uphold', { id, h: e.h })); assert.strictEqual(r.j.game.day.scores.T2[5].p[x.pid.bob], 9, 'two other teams upheld it');
+  assert.strictEqual((await call('cat', 'sign', { id, n: r.j.n })).s, 403, 'round 6: a higher number for Team 2: only Team 2 signs'); const n = r.j.n;
+  r = ok(await call('bob', 'sign', { id, n, ok: false }), 'round 6 (item 3): Bob says no; it stays, and can be overruled'); assert.strictEqual(r.j.game.pending[0].dec, 'Bob'); assert.strictEqual(r.j.game.day.scores.T2[5].p[x.pid.bob], PAR[4]);
+  assert.strictEqual((await call('ann', 'uphold', { id, n })).s, 403, 'not the team that asked'); r = ok(await call('cat', 'uphold', { id, n })); assert.ok(r.j.partial); r = ok(await call('dan', 'uphold', { id, n })); assert.strictEqual(r.j.game.day.scores.T2[5].p[x.pid.bob], 9, 'two other teams overruled the no');
+  r = await call('ann', 'final', { id }); assert.strictEqual(r.s, 409, 'round 6 (X4): Final waits 15 minutes after a change made a team worse without its signature'); assert.ok(r.j.holdUntil); NOW += 16 * 60e3; ok(await call('ann', 'final', { id }));
 });
 chk('Payout table: a rising split ("10 30 60") is refused', async () => {
   const r = await call('ann', 'create', { kind: 'day', title: 'Rising', course: COURSE, day: { fmt: 'stroke', teams: 4, teamSize: 1 }, pot: { entry: 10, split: '10 30 60' } }); assert.strictEqual(r.s, 400); assert.ok(/lower place/.test(r.j.error));

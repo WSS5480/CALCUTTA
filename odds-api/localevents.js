@@ -729,6 +729,15 @@ async function groupRole(groupId, accountId) {
     const mk = crypto.createHash('sha256').update('oddable-group|' + accountId).digest('hex').slice(0, 24), r1 = await D.S.dbGet('lock:grp:' + gid), g = r1 && r1.data; if (!g || g.deleted) return null; return g.comm === mk ? 'comm' : (g.members || []).some((m) => m.mk === mk) ? 'member' : null;
   } catch (e) { return null; }
 }
+// Review H1 (a brand-new person opened an event link): what the phone needs to ASK to join the event's group, and nothing else. The group's name and whether
+// it takes requests / already has this person's request: no members, no codes (the group's invite code is never handed out: the commissioner's code can join
+// without approval). The ask itself is Groups' own POST /groups/request {id} (commissioner approval, cap, closed and "said no" all enforced there).
+async function groupAsk(groupId, accountId) {
+  try { const gid = String(groupId || ''); if (!/^[A-Z2-9]{10}$/.test(gid) || !accountId) return null; const r = await D.S.dbGet('lock:grp:' + gid), g = r && r.data; if (!g || g.deleted || !g.id) return null;
+    const mk = crypto.createHash('sha256').update('oddable-group|' + accountId).digest('hex').slice(0, 24), st = (g.denied || []).includes(mk) ? 'no' : (g.reqs || []).some((q) => q.mk === mk) ? 'pending' : g.join && g.join.requests ? 'ask' : 'closed';
+    return { name: String(g.name || '').slice(0, 60), state: st };
+  } catch (e) { return null; }
+}
 async function needGroup(evt, u) { if (memberOf(evt, u.mk)) return; if (!(await groupRole(evt.group.gid, u.e))) throw Object.assign(bad(403, 'Join the group first: this event is for its members.'), { code: 'group' }); }
 // Owner's Activity in My Apps (main's events.js, type pickleball_start), sent once per event after it is saved and answered, like golfday.js golf_start.
 function actStarted(evt, gid, accountId) { setImmediate(async () => { try { const A = D.activity(); if (!A || typeof A.pickleballStarted !== 'function') return; let gname = ''; try { const G = D.groups(), m = G ? await G.memberCheck(gid, accountId) : null; gname = (m && m.group) || ''; } catch (x) {}
@@ -795,7 +804,7 @@ async function handleOn(req, res) {
       if (codeBlocked('ec|a|' + u.mk) || codeBlocked('ec|i|' + ip, WRONG_IP)) throw bad(429, 'Too many wrong codes. Wait 15 minutes.');
       rate('join', u.mk, ip); const code = normCode(b.code), id = code ? await byCode(code) : null;
       if (!id) { codeFail('ec|a|' + u.mk); codeFail('ec|i|' + ip); throw bad(404, 'No event with that code'); }
-      if (op === 'preview') { const r = await load(id); if (!r) throw bad(404, 'No event with that code'); const evt = r.data; tick(evt, now); const cap = await capOf(evt); const o = memberOf(evt, u.mk) ? full(evt, u.mk, now, cap) : previewOf(evt, now, cap); if (evt.group && o.role === 'none') o.groupOnly = !(await groupRole(evt.group.gid, u.e)); send(res, 200, { event: o }); return true; }
+      if (op === 'preview') { const r = await load(id); if (!r) throw bad(404, 'No event with that code'); const evt = r.data; tick(evt, now); const cap = await capOf(evt); const o = memberOf(evt, u.mk) ? full(evt, u.mk, now, cap) : previewOf(evt, now, cap); if (evt.group && o.role === 'none') { o.groupOnly = !(await groupRole(evt.group.gid, u.e)); if (o.groupOnly) o.groupAsk = await groupAsk(evt.group.gid, u.e); } send(res, 200, { event: o }); return true; }
       const r0 = await load(id); if (r0 && r0.data.group) await needGroup(r0.data, u); // an event that belongs to a group is for that group's members, also by code
       const { evt, cap } = await joinEvent(id, u, b); await idxSet(id, () => idxEntry(evt)); send(res, 200, { event: full(evt, u.mk, now, cap) }); return true;
     }

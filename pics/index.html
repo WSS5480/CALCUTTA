@@ -541,12 +541,12 @@ function navMore(open) {
 let GRPL = 0; const GRPQ = [];
 function grpLoad(then) { // pics/groups.js, fetched the first time it is needed
   if (window.OddGroups) { if (then) then(); return; } if (then) GRPQ.push(then); if (GRPL) return; GRPL = 1;
-  const sc = document.createElement('script'); sc.src = 'groups.js?v=274'; sc.onload = () => { const go = () => GRPQ.splice(0).forEach((f) => { try { f(); } catch (e) {} }); if (levOn()) levLoad(go); else go(); }; /* + the pickleball group game file first, when it is on for this account */ sc.onerror = () => { GRPL = 0; GRPQ.length = 0; sc.remove(); }; document.head.appendChild(sc);
+  const sc = document.createElement('script'); sc.src = 'groups.js?v=274'; sc.onload = () => { GRPQ.splice(0).forEach((f) => { try { f(); } catch (e) {} }); }; sc.onerror = () => { GRPL = 0; GRPQ.length = 0; sc.remove(); }; document.head.appendChild(sc);
 }
 // Invite links: https://<site>/?join=g.<code> (built with window.oddShareUrl, so they also carry ?ref=). The code is kept for this tab and taken out of the address bar.
 // Read ONLY when the server says Groups exists (/acct/status `groups`, kept in 'odd-gsw'); with Groups dark the link is left alone and opens the app as any link does.
 const grpPend = (v) => { try { if (v === undefined) return sessionStorage.getItem('odd-join') || ''; if (v) sessionStorage.setItem('odd-join', v); else sessionStorage.removeItem('odd-join'); } catch (e) {} return ''; };
-function grpCapture() { try { const u = new URL(location.href), m = /^g\.([A-Za-z0-9-]{4,40})$/.exec(u.searchParams.get('join') || ''), me = /^e\.([A-Za-z0-9-]{4,40})$/.exec(u.searchParams.get('join') || ''); if (!u.searchParams.has('join')) return; if (m) grpPend(m[1]); if (me && lsg('odd-lsw') === '1') levPend(me[1]); u.searchParams.delete('join'); history.replaceState(history.state, '', u.pathname + (u.searchParams.toString() ? '?' + u.searchParams.toString() : '') + u.hash); } catch (e) {} }
+function grpCapture() { try { const u = new URL(location.href), m = /^g\.([A-Za-z0-9-]{4,40})$/.exec(u.searchParams.get('join') || ''); if (!m) return; grpPend(m[1]); u.searchParams.delete('join'); history.replaceState(history.state, '', u.pathname + (u.searchParams.toString() ? '?' + u.searchParams.toString() : '') + u.hash); } catch (e) {} } // only g. (group) links: c. / e. links are left for their own game
 // ---- Pickleball & local games as a GROUP game (pics/localevents.js, server odds-api/localevents.js). Off unless the server says so: /acct/status `levents`
 // (kept in 'odd-lsw', LOCALEVENTS_ENABLED=1) and, for THIS account, `me.levents` (kept in 'odd-lev'; only for accounts Groups is on for). Off = no file, no call,
 // and a ?join=e.<code> link is dropped exactly as before. On: the file loads right after groups.js and adds its card to a group's Games list.
@@ -554,7 +554,9 @@ const levOn = () => grpOn() && lsg('odd-lev') === '1';
 let LEVL = 0; const LEVQ = [];
 function levLoad(then) { if (window.OddEvents && window.OddEvents.openFromGroup) { if (window.OddGroups) window.OddEvents.register(); if (then) then(); return; } if (then) LEVQ.push(then); if (LEVL) return; LEVL = 1;
   const sc = document.createElement('script'); sc.src = 'localevents.js?v=274'; const done = () => LEVQ.splice(0).forEach((f) => { try { f(); } catch (e) {} }); sc.onload = () => { try { if (window.OddGroups && window.OddEvents) window.OddEvents.register(); } catch (e) {} done(); }; sc.onerror = () => { LEVL = 0; sc.remove(); done(); }; document.head.appendChild(sc); }
+{ const g0 = grpLoad; grpLoad = function (then) { return g0(levOn() ? () => levLoad(then) : then); }; } // groups.js, then (when on for this account) localevents.js before anything waiting on groups.js runs, so the group's Games list has its card. Off = main's grpLoad, untouched
 const levPend = (v) => { try { if (v === undefined) return sessionStorage.getItem('odd-join-e') || ''; if (v) sessionStorage.setItem('odd-join-e', v); else sessionStorage.removeItem('odd-join-e'); } catch (e) {} return ''; };
+function levCapture() { try { const u = new URL(location.href), m = /^e\.([A-Za-z0-9-]{4,40})$/.exec(u.searchParams.get('join') || ''); if (!m || lsg('odd-lsw') !== '1') return; levPend(m[1]); u.searchParams.delete('join'); history.replaceState(history.state, '', u.pathname + (u.searchParams.toString() ? '?' + u.searchParams.toString() : '') + u.hash); } catch (e) {} } // review D1: only e. (event) links, only while the server says the game exists ('odd-lsw'); g. / c. links are left for their own capture
 let LEVLAST = '';
 function levJoinRun() { // an event invite waiting and a signed-in account: on for it -> the event's join screen; not on -> one sheet that says so
   const c = levPend(); if (!c || !lsg('odd-tok')) return;
@@ -577,12 +579,13 @@ async function grpAsk(btn) {
 }
 // gate.js calls these: oddGroupsSw() when /acct/status says Groups exists; oddGroupsChanged() each time it has the account (`me`) from the server.
 let GRPWAS = grpOn();
-window.oddGroupsSw = function () { grpCapture(); if (levPend() && !grpPend()) { setTimeout(() => { try { if (levPend() && window.__oddLock === 'guest' && !lsg('odd-tok') && window.oddSignUp) window.oddSignUp('group:e:' + levPend()); else levJoinRun(); } catch (e) {} }, 400); return; } if (!grpPend()) return; setTimeout(() => { try { if (grpPend() && window.__oddLock === 'guest' && !lsg('odd-tok') && window.oddSignUp) window.oddSignUp('group:g:' + grpPend()); } catch (e) {} }, 400); }; // a guest with an invite: the sign-up sheet, then afterSignIn brings them back
+window.oddGroupsSw = function () { grpCapture(); if (!grpPend()) return; setTimeout(() => { try { if (grpPend() && window.__oddLock === 'guest' && !lsg('odd-tok') && window.oddSignUp) window.oddSignUp('group:g:' + grpPend()); } catch (e) {} }, 400); }; // a guest with an invite: the sign-up sheet, then afterSignIn brings them back
 window.oddGroupsChanged = function () {
   const on = grpOn(); if (on !== GRPWAS) { GRPWAS = on; if (!on) { navMore(false); try { if (window.OddGroups) window.OddGroups.close(); } catch (e) {} } try { navRender(); } catch (e) {} }
   if (on) grpLoad(grpJoinRun); else if (lsg('odd-gsw') === '1') grpJoinRun();
-  if (levPend()) levJoinRun();
 };
+{ const os = window.oddGroupsSw; window.oddGroupsSw = function () { const r = os.apply(this, arguments); levCapture(); if (levPend() && !grpPend()) setTimeout(() => { try { if (levPend() && window.__oddLock === 'guest' && !lsg('odd-tok') && window.oddSignUp) window.oddSignUp('group:e:' + levPend()); else levJoinRun(); } catch (e) {} }, 400); return r; }; } // pickleball group game: right after grpCapture (nothing between reads the address bar), the e. link is kept; a guest gets the sign-up sheet
+{ const oc = window.oddGroupsChanged; window.oddGroupsChanged = function () { const r = oc.apply(this, arguments); try { if (levPend()) levJoinRun(); } catch (e) {} return r; }; } // pickleball group game: an event invite waiting runs once the account is known
 if (GRPWAS) setTimeout(() => grpLoad(), 1500); // a known Groups account: the file is ready before the first bet (the bet step lives in it)
 // ================= end v272 Groups (switch, bar, invites) =================
 function navGo(k) {
@@ -3310,7 +3313,8 @@ loadAll();
 // Auto-update: when the app comes back to the front (or every 10 minutes) check for a newer version and reload into it
 const vnum = (x) => +((/(?:Pics|Oddable) v(\d+)/.exec(x) || [])[1] || 0);
 async function checkUpdate() {
-  if (document.querySelector('#odash,#ogrp,#oevt')) return; // never reload under the owner dashboard or Groups
+  if (document.querySelector('#odash,#ogrp')) return; // never reload under the owner dashboard or Groups
+  if (document.getElementById('oevt')) return; // pickleball group game: nor under its overlay
   try {
     const t = await (await fetch('index.html?c=' + Date.now(), { cache: 'no-store' })).text();
     const mine = vnum(document.querySelector('header').textContent) || vnum(document.documentElement.innerHTML), theirs = vnum(t);
@@ -3328,7 +3332,8 @@ setTimeout(() => { if (lsg('kal-id')) kalshiSync(false); }, 3000); setTimeout(lo
 if ('serviceWorker' in navigator) {
   const had = !!navigator.serviceWorker.controller; let rl = false;
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((r) => { r.update().catch(() => {}); const up = () => { if (!document.hidden) r.update().catch(() => {}); }; document.addEventListener('visibilitychange', up); setInterval(up, 300000); }).catch(() => {});
-  navigator.serviceWorker.addEventListener('controllerchange', () => { if (had && !rl && !document.querySelector('#odash,#ogrp,#oevt')) { rl = true; location.reload(); } });
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (document.getElementById('oevt')) rl = true; }); // pickleball group game: runs first; no reload under its overlay
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (had && !rl && !document.querySelector('#odash,#ogrp')) { rl = true; location.reload(); } });
 }
 
 // Pull down to refresh: wipes the saved app copy and reloads fresh code and data
@@ -3336,7 +3341,8 @@ if ('serviceWorker' in navigator) {
   const bar = document.createElement('div'); bar.id = 'ptr'; document.body.appendChild(bar);
   let y0 = null, d = 0, busy = false;
   const set = (h, t) => { bar.style.height = h + 'px'; bar.textContent = t || ''; };
-  window.addEventListener('touchstart', (e) => { y0 = window.scrollY <= 0 && !busy && !document.querySelector('#odash,#ogrp,#oevt') ? e.touches[0].clientY : null; d = 0; }, { passive: true });
+  window.addEventListener('touchstart', (e) => { y0 = window.scrollY <= 0 && !busy && !document.querySelector('#odash,#ogrp') ? e.touches[0].clientY : null; d = 0; }, { passive: true });
+  window.addEventListener('touchstart', () => { if (document.getElementById('oevt')) y0 = null; }, { passive: true }); // pickleball group game: runs after the line above; no pull-to-refresh under its overlay
   window.addEventListener('touchmove', (e) => {
     if (y0 === null) return;
     d = e.touches[0].clientY - y0;
@@ -3429,7 +3435,7 @@ if ('serviceWorker' in navigator) {
   document.addEventListener('visibilitychange', () => { if (hb) here(); });
   // ---- the invitation: a card in the page flow (never fixed, never a modal), at most once per app open ----
   const inv = () => { try { const o = JSON.parse(ls(IK) || '{}'); return { n: Number(o.n) || 0, t: Number(o.t) || 0 }; } catch (e) { return { n: 0, t: 0 }; } };
-  const overlay = () => !!(el('gate') || el('oddwarn') || el('gnm') || el('odash') || el('ogrp') || el('oevt') || el('bnmore') || ['infosheet', 'teampage', 'mv', 'lvov'].some((id) => { const x = el(id); return x && !x.hidden; }));
+  const overlay = () => !!(el('gate') || el('oddwarn') || el('gnm') || el('odash') || el('ogrp') || el('bnmore') || ['infosheet', 'teampage', 'mv', 'lvov'].some((id) => { const x = el(id); return x && !x.hidden; }));
   function openToday() { try { const d = dayKey(Date.now()); return BETS.some((b) => !b.fin && !b.res && betDay(b) === d); } catch (e) { return false; } }
   function hide(forGood) { const c = el('bpinv'); if (c) { c.hidden = true; c.innerHTML = ''; } if (forGood) { BP.gone = true; clearInterval(BP.t); } }
   function invite() {
@@ -3437,6 +3443,7 @@ if ('serviceWorker' in navigator) {
     if (!BP.enabled || !BP.st || isOn() || !tok()) return hide(true);
     let view = 'main'; try { view = VIEW; } catch (e) {}
     const where = view === 'main' ? el('nb') : view === 'bets' && openToday() ? el('betspage') : null;
+    if (!BP.shown && el('oevt')) return; // pickleball group game: the invitation card never comes up under its overlay
     if (!BP.shown) { const i = inv(); if (i.n >= 2 || (i.n === 1 && Date.now() - i.t < 14 * DAY)) return hide(true); if (!where || overlay()) return; }
     if (!where) { c.hidden = true; return; }
     if (c.nextElementSibling !== where) where.parentNode.insertBefore(c, where);

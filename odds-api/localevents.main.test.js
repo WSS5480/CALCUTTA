@@ -105,6 +105,10 @@ srv.listen(0, '127.0.0.1', async () => {
     delete process.env.LOCALEVENTS_ENABLED; const before = dbCalls.n; r = await post('/levents/get', { id: ev.id }, H(steve.token)); assert.strictEqual(r.s, 403); assert.strictEqual(dbCalls.n, before); assert.ok(DB['lock:evt:' + ev.id], 'the event row is kept');
     process.env.LOCALEVENTS_ENABLED = '1'; r = await post('/levents/get', { id: ev.id }, H(steve.token)); assert.strictEqual(r.s, 200);
     t('switching LOCALEVENTS_ENABLED off blocks every call at once (nothing read, nothing deleted); on again = as it was');
+
+    // ---- 7. review M2 / main preserved: every touched main file is main's plus added lines (and the two listed replacements shared with feat/calcutta-on-main) ----
+    require('child_process').execFileSync(process.execPath, [require('path').join(__dirname, '..', 'scripts', 'localevents', 'main-preserved.js')], { stdio: 'pipe' });
+    t('main\'s code preserved in every touched file (scripts/localevents/main-preserved.js)');
   } catch (e) { failed++; console.error('FAIL', e && e.stack || e); }
   console.log(failed ? '\nFAILED' : '\nPASS ' + n + ' main-line checks'); srv.close(); process.exit(failed ? 1 : 0);
 });

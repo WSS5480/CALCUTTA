@@ -108,13 +108,44 @@
     return h + '<div class="enote">' + esc(CAPLINE) + ' Spectators count toward the 8.</div><div class="enote">' + esc(ENTTEXT) + '</div>';
   }
   function joinCodeV() { const s = cur(); return '<h1>Join with a code</h1><label class="elab">Invite code<input id="ecode" class="ein ecodein" autocomplete="off" autocapitalize="characters" maxlength="14" placeholder="ABCD-1234" value="' + esc(s.code || '') + '"></label><button class="epri efull" data-a="lookup">Look it up</button><label class="elab">Have a guest claim code from the commissioner?<input id="eclaim" class="ein" autocomplete="off" autocapitalize="characters" maxlength="24" placeholder="ABCD-1234.XXXXXXXXXX"></label><button class="esec efull" data-a="claim">Claim my results</button><div class="enote">A claim code moves the results the commissioner typed in under your name into your account (lifetime stats).</div>'; }
+  // Review H1: a person who is not in the event's group (a brand-new player who signed up from the event link, say). The box comes FIRST, with "Ask to join <group>"
+  // (Groups' own POST /groups/request: the commissioner approves; the group's code and members are never sent here). The event code is kept on the phone
+  // ('oevt-gwait') and, once the person is in the group, the event reopens by itself (next app open, or "Check again").
+  function groupAskV(e) {
+    const ga = e.groupAsk, nm = ga && ga.name ? esc(ga.name) : 'the group', st = ga ? ga.state : '';
+    let h = '<div class="ewarn" id="egask" role="status"><b>This event belongs to a group</b>';
+    if (st === 'ask') h += 'It is for the members of ' + nm + '. Ask to join the group: the commissioner approves who joins. Once you are in, this event opens here again.<button class="epri efull" data-a="gask">Ask to join ' + nm + '</button>';
+    else if (st === 'pending') h += 'Your request to join ' + nm + ' is with the commissioner. Once you are in, this event opens here again.<button class="esec efull" data-a="gcheck">Check again</button>';
+    else if (st === 'closed') h += nm + ' is not taking requests right now. Ask the person who sent you the link to have the commissioner invite you to the group.';
+    else if (st === 'no') h += 'The commissioner of ' + nm + ' did not let you into the group, so this event cannot be joined.';
+    else h += 'It is for the group\'s members. Join the group first, then open the event from the group.';
+    return h + '</div>';
+  }
+  const GAPI = (window.ODD_GROUPS_API || 'https://calcutta-odds.onrender.com') + '/groups/';
+  const gwait = (v) => { if (v === undefined) { try { const w = JSON.parse(ls('oevt-gwait') || 'null'); return w && /^[A-Z2-9-]{4,40}$/i.test(String(w.code || '')) && Date.now() - Number(w.at || 0) < 30 * 864e5 ? w : null; } catch (x) { return null; } } ls('oevt-gwait', v ? JSON.stringify(v) : null); return null; };
+  async function groupAskSend(s) {
+    const e = s.ev; if (!e || !e.group || !e.groupAsk || busy) return; busy = true; err = ''; paintBusy(true);
+    try { const r = await fetch(GAPI + 'request', { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': tok() }, body: JSON.stringify({ id: e.group.id, myName: ls('odd-name') || '' }) }); const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw Object.assign(new Error(j.error || 'Server said ' + r.status), { status: r.status });
+      e.groupAsk.state = 'pending'; gwait({ code: s.code, at: Date.now() }); } catch (x) { err = errText(x); }
+    busy = false; paintBusy(false); paint();
+  }
+  // -> true when the event was reopened (the person is in the group now). quiet = at app open: nothing shown unless it reopens.
+  async function groupWaitCheck(quiet) {
+    const w = gwait(); if (!w || !tok()) return false; let j; try { j = await post('preview', { code: w.code }); } catch (x) { if (x && (x.status === 404 || x.status === 403)) gwait(null); if (!quiet) { err = errText(x); paint(); } return false; }
+    const e = j && j.event; if (!e) return false;
+    if (!e.groupOnly) { gwait(null); window.OddEvents.join(w.code); return true; }
+    const st = e.groupAsk && e.groupAsk.state; if (st !== 'pending' && st !== 'ask') gwait(null);
+    if (!quiet) { const s = cur(); if (s && s.t === 'preview') { s.ev = e; err = st === 'pending' ? 'Still waiting for the commissioner to let you into the group.' : ''; paint(); } }
+    return false;
+  }
   function previewV() {
     const s = cur(), e = s.ev;
     if (!e && s.peek) return '<h1>' + esc(s.peek.title) + '</h1><div class="emeta">' + esc(s.peek.kind) + '</div><div class="ecard">You were invited to this game. Sign up for Oddable (or sign in), then open the invite link again to join.</div>';
     if (!e) return s.fail ? '<h1>Event</h1><div class="ecard emut">This event could not be opened from the group.</div>' : '<div class="ecard">Loading…</div>';
     if (e.role && e.role !== 'none') return '<h1>' + esc(e.title) + '</h1><button class="epri efull" data-a="open" data-id="' + att(e.id) + '">You are in this event. Open it ›</button>';
+    if (e.groupOnly) return groupAskV(e) + '<h1>' + esc(e.title) + '</h1><div class="emeta">' + fmtLine(e) + ' · run by ' + esc(e.commName) + '</div><div class="ecard">' + rulesList(e) + '</div>'; // review H1: the way in comes first
     let h = '<h1>' + esc(e.title) + '</h1><div class="emeta">' + fmtLine(e) + ' · run by ' + esc(e.commName) + '</div>' + (s.gj ? '<div class="enote">This event is on your group. Members of the group can join it here.</div>' : '') + '<div class="ecard">' + rulesList(e) + '</div>';
-    if (e.groupOnly) return h + '<div class="ewarn"><b>This event belongs to a group</b>It is for the group\'s members. Join the group first, then open the event from the group.</div>';
     h += '<div class="enote">' + e.people + ' of ' + e.cap + ' people so far. ' + esc(MONEY) + '</div>';
     const open = (e.open || []).filter((x) => x.open > 0);
     if (!e.locked) {
@@ -445,6 +476,8 @@
     if (a === 'qclear') { Qset(Q().filter((x) => !x.fail)); paint(); return; }
     if (a === 'gstart') { const s = cur(); DR = draftNew({ group: { id: s.gid, name: s.gname } }); push({ t: 'create' }); return; }
     if (a === 'gopen') { const g = (cur().data && cur().data.events || []).find((x) => x.id === id); if (g && g.role && g.role !== 'none') { const s = { t: 'event', id, tab: 'matches' }; push(s); load(s); return; } const s = { t: 'preview', gj: String(id), code: '' }; push(s); act('gjoin', { id: s.gj, preview: true }, async (j) => { s.ev = j.event; paint(); }); return; }
+    if (a === 'gask') { groupAskSend(cur()); return; }
+    if (a === 'gcheck') { const s = cur(); if (s.ev && s.code && !gwait()) gwait({ code: s.code, at: Date.now() }); groupWaitCheck(false); return; }
     if (a === 'joincode') { push({ t: 'joincode' }); return; }
     if (a === 'lookup') { const s = cur(); s.code = (document.getElementById('ecode') || {}).value || ''; openPreview(s.code); return; }
     if (a === 'claim') { const c = (document.getElementById('eclaim') || {}).value || ''; act('claim', { claim: c.trim() }, async (j) => { rootReset(); push({ t: 'event', id: j.event.id, ev: j.event, tab: 'info' }); }); return; }
@@ -538,7 +571,7 @@
     if (!tok()) { // signed out: the public peek shows only the title and kind; sign up / sign in, then the same link opens the join screen
       try { const j = await post('peek', { code, dev: dev() }); s.peek = j; } catch (e) { err = errText(e); } paint(); return;
     }
-    try { const j = await post('preview', { code }); s.ev = j.event; s.code = code; } catch (e) { err = errText(e); } paint();
+    try { const j = await post('preview', { code }); s.ev = j.event; s.code = code; if (j.event && j.event.groupOnly && j.event.groupAsk && j.event.groupAsk.state === 'pending' && !gwait()) gwait({ code, at: Date.now() }); } catch (e) { err = errText(e); } paint();
   }
   // ---------- voice: "Log my score" (shared module pics/voicelog.js when present) ----------
   function openVoice(e, kind) {
@@ -667,6 +700,8 @@
     if (window.OddJoin && typeof window.OddJoin.register === 'function') { ['e', 'event', 'events'].forEach((k) => window.OddJoin.register(k, fromHub)); return true; }
     return false;
   }
+  window.OddEvents.groupWaitCheck = groupWaitCheck;
   hookJoin(); register(); // main port: ?join=e.<code> links are captured and routed by index.html (grpCapture / levJoinRun), not read here
   try { if (sessionStorage.getItem('oevt-open') === '1') setTimeout(() => { if (!el() && tok()) window.OddEvents.open(); }, 1500); } catch (e) {}
+  setTimeout(() => { if ((!el() || cur().t === 'home') && gwait()) groupWaitCheck(true); }, 2500); // review H1: asked to join the event's group earlier and let in since: the event opens again
 })();

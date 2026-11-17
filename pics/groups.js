@@ -198,7 +198,7 @@
   function push(v) { err = ''; stack.push(v); paint(); el().scrollTop = 0; }
   // v273 Golf days (a group game): the screens live in pics/golfday.js, fetched the first time a member opens the Golf day tile. It draws inside this
   // overlay and uses the same stack (Back), the same one-call-at-a-time `act` (so an ended account gets the same lock card) and the same classes.
-  let GDL = null; const GDV = '274';
+  let GDL = null; const GDV = '275';
   const GDX = { esc, att, fmtDay, chiDay, addDays, push, back: () => back(), paint: () => paint(), cur, el, act, post, errText, tile, sel, busy: () => busy, setErr: (m) => { err = m || ''; }, me: () => g('odd-name') || '' };
   function gdOpen(gr) {
     push({ t: 'golf', v: 'home', gr });

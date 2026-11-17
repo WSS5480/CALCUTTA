@@ -83,7 +83,8 @@
     s += '<div class="og3">' + tile('Members', gr.count + ' of ' + gr.join.max, 'data-a="members"', comm && gr.reqCount ? gr.reqCount + ' asking to join' : '')
       + (c ? tile(gr.started ? 'Standings' : 'Contest', esc(c.name), 'data-a="contest" data-cid="' + att(c.cid) + '"', esc(SPORT[c.sport] || c.sportName || '')) : '')
       + (c ? tile('Rules', esc(RUN[c.runs] || 'Dates'), 'data-a="rules" data-cid="' + att(c.cid) + '"', esc(fmtDay(c.startDay) + ' to ' + fmtDay(c.endDay))) : '')
-      + tile('Golf day', '⛳ Golf', 'data-a="golf"', comm ? 'Start one, scores, leaderboard' : 'Join, log my score, leaderboard') + '</div>'; // v273
+      + tile('Golf day', '⛳ Golf', 'data-a="golf"', comm ? 'Start one, scores, leaderboard' : 'Join, log my score, leaderboard') // v273
+      + tile('Pickleball', '🏓 Pickleball', 'data-a="pb"', comm ? 'Start a game, scores, standings' : 'Join, scores, standings') + '</div>'; // pb-group
     s += '<div class="oggrid">';
     if (!gr.ended && Date.now() < gr.joinUntil) s += '<div class="ogcard"><b>Invite people</b><div class="ogmeta">' + (comm ? (gr.join.auto ? 'Anyone who opens your link joins straight away.' : 'People who open your link ask to join. You approve each one.') : 'People who open your link ask to join. The commissioner approves each one.') + ' Joining closes when the contest starts.</div><button type="button" class="ogpri" data-a="invite">Invite</button><div id="ginv"></div></div>';
     else s += '<div class="ogcard ogmut">Joining is closed: the contest has started.</div>';
@@ -165,7 +166,7 @@
   function lookup(code) { const c = normCode(code); cur().code = String(code || ''); if (!c) { err = 'That code is not complete. It has 8 letters and numbers.'; return paint(); } act('preview', { code: c }, async (j) => { const s = cur(); s.code = c; s.pv = j.group; paint(); }); }
   function doJoin() { const s = cur(); act('join', { code: s.code }, async (j) => { s.done = j.pending ? { pending: true, text: j.text || 'Request sent. The commissioner approves who joins.' } : { pending: false, text: 'You joined ' + (j.group ? j.group.name : 'the group') + '.' }; s.gr = j.pending ? null : j.group; H = null; paint(); blStatus(); }); }
   // An invite link (?join=g.<code>) lands here once the person is signed in (index.html grpJoinRun, also through gate.js afterSignIn('group:g:<code>')).
-  function openJoin(code) { WANT = String(code || ''); open(true); stack = [{ t: 'home' }, { t: 'join', code: WANT }]; err = ''; paint(); if (expired()) return; WANT = ''; lookup(cur().code); }
+  function openJoin(code) { WANT = String(code || ''); open(true); if (window.OddLocal) { try { window.OddLocal.close(); } catch (x) {} } stack = [{ t: 'home' }, { t: 'join', code: WANT }]; err = ''; paint(); if (expired()) return; WANT = ''; lookup(cur().code); }
 
   // ---------- invite ----------
   async function invite() {
@@ -199,6 +200,15 @@
     if (!GDL) GDL = new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = 'golfday.js?v=' + GDV; sc.onload = ok; sc.onerror = () => { GDL = null; sc.remove(); no(); }; document.head.appendChild(sc); });
     GDL.then(go, () => { err = 'Could not load Golf days. Check your signal and try again.'; paint(); });
   }
+  // Pickleball (branch pb-group): the screens live in pics/local.js, fetched the first time a member taps the Pickleball tile (same tag as Golf days).
+  // It draws its own screen (#oevt) exactly over this one, one z-index above, so the tab bar stays visible; its Back on the first screen returns here.
+  let PBL = null;
+  function pbOpen(gr) {
+    const go = () => { if (el() && cur().t === 'hub' && !expired()) window.OddLocal.open({ id: gr.id, name: gr.name, role: gr.role }); };
+    if (window.OddLocal) return go();
+    if (!PBL) PBL = new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = 'local.js?v=' + GDV; sc.onload = ok; sc.onerror = () => { PBL = null; sc.remove(); no(); }; document.head.appendChild(sc); });
+    busy = true; paintBusy(true); PBL.then(() => { busy = false; paintBusy(false); go(); }, () => { busy = false; paintBusy(false); err = 'Could not load Pickleball. Check your signal and try again.'; paint(); });
+  }
   function click(ev) {
     const b = ev.target.closest && ev.target.closest('button[data-a]'); if (!b || b.disabled) return; const a = b.getAttribute('data-a'), id = b.getAttribute('data-id'), gr = curGroup();
     if (a === 'close') return close(); if (a === 'back') return back(); if (busy) return;
@@ -217,6 +227,7 @@
     if (a === 'rules') return push({ t: 'rules', gr, cid: b.getAttribute('data-cid') });
     if (a === 'contest') { const cid = b.getAttribute('data-cid'), c = cof(gr, cid); push({ t: 'contest', gr, cid }); if (c && c.started) act('standings', { id: gr.id, cid }, async (j) => { const s = cur(); if (s.t === 'contest') { s.rows = j.rows || []; if (j.group) setGroup(j.group); } paint(); }); return; }
     if (a === 'golf') return gdOpen(gr);
+    if (a === 'pb') return pbOpen(gr);
     if (a === 'invite') return invite();
     if (a === 'decide') return act('decide', { id: gr.id, pid: b.getAttribute('data-pid'), ok: b.getAttribute('data-ok') === '1' }, async (j) => { setGroup(j.group); paint(); });
     if (a === 'leave') { if (!confirm('Leave "' + gr.name + '"? You can ask to join again before it starts.')) return; return act('leave', { id: gr.id }, async () => { stack = [{ t: 'home' }]; H = null; paint(); loadHome(); blStatus(); }); }
@@ -249,12 +260,12 @@
   }
   function open(keep) {
     css(); let e = el(); if (!e) { e = document.createElement('div'); e.id = 'ogrp'; e.setAttribute('role', 'dialog'); e.setAttribute('aria-label', 'Groups'); e.innerHTML = '<div class="ogin0"></div>'; document.body.appendChild(e); e.addEventListener('click', click); window.addEventListener('resize', fit); }
-    fit(); try { if (window.navRender) window.navRender(); } catch (x) {} fit();
-    if (keep) return; stack = [{ t: 'home' }]; err = ''; paint(); if (!expired()) loadHome();
+    fit(); try { if (window.navRender) window.navRender(); } catch (x) {} fit(); if (window.OddLocal) { try { window.OddLocal.fit(); } catch (x) {} }
+    if (keep) return; if (window.OddLocal) { try { window.OddLocal.close(); } catch (x) {} } stack = [{ t: 'home' }]; err = ''; paint(); if (!expired()) loadHome(); // the Groups tab again = my groups, Pickleball closed
   }
-  function close() { const e = el(); if (!e) return; if (window.OddGolfDay) { try { window.OddGolfDay.stop(); } catch (x) {} } e.remove(); window.removeEventListener('resize', fit); busy = false; try { if (window.navRender) window.navRender(); } catch (x) {} }
+  function close() { const e = el(); if (!e) return; if (window.OddGolfDay) { try { window.OddGolfDay.stop(); } catch (x) {} } if (window.OddLocal) { try { window.OddLocal.close(); } catch (x) {} } e.remove(); window.removeEventListener('resize', fit); busy = false; try { if (window.navRender) window.navRender(); } catch (x) {} }
   // gate.js tells the page when the lock changes (paid, signed out, time ended): the open screen follows without a reload.
-  function lockChanged() { if (!el()) return; if (!g('odd-tok') || g('odd-grp') !== '1') return close(); err = ''; paint(); if (!expired()) { if (cur().t === 'join' && cur().code && !cur().pv) lookup(cur().code); else if (!H) loadHome(); } }
+  function lockChanged() { if (!el()) return; if (!g('odd-tok') || g('odd-grp') !== '1') return close(); if (window.OddLocal) { try { window.OddLocal.close(); } catch (x) {} } err = ''; paint(); if (!expired()) { if (cur().t === 'join' && cur().code && !cur().pv) lookup(cur().code); else if (!H) loadHome(); } }
 
   // ---------- group bets: a NEW bet of a group member is saved on the server first, then it is locked ----------
   const TK = () => (g('odd-tok') || '').slice(-12);

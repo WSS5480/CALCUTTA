@@ -21,6 +21,7 @@ Start here if you are a new AI session picking up this repo. Update this file in
 
 - **Session rotation (Steve, 2026-11-13):** when a session is close to handing off, it stops coding and becomes **reviewer**; before leaving it becomes the **second reviewer**. It only leaves once the new coder has become the **first reviewer** and the old first reviewer has taken its place. Each session trains the next by these rules. Reviewers stay read-only; check afterwards that they changed nothing.
 - **Test like a real user (2026-11-13):** the sign-up/"Failed to fetch" bug (missing CORS preflight) lived since v112 because tests ran in scripts that don't enforce CORS. Always test cross-origin calls from the real page in the user's Chrome, and try a real sign-up/sign-in flow before saying it works.
+- **Every agent on Opus 5.5 (Steve, Nov 17 2026):** every manager, coder and reviewer session runs on Opus 5.5; a manager starts each coder and reviewer with the opus model, never haiku, sonnet or fable.
 
 ## How it is built / run / shipped
 - No build step. `pics/` = Oddable (single-page app, mostly `pics/index.html`; `classic.html` is the older look, `sports.html` handles NBA/MLB/NHL/NCAAB).
@@ -31,6 +32,7 @@ Start here if you are a new AI session picking up this repo. Update this file in
 - Local check: serve `pics/` with `python3 -m http.server`, set `localStorage['pics-lg']='cfb'`, open `index.html?mirror=1`. ESPN must be mocked if outbound access is blocked.
 
 ## Change log
+- pb-group (Nov 17 2026, version TBD, branch `pb-group` from 30b1509 = v273, not pushed) — 🏓 PICKLEBALL AS A GROUP GAME behind the Groups switches: new server module `odds-api/local.js` (routes `/local/*`, the preview's local-events engine renamed because main's `events.js` is the activity module), new phone file `pics/local.js` (loaded only from the group page's new Pickleball tile) and `pics/games-catalog.json` (pickleball active, every other sport Coming soon). Round robin, single / double elimination, ladder, heads-up challenges, solo / skills score, spectator pick'em, standings, brackets, player pages, scores on court. No money. Dark with Groups. Read "## Pickleball as a group game" at the end.
 - v194 (2026-11-14) — Kalshi CASH OUT (real sale) with confirm screen. Button 'Cash out…' appears on open Kalshi bets only where a sale can work (market active, a bid >= 1c, at least 1 whole contract). Tap -> modal with live price (re-quoted every 4 s), contracts, proceeds, cost, result; 'Confirm sale' re-quotes first and refuses if the price fell below what was shown. Order = limit, immediate_or_cancel, reduce_only SELL of floor(contracts) at the bid, sent signed from the phone through the new stateless POST /kalshi/order in kalshi-sync/server.js (validates: sell only, integer count, price 0.01-0.99 dollars string, IOC, reduce_only, client_order_id; forwards a cleaned body; refuses everything else). Needs a Kalshi key with TRADING permission (read-only key -> Kalshi 401/403 -> message + `kco-ro` flag). Whole contracts only (Kalshi count is an integer), so fractional leftovers stay open. Sales are logged locally in `kco-log`. Sync now reads SELL fills: when a position is fully sold the bet gets `cash` (proceeds after fee) and `soldN`; betGradeLive/betPL use it (won/lost/push by cash vs stake, P&L = cash - stake). Cash-out value on open Kalshi bets refreshes every 10 s while My Bets is open (cache 8 s). NOT tested against real Kalshi orders (no trade was placed by Claude): first real sale must be tried by Steve on a small position. Server needs a calcutta-odds redeploy for /kalshi/order. Open: combo (MVE) markets may reject normal sell orders; partial sells show only a note; My Apps dashboard grading of cashed bets may differ from the app.
 - v193 (2026-11-14) — Kalshi status light in the header (next to the version pill, every page): green flashing = Kalshi key on this device and synced in the last 20 min; orange = syncing/waiting/stale; red = key rejected or cannot connect; hidden when no key. Tap it to open My Bets; hover/aria text shows the sync line. `kdotPaint()` runs every 3 s and after each sync; `KLAST` stamps the last good sync; reduced-motion users get a steady green. Cash-out button NOT built (still preview only, needs trade-enabled key + confirm screen + signed POST; see v177 note).
 - v192 (2026-11-14) — Kalshi combo synced but was easy to miss: the real $89.97 5-leg Kalshi combo DID sync (fills API) with correct legs, but (1) it was filed on Sun 11/15 (the combo market's expiry) instead of Sat 11/14 (its games), so it was not on today's My Bets; (2) its stake was 84.66 not 89.97 because Kalshi's fee_cost was left out. Fix: combos use the day of their first leg; stake = fills cost + fee_cost for combos and single Kalshi bets (matches Kalshi's ticket cost; multiplier now 9.135x for that combo); parlay re-sync now also updates a changed day. Existing synced bets are corrected on the next Kalshi sync. Open: bets edited by hand get overwritten by the next sync only when day/stake differ from Kalshi (pre-existing behaviour).
@@ -1565,3 +1567,71 @@ index.html (comment, header pill, footer, `trophy.js`, `alert-frozen.json`, `gro
 5. Want "Log my score" on the Golf GPS hole screen (no trip back to Groups each hole), and scores kept on the phone when there is no signal?
 6. Commissioner changing course flag colours on a Golf day (rule 13): still waiting for his answer.
 7. To-do (unchanged): upgrade The Odds API plan (about $30/month) if the app sells. Golf days spend no Odds API credits.
+
+## Pickleball as a group game (Nov 17 2026, branch pb-group, version TBD)
+
+Coder agent (Opus 5.5) in worktree `/tmp/claude-0/wt-pb`, branch `pb-group` from origin/main 30b1509 (= live v273). Committed locally, NOT pushed, version NOT bumped (the manager picks it at ship). **Dark with Groups: with `GROUPS_ENABLED` unset nothing changes for anyone** (checked in a browser, see Tests). **No money anywhere**: no entry, pot, payout, "paid" mark, price line, order or message path. Calcutta is NOT built; only its source hook is kept exported.
+
+### What
+- Pickleball games inside a group, the way v273 brought Golf days in. Ported from the preview branch commit 872e74a ("Local events v1.3"): its `odds-api/events.js` engine + tests, `pics/events.js` screens, `catalog.js` / `games-catalog.json`. Left out: `preview*.js`, the in-memory store, `PV()`, the `location.origin` rewrites, demo data.
+- **Name clash solved by renaming**: main's `odds-api/events.js` is the activity module (My Apps Activity), so the engine is `odds-api/local.js` and the phone file is `pics/local.js`; every require / test points at the new names. `odds-api/server.js` routes `/local` and `/local/*` to `require('./local').handle` (right after the golfday line).
+- Storage (same Supabase table, `lock:` rows so no player list reads them): `lock:evt:<id>` (a game), `lock:evtidx` (the index; each entry carries `g` = the group id), `lock:evr:<id>`.
+
+### Routes (all POST `/local/<op>`, body `{ g: <group id>, ... }`)
+- `list, create, preview, join, claim, get, edit, entrant, draw, leave, delete, finish, solo, score, confirm, dispute, live, pick, picklock, challenge, accept, decline, tiebreak, poreset, poredraw, partners, teams, trate`. Anything else (the preview's `peek`, `mine`, `paid`) = 404. GET = 405.
+- Order of checks: Groups switch (off = 403 `{off:true}` with NO database read) → ended account (403 `{expired:true}`) → signed in (401) → group id shape (404) → 600 calls / 10 min per account → op allowed → member of the group (`groups.memberCheck`, else 403 "Pickleball games are for members of this group") → the game must belong to THIS group (else 404 "Game not found"; claim codes too).
+- `create` (and `edit`): commissioner only; sport forced to pickleball (anything else = 400 "Only pickleball games can be started in a group for now. Other sports are coming soon."); entry 0, split none, take none, pot main forced. Engine limit: 6 creates per hour per account.
+- After a create: `events.js pickleballStarted({id, name}, title, {account: commissioner's email, key: game id, detail: 'Group: X. <Format>. <unit>. <Chicago date>'})` → My Apps Activity shows "Pickleball started: <title>". Names only.
+- People cap per game: `limits.js` (today 8, counting organizer, players, spectators and typed-in players); the price / enterprise sentence is stripped from every answer inside a group.
+
+### Switches
+- Exactly the Groups switches (`GROUPS_ENABLED`, `GROUPS_OWNER_ONLY`, `GROUPS_TESTERS`, via `groups.onFor`). No switch of its own. Off = the route answers 403 off and the phone never sees the tile (the tile lives on the group page, which only exists with Groups on).
+
+### Formats that work (end to end on the server AND in the browser)
+- Round robin (pools, optional playoff, tiebreak steps, coin flip / tiebreak playoff, Finish), single elimination, double elimination (losers bracket, bracket reset), ladder (challenges up to N spots above, expiry, swap / take the spot), heads-up challenges (singles / doubles, offer → accept), solo / skills score, spectator bracket pick'em with leaderboard, partner suggestions (main's `pairing.js`), tournament ratings, claim codes for typed-in players, scores entered on court with the other side confirming (offline queue on the phone).
+- **Skins is NOT in the engine.** The closest is the solo / skills score. Owner question below.
+- `/courts` is NOT used: the engine has no location field.
+
+### Phone (pics/local.js, pics/groups.js, pics/games-catalog.json)
+- Group page: a fifth tile **🏓 Pickleball** after Golf day. The first tap fetches `local.js?v=` + the Golf-day tag (`GDV`, today 273); nobody without Groups ever gets the file.
+- It draws its own screen `#oevt` exactly over `#ogrp` (left / bottom copied from it, z-index one above it = 46, the My Bets banner is 40), so the tab bar stays visible and the banner never sits on top. ‹ Back on its first screen returns to the group page; Close leaves Groups; any tab closes both.
+- Screens: Pickleball home (My games / Other games in this group), Start a game (sport chips; pickleball active, every other sport Coming soon; Golf day and the picks contest open their own tiles), How it works, create form (format, unit, rules; no money card), game (tiles Status / For you / Disputes or People, tabs Matches / Standings-Bracket-Ladder / Pick'em / Info), match + score entry, challenge, player page (Record / Standing-Place-Ladder / Matches left tiles that drill down, ratings, the player's matches), claim my results, preview for a member not in the game yet (rules, entries by name, join as a player or to watch).
+- No invite link and no public peek: every member of the group sees every game of the group and joins it by id. Claim codes stay (for typed-in players).
+- Wide screens: content up to 1328 px, cards in auto-fill columns (2 at 768/820, 3 at 1180, 4 at 1440); forms in a grid; single buttons max 520 px.
+
+### Adaptations from the preview (keep in mind when reading 872e74a)
+- Every game belongs to a group; only the commissioner starts one. `list` inside a group returns every game of the group (role `none` for games the member is not in). `preview` inside a group also lists the entries (names only).
+- Wording: user-facing "event" became "game" on the phone. Some server error texts still say "event".
+- Main's `pairing.js` differs from the preview's (wording, Laplace ranking, unknown rating = the median): the tests were adapted, `pairing.js` was not changed; the engine passes 1500 for an unrated player.
+- `games-catalog.json` v2: capLine = the group cap sentence, no price line, no entLine.
+
+### Owner-changeable decisions (coder's defaults)
+1. Only the group's commissioner starts a pickleball game (members join, score, watch, play pick'em).
+2. Pickleball only; every other sport shows "Coming soon".
+3. No money in group games (entry / pot / paid forced off).
+4. No invite links or public previews for group games; the group is the audience.
+5. My Apps is told once per game, at create (key = game id), like Golf days.
+6. Its own overlay over the group page instead of drawing inside `#ogrp` like Golf days (keeps the engine's look and stack).
+
+### Tests
+- Every `odds-api/*.test.js` (31 files) exits 0. New: `local.group.test.js` (9 checks: dark = 31 routes 403 with zero DB reads; owner-only / testers / ended; signed out, non-member, bad group, peek / mine / paid 404, GET 405; comm-only create, pickleball only, money forced off, pickleball_start event; group scoping incl. preview entries names-only; the real limits cap; every format end to end; privacy scan; switching off blocks at once). Ported: `local.test.js` 25, `local.fix.test.js` 14, `local.rev2.test.js` 25, `local.owner.test.js` 13 (adapted as above). `local.calcutta.check.js` prints "skipped" (no `calcutta.js` on main).
+- Playwright (scratch harness `/tmp/claude-0/pb-scratch/ui/`: `server.js` serves `pics/` + `public/` and the REAL acct / sync / groups / limits / events / local modules over a fake Supabase / My Apps; `t_pb.js` drives the real `index.html` → Groups → group page → Pickleball in two browser contexts, commissioner + member; `t_dark.js`): 390x844 navy 257/257, 430x900 navy 257/257, 820x1180 violet dark 257/257, 1280x800 violet light 289/289 (incl. 768/820/1180/1440 width fill), dark 13/13. Every screen: no sideways scroll, tap targets ≥ 40 px, headers over their columns (37 header cells per run), the My Bets banner (seeded with a bet for today, shown at 118x79 top right) never on top of a pickleball control (0 covered of 208-289 controls per run), 0 page errors, standalone `pickleball.html` works.
+- The UI run found and fixed one real bug in this branch: `groups.js open()` had its own reset line commented out by an edit (the Groups tab opened empty). Fixed before commit.
+- Build check `cp pics/* dist/` exits 0 (no folder added).
+
+### NOT verified
+- The live odds server, Supabase and My Apps (a real `pickleball_start` in Activity); a real phone (iOS Safari, the installed app); offline score queue on a real network drop; push / notifications (none added); the ended-account lock screen in the browser (server side tested only); more than one group per account in the browser; the "Open Golf day" / "Open the group contest" buttons in the games list (not clicked in the browser).
+
+### At ship (manager)
+1. Pick the version; bump `grpLoad`'s `groups.js?v=273` in `pics/index.html` AND `GDV` in `pics/groups.js` (it tags `golfday.js` and `local.js`), or phones keep the cached `groups.js` without the tile.
+2. Remove the League-menu "Pickleball" entry if wanted (left as is here; `pickleball.html` untouched).
+3. Push; check BOTH deploys (ODDABLE and `steves-pics`).
+
+### Roll back
+- No deploy: unset `GROUPS_ENABLED` (Groups, Golf days and Pickleball go dark together; nothing deleted). Code: revert the commit; `lock:evt*` rows are read by nothing else.
+
+### Questions for the owner
+1. Skins: the engine has no skins game. Build one, or is the solo / skills score enough for now?
+2. Should members (not only the commissioner) be able to start a pickleball game in their group?
+3. Should a group game ever get a share link for people outside the group (now: no)?
+4. The 8-people cap per game counts spectators and typed-in players. Keep?

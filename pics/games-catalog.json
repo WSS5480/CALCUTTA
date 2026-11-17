@@ -1,0 +1,747 @@
+{
+ "v": 2,
+ "updated": "2026-11-17",
+ "capLine": "Up to 8 people per game, counting the organizer, players, spectators and typed-in players.",
+ "potLine": "No money moves through Oddable: no entry, no pot, nothing collected, held or paid.",
+ "invite": "Members of the group open each game from the group page.",
+ "status": {
+  "now": "Available now",
+  "soon": "Coming soon",
+  "planned": "Coming soon"
+ },
+ "statusInfo": {
+  "now": "Works in groups now.",
+  "soon": "Not in groups yet.",
+  "planned": "Not in groups yet."
+ },
+ "results": {
+  "live": "Live results",
+  "scorer": "Scorer enters results",
+  "tbc": "Live results to be confirmed"
+ },
+ "resultsInfo": {
+  "live": "Scores come in automatically from a public sports feed.",
+  "scorer": "No feed: a scorer types results in and the other side (or the commissioner) confirms.",
+  "tbc": "ESPN seems to carry this, but the feed has not been confirmed from Oddable yet; until then a scorer enters results."
+ },
+ "games": {
+  "group-picks": {
+   "name": "Picks contest vs the group",
+   "line": "Everyone bets or picks real games; best winnings or record takes the pot.",
+   "info": "Members compete with the real bets they already track in My Bets (or verified Kalshi bets only). The commissioner sets the rules before the first kickoff: which bets count, how the winner is decided (winnings, units, return % or win %), a per-bet cap, minimum bets a week, entry, split and take. Other members’ bets stay hidden until their game starts."
+  },
+  "pickem": {
+   "name": "Pick'em / confidence pool",
+   "line": "Pick every game each week; rank your picks by confidence for more points.",
+   "info": "Each week every member picks the winner (or against the spread) of each game. In confidence mode you rank your picks: your surest pick is worth the most points. Picks lock at each game's start. Most points over the season wins."
+  },
+  "survivor": {
+   "name": "Survivor",
+   "line": "Pick one team to win each week. Lose and you are out. You cannot use a team twice.",
+   "info": "Each week every member picks one team to win. A loss knocks you out; a team can only be used once. Last one standing wins (ties split, or the pool rolls over, as the commissioner sets)."
+  },
+  "bracket": {
+   "name": "Bracket pick'em",
+   "line": "Fill out the whole bracket before it starts; later rounds are worth more.",
+   "info": "Everyone fills out the tournament bracket before the first game. Each right pick scores points, more in later rounds. Most points wins; the tiebreak is the final’s total score."
+  },
+  "calcutta": {
+   "name": "Calcutta auction",
+   "line": "Bid on teams before it starts. Owners get paid by how far their team goes.",
+   "info": "Before the event, members bid on each team (or player) in a live auction. The money bid makes the pot (information only). Each team’s owner is paid a set share for every round the team wins, and the most for the champion."
+  },
+  "squares": {
+   "name": "Squares",
+   "line": "Buy squares on a 10 x 10 grid; the last digits of each quarter’s score win.",
+   "info": "Members claim squares on a 10 x 10 grid. Numbers 0-9 are drawn for each side after the grid fills. At the end of each quarter (or half), the square matching the last digit of each team’s score wins that period’s share."
+  },
+  "tiers": {
+   "name": "Pick-six tiers",
+   "line": "Pick one golfer from each of six tiers. Best total score wins.",
+   "info": "Golfers are split into six tiers by odds. Each member picks one from each tier before the first tee time. Your best scores are added up (the commissioner sets how many count, and what a missed cut costs). Lowest total wins."
+  },
+  "oad": {
+   "name": "One-and-done",
+   "line": "Pick one player per event all season; you can use each player only once.",
+   "info": "For every event in the season each member picks one player. You earn that player’s prize money (or points). You cannot pick the same player twice in the season. Most earned at the end wins."
+  },
+  "props": {
+   "name": "Props pool",
+   "line": "Answer a sheet of yes/no and over/under questions before it starts.",
+   "info": "The commissioner writes a sheet of questions (first score, total points, MVP...). Members answer before the start. Each right answer scores; most right wins, with a tiebreak question."
+  },
+  "winner": {
+   "name": "Pick the winner",
+   "line": "Pick who wins each race or fight on the card.",
+   "info": "For every race (or fight) members pick the winner before it starts; optional bonus for method or round. Picks lock at each start. Most points wins."
+  },
+  "rr": {
+   "name": "Round robin + playoff",
+   "line": "Everyone plays everyone. Top finishers can go to a playoff bracket. Scores entered on court.",
+   "info": null
+  },
+  "elim": {
+   "name": "Bracket tournament",
+   "line": "Single or double elimination, seeded by rating or random draw.",
+   "info": null
+  },
+  "ladder": {
+   "name": "Ladder (weeks long)",
+   "line": "Challenge anyone up to a few spots above you. Win and you take the higher spot.",
+   "info": null
+  },
+  "h2h": {
+   "name": "Heads-up challenges",
+   "line": "Player vs player or pair vs pair, best of 1, 3 or 5, on the side.",
+   "info": null
+  },
+  "pickem-local": {
+   "name": "Bracket pick'em (spectators)",
+   "line": "Spectators pick every match before it starts. Most right wins.",
+   "info": null
+  },
+  "solo": {
+   "name": "Solo / skills score",
+   "line": "A drill or skills game with a number. Works with one player for practice.",
+   "info": null
+  },
+  "team-calcutta": {
+   "name": "Team Calcutta",
+   "line": "Auction the players or pairs before play starts. Owners get paid by how far they go.",
+   "info": "Before play, members bid on each player or pair of your own event. Owners are paid by how far their entry goes. Uses the Calcutta engine with this event’s entries as the lots."
+  },
+  "golf-day": {
+   "name": "Golf day formats",
+   "line": "Scramble, best ball, skins, Stableford, match play: scores entered by hole.",
+   "info": "For your own round: the group picks a format (scramble, best ball, skins, Stableford, match play, Nassau). A scorer in each foursome enters scores hole by hole; the leaderboard and skins update for everyone."
+  }
+ },
+ "localInfoKey": {
+  "rr": "rr",
+  "elim": "se",
+  "ladder": "ladder",
+  "h2h": "h2h",
+  "pickem-local": "pickem",
+  "solo": "solo"
+ },
+ "sports": [
+  {
+   "key": "pickleball",
+   "name": "Pickleball",
+   "long": "Pickleball",
+   "leagues": "Your own events; pro tours (PPA, MLP)",
+   "feed": "scorer",
+   "games": [
+    {
+     "key": "rr",
+     "mode": "own",
+     "results": "scorer",
+     "status": "now",
+     "start": {
+      "kind": "event",
+      "sport": "pickleball",
+      "fmt": "rr"
+     }
+    },
+    {
+     "key": "elim",
+     "mode": "own",
+     "results": "scorer",
+     "status": "now",
+     "start": {
+      "kind": "event",
+      "sport": "pickleball",
+      "fmt": "se"
+     }
+    },
+    {
+     "key": "ladder",
+     "mode": "own",
+     "results": "scorer",
+     "status": "now",
+     "start": {
+      "kind": "event",
+      "sport": "pickleball",
+      "fmt": "ladder"
+     }
+    },
+    {
+     "key": "team-calcutta",
+     "mode": "own",
+     "results": "scorer",
+     "status": "soon",
+     "gold": true
+    },
+    {
+     "key": "h2h",
+     "mode": "own",
+     "results": "scorer",
+     "status": "now",
+     "start": {
+      "kind": "event",
+      "sport": "pickleball",
+      "fmt": "h2h"
+     }
+    },
+    {
+     "key": "pickem-local",
+     "mode": "own",
+     "results": "scorer",
+     "status": "now",
+     "start": {
+      "kind": "event",
+      "sport": "pickleball",
+      "fmt": "se",
+      "pickem": true
+     }
+    },
+    {
+     "key": "solo",
+     "mode": "own",
+     "results": "scorer",
+     "status": "now",
+     "start": {
+      "kind": "event",
+      "sport": "pickleball",
+      "fmt": "solo"
+     }
+    },
+    {
+     "key": "winner",
+     "mode": "pro",
+     "status": "soon",
+     "results": "scorer",
+     "name": "Pro tour pick'em (PPA, MLP)"
+    }
+   ],
+   "feedNote": "No public feed: scores are entered on court."
+  },
+  {
+   "key": "football",
+   "name": "Football",
+   "long": "Football (NFL, college)",
+   "leagues": "NFL, college football",
+   "feed": "live",
+   "games": [
+    {
+     "key": "group-picks",
+     "mode": "pro",
+     "status": "now",
+     "results": "live",
+     "start": {
+      "kind": "tile",
+      "tile": "contest",
+      "label": "Open the group contest"
+     },
+     "note": "Every group has one: the Contest tile on the group page."
+    },
+    {
+     "key": "pickem",
+     "mode": "pro",
+     "status": "soon",
+     "results": "live"
+    },
+    {
+     "key": "survivor",
+     "mode": "pro",
+     "status": "soon",
+     "results": "live"
+    },
+    {
+     "key": "bracket",
+     "mode": "pro",
+     "status": "soon",
+     "results": "live",
+     "name": "Bracket pick'em (college playoff)"
+    },
+    {
+     "key": "calcutta",
+     "mode": "pro",
+     "status": "soon",
+     "results": "live"
+    },
+    {
+     "key": "squares",
+     "mode": "pro",
+     "status": "soon",
+     "results": "live"
+    },
+    {
+     "key": "props",
+     "mode": "pro",
+     "status": "soon",
+     "results": "live"
+    }
+   ]
+  },
+  {
+   "key": "basketball",
+   "name": "Basketball",
+   "long": "Basketball (NBA, WNBA, college)",
+   "leagues": "NBA, WNBA, college incl. March Madness",
+   "feed": "live",
+   "games": [
+    {
+     "key": "group-picks",
+     "mode": "pro",
+     "status": "now",
+     "results": "live",
+     "note": "Every group has one: the Contest tile on the group page.",
+     "start": {
+      "kind": "tile",
+      "tile": "contest",
+      "label": "Open the group contest"
+     }
+    },
+    {
+     "key": "bracket",
+     "mode": "pro",
+     "status": "soon",
+     "results": "live",
+     "name": "March Madness bracket pick'em"
+    },
+    {
+     "key": "calcutta",
+     "mode": "pro",
+     "status": "soon",
+     "results": "live",
+     "name": "March Madness Calcutta"
+    },
+    {
+     "key": "survivor",
+     "mode": "pro",
+     "status": "soon",
+     "results": "live"
+    },
+    {
+     "key": "pickem",
+     "mode": "pro",
+     "status": "soon",
+     "results": "live"
+    },
+    {
+     "key": "squares",
+     "mode": "pro",
+     "status": "soon",
+     "results": "live"
+    },
+    {
+     "key": "rr",
+     "mode": "own",
+     "results": "scorer",
+     "status": "soon"
+    },
+    {
+     "key": "h2h",
+     "mode": "own",
+     "results": "scorer",
+     "status": "soon",
+     "note": "1-on-1, H-O-R-S-E, 3-on-3."
+    },
+    {
+     "key": "solo",
+     "mode": "own",
+     "results": "scorer",
+     "status": "soon",
+     "note": "Free throws, three-point contest."
+    }
+   ],
+   "feedNote": "NBA, WNBA and men’s college basketball confirmed."
+  },
+  {
+   "key": "baseball",
+   "name": "Baseball",
+   "long": "Baseball (MLB)",
+   "leagues": "MLB",
+   "feed": "live",
+   "games": [
+    {
+     "key": "group-picks",
+     "mode": "pro",
+     "status": "now",
+     "results": "live",
+     "start": {
+      "kind": "tile",
+      "tile": "contest",
+      "label": "Open the group contest"
+     },
+     "note": "Every group has one: the Contest tile on the group page."
+    },
+    {
+     "key": "pickem",
+     "mode": "pro",
+     "status": "soon",
+     "results": "live"
+    },
+    {
+     "key": "survivor",
+     "mode": "pro",
+     "status": "soon",
+     "results": "live"
+    },
+    {
+     "key": "props",
+     "mode": "pro",
+     "status": "soon",
+     "results": "live"
+    }
+   ]
+  },
+  {
+   "key": "hockey",
+   "name": "Hockey",
+   "long": "Hockey (NHL)",
+   "leagues": "NHL",
+   "feed": "live",
+   "games": [
+    {
+     "key": "group-picks",
+     "mode": "pro",
+     "status": "now",
+     "results": "live",
+     "start": {
+      "kind": "tile",
+      "tile": "contest",
+      "label": "Open the group contest"
+     },
+     "note": "Every group has one: the Contest tile on the group page."
+    },
+    {
+     "key": "pickem",
+     "mode": "pro",
+     "status": "soon",
+     "results": "live"
+    },
+    {
+     "key": "survivor",
+     "mode": "pro",
+     "status": "soon",
+     "results": "live"
+    },
+    {
+     "key": "bracket",
+     "mode": "pro",
+     "status": "soon",
+     "results": "live",
+     "name": "Playoff bracket pick'em"
+    }
+   ]
+  },
+  {
+   "key": "soccer",
+   "name": "Soccer",
+   "long": "Soccer (EPL, MLS, Champions League, World Cup)",
+   "leagues": "EPL, MLS, Champions League, World Cup",
+   "feed": "live",
+   "feedNote": "EPL (eng.1), MLS (usa.1) and World Cup (fifa.world) confirmed; Champions League (uefa.champions) to be confirmed.",
+   "games": [
+    {
+     "key": "group-picks",
+     "mode": "pro",
+     "status": "now",
+     "results": "live",
+     "start": {
+      "kind": "tile",
+      "tile": "contest",
+      "label": "Open the group contest"
+     },
+     "note": "Every group has one: the Contest tile on the group page."
+    },
+    {
+     "key": "pickem",
+     "mode": "pro",
+     "status": "soon",
+     "results": "live"
+    },
+    {
+     "key": "survivor",
+     "mode": "pro",
+     "status": "soon",
+     "results": "live"
+    },
+    {
+     "key": "bracket",
+     "mode": "pro",
+     "status": "soon",
+     "results": "live",
+     "name": "World Cup bracket pick'em"
+    },
+    {
+     "key": "calcutta",
+     "mode": "pro",
+     "status": "soon",
+     "results": "live",
+     "name": "World Cup Calcutta"
+    }
+   ]
+  },
+  {
+   "key": "golf",
+   "name": "Golf",
+   "long": "Golf",
+   "leagues": "PGA Tour, majors; your own rounds",
+   "feed": "tbc",
+   "games": [
+    {
+     "key": "tiers",
+     "mode": "pro",
+     "status": "soon",
+     "results": "tbc"
+    },
+    {
+     "key": "calcutta",
+     "mode": "pro",
+     "status": "soon",
+     "results": "tbc",
+     "name": "Masters / major Calcutta"
+    },
+    {
+     "key": "oad",
+     "mode": "pro",
+     "status": "soon",
+     "results": "tbc"
+    },
+    {
+     "key": "props",
+     "mode": "pro",
+     "status": "soon",
+     "results": "tbc"
+    },
+    {
+     "key": "golf-day",
+     "mode": "own",
+     "results": "scorer",
+     "status": "now",
+     "start": {
+      "kind": "tile",
+      "tile": "golf",
+      "label": "Open Golf day"
+     },
+     "note": "In a group it is the Golf day tile on the group page."
+    },
+    {
+     "key": "team-calcutta",
+     "mode": "own",
+     "results": "scorer",
+     "status": "soon",
+     "gold": true
+    },
+    {
+     "key": "solo",
+     "mode": "own",
+     "results": "scorer",
+     "status": "soon",
+     "note": "Putting or chipping contest, closest to the pin (lowest wins)."
+    }
+   ],
+   "feedNote": "ESPN golf (PGA Tour) feed to be confirmed; your own rounds are entered by a scorer."
+  },
+  {
+   "key": "tennis",
+   "name": "Tennis",
+   "long": "Tennis",
+   "leagues": "Club nights; Grand Slams, ATP, WTA",
+   "feed": "tbc",
+   "games": [
+    {
+     "key": "rr",
+     "mode": "own",
+     "results": "scorer",
+     "status": "soon"
+    },
+    {
+     "key": "elim",
+     "mode": "own",
+     "results": "scorer",
+     "status": "soon"
+    },
+    {
+     "key": "ladder",
+     "mode": "own",
+     "results": "scorer",
+     "status": "soon"
+    },
+    {
+     "key": "team-calcutta",
+     "mode": "own",
+     "results": "scorer",
+     "status": "soon",
+     "gold": true
+    },
+    {
+     "key": "h2h",
+     "mode": "own",
+     "results": "scorer",
+     "status": "soon"
+    },
+    {
+     "key": "pickem-local",
+     "mode": "own",
+     "results": "scorer",
+     "status": "soon"
+    },
+    {
+     "key": "solo",
+     "mode": "own",
+     "results": "scorer",
+     "status": "soon"
+    },
+    {
+     "key": "bracket",
+     "mode": "pro",
+     "status": "soon",
+     "results": "tbc",
+     "name": "Grand Slam draw pick'em"
+    },
+    {
+     "key": "pickem",
+     "mode": "pro",
+     "status": "soon",
+     "results": "tbc"
+    }
+   ],
+   "feedNote": "Pro tennis feed (ATP/WTA) to be confirmed; club nights are entered by a scorer."
+  },
+  {
+   "key": "racing",
+   "name": "Racing",
+   "long": "Racing (NASCAR, F1)",
+   "leagues": "NASCAR, Formula 1",
+   "feed": "tbc",
+   "games": [
+    {
+     "key": "winner",
+     "mode": "pro",
+     "status": "soon",
+     "results": "tbc"
+    },
+    {
+     "key": "oad",
+     "mode": "pro",
+     "status": "soon",
+     "results": "tbc",
+     "name": "One-and-done drivers"
+    },
+    {
+     "key": "props",
+     "mode": "pro",
+     "status": "soon",
+     "results": "tbc"
+    }
+   ],
+   "feedNote": "NASCAR and F1 feeds to be confirmed."
+  },
+  {
+   "key": "horse",
+   "name": "Horse racing",
+   "long": "Horse racing",
+   "leagues": "Triple Crown, Breeders’ Cup",
+   "feed": "scorer",
+   "games": [
+    {
+     "key": "winner",
+     "mode": "pro",
+     "status": "soon",
+     "results": "scorer",
+     "name": "Race-day pick’em"
+    },
+    {
+     "key": "calcutta",
+     "mode": "pro",
+     "status": "soon",
+     "results": "scorer",
+     "name": "Derby Calcutta"
+    },
+    {
+     "key": "props",
+     "mode": "pro",
+     "status": "soon",
+     "results": "scorer"
+    }
+   ],
+   "feedNote": "No public feed found: a scorer enters results."
+  },
+  {
+   "key": "fighting",
+   "name": "Fighting",
+   "long": "Fighting (UFC, boxing)",
+   "leagues": "UFC, boxing",
+   "feed": "tbc",
+   "feedNote": "UFC (mma/ufc) to be confirmed; boxing: no ESPN feed found, scorer enters.",
+   "games": [
+    {
+     "key": "winner",
+     "mode": "pro",
+     "status": "soon",
+     "results": "tbc",
+     "name": "Fight-card pick’em"
+    },
+    {
+     "key": "pickem",
+     "mode": "pro",
+     "status": "soon",
+     "results": "tbc",
+     "name": "Confidence fight card"
+    },
+    {
+     "key": "props",
+     "mode": "pro",
+     "status": "soon",
+     "results": "tbc"
+    }
+   ]
+  },
+  {
+   "key": "bar",
+   "name": "Bar & backyard",
+   "long": "Bar & backyard (cornhole, darts, bowling, pool)",
+   "leagues": "Your own events",
+   "feed": "scorer",
+   "games": [
+    {
+     "key": "rr",
+     "mode": "own",
+     "results": "scorer",
+     "status": "soon"
+    },
+    {
+     "key": "elim",
+     "mode": "own",
+     "results": "scorer",
+     "status": "soon"
+    },
+    {
+     "key": "ladder",
+     "mode": "own",
+     "results": "scorer",
+     "status": "soon"
+    },
+    {
+     "key": "team-calcutta",
+     "mode": "own",
+     "results": "scorer",
+     "status": "soon",
+     "gold": true
+    },
+    {
+     "key": "h2h",
+     "mode": "own",
+     "results": "scorer",
+     "status": "soon"
+    },
+    {
+     "key": "pickem-local",
+     "mode": "own",
+     "results": "scorer",
+     "status": "soon"
+    },
+    {
+     "key": "solo",
+     "mode": "own",
+     "results": "scorer",
+     "status": "soon"
+    }
+   ]
+  }
+ ]
+}

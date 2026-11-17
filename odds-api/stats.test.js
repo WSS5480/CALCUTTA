@@ -29,6 +29,11 @@ let pass = 0; const t = (m) => { pass++; console.log('  ok', m); }, fails = [], 
 // stats is tested with no groups module at all (the provider contract with groups-v1 is covered by the S-ALL and G16 groups below, which use its record shapes).
 const MERGED = typeof G.statsFor === 'function'; if (MERGED) D.groups = () => ({});
 S._isolate(); // stats alone: other engines in a merged build (calcutta / golf / events / limits) are not picked up here; they have their own suites
+// Review 4 (Nov 17 2026): a confirmer must be an account at least 30 days old with 3 games of its own, and a number on fewer than 8 counting rounds is
+// provisional. Those guards have their own suite (stats-r4.test.js). HERE every confirmer is treated as an established account, so these groups keep
+// testing what they were written for.
+S._deps.confirmer = async (ref) => ({ key: ref, name: '', since: Date.parse('2025-01-01T12:00:00Z'), acts: 99 });
+S.CONF.fullRounds = S.CONF.minRounds; // ... and a number on 3 confirmed rounds is used as before (the provisional step, 3 to 7 rounds, is tested in stats-r4.test.js)
 const near = (a, b, m) => assert.ok(Math.abs(a - b) < 1e-6, m + ': ' + a + ' vs ' + b);
 const row = (sid, data) => { db[sid] = { id: sid, salt: 's', pinhash: 'h', data, updated: 1, created_at: '2025-01-01T12:00:00Z' }; }; // created_at: the account existed before every date used below
 

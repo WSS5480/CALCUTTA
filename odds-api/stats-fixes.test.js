@@ -9,6 +9,11 @@ process.env.SUPABASE_URL = 'https://fake.supabase.co'; process.env.SUPABASE_KEY 
 const B = (process.env.STATS_DIR ? path.resolve(process.env.STATS_DIR) : __dirname) + '/';
 const S = require(B + 'stats'), D = S._deps, R = require(B + 'ratings');
 if (typeof S._isolate === 'function') S._isolate();
+// Review 4 (Nov 17 2026): a confirmer must be an account at least 30 days old with 3 games of its own, and a number on fewer than 8 counting rounds is
+// provisional. Those guards have their own suite (stats-r4.test.js). HERE every confirmer is treated as an established account, so these groups keep
+// testing what they were written for.
+S._deps.confirmer = async (ref) => ({ key: ref, name: '', since: Date.parse('2025-01-01T12:00:00Z'), acts: 99 });
+S.CONF.fullRounds = S.CONF.minRounds; // ... and a number on 3 confirmed rounds is used as before (the provisional step, 3 to 7 rounds, is tested in stats-r4.test.js)
 let db = {}, slow = false;
 const nap = () => (slow ? new Promise((ok) => setTimeout(ok, Math.random() * 6)) : null);
 const FDB = {
@@ -156,7 +161,7 @@ srv.listen(0, async () => {
     assert.strictEqual(rt.text, rt.oddable.rating + ' · 0 of 10 games confirmed'); assert.strictEqual((await S.ratingFor(K('ann'), 'pickleball', { casual: true })).use, rt.oddable.rating);
     const gB = await pal('ann', 'bob'), id = ok(await call('ann', 'self/save', { item: { type: 'pickleball', date: '2026-11-15', fmt: 'singles', opp: ['x'], oppGuest: [gB], games: [[11, 7], [11, 9]] } })).record.id;
     ok(await call('bob', 'confirm/do', { code: ok(await call('ann', 'confirm/link', { id })).code }));
-    rt = await S.ratingFor(K('ann')); j = ok(await call('ann', 'me')); assert.deepStrictEqual([rt.confirmedGames, j.ratings.pickleball.confirmedRating, rt.use, rt.why], [1, 1516, null, 'needs games confirmed by 3 different players'], 'the confirmed win counts (1500 + 16); seeding waits for three different confirmers');
+    rt = await S.ratingFor(K('ann')); j = ok(await call('ann', 'me')); assert.deepStrictEqual([rt.confirmedGames, j.ratings.pickleball.confirmedRating, rt.use, rt.why], [1, 1516, null, 'needs 3 confirmed games (1 so far)'], 'the confirmed win counts (1500 + 16); seeding waits for three different confirmers');
     const rb = await S.ratingFor(K('bob')); j = ok(await call('bob', 'me')); assert.deepStrictEqual([rb.confirmedGames, j.ratings.pickleball.confirmedRating], [1, 1484], 'the opponent who confirmed gets the same match from their side');
     j = ok(await call('bob', 'me')); const mr = j.records.find((x) => x.kind === 'match'); assert.deepStrictEqual([mr.result, mr.extra.scoreText, mr.extra.loggedBy, mr.opponent], ['L', '7-11, 9-11', 'Ann Real', 'Ann Real']);
   });

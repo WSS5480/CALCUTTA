@@ -218,20 +218,27 @@ const ownRound = (r) => r.kind === 'golf-round' && r.score != null && !teamFmt(r
 //   - typed totals (no hole scores) are confirmable by link only, and at most 5 of any 20 count.
 // DIVERSITY: the money-game number needs at least 3 DIFFERENT confirming accounts across the counting entries (the last 20 confirmed); otherwise
 // `use` is null, needsSet is true and the organizer / director sets the number ("needs rounds confirmed by 3 different players").
-const CONF = { perBy: 2, gamePerBy: 8, win: 20, typedMax: 5, needBy: 3, linkDays: 7, linkLife: 7 * DAY, backDays: 30 }; // perBy = by LINK; gamePerBy = golf rounds scored in a game
+// REVIEW 4 (manager, Nov 17 2026; H1 three throwaway accounts, H3 filler entries):
+//   - a confirmer counts only when its account was at least 30 days old WHEN IT CONFIRMED (byAgeDays; server sign-up stamp, else the earliest
+//     server-stamped record) and it has itself at least 3 rounds or matches scored in Oddable games (byActs). Otherwise the confirmation is recorded and
+//     shown, and does not count ("confirmer too new");
+//   - fewer than 8 counting confirmed rounds (fullRounds) = a PROVISIONAL number: never used on its own, the organizer approves it on the make-up screen;
+//   - at most 1 link-confirmed round counts per date played (linkPerDate); at most 3 rounds logged on one day count (perDay);
+//   - the per-confirmer limits run over the COUNTING set only: 2 of any 20 by link (perBy), 8 of any 20 in all, link and game together (allPerBy).
+const CONF = { perBy: 2, gamePerBy: 8, allPerBy: 8, win: 20, typedMax: 5, needBy: 3, minRounds: 3, fullRounds: 8, byAgeDays: 30, byActs: 3, perDay: 3, linkPerDate: 1, linkDays: 7, linkLife: 7 * DAY, linkOpen: 30 * DAY, backDays: 30 }; // perBy = by LINK; allPerBy = link + game together (gamePerBy kept as the old name)
 const isSelfLogged = (r) => r.src === 'self';
 const holeScored = (r) => { const x = r.extra || {}, hs = x.holeScores || x.strokes, n = Number(x.of) === 9 || (!x.of && Number(x.holes) === 9) ? 9 : 18; return Array.isArray(hs) && hs.filter((v) => Number.isFinite(Number(v)) && Number(v) > 0 && v !== null && v !== '').length >= n; };
 const refList = (v) => (Array.isArray(v) ? v : [v]).map((x) => (typeof x === 'string' ? x : '')).filter((x) => /^[\w:.-]{6,40}$/.test(x)).slice(0, 8);
 // What ONE record says about its own confirmation (before the counting limits): { ok, by: [refs], name, typed, how: 'game' | 'link', why }.
 function confInfo(r, meRef) {
-  const x = r.extra || {}, golfR = r.kind === 'golf-round', typed = golfR && !holeScored(r), no = (why) => ({ ok: false, by: [], name: '', typed, how: r.src === 'self' ? 'link' : 'game', why });
+  const x = r.extra || {}, golfR = r.kind === 'golf-round', typed = golfR && !holeScored(r), no = (why) => ({ ok: false, by: [], name: '', typed, how: r.src === 'self' ? 'link' : 'game', why, at: 0 }), noon = Date.parse(r.date + 'T18:00:00Z') || 0;
   if (x.confirmed === false) return no(clean(x.unrated, 90) || (x.forfeit ? 'Forfeit: not counted' : 'The game marked this one as not confirmed'));
   if (x.solo) return no('A one-player game is never confirmed');
   if (x.preAcct) return no('Dated before you joined Oddable: counts as played, never confirmed');
   if (r.src === 'self') {
     const cb = x.confirmedBy; if (!cb) return no(x.claimed || x.loggedBy ? 'Kept for you by another player: not confirmed' : 'Not confirmed yet');
     if (!(cb.played === true && typeof cb.ref === 'string' && cb.ref)) return no('Confirmed by someone who is not recorded as playing in it: not counted');
-    return { ok: true, by: [cb.ref], name: clean(cb.name, 30) || 'Another player', typed, how: 'link', why: '' };
+    return { ok: true, by: [cb.ref], name: clean(cb.name, 30) || 'Another player', typed, how: 'link', why: '', at: N(cb.at) || N(x.at) || noon };
   }
   const card = x.card && typeof x.card === 'object' ? x.card : null, legacy = !card && r.kind === 'match' && x.confirmed === true && x.confirmedBy && typeof x.confirmedBy === 'object'; // the events engine's own shape
   if (!card && !legacy) return no('No scored card from another account confirmed by another team');
@@ -239,24 +246,88 @@ function confInfo(r, meRef) {
   if (others < 1) return no('No other account had a scored card in this game');
   if (golfR && typed) return no('No hole-by-hole scores on this round');
   const by = refList(card ? card.by : x.confirmedBy.ref || x.oppKey).filter((b) => b !== meRef); if (!by.length) return no('No account on another team confirmed the card');
-  return { ok: true, by, name: clean(card ? card.byName : x.confirmedBy.name, 30) || 'Another player', typed: false, how: 'game', why: '' };
+  return { ok: true, by, name: clean(card ? card.byName : x.confirmedBy.name, 30) || 'Another player', typed: false, how: 'game', why: '', at: N(card ? card.at : x.confirmedBy.at) > 1.4e12 ? N(card ? card.at : x.confirmedBy.at) : N(x.at) || noon };
 }
-// The counting limits, walked in play order over ONE family of a player's records (their own golf rounds, or their matches in one sport).
-// -> Map(record id -> { cand, confirmed, by (ref, server only), name, typed, how, why }). The window is the last 19 CONFIRMABLE entries before this one, so
-// no 20 in a row ever hold more than 2 from one confirmer or more than 5 typed totals, and newer entries keep getting their turn.
-function confirmMarks(list, meRef) {
-  const out = new Map(), win = [];
-  list.slice().sort(order).forEach((r) => {
-    const c = confInfo(r, meRef), m = { cand: c.ok, confirmed: false, by: null, name: c.name, typed: c.typed, how: c.how, why: c.why };
-    if (c.ok) {
-      const game = c.how === 'game', cap = !game ? CONF.perBy : r.kind === 'match' ? Infinity : CONF.gamePerBy; // link: 2; a golf round scored in a game: 8; an event match: no limit here
-      const ref = c.by.find((b) => win.filter((w) => w.by === b && w.how === c.how).length < cap);
-      if (!ref) m.why = 'Not counted: ' + c.name + ' already confirmed ' + cap + ' of your last ' + CONF.win + (game ? ' rounds scored in games' : ' by link');
-      else if (c.typed && win.filter((w) => w.typed && w.by).length >= CONF.typedMax) m.why = 'Not counted: only ' + CONF.typedMax + ' typed totals count in any ' + CONF.win + ' confirmed rounds';
-      else { m.confirmed = true; m.by = ref; }
-      win.push({ by: m.by, typed: c.typed, how: c.how }); if (win.length > CONF.win - 1) win.shift();
-    }
-    out.set(r.id, m);
+// WHO A CONFIRMER IS (review 4). A reference on a record ('a:<hash>' from acctRef, or an engine's own key such as the events 'e:<hash>') is looked up in
+// the server-only directory 'lock:cref' { r: { <ref>: <account id> } } and turned into ONE identity per account, so the same person is one confirmer
+// whether they confirmed in an event or through a link. acctRef(accountId) files the account's own reference; an engine that uses another key calls
+// stats.linkRef(key, accountId). A reference with no account on file cannot be checked and never counts.
+const REFS = new Map(), CREF = 'lock:cref'; let CREFC = { at: 0, v: {} };
+function refNote(ref, e) {
+  const k = String(e || ''); if (!ref || !k || /^guest:/.test(k) || REFS.get(ref) === k) return Promise.resolve();
+  REFS.set(ref, k); if (REFS.size > 20000) REFS.delete(REFS.keys().next().value);
+  return rowMutate(CREF, () => ({ r: {} }), (d) => { d.r = d.r || {}; if (d.r[ref] === k) return { nochange: true }; d.r[ref] = k; return {}; }).catch(() => {});
+}
+async function refAcct(ref) {
+  if (REFS.has(ref)) return REFS.get(ref);
+  if (D.now() - CREFC.at > 30e3 || CREFC.at > D.now()) { const r = await D.S.dbGet(CREF).catch(() => null); CREFC = { at: D.now(), v: (r && r.data && r.data.r) || {} }; }
+  return CREFC.v[ref] || null;
+}
+// An engine's own opponent / confirmer key -> the account behind it (events: stats.linkRef(extra.oppKey, accountId) for a singles opponent).
+async function linkRef(ref, accountId) {
+  const r = String(ref || ''), e = String(accountId || ''); if (!/^[\w:.-]{6,40}$/.test(r) || !e || /^guest:/.test(e)) return false;
+  if (/^a:/.test(r) && r !== oppKeyFor(mkOf(e))) return false; // an account reference always belongs to its own account
+  await refNote(r, e); return true;
+}
+// A game that counts as the confirmer's own activity: a round or match SCORED IN AN ODDABLE GAME (an engine record, not a one-player game, not self-logged).
+const gameScored = (r) => (r.src === 'golf' || r.src === 'events') && (r.kind === 'golf-round' || r.kind === 'match') && !(r.extra && (r.extra.solo || r.extra.confirmed === false));
+const BYC = new Map();
+// Everything the rule needs to know about the confirmers of a set of records: Map(ref -> { key (one per account), name, since (ms), acts }).
+async function confCtx(recs, meRef, now) {
+  const t = now || D.now(), refs = new Set(), by = new Map(), keys = new Map();
+  (recs || []).forEach((r) => { if (r.kind !== 'golf-round' && !(r.kind === 'match' && r.sport !== 'golf')) return; const c = confInfo(r, meRef); if (c.ok) c.by.forEach((b) => refs.add(b)); });
+  for (const ref of [...refs].slice(0, 80)) {
+    try {
+      if (typeof D.confirmer === 'function') { const v = await D.confirmer(ref); if (v) { by.set(ref, v); keys.set(v.key, v); } continue; } // TEST SWITCH (like D.auto): the older suites treat every confirmer as an established account. Never set in the app.
+      const e = await refAcct(ref); if (!e) continue;
+      let c = BYC.get(e); if (!c || t - c.at > 60e3 || c.at > t) {
+        const row = await selfRow(e).catch(() => null), since = await acctSince(e, (row && row.data) || {}, t), v = await cached(e);
+        c = { at: t, v: { key: oppKeyFor(mkOf(e)), name: (await nameOf(e).catch(() => '')) || '', since, acts: v.recs.filter(gameScored).length } }; BYC.set(e, c); if (BYC.size > 2000) BYC.delete(BYC.keys().next().value);
+      }
+      by.set(ref, c.v); keys.set(c.v.key, c.v);
+    } catch (er) { /* a confirmer that cannot be read does not count */ }
+  }
+  return { by, keys, now: t };
+}
+// One confirmer of one record, at the time it confirmed -> { ok, key, known, name, why }.
+function byCheck(ctx, ref, at, name) {
+  const c = ctx && ctx.by && ctx.by.get(ref), nm = (c && c.name) || name || 'The confirmer';
+  if (!c) return { ok: false, known: false, key: ref, name: name || '', why: 'confirmer not checked: ' + nm + ' has no Oddable account on file for this confirmation' };
+  if (at - c.since < CONF.byAgeDays * DAY) return { ok: false, known: true, key: c.key, name: nm, why: 'confirmer too new: ' + nm + ' joined Oddable less than ' + CONF.byAgeDays + ' days before confirming' };
+  if (c.acts < CONF.byActs) return { ok: false, known: true, key: c.key, name: nm, why: 'confirmer too new: ' + nm + ' has fewer than ' + CONF.byActs + ' rounds or matches scored in Oddable games' };
+  return { ok: true, known: true, key: c.key, name: nm, why: '' };
+}
+const entryOf = (r) => N(r.extra && r.extra.at) || Date.parse(r.date + 'T18:00:00Z') || 0;
+// THE COUNTING SET (review 4, H1 + H3), worked out over ONE family of a player's records (their own golf rounds, or their matches in one game).
+// -> Map(record id -> { cand, confirmed, by (one key per account, server only), name, typed, how, why, recBy, date, at }).
+//   1. confInfo: what the record says. 2. byCheck: the confirmer was old enough and active enough (else "recorded, not counted").
+//   3. golf rounds logged by hand: the first 3 logged on one day, and one link-confirmed round per date played.
+//   4. the per-confirmer limits, walked from the NEWEST entry back over the entries that COUNT: among any 20 counting entries in a row one confirmer has
+//      at most 2 by link and 8 in all (golf), and at most 5 are typed totals. An entry that does not count never takes a place, so filler entries
+//      cannot push good rounds out, and a newer round from the same confirmer takes the place of their older one (nothing freezes).
+function confirmMarks(list, meRef, ctx) {
+  const out = new Map(), sorted = list.slice().sort(order), cands = [];
+  sorted.forEach((r) => {
+    const c = confInfo(r, meRef), m = { cand: c.ok, confirmed: false, by: null, name: c.name, typed: c.typed, how: c.how, why: c.why, recBy: null, date: r.date, at: c.at || 0, ent: entryOf(r) };
+    out.set(r.id, m); if (!c.ok) return;
+    const chk = c.by.map((b) => byCheck(ctx, b, c.at, c.name)).filter((k) => k.key !== meRef), good = chk.filter((k) => k.ok), first = chk.find((k) => k.known) || chk[0];
+    if (!first) { m.cand = false; m.why = 'No account on another team confirmed the card'; return; }
+    m.recBy = first.key; if (first.known) m.name = first.name;
+    if (!good.length) { m.why = 'Recorded, not counted (' + first.why + ')'; return; }
+    m.keys = [...new Set(good.map((k) => k.key))]; m.names = {}; good.forEach((k) => { m.names[k.key] = k.name; }); cands.push({ r, m });
+  });
+  const late = new Set(), dup = new Set(), perDay = {}, perDate = {};
+  sorted.filter((r) => r.kind === 'golf-round' && isSelfLogged(r)).sort((a, b) => entryOf(a) - entryOf(b) || order(a, b)).forEach((r) => { const d = chiDay(entryOf(r)); perDay[d] = (perDay[d] || 0) + 1; if (perDay[d] > CONF.perDay) late.add(r.id); });
+  cands.filter((x) => x.r.kind === 'golf-round' && x.m.how === 'link' && !late.has(x.r.id)).sort((a, b) => entryOf(a.r) - entryOf(b.r) || order(a.r, b.r)).forEach((x) => { perDate[x.r.date] = (perDate[x.r.date] || 0) + 1; if (perDate[x.r.date] > CONF.linkPerDate) dup.add(x.r.id); });
+  const win = []; // the counting entries newer than the one being looked at (the 19 nearest)
+  cands.slice().reverse().forEach(({ r, m }) => {
+    const golfR = r.kind === 'golf-round', link = m.how === 'link', cnt = (k, how) => win.filter((w) => w.by === k && (!how || w.how === how)).length;
+    if (late.has(r.id)) { m.why = 'Not counted: only the first ' + CONF.perDay + ' rounds logged on one day count toward the money-game number'; return; }
+    if (dup.has(r.id)) { m.why = 'Not counted: only one link-confirmed round counts per day played'; return; }
+    const key = m.keys.find((k) => (!link || cnt(k, 'link') < CONF.perBy) && (!golfR || cnt(k) < CONF.allPerBy));
+    if (!key) { const k0 = m.keys[0], nm = m.names[k0] || m.name; m.name = nm; m.why = link && cnt(k0, 'link') >= CONF.perBy ? 'Not counted: ' + nm + ' already confirmed ' + CONF.perBy + ' of your last ' + CONF.win + ' counting ' + (golfR ? 'rounds' : 'games') + ' by link' : 'Not counted: ' + nm + ' already confirmed ' + CONF.allPerBy + ' of your last ' + CONF.win + ' counting rounds'; return; }
+    if (m.typed && win.filter((w) => w.typed).length >= CONF.typedMax) { m.why = 'Not counted: only ' + CONF.typedMax + ' typed totals count in any ' + CONF.win + ' confirmed rounds'; return; }
+    m.confirmed = true; m.by = key; m.name = m.names[key] || m.name; win.push({ by: key, typed: m.typed, how: m.how }); if (win.length > CONF.win - 1) win.shift();
   });
   return out;
 }
@@ -265,28 +336,56 @@ const isConfirmed = (r) => confInfo(r).ok;
 const hasRating = (r) => !!(r.extra && Number.isFinite(crOf(r.extra)) && Number.isFinite(slopeOf(r.extra)));
 // The make-up of a number (manager rule: the organizer of a money game sees it before approving the game; the player sees the same on My handicap / My rating).
 // items = the counting entries, newest first: [{ date, what, score?, diff?, used?, meta: {by, name, typed, how} }]. Refs never leave: names and counts only.
-function makeupOf(items, unit) {
-  const byRef = new Map(); items.forEach((d) => { const m = d.meta || {}; if (!m.by) return; const e = byRef.get(m.by) || { name: m.name || 'Another player', n: 0 }; e.n++; byRef.set(m.by, e); });
-  const scored = items.filter((d) => d.meta && d.meta.how === 'game').length, typed = items.filter((d) => d.meta && d.meta.typed).length, linked = items.length - scored - typed, nby = byRef.size, U = unit || 'round';
+// REVIEW 4: `who` lists EVERY confirmer of the recent entries, counting or not, each with when they joined, how many they confirmed and the flags an
+// organizer should see ("joined this week", "confirmed 14 of 20", "does not count: ..."); `flags` / `warn` say what is odd about the whole number
+// ("all rounds on one date", "all logged on one day"). marks = the family's confirmMarks (for the recorded-but-not-counting confirmations).
+function makeupOf(items, unit, ctx, marks) {
+  const U = unit || 'round', now = (ctx && ctx.now) || D.now(), info = (k) => (ctx && ctx.keys && ctx.keys.get(k)) || null, byRef = new Map();
+  const seat = (k, name) => { let e = byRef.get(k); if (!e) { const c = info(k); e = { name: (c && c.name) || name || 'Another player', n: 0, recorded: 0, since: c ? c.since : null, acts: c ? c.acts : null, why: '' }; byRef.set(k, e); } return e; };
+  items.forEach((d) => { const m = d.meta || {}; if (m.by) seat(m.by, m.name).n++; });
+  const recent = marks ? [...marks.values()].filter((m) => m.cand && m.recBy).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.ent - a.ent)).slice(0, CONF.win) : [];
+  recent.forEach((m) => { const e = seat(m.by || m.recBy, m.name); e.recorded++; if (!m.confirmed && m.why && (!e.why || (/^Recorded, not counted \(/.test(m.why) && !e.tooNew))) { e.tooNew = /^Recorded, not counted \(/.test(m.why); e.why = m.why.replace(/^Recorded, not counted \(/, '').replace(/\)$/, '').replace(/^Not counted: /, ''); } });
+  const scored = items.filter((d) => d.meta && d.meta.how === 'game').length, typed = items.filter((d) => d.meta && d.meta.typed).length, linked = items.length - scored - typed;
+  const counting = [...byRef.values()].filter((e) => e.n > 0), nby = counting.length, tot = Math.max(recent.length, items.length);
   const parts = []; if (scored) parts.push(scored + ' scored in games'); if (linked) parts.push(linked + ' confirmed by link'); if (typed) parts.push(typed + ' typed total' + (typed === 1 ? '' : 's') + ' confirmed by link');
-  return { n: items.length, scored, linked, typed, confirmers: nby, need: CONF.needBy, ok: nby >= CONF.needBy,
-    who: [...byRef.values()].sort((a, b) => b.n - a.n).map((e) => ({ name: e.name, n: e.n })),
+  const who = [...byRef.values()].sort((a, b) => b.n - a.n || b.recorded - a.recorded).map((e) => {
+    const days = e.since == null ? null : Math.floor((now - e.since) / DAY), flags = [], rec = Math.max(e.recorded, e.n);
+    if (days != null && days < 1) flags.push('joined today'); else if (days != null && days < 7) flags.push('joined this week'); else if (days != null && days < CONF.byAgeDays) flags.push('joined less than ' + CONF.byAgeDays + ' days ago');
+    if (e.acts != null && e.acts < CONF.byActs) flags.push('fewer than ' + CONF.byActs + ' rounds or matches of their own scored in games');
+    if (tot >= 4 && rec * 2 >= tot) flags.push('confirmed ' + rec + ' of ' + tot);
+    if (e.since == null) flags.push('no Oddable account on file');
+    return { name: e.name, n: e.n, recorded: rec, of: tot, joined: e.since == null ? null : chiDay(e.since), counts: e.n > 0, why: e.n > 0 ? '' : e.why || 'none of their confirmations count', flags };
+  });
+  const flags = [], dates = new Set((items.length ? items : recent).map((d) => d.date)), entDays = new Set(recent.map((m) => chiDay(m.ent)));
+  if ((items.length || recent.length) >= 2 && dates.size === 1) flags.push('all ' + U + 's on one date');
+  if (recent.length >= 2 && entDays.size === 1 && recent.some((m) => m.how === 'link')) flags.push('all logged on one day');
+  who.forEach((w) => w.flags.forEach((f) => { if (/^joined|^confirmed|^no Oddable/.test(f)) flags.push(w.name + ': ' + f); }));
+  return { n: items.length, scored, linked, typed, confirmers: nby, need: CONF.needBy, ok: nby >= CONF.needBy, full: CONF.fullRounds, who, flags, warn: flags.length ? 'Check before approving: ' + flags.join('; ') + '.' : '',
     why: nby >= CONF.needBy ? '' : 'needs ' + U + 's confirmed by ' + CONF.needBy + ' different players',
     text: items.length ? parts.join(', ') + ' · confirmed by ' + nby + ' player' + (nby === 1 ? '' : 's') : 'no confirmed ' + U + 's yet',
     rounds: items.map((d) => ({ date: d.date, what: d.what || '', score: d.score != null ? d.score : null, diff: d.diff != null ? d.diff : null, used: !!d.used, how: d.meta && d.meta.how === 'game' ? 'Scored in a game' : d.meta && d.meta.typed ? 'Typed total, confirmed by link' : 'Hole by hole, confirmed by link', typed: !!(d.meta && d.meta.typed), byName: (d.meta && d.meta.name) || '' })) };
 }
+// PROVISIONAL (review 4): a number built on fewer than 8 counting confirmed entries is never used on its own. -> { use, provisional, why }
+function moneyNumber(value, n, mk, unit, soFar) {
+  const enough = value != null && n >= CONF.minRounds && mk.ok, U = unit || 'round';
+  if (enough && n >= CONF.fullRounds) return { use: value, provisional: null, why: '' };
+  if (enough) return { use: null, provisional: value, why: 'provisional: built on ' + n + ' confirmed ' + U + 's (' + CONF.fullRounds + ' needed). The organizer approves it on the make-up screen' };
+  return { use: null, provisional: null, why: value == null || n < CONF.minRounds ? 'needs ' + CONF.minRounds + ' confirmed ' + U + 's (' + soFar + ' so far)' : mk.why };
+}
 // THE handicap calculation (one copy of the maths: ratings.js handicapSet). Used by /stats/me, handicapFor, the course view, guests and pairingProfile alike.
-function golfHcp(recs, meRef) { // own, complete 9- or 18-hole rounds with Course Rating + Slope
-  const own = recs.filter((r) => ownRound(r) && hasRating(r)), marks = confirmMarks(own, meRef);
+// ctx = confCtx(recs, meRef): who the confirmers are. Without it no confirmer can be checked, so nothing counts as confirmed (the safe direction).
+function golfHcp(recs, meRef, ctx) { // own, complete 9- or 18-hole rounds with Course Rating + Slope
+  const own = recs.filter((r) => ownRound(r) && hasRating(r)), marks = confirmMarks(own, meRef, ctx);
   const rounds = own
     .map((r) => { const x = r.extra, n = holesOf(r), pars = Array.isArray(x.pars) ? x.pars : null, mk0 = marks.get(r.id); return { id: r.id, date: r.date, at: x.at, holes: n, total: r.score, cr: crOf(x), slope: slopeOf(x), par: Number(x.par) || (pars && pars.length === n ? pars.reduce((a, b) => a + b, 0) : r.toPar != null ? r.score - r.toPar : n === 9 ? 36 : 72), strokes: x.strokes || x.holeScores, pars, si: x.si || x.hcpIdx, course: clean(x.course, 40), tees: clean(x.tees, 20), confirmed: mk0.confirmed, self: isSelfLogged(r), meta: { by: mk0.by, name: mk0.confirmed ? mk0.name : '', typed: mk0.typed, how: mk0.how, why: mk0.confirmed ? '' : mk0.why } }; });
   const h = R.handicapSet(rounds); h.label = HCP_LABEL; h.method = HCP_METHOD; h.official = false;
-  // The make-up of the money-game number + the diversity rule. Confirmer refs stay here: only names and counts go out.
-  h.makeup = makeupOf(h.confirmedDiffs.map((d) => ({ date: d.date, what: (d.course || 'Round') + (d.nHoles === 9 ? ' (9 holes)' : ''), score: d.total, diff: d.eff, used: d.used, meta: d.meta })), 'round');
-  h.moneyIndex = h.confirmedRounds >= 3 && h.confirmedIndex != null && h.makeup.ok ? h.confirmedIndex : null; // THE number for money games, flights and tournaments (null = the organizer sets it)
-  h.moneyWhy = h.moneyIndex != null ? '' : h.confirmedRounds < 3 || h.confirmedIndex == null ? 'needs 3 confirmed rounds (' + h.confirmedRounds + ' so far)' : h.makeup.why;
+  // The make-up of the money-game number + the diversity rule. Confirmer refs stay here: only names, join dates and counts go out.
+  h.makeup = makeupOf(h.confirmedDiffs.map((d) => ({ date: d.date, what: (d.course || 'Round') + (d.nHoles === 9 ? ' (9 holes)' : ''), score: d.total, diff: d.eff, used: d.used, meta: d.meta })), 'round', ctx, marks);
+  const mn = moneyNumber(h.confirmedIndex, h.makeup.n, h.makeup, 'round', h.confirmedRounds);
+  h.moneyIndex = mn.use; // THE number for money games, flights and tournaments (null = the organizer sets it, or approves the provisional one)
+  h.provisional = mn.provisional; h.moneyWhy = mn.why; h.makeup.provisional = mn.provisional != null;
   const strip = (d) => { if (d.meta) { d.meta = { name: d.meta.name, typed: d.meta.typed, how: d.meta.how, why: d.meta.why }; } return d; }; h.diffs.forEach(strip); delete h.confirmedDiffs;
-  h.conf = {}; marks.forEach((m, id) => { h.conf[id] = { confirmed: m.confirmed, name: m.confirmed ? m.name : '', typed: m.typed, how: m.how, why: m.confirmed ? '' : m.why }; }); // per round, for the notes on each record
+  h.conf = {}; marks.forEach((m, id) => { h.conf[id] = { confirmed: m.confirmed, name: m.confirmed || m.recBy ? m.name : '', typed: m.typed, how: m.how, why: m.confirmed ? '' : m.why }; }); // per round, for the notes on each record
   h.missing = recs.filter((r) => ownRound(r) && !hasRating(r)).length; // rounds without rating/slope cannot count (each one says so: hcpNote)
   h.nine = rounds.filter((r) => r.holes === 9).length; h.team = recs.filter((r) => r.kind === 'golf-round' && teamFmt(r)).length;
   const diffTitle = {}; recs.forEach((r) => { diffTitle[r.id] = r.title; }); h.diffs.forEach((d) => { d.title = diffTitle[d.id] || ''; });
@@ -309,15 +408,16 @@ const rateKey = (r) => { if (r.sport !== 'other') return r.sport; const x = r.ex
 const rateName = (key, recs) => { if (!/^other:/.test(key)) return SPORTN[key] || key; const r = (recs || []).find((x) => rateKey(x) === key), x = (r && r.extra) || {}; return clean(x.game || x.ttl, 30) || key.slice(6); };
 const normSport = (sport) => { const v = String(sport == null ? 'pickleball' : sport).toLowerCase().trim(); if (v === 'golf') throw bad(400, 'Golf has no rating: use handicapFor'); if (SPORTS.includes(v)) return v; const g = gameSlug(v.replace(/^other:/, '')); if (!g) throw bad(400, 'Unknown sport'); return 'other:' + g; };
 // THE rating calculation (ratings.js eloSet): the full Oddable rating plus the rating from confirmed games only (the one used for seeding).
-function eloAll(recs, meRef) {
+function eloAll(recs, meRef, ctx) {
   const by = {}; recs.filter(ELOSRC).forEach((r) => { const k = rateKey(r); (by[k] = by[k] || []).push(r); }); const o = {};
   Object.keys(by).forEach((k) => {
-    const marks = confirmMarks(by[k], meRef), list = by[k].map((r) => Object.assign({}, r, { confirmed: marks.get(r.id).confirmed, extra: Object.assign({}, r.extra, { confirmed: marks.get(r.id).confirmed }) }));
+    const marks = confirmMarks(by[k], meRef, ctx), list = by[k].map((r) => Object.assign({}, r, { confirmed: marks.get(r.id).confirmed, extra: Object.assign({}, r.extra, { confirmed: marks.get(r.id).confirmed }) }));
     const E = Object.assign(R.eloSet(list), { label: RATING_LABEL, key: k, name: rateName(k, by[k]), sport: by[k][0].sport }), cset = new Set((E.confirmedHistory || []).filter((h) => h.w > 0).map((h) => h.id));
     const counted = list.filter((r) => cset.has(r.id)).sort((a, c) => -order(a, c)).slice(0, CONF.win);
-    E.makeup = makeupOf(counted.map((r) => ({ date: r.date, what: clean(r.title, 60), used: true, meta: marks.get(r.id) })), 'game');
-    E.seedRating = E.confirmedGames && E.makeup.ok ? E.confirmedRating : null; E.seedWhy = E.seedRating != null ? '' : E.confirmedGames ? E.makeup.why : 'no confirmed games yet';
-    E.conf = {}; marks.forEach((m, id) => { E.conf[id] = { confirmed: m.confirmed, name: m.confirmed ? m.name : '', how: m.how, why: m.confirmed ? '' : m.why }; }); delete E.confirmedHistory;
+    E.makeup = makeupOf(counted.map((r) => ({ date: r.date, what: clean(r.title, 60), used: true, meta: marks.get(r.id) })), 'game', ctx, marks);
+    const mn = moneyNumber(E.confirmedGames ? E.confirmedRating : null, E.makeup.n, E.makeup, 'game', E.makeup.n); // review 4: under 8 counting games the rating is provisional
+    E.seedRating = mn.use; E.provisional = mn.provisional; E.seedWhy = mn.use != null ? '' : E.confirmedGames ? mn.why : 'no confirmed games yet'; E.makeup.provisional = mn.provisional != null;
+    E.conf = {}; marks.forEach((m, id) => { E.conf[id] = { confirmed: m.confirmed, name: m.confirmed || m.recBy ? m.name : '', how: m.how, why: m.confirmed ? '' : m.why }; }); delete E.confirmedHistory;
     o[k] = E;
   });
   return o;
@@ -489,11 +589,12 @@ function selfRecord0(b, id, date, G, notes, at, voice) {
     const putts = int(b.putts, 0, holes * 6, 'Putts: 0 to ' + holes * 6, true), fw = int(b.fw, 0, 18, 'Fairways hit: 0 to 18', true), fwOf = int(b.fwOf, 0, 18, 'Fairways: 0 to 18', true), gir = int(b.gir, 0, holes, 'Greens in regulation: 0 to ' + holes, true);
     if (fw != null && fwOf != null && fw > fwOf) throw bad(400, 'Fairways hit cannot be more than fairways');
     const format = ['individual', 'scramble', 'bestball'].includes(b.format) ? b.format : 'individual', team = format !== 'individual' ? clean(b.team, 30) : '', mates = format !== 'individual' ? (Array.isArray(b.mates) ? b.mates : []).map((x) => clean(x, 30)).filter(Boolean).slice(0, 5) : [];
+    const yards = int(b.yards, holes === 18 ? 1000 : 500, holes === 18 ? 9000 : 4500, 'Yards: ' + (holes === 18 ? '1,000 to 9,000' : '500 to 4,500'), true);
     const who = b.guest ? String(b.guest) : ''; if (who && !G[who]) throw bad(404, 'That guest player is not on your list');
     // PLAYED WITH (review 3): the people recorded as playing in this round, picked from the logger's own players list. Only one of THEM can confirm it.
     const withGuests = [...new Set((Array.isArray(b.withGuests) ? b.withGuests : []).map((x) => String(x || '')).filter(Boolean))].slice(0, 3); withGuests.forEach((x) => { if (!G[x]) throw bad(404, 'That player is not on your list'); if (x === who) throw bad(400, 'The player whose round this is cannot also be listed as playing with them'); });
     return { src: 'self', id, date, sport: 'golf', kind: 'golf-round', title: (format === 'scramble' ? 'Scramble · ' : format === 'bestball' ? 'Best ball · ' : '') + course + (tees ? ' · ' + tees + ' tees' : ''), result: null, score: total, toPar: total - par, verified: false,
-      extra: { type: 'golf', at, course, courseId: okCid(b.courseId) || undefined, tees, holes, par, pars, si, cr, slope, strokes, putts, fw, fwOf, gir, notes, format, team, mates, guest: who || undefined, withGuests: withGuests.length ? withGuests : undefined, withNames: withGuests.length ? withGuests.map((x) => G[x]) : undefined, voice } };
+      extra: { type: 'golf', at, course, courseId: okCid(b.courseId) || undefined, tees, holes, par, pars, si, cr, slope, yards: yards != null ? yards : undefined, strokes, putts, fw, fwOf, gir, notes, format, team, mates, guest: who || undefined, withGuests: withGuests.length ? withGuests : undefined, withNames: withGuests.length ? withGuests.map((x) => G[x]) : undefined, voice } };
   }
   if (b.type === 'pickleball') {
     const fmt = b.fmt === 'doubles' ? 'doubles' : b.fmt === 'singles' ? 'singles' : null; if (!fmt) throw bad(400, 'Singles or doubles?');
@@ -567,6 +668,29 @@ async function claimedRemove(e, id, claimed) {
 }
 function selfMutate(e, fn) { return rowMutate(selfKey(e), () => ({ items: [] }), (d) => { d.items = Array.isArray(d.items) ? d.items : []; return fn(d); }).then((out) => { CACHE.delete(e); return out; }); }
 
+// ---------- MY COURSES (review 4, H2; ONE store for My stats and the golf engine) ----------
+// The courses a player picked lately and their home course, kept on the SERVER in the player's own stats row: data.mc = { home: <id> | null, list: [course] }.
+// course = { id, name, city, state, tees, rating, slope, par, yards, holes (9 | 18), at, n }   id = the course id saved on a round as extra.courseId
+// (an OpenGolfAPI extId, or the golf engine's own course id); tees / rating / slope / par / yards = the tee picked last (rating and slope null = none on file).
+// Routes (POST, x-token):  /stats/mycourses {} -> { ok, home: course | null, recent: [course] (newest first, at most 8, the home course first) }
+//   /stats/mycourses/use { course }  /stats/mycourses/home { id | null }  /stats/mycourses/remove { id }   -> the same answer.
+// Server side (golf engine): stats.myCourses(userKey), stats.myCourseUse(userKey, course), stats.myCourseHome(userKey, id).
+const MCMAX = 8;
+function mcClean(c) {
+  const x = c && typeof c === 'object' ? c : {}, id = okCid(x.id || x.courseId || x.extId), name = clean(x.name || x.course, 60); if (!id || name.length < 2) throw bad(400, 'Pick a course first');
+  const t = x.tee && typeof x.tee === 'object' ? x.tee : x, num = (v, lo, hi) => { const n = v == null || v === '' ? NaN : Number(v); return Number.isFinite(n) && n >= lo && n <= hi ? n : null; };
+  const holes = Number(x.holes) === 9 || Number(t.holes) === 9 ? 9 : 18;
+  return { id, name, city: clean(x.city, 40), state: clean(x.state, 20), tees: clean(t.name != null && t !== x ? t.name : x.tees, 30), rating: num(t.rating != null ? t.rating : t.cr, 27.5, 85), slope: num(t.slope, 55, 155), par: num(t.par, 27, 80), yards: num(t.yards, 500, 9000), holes };
+}
+function mcOut(sd) { const mc = (sd && sd.mc) || {}, list = (Array.isArray(mc.list) ? mc.list : []).slice().sort((a, b) => N(b.at) - N(a.at)), home = list.find((c) => c.id === mc.home) || null; return { home, recent: (home ? [home] : []).concat(list.filter((c) => c !== home)).slice(0, MCMAX).map((c) => Object.assign({}, c, { home: !!home && c.id === home.id })) }; }
+async function myCourses(e) { const r = await selfRow(e); return Object.assign({ ok: true }, mcOut((r && r.data) || {})); }
+async function myCourseUse(e, course) { const c = mcClean(course), now = D.now();
+  return Object.assign({ ok: true }, await selfMutate(e, (d) => { const mc = (d.mc = d.mc && typeof d.mc === 'object' ? d.mc : { home: null, list: [] }); mc.list = Array.isArray(mc.list) ? mc.list : []; const old = mc.list.find((y) => y.id === c.id);
+    mc.list = mc.list.filter((y) => y.id !== c.id); mc.list.push(Object.assign(c, { at: now, n: N(old && old.n) + 1 })); mc.list.sort((a, b) => N(b.at) - N(a.at)); const keep = mc.list.filter((y) => y.id === mc.home).concat(mc.list.filter((y) => y.id !== mc.home).slice(0, MCMAX - 1)); mc.list = keep; return mcOut(d); })); }
+async function myCourseHome(e, id) { const cid = id == null || id === '' ? null : okCid(id); if (id != null && id !== '' && !cid) throw bad(400, 'Pick a course first');
+  return Object.assign({ ok: true }, await selfMutate(e, (d) => { const mc = (d.mc = d.mc && typeof d.mc === 'object' ? d.mc : { home: null, list: [] }); if (cid && !(mc.list || []).some((y) => y.id === cid)) throw bad(404, 'Use that course once first, then make it your home course'); mc.home = cid; return mcOut(d); })); }
+async function myCourseRemove(e, id) { const cid = okCid(id); return Object.assign({ ok: true }, await selfMutate(e, (d) => { const mc = d.mc || { home: null, list: [] }; mc.list = (mc.list || []).filter((y) => y.id !== cid); if (mc.home === cid) mc.home = null; d.mc = mc; return mcOut(d); })); }
+
 // ---------- share switch ("Show my lifetime stats to my groups", default OFF) ----------
 async function shareGet(mk) { const r = await D.S.dbGet(SHARE); return (r && r.data && r.data.users && r.data.users[mk]) || null; }
 async function shareSet(e, on) { const mk = mkOf(e); await rowMutate(SHARE, () => ({ users: {} }), (d) => { d.users = d.users || {}; if (on) d.users[mk] = { e, at: D.now() }; else delete d.users[mk]; return {}; }); return !!on; }
@@ -588,10 +712,13 @@ async function nameOf(e) {
 // never count as confirmed.
 async function acctSince(e, sd, now) {
   let t = now; const see = (v) => { const x = typeof v === 'number' ? v : Date.parse(v || ''); if (Number.isFinite(x) && x > 1.4e12 && x < t) t = x; };
-  try { const A = D.acct(); if (typeof A.since === 'function') see(await A.since(e)); } catch (er) {}
+  let stamp = null; const A = D.acct(); try { if (typeof A.since === 'function') { stamp = await A.since(e); see(stamp); } } catch (er) {}
   see(Number(sd && sd.since)); ((sd && sd.items) || []).forEach((it) => see(Number(it && it.extra && it.extra.at)));
   const sid = await sidOf(e).catch(() => null);
-  if (sid) { const row = await D.S.dbGet(sid).catch(() => null); if (row) { see(row.created_at); see(row.created); } } // table columns the database fills in; never row.data
+  if (sid) { const row = await D.S.dbGet(sid).catch(() => null); if (row) { see(row.created_at); see(row.created); see(Number(row.updated)); } } // table columns the database / this server fill in (`updated` = the server time of the last sync write: the account existed by then); never row.data
+  // Review 4, M4: an account with no sign-up stamp gets ONE now, from its earliest server-stamped record (set once, never moved), so it can log, confirm
+  // and be confirmed from that day on instead of from "today" each time it is looked at.
+  if (!stamp && typeof A.sinceSet === 'function' && !/^guest:/.test(String(e))) { try { const got = await A.sinceSet(e, t); if (Number(got) > 1.4e12 && Number(got) < t) t = Number(got); } catch (er) {} }
   return t;
 }
 
@@ -665,8 +792,8 @@ async function courseView(e, op, b, today) {
   const cs = await cshare(), members = Object.entries(((cs[cid] || {}).m) || {}).filter(([, m]) => m.on && m.e).slice(0, 400), via = String(b.via || '');
   const events = []; members.forEach(([, m]) => (m.via || []).forEach((v) => { if (!events.some((x) => x.id === v.id)) events.push(v); }));
   const pick = members.filter(([, m]) => !via || (m.via || []).some((v) => v.id === via)), mo = today.slice(0, 7) + '-01', cname = normCourse(course.name);
-  const rows = []; for (const [mk, m] of pick) { let v; try { v = await cached(m.e); } catch (er) { continue; } const golfRecs = v.recs.filter((r) => r.sport === 'golf'), h = golfHcp(golfRecs, oppKeyFor(mk)), t = hcpTrend(h, today);
-    rows.push({ pid: cpid(cid, mk), name: (await nameOf(m.e).catch(() => '')) || 'Player', index: h.index, confirmedIndex: h.moneyIndex, confirmedRounds: h.confirmedRounds, confirmedOf: h.confirmedOf, of: h.of, selfLogged: h.selfLogged, text: h.text, why: h.moneyWhy, makeup: { text: h.makeup.text, who: h.makeup.who, scored: h.makeup.scored, linked: h.makeup.linked, typed: h.makeup.typed, confirmers: h.makeup.confirmers }, trend: t.dir, change: t.change, rounds: h.rounds, need: h.need, roundsMonth: golfRecs.filter((r) => ownRound(r) && r.date >= mo).length, _h: h, _recs: golfRecs }); }
+  const rows = []; for (const [mk, m] of pick) { let v; try { v = await cached(m.e); } catch (er) { continue; } const golfRecs = v.recs.filter((r) => r.sport === 'golf'), h = golfHcp(golfRecs, oppKeyFor(mk), await confCtx(golfRecs, oppKeyFor(mk))), t = hcpTrend(h, today);
+    rows.push({ pid: cpid(cid, mk), name: (await nameOf(m.e).catch(() => '')) || 'Player', index: h.index, confirmedIndex: h.moneyIndex, provisional: h.provisional, confirmedRounds: h.confirmedRounds, confirmedOf: h.confirmedOf, of: h.of, selfLogged: h.selfLogged, text: h.text, why: h.moneyWhy, makeup: { n: h.makeup.n, text: h.makeup.text, who: h.makeup.who, flags: h.makeup.flags, warn: h.makeup.warn, provisional: h.makeup.provisional, scored: h.makeup.scored, linked: h.makeup.linked, typed: h.makeup.typed, confirmers: h.makeup.confirmers }, trend: t.dir, change: t.change, rounds: h.rounds, need: h.need, roundsMonth: golfRecs.filter((r) => ownRound(r) && r.date >= mo).length, _h: h, _recs: golfRecs }); }
   if (op === 'course/players') return { ok: true, course, events, via: via || null, label: HCP_LABEL, method: HCP_METHOD, players: rows.map(({ _h, _recs, ...x }) => x).sort((a, c) => (a.index == null) - (c.index == null) || (a.index || 0) - (c.index || 0) || a.name.localeCompare(c.name)) };
   if (op === 'course/player') { const r0 = rows.find((x) => x.pid === String(b.pid || '')); if (!r0) throw bad(404, 'Player not found'); return { ok: true, course, name: r0.name, readOnly: true, golfHcp: shareHcp(r0._h) }; }
   if (op === 'course/rounds') { const out = []; rows.forEach((x) => x._recs.filter((r) => r.kind === 'golf-round' && !(r.extra && r.extra.side) && ((r.extra && okCid(r.extra.courseId) === cid) || normCourse(r.extra && r.extra.course) === cname)).forEach((r) => { const d = x._h.diffs.find((y) => y.id === r.id); out.push({ date: r.date, pid: x.pid, name: x.name, score: r.score, toPar: r.toPar == null ? null : r.toPar, tees: clean(r.extra.tees, 20), holes: holesOf(r), team: teamFmt(r), diff: d ? d.diff : null, self: isSelfLogged(r), confirmed: !!(x._h.conf[r.id] && x._h.conf[r.id].confirmed), how: (() => { const c = x._h.conf[r.id] || {}, typed = c.typed ? 'typed total' : 'hole by hole'; return isSelfLogged(r) ? (c.confirmed ? 'Self-logged (' + typed + '), confirmed by ' + (c.name || 'a player who was there') : 'Self-logged (' + typed + '), not confirmed') : c.confirmed ? 'Scored in a game, card confirmed by ' + (c.name || 'another team') : 'Scored in the app, not confirmed'; })() }); }));
@@ -674,7 +801,7 @@ async function courseView(e, op, b, today) {
   if (op === 'course/prefill') { const cr = numOpt(b.cr, 55, 85, 'Course Rating: 55 to 85'), slope = int(b.slope, 55, 155, 'Slope Rating: 55 to 155'), par = int(b.par, 54, 80, 'Par: 54 to 80');
     if (cr == null) throw bad(400, 'Enter the Course Rating');
     return { ok: true, course, tee: { cr, slope, par }, note: 'Course handicaps come from confirmed rounds only. A player needs 3 confirmed rounds, confirmed by 3 different players; until then they have none: set a number for them.',
-      players: rows.map((x) => ({ pid: x.pid, name: x.name, index: x.index, confirmedIndex: x.confirmedIndex, confirmedRounds: x.confirmedRounds, text: x.text, why: x.why, makeup: x.makeup, needsSet: x.confirmedIndex == null, ch: x.confirmedIndex == null ? null : R.courseHandicap(x.confirmedIndex, slope, cr, par) })).sort((a, c) => (a.ch == null) - (c.ch == null) || (a.ch || 0) - (c.ch || 0)) }; }
+      players: rows.map((x) => ({ pid: x.pid, name: x.name, index: x.index, confirmedIndex: x.confirmedIndex, provisional: x.provisional, confirmedRounds: x.confirmedRounds, text: x.text, why: x.why, makeup: x.makeup, needsSet: x.confirmedIndex == null, ch: x.confirmedIndex == null ? null : R.courseHandicap(x.confirmedIndex, slope, cr, par) })).sort((a, c) => (a.ch == null) - (c.ch == null) || (a.ch || 0) - (c.ch || 0)) }; }
   throw bad(404, 'not found');
 }
 // Exported for the golf engine's director screens: the consenting members of one of the director's courses, each with the Oddable index, the CONFIRMED
@@ -786,14 +913,14 @@ const evOver = (ev, userKey, field) => { const s = ev && ev.set && ev.set[pkeyOf
 //   A NULL `use` IS NEVER 0: ratings.strokesOnHole / courseHandicap throw on it. The engine must stop and ask for a number.
 const meRefOf = (userKey) => (/^guest:/.test(String(userKey || '')) ? '' : oppKeyFor(mkOf(userKey)));
 async function handicapFor(userKey, opts) {
-  const h = golfHcp((await recsOf(userKey)).filter((r) => r.sport === 'golf'), meRefOf(userKey)), o = opts || {}, ev = o.eventId ? await evRow(o.eventId) : null, s = evOver(ev, userKey, 'hcp');
+  const golfRecs = (await recsOf(userKey)).filter((r) => r.sport === 'golf'), h = golfHcp(golfRecs, meRefOf(userKey), await confCtx(golfRecs, meRefOf(userKey))), o = opts || {}, ev = o.eventId ? await evRow(o.eventId) : null, s = evOver(ev, userKey, 'hcp');
   const oddable = { index: h.index, rounds: h.rounds, need: h.need, selfLogged: h.selfLogged, confirmedOf: h.confirmedOf, of: h.of, text: h.text, cap: h.cap, label: HCP_LABEL, method: HCP_METHOD };
   const typed = o.typed != null && o.typed !== '' && Number.isFinite(Number(o.typed)) && Number(o.typed) >= -10 && Number(o.typed) <= 54 ? r1(Number(o.typed)) : null, conf = h.moneyIndex;
-  let use = null, setBy = null; if (s) { use = s.hcp; setBy = 'tournament'; } else if (o.casual === true) use = h.index; else if (conf != null) use = conf; else if (typed != null) { use = typed; setBy = 'organizer'; }
+  const prov = h.provisional; let use = null, setBy = null, approved = false; if (s) { use = s.hcp; setBy = 'tournament'; } else if (o.casual === true) use = h.index; else if (conf != null) use = conf; else if (typed != null) { use = typed; setBy = 'organizer'; } else if (o.approved === true && prov != null) { use = prov; setBy = 'organizer'; approved = true; } // review 4: a provisional number plays only after the organizer approved it on the make-up screen
   const needsSet = use == null && o.casual !== true, why = conf == null ? h.moneyWhy : '';
-  return { oddable, confirmedIndex: conf, rounds: h.rounds, confirmedRounds: h.confirmedRounds, event: s ? s.hcp : null, setBy, use, needsSet, why: why || undefined, makeup: h.makeup,
-    ask: needsSet ? 'No handicap for money games yet: ' + why + '. The organizer or tournament director sets a handicap for this game.' : undefined,
-    text: h.text, label: HCP_LABEL, method: HCP_METHOD, reason: s ? s.reason : undefined, at: s ? s.at : undefined, locked: ev ? evLocked(ev) : undefined };
+  return { oddable, confirmedIndex: conf, provisional: prov != null ? prov : undefined, approved: approved || undefined, rounds: h.rounds, confirmedRounds: h.confirmedRounds, event: s ? s.hcp : null, setBy, use, needsSet, why: why || undefined, makeup: h.makeup,
+    ask: needsSet ? (prov != null ? 'Provisional handicap ' + R.fmtIdx(prov) + ': ' + why.replace(/^provisional: /, '') + ', or sets another number.' : 'No handicap for money games yet: ' + why + '. The organizer or tournament director sets a handicap for this game.') : undefined,
+    text: h.text, label: HCP_LABEL, method: HCP_METHOD, reason: s ? s.reason : use == null && why ? why : undefined, at: s ? s.at : undefined, locked: ev ? evLocked(ev) : undefined };
 }
 // ratingFor(userKey, sport = 'pickleball', {eventId, casual}) -> { sport, oddable: {rating, matches, text, label}, confirmedRating, confirmedGames, event, setBy, use, start, text }
 //   oddable.rating = Elo over every match played or logged (null = none yet). confirmedRating = Elo over confirmed games only.
@@ -804,11 +931,12 @@ async function handicapFor(userKey, opts) {
 // least 3 different accounts (the manager rule); otherwise use = null, needsSet and start are true and `why` says so. `seed` is always a number to
 // seed on (use, else the 1500 start) for an engine that has no "director sets it" step. (3) makeup as in handicapFor.
 async function ratingFor(userKey, sport, opts) {
-  const sp = normSport(sport), E = eloAll(await recsOf(userKey), meRefOf(userKey))[sp], o = opts || {}, ev = o.eventId ? await evRow(o.eventId) : null, s = evOver(ev, userKey, 'rating');
+  const sp = normSport(sport), recsAll = await recsOf(userKey), E = eloAll(recsAll, meRefOf(userKey), await confCtx(recsAll.filter(ELOSRC), meRefOf(userKey)))[sp], o = opts || {}, ev = o.eventId ? await evRow(o.eventId) : null, s = evOver(ev, userKey, 'rating');
   const oddable = { rating: E ? E.rating : null, matches: E ? E.matches : 0, text: E ? E.text : 'No games yet', label: RATING_LABEL }, cg = E ? E.confirmedGames : 0, cr = E ? E.seedRating : null, START = R.ELO.start;
-  const use = s ? s.rating : o.casual === true ? (E ? E.rating : START) : cr, needsSet = use == null, why = !s && o.casual !== true && cr == null ? (E ? E.seedWhy : 'no confirmed games yet') : '';
-  return { sport: sp, name: E ? E.name : rateName(sp), oddable, confirmedRating: cr, confirmedGames: cg, event: s ? s.rating : null, setBy: s ? 'tournament' : null, use, seed: use != null ? use : START, needsSet, why: why || undefined, makeup: E ? E.makeup : makeupOf([], 'game'),
-    start: !s && (o.casual === true ? !E : cr == null), text: oddable.text, label: RATING_LABEL, reason: s ? s.reason : undefined, at: s ? s.at : undefined, locked: ev ? evLocked(ev) : undefined };
+  const prov = E && E.provisional != null ? E.provisional : null, approved = !s && o.casual !== true && cr == null && o.approved === true && prov != null; // review 4: provisional under 8 counting games
+  const use = s ? s.rating : o.casual === true ? (E ? E.rating : START) : approved ? prov : cr, needsSet = use == null, why = !s && o.casual !== true && cr == null ? (E ? E.seedWhy : 'no confirmed games yet') : '';
+  return { sport: sp, name: E ? E.name : rateName(sp), oddable, confirmedRating: cr, provisional: prov != null ? prov : undefined, approved: approved || undefined, confirmedGames: cg, event: s ? s.rating : null, setBy: s ? 'tournament' : approved ? 'organizer' : null, use, seed: use != null ? use : START, needsSet, why: why || undefined, makeup: E ? E.makeup : makeupOf([], 'game'),
+    start: !s && (o.casual === true ? !E : use == null), text: oddable.text, label: RATING_LABEL, reason: s ? s.reason : use == null && why ? why : undefined, at: s ? s.at : undefined, locked: ev ? evLocked(ev) : undefined };
 }
 // Course Handicap off THE handicap (tournament value when set) for one tee: strokes / net scores / flights.
 async function courseHandicapFor(userKey, tee, opts) { const h = await handicapFor(userKey, opts), t = tee || {}; return Object.assign(h, { courseHandicap: h.use == null ? null : R.courseHandicap(h.use, Number(t.slope), Number(t.cr != null ? t.cr : t.rating), Number(t.par)) }); } // courseHandicap null = no handicap yet (needsSet): never play it as 0
@@ -839,7 +967,7 @@ async function markEvents(userKey, recs) {
   const found = {}; let n = 0; for (const id of ids) { if (++n > 120) break; const ev = await evRow(id); if (!ev) continue; const s = ev.set && ev.set[pk]; if (s) found[id] = { title: clean(ev.title, 60), sport: ev.sport, hcp: s.hcp != null ? s.hcp : null, rating: s.rating != null ? s.rating : null, reason: s.reason || '', at: s.at, locked: evLocked(ev), lockAt: ev.lockAt || null,
     log: logMine(ev, pk).slice(-10).map((l) => ({ at: l.at, by: l.by, field: l.field, old: l.old, new: l.new, oddable: l.oddable, reason: l.reason })) }; }
   if (!Object.keys(found).length) return { recs, events: [] };
-  const HH = golfHcp(recs.filter((r) => r.sport === 'golf'), meRefOf(userKey)), H = HH.index, E = eloAll(recs, meRefOf(userKey)), EK = (r) => E[rateKey(r)] || E[r.sport];
+  const ctx = await confCtx(recs, meRefOf(userKey)), HH = golfHcp(recs.filter((r) => r.sport === 'golf'), meRefOf(userKey), ctx), H = HH.index, E = eloAll(recs, meRefOf(userKey), ctx), EK = (r) => E[rateKey(r)] || E[r.sport];
   const out = recs.map((r) => { const x = r.extra || {}, id = [x.eventId, r.contestId, String(r.id).split(':')[0]].find((v) => found[v]); if (!id) return r; const f = found[id];
     return Object.assign({}, r, { extra: Object.assign({}, x, { setBy: 'tournament', eventHcp: f.hcp, eventRating: f.rating, oddableHcp: H, oddableRating: EK(r) ? EK(r).rating : null }) }); });
   return { recs: out, events: Object.keys(found).map((id) => Object.assign({ eventId: id, oddableHcp: H, oddableText: HH.text, oddableRating: found[id].rating != null && E[found[id].sport] ? E[found[id].sport].rating : null }, found[id])) };
@@ -880,12 +1008,12 @@ function limited(key, n, ms) { const t = D.now(), a = (RL.get(key) || []).filter
 // newest-first sort is for the lists only.
 const MAXREC = 3000, PAGE = 100; // /stats/me carries the newest 3,000 records; lists show 100 at a time ("Showing 100 of N", Show more) and page through /stats/list beyond that
 async function meData(e, now, today) {
-  const v = await cached(e), mev = await markEvents(e, v.recs).catch(() => ({ recs: v.recs, events: [] })), me = meRefOf(e), H = golfHcp(mev.recs, me), E = eloAll(mev.recs, me);
+  const v = await cached(e), mev = await markEvents(e, v.recs).catch(() => ({ recs: v.recs, events: [] })), me = meRefOf(e), ctx = await confCtx(mev.recs, me, now), H = golfHcp(mev.recs, me, ctx), E = eloAll(mev.recs, me, ctx);
   const srow = await selfRow(e).catch(() => null), sd = (srow && srow.data) || {}, edits = {};
   const recs = mev.recs.map((r) => { const x = Object.assign({}, r.extra), note = hcpNote(r, H);
     if (note) x.hcpNote = note;
     if (r.kind === 'golf-round' || ELOSRC(r)) { const cm = r.kind === 'golf-round' ? H.conf[r.id] : ((E[rateKey(r)] || {}).conf || {})[r.id], one = cm || (() => { const c = confInfo(r, me); return { confirmed: c.ok, name: c.name, how: c.how, why: c.why }; })();
-      x.confirmed = !!one.confirmed; if (one.confirmed) { x.confirmedHow = one.how; x.confirmedName = one.name; } else if (one.why) x.confirmWhy = one.why; if (isSelfLogged(r)) x.selfLogged = true; }
+      x.confirmed = !!one.confirmed; if (one.confirmed) { x.confirmedHow = one.how; x.confirmedName = one.name; } else { if (one.why) x.confirmWhy = one.why; if (/^Recorded, not counted/.test(one.why || '')) x.confirmRecorded = one.name || 'Another player'; } if (isSelfLogged(r)) x.selfLogged = true; }
     if (ELOSRC(r)) x.rateKey = rateKey(r);
     if (r.src === 'self' && !x.claimed) { x.locked = now - N(x.ent || x.at) > LOCKMS; const h = (sd.edits || {})[r.id]; if (h && h.length) edits[r.id] = h.length > 10 ? [h[0]].concat(h.slice(-9)) : h; // the ORIGINAL is always shown, then the latest changes
       if (canConfirm(r)) { const lk = linkState(r, sd, now); x.canLink = lk.ok; if (!lk.ok) x.linkWhy = lk.why; else if (lk.live) x.linkLive = true; } }
@@ -906,7 +1034,7 @@ async function handle(req, res) {
       send(res, 200, await ownerView(today)); return true;
     }
     const e = D.acct().who(req); if (!e) throw bad(401, 'Sign in to see your stats');
-    const mk = mkOf(e);
+    const mk = mkOf(e); await refNote(oppKeyFor(mk), e); // the confirmer directory (review 4): who an 'a:' reference is
     if (op === 'me' || op === 'list') {
       if (limited('r|' + mk, op === 'me' ? 120 : 240, 600e3)) throw bad(429, 'Too many tries. Wait a few minutes.');
       const M = await meData(e, now, today);
@@ -917,12 +1045,16 @@ async function handle(req, res) {
       }
       const P = periods(M.recs, today), sh = await shareGet(mk).catch(() => null), sd = M.sd, since = await acctSince(e, sd, now);
       send(res, 200, { today, from: P.from, periods: P.periods, records: M.recs.slice(0, MAXREC), total: M.recs.length, more: Math.max(0, M.recs.length - MAXREC), page: PAGE, sources: sources(), errors: M.errors, share: !!sh, owner: !!D.acct().ownerOk(req),
-        golfHcp: M.H, ratings: M.E, guests: (sd.guests || []).length, tournaments: M.events, edits: M.edits, gone: (sd.gone || []).slice(-50).reverse().map((g) => ({ at: g.at, was: g.was })), lockHours: LOCKMS / 36e5, since: chiDay(since), logFrom: dayAdd(chiDay(since), -CONF.backDays), confirmRules: { linkDays: CONF.linkDays, needBy: CONF.needBy, perBy: CONF.perBy, gamePerBy: CONF.gamePerBy, typedMax: CONF.typedMax },
+        golfHcp: M.H, ratings: M.E, guests: (sd.guests || []).length, tournaments: M.events, edits: M.edits, gone: (sd.gone || []).slice(-50).reverse().map((g) => ({ at: g.at, was: g.was })), lockHours: LOCKMS / 36e5, since: chiDay(since), logFrom: dayAdd(chiDay(since), -CONF.backDays), confirmRules: { linkDays: CONF.linkDays, needBy: CONF.needBy, perBy: CONF.perBy, gamePerBy: CONF.gamePerBy, allPerBy: CONF.allPerBy, typedMax: CONF.typedMax, fullRounds: CONF.fullRounds, byAgeDays: CONF.byAgeDays, byActs: CONF.byActs, perDay: CONF.perDay, linkOpenDays: CONF.linkOpen / DAY }, myCourses: mcOut(sd),
         courseView: (await ownedCourses(e).catch(() => [])).length > 0 }); return true;
     }
     if (op === 'self/save' || op === 'self/delete' || op === 'share' || op.startsWith('guest/') || op.startsWith('confirm/')) {
       if (limited('w|' + mk, 60, 600e3) || limited('w|i|' + ip, 120, 600e3)) throw bad(429, 'Too many changes. Wait a few minutes.');
       send(res, 200, await writeOp(op, b, e, mk, now, ip)); return true;
+    }
+    if (op === 'mycourses' || op.startsWith('mycourses/')) { // MY COURSES (review 4, H2): recent courses + the home course, one store for stats and golf
+      if (limited((op === 'mycourses' ? 'r|' : 'w|') + mk, op === 'mycourses' ? 120 : 60, 600e3)) throw bad(429, 'Too many tries. Wait a few minutes.');
+      send(res, 200, op === 'mycourses' ? await myCourses(e) : op === 'mycourses/use' ? await myCourseUse(e, b.course) : op === 'mycourses/home' ? await myCourseHome(e, b.id) : op === 'mycourses/remove' ? await myCourseRemove(e, b.id) : (() => { throw bad(404, 'not found'); })()); return true;
     }
     if (op === 'courses' || op === 'coursedetail') { // OpenGolfAPI course search for Post a round and the course handicap calculator (server-side, cached)
       if (limited('cs|' + mk, 60, 600e3)) throw bad(429, 'Too many searches. Wait a few minutes.');
@@ -1028,7 +1160,7 @@ const CFM = (cid) => 'lock:cfm:' + cid, HOST = () => String(process.env.ODDABLE_
 const snapOf = (r) => { const x = r.extra || {}; return { date: r.date, title: r.title, result: r.result, score: r.score != null ? r.score : null, toPar: r.toPar != null ? r.toPar : null, cr: x.cr != null ? x.cr : null, slope: x.slope != null ? x.slope : null, par: x.par != null ? x.par : null, holes: x.holes != null ? x.holes : null, scoreText: x.scoreText || '', opponent: r.opponent || '', confirmedBy: x.confirmedBy ? x.confirmedBy.name : null }; };
 const canConfirm = (it) => { const x = (it && it.extra) || {}; return !!it && it.src !== 'bets' && !x.guest && !x.from && !x.loggedBy && !x.claimed && !x.solo && (it.kind === 'golf-round' || (it.kind === 'match' && !!it.result)); };
 const oppKeyFor = (mk) => 'a:' + sha('oddable-opp|' + mk).slice(0, 12);
-const acctRef = (userKey) => oppKeyFor(mkOf(userKey)); // exported: how an engine names the confirming account in extra.card.by (a one-way reference, never the account id)
+const acctRef = (userKey) => { const ref = oppKeyFor(mkOf(userKey)); refNote(ref, userKey); return ref; }; // files the reference in the confirmer directory (review 4), so stats can check the account's age and activity. Exported: how an engine names the confirming account in extra.card.by (a one-way reference, never the account id)
 const slotsOf = (it) => { const x = (it && it.extra) || {}, out = []; (x.withGuests || []).forEach((g) => out.push({ gid: g, as: 'with' })); if (x.partnerGuest) out.push({ gid: x.partnerGuest, as: 'partner' }); (x.oppGuest || []).forEach((g) => { if (g) out.push({ gid: g, as: 'opp' }); }); return out.filter((o) => /^[a-z0-9]{6,24}$/.test(String(o.gid))).slice(0, 6); };
 const daysApart = (a, b) => Math.round((Date.parse(a + 'T12:00:00Z') - Date.parse(b + 'T12:00:00Z')) / DAY);
 // Can this entry get a confirm link at all? -> { ok, why, live }
@@ -1038,6 +1170,7 @@ function linkState(it, sd, now) {
   if (x.confirmedBy) return { ok: false, why: 'Already confirmed' };
   if (x.preAcct) return { ok: false, why: 'Dated before you joined Oddable: it counts as played and cannot be confirmed' };
   if (daysApart(chiDay(N(x.at) || now), it.date) > CONF.linkDays) return { ok: false, why: 'It was logged more than ' + CONF.linkDays + ' days after it was played, so it cannot be confirmed' };
+  if (now - (N(x.at) || now) > CONF.linkOpen) return { ok: false, why: 'It was logged more than ' + CONF.linkOpen / DAY + ' days ago, so it can no longer be confirmed' }; // review 4, L1: no link re-made months later
   if (!slotsOf(it).length) return { ok: false, why: 'Nobody is recorded as playing in it. Edit it and pick who you played with from your players list: only a player recorded on the entry can confirm it' };
   const c = sd && sd.cf && sd.cf[it.id]; return { ok: true, why: '', live: !!(c && c.rev === N(x.rev) && now - N(c.at) < CONF.linkLife) };
 }
@@ -1082,12 +1215,16 @@ async function confirmOp(op, b, e, mk, now, ip, sd) {
   if (!cb && now - N(c.at) >= CONF.linkLife) throw bad(410, OLD); // 7 days
   const loggedBy = (await nameOf(c.e)) || 'Another player', mine = c.mk === mk, role = mine ? null : await playedAs(it, c.mk, mk);
   const NOTPLAYER = 'Only a player recorded on this entry can confirm it. Ask ' + loggedBy + ' to pick you as a player on the entry (you claim your player link from them once), then to send a new link.';
-  if (op === 'confirm/get') return { ok: true, mine, confirmed: !!cb, byMe, loggedBy, canConfirm: !cb && !mine && !!role, as: role, why: cb || mine || role ? '' : NOTPLAYER, expires: N(c.at) + CONF.linkLife,
+  const NOTPLAYER0 = 'Only a player recorded on this entry can confirm it. Ask the person who sent you the link to pick you as a player on the entry (you claim your player link from them once), then to send a new link.';
+  if (op === 'confirm/get' && !mine && !role && !byMe) return { ok: true, mine: false, confirmed: !!cb, byMe: false, loggedBy: '', canConfirm: false, as: null, why: NOTPLAYER0, entry: null }; // review 4, L2: no name, course, date or score for someone who did not play
+  if (op === 'confirm/get') return { ok: true, mine, confirmed: !!cb, byMe, loggedBy, canConfirm: !cb && !mine && !!role, as: role, why: cb || mine || role ? '' : NOTPLAYER, expires: N(c.at) + CONF.linkLife, shown: 'Your name and the date you joined Oddable are shown next to this ' + (it.kind === 'golf-round' ? 'round' : 'match') + ' to ' + loggedBy + ', to organizers of money games and to course directors.',
     entry: { kind: it.kind, sport: it.sport, title: it.title, date: it.date, result: it.result, score: it.score != null ? it.score : null, toPar: it.toPar != null ? it.toPar : null, scoreText: x.scoreText || '', course: x.course || '', tees: x.tees || '', fmt: x.fmt || '', holes: x.holes || null } };
   if (mine) throw bad(400, 'You cannot confirm your own entry. Send the link to someone who played with you.');
   if (cb) { if (byMe) return { ok: true, already: true }; throw bad(409, 'Someone already confirmed this entry'); }
-  if (!role) throw bad(403, NOTPLAYER);
+  if (!role) throw bad(403, NOTPLAYER0);
   if (daysApart(chiDay(N(x.at) || now), it.date) > CONF.linkDays || x.preAcct) throw bad(409, 'This entry cannot be confirmed: it was logged more than ' + CONF.linkDays + ' days after it was played.');
+  if (now - (N(x.at) || now) > CONF.linkOpen) throw bad(410, 'This entry was logged more than ' + CONF.linkOpen / DAY + ' days ago and can no longer be confirmed.');
+  await refNote(myRef, e); await refNote(oppKeyFor(c.mk), c.e); // the confirmer directory: both accounts, so each one's age and activity can be checked
   const myName = (await nameOf(e)) || 'Another player', match = it.kind === 'match', singles = match && x.fmt !== 'doubles' && !(Array.isArray(x.opp) && x.opp.length > 1), mid = ('cm' + c.rid).slice(0, 80);
   const sp = match ? rateKey(it) : null, mineUse = match ? (await ratingFor(e, sp)).seed : null, theirUse = match ? (await ratingFor(c.e, sp)).seed : null; // seeding ratings BEFORE this match counts
   // THE single use: one queued write on the ENTRY's row. It goes through only while the entry is unchanged, unconfirmed and this is still its live link.
@@ -1153,8 +1290,8 @@ async function ownerView(today) {
   OWN = { at: D.now(), v: { today, from: Object.fromEntries(PERIODS.map((p) => [p, periodFrom(p, today)])), users } }; return OWN.v;
 }
 
-module.exports = { handle, register, statsFor, handicapFor, ratingFor, courseHandicapFor, pairingProfile, courseMembers, isConfirmed, confInfo, confirmMarks, acctRef, CONF, EVT, rateKey, acctSince, moneyOf, playState, nameOf, eventSetup, eventOverride, eventLog, HCP_LABEL, HCP_METHOD, RATING_LABEL, guestAdd, guestRemove, consentOnJoin, coursePrefill, ownedCourses, golfHcp, eloAll, validate, tot, tree, periods, periodFrom, publicTree, betRecords, selfRecord, chiDay, mkOf, selfKey, SRC, SPORTS, KINDS, _deps: D,
+module.exports = { handle, register, statsFor, handicapFor, ratingFor, courseHandicapFor, pairingProfile, courseMembers, isConfirmed, confInfo, confirmMarks, confCtx, makeupOf, linkRef, acctRef, myCourses, myCourseUse, myCourseHome, CONF, EVT, rateKey, acctSince, moneyOf, playState, nameOf, eventSetup, eventOverride, eventLog, HCP_LABEL, HCP_METHOD, RATING_LABEL, guestAdd, guestRemove, consentOnJoin, coursePrefill, ownedCourses, golfHcp, eloAll, validate, tot, tree, periods, periodFrom, publicTree, betRecords, selfRecord, chiDay, mkOf, selfKey, SRC, SPORTS, KINDS, _deps: D,
   // Tests: _isolate() makes this module ignore whatever other engines sit next to it in a merged build (auto providers off, Enterprise / course-owner
   // stand-ins on), so the stats suite checks stats alone and runs the same on the stats branch and on the merged preview.
   _isolate: () => { Object.keys(MODS).forEach((k) => { AUTO[k] = null; }); D.limits = () => LIMSTAND; D.golf = () => GOLFSTAND; },
-  _reset: () => { RL.clear(); CACHE.clear(); QUEUE.clear(); IDS.map = null; NMC = { at: 0, v: {} }; OWN = { at: 0, v: null }; } };
+  _reset: () => { RL.clear(); CACHE.clear(); QUEUE.clear(); REFS.clear(); BYC.clear(); CREFC = { at: 0, v: {} }; IDS.map = null; NMC = { at: 0, v: {} }; OWN = { at: 0, v: null }; } };

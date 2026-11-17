@@ -1,5 +1,5 @@
 # Phone / desktop screenshots + layout checks for My stats. Needs: node scripts/stats-shots/harness.js running (ports 8896 / 8897).
-# Usage: python3 scripts/stats-shots/play.py [out dir] [themes] [widths]     defaults: /tmp/stats-shots3  navy,violet,violet-dark  360,430,1280
+# Usage: python3 scripts/stats-shots/play.py [out dir] [themes] [widths]     defaults: /tmp/stats-shots4  navy,violet,violet-dark  360,430,1280
 # Runs the FULL app (pics/index.html with gate.js, sync.js, groups.js, dash.js, voicelog.js, stats.js loaded by the page itself, never ?mirror=1), once per
 # theme and width, into <out>/<theme>_<width>/. Every screenshot is checked: no sideways scroll, every tap target at least 44 x 44 px (hole-grid inputs
 # INCLUDED), nothing wider than the screen, the floating My Bets banner covered by the overlay, no "USGA / GHIN / unofficial / DUPR" wording, no
@@ -9,7 +9,7 @@
 # course list paging + sample list, owner dashboard "not known".
 import asyncio, json, sys, os
 from playwright.async_api import async_playwright
-ROOT = (sys.argv[1] if len(sys.argv) > 1 else '/tmp/stats-shots3').rstrip('/') + '/'
+ROOT = (sys.argv[1] if len(sys.argv) > 1 else '/tmp/stats-shots4').rstrip('/') + '/'
 THEMES = (sys.argv[2] if len(sys.argv) > 2 else 'navy,violet,violet-dark').split(',')
 WIDTHS = [int(x) for x in (sys.argv[3] if len(sys.argv) > 3 else '360,430,1280').split(',')]
 API, WEB = 'http://127.0.0.1:8896', 'http://localhost:8897'
@@ -80,8 +80,9 @@ async def run(b, theme, W):
     await pg.click('#ostat .srowc[data-a=sport] >> text=Golf'); await shot('11_sport_golf'); await back()
     await pg.click('#ostat .srowc[data-a=sport] >> text=NFL'); await shot('12_sport_nfl'); await back()
     # ---- handicap: the money-game number and what it is made of
-    await pg.click('#ostat [data-a=hcp]'); await pg.wait_for_selector('#ostat .sbigc'); await pg.click('#ostat details.smore summary >> nth=0'); await shot('13_my_handicap_make_up'); t = await txt()
-    ok('My handicap: money-game index with its make-up (who confirmed, scored / typed), and the 9-hole estimate line', 'In money games, flights and tournaments' in t and 'Made of:' in t and 'scored in games' in t and 'Confirmed by DanTheDriver' in t and 'Scored in a game' in t and 'an estimate of the official method' in t and 'sees this make-up before approving' in t, t[:900])
+    await pg.click('#ostat [data-a=hcp]'); await pg.wait_for_selector('#ostat .sbigc'); await pg.evaluate("document.querySelector('#ostat details.smore').open = true"); await shot('13_my_handicap_make_up'); t = await txt()
+    ok('My handicap: money-game index with its make-up (who confirmed, scored / typed), and the 9-hole estimate line', 'In money games, flights and tournaments' in t and 'Made of:' in t and 'scored in games' in t and 'DanTheDriver' in t and 'Joined Oddable' in t and 'Scored in a game' in t and 'an estimate of the official method' in t and 'sees this make-up before approving' in t, t[:900])
+    ok('review 4: the make-up lists each confirmer with the day they joined and how many they confirmed, flags the one who joined today and says his confirmation does not count', 'NewGuy27' in t and 'joined today' in t and 'Does not count: confirmer too new' in t and 'Check before approving' in t and '2 of 10' in t and 'rounds counting' in t, t[300:1500])
     ok('every round says how it was confirmed, or why not', 'scored in a game, confirmed by' in t and 'self-logged · not confirmed yet' in t and 'Member-Guest (next week)' in t, t[900:1900])
     ok('chart has no tap strips; the rounds list under it is the way in', await pg.evaluate("document.querySelectorAll('#ostat svg [data-a]').length === 0 && document.querySelectorAll('#ostat .strow[data-a=round]').length >= 10"))
     await pg.click('#ostat .sinfo'); await shot('14_handicap_info'); t = await pg.inner_text('#ostat .sinfobox'); ok('the info sheet states the confirmed rule, the typed-total cap and the 9-hole estimate', '3 different players' in t and 'estimate of the official method' in t and 'the total itself is capped' in t, t[-700:]); await pg.click('#ostat .sinfobox .spri')
@@ -91,8 +92,13 @@ async def run(b, theme, W):
     await pg.click('#ostat [data-a=post]'); await pg.wait_for_selector('#sf_course'); await pg.fill('#sf_course', 'Cedar'); await pg.click('#ostat [data-a=csearch]'); await pg.wait_for_selector('#ostat [data-a=cpick]'); await shot('17a_course_list_first_page'); t = await txt()
     ok('course search: 25 results and "Show more courses (25 of 40)"', await pg.locator('#ostat [data-a=cpick]').count() == 25 and 'Show more courses (25 of 40)' in t, t[:300])
     await pg.click('#ostat [data-a=cmore]'); await pg.wait_for_function("document.querySelectorAll('#ostat [data-a=cpick]').length === 40"); ok('Show more loads the rest into the same list', await pg.locator('#ostat [data-a=cmore]').count() == 0)
-    await pg.click('#ostat [data-a=cpick] >> nth=0'); await pg.wait_for_selector('#ostat [data-a=ctee]'); await shot('17b_course_tees'); t = await txt(); ok('tees with rating, slope and yards', 'Rating 71.3' in t and 'Slope 125' in t and '6612 yds' in t, t[:400])
-    await pg.click('#ostat [data-a=ctee] >> nth=0'); await pg.wait_for_timeout(300); ok('picking a tee fills Rating / Slope / par and keeps the form', await pg.input_value('#sf_cr') == '71.3' and await pg.input_value('#sf_slope') == '125' and 'Cedar Ridge 1' in await pg.input_value('#sf_course'))
+    # review 4, H2: a course opens its own screen: tees as big buttons, "Use this course" and "Back to results" always at the bottom (full flow checks: course.py)
+    use_vis = "(()=>{const e=document.querySelector('#ostat [data-a=cuse]'),r=e.getBoundingClientRect(),t=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return r.bottom<=innerHeight&&r.top>=0&&(t===e||e.contains(t))&&document.getElementById('ostat').scrollTop===0})()"
+    await pg.click('#ostat [data-a=cpick] >> nth=2'); await pg.wait_for_selector('#ostat .sbar [data-a=cuse]:not([disabled])'); await shot('17b3_course_no_tee_data'); t = await txt()
+    ok('a course with NO tee data is not a dead end: it says so, takes optional Rating / Slope / yards, and "Use this course" is on screen', 'No ratings on file for this course' in t and 'counts toward your handicap only when' in t and await pg.locator('#sp_yards').count() == 1 and await pg.evaluate(use_vis) and 'Back to results' in t, t[:400]); await pg.click('#ostat [data-a=cback]'); await pg.wait_for_selector('#sf_course')
+    await pg.click('#ostat [data-a=cpick] >> nth=1'); await pg.wait_for_selector('#ostat .sbar [data-a=cuse]:not([disabled])'); await shot('17b2_course_one_tee'); ok('a course with ONE tee has it picked already', await pg.get_attribute('#ostat .stee', 'aria-pressed') == 'true' and await pg.evaluate(use_vis)); await pg.click('#ostat [data-a=cback]'); await pg.wait_for_selector('#sf_course')
+    await pg.click('#ostat [data-a=cpick] >> nth=0'); await pg.wait_for_selector('#ostat .sbar [data-a=cuse]:not([disabled])'); await shot('17b_course_tees'); t = await txt(); ok('tees as big buttons with rating, slope and yards; "Use this course" on screen without scrolling', 'Rating 71.3' in t and 'Slope 125' in t and '6,612 yds' in t and await pg.locator('#ostat .stee').count() == 5 and await pg.evaluate(use_vis), t[:400])
+    await pg.click('#ostat .stee >> text=Blue'); await pg.click('#ostat [data-a=cuse]'); await pg.wait_for_selector('#ostat .scset'); await shot('17b4_form_course_set'); ok('"Use this course" fills Rating / Slope / par, keeps the form and shows "Course set"', await pg.input_value('#sf_cr') == '71.3' and await pg.input_value('#sf_slope') == '125' and 'Cedar Ridge 1' in await pg.input_value('#sf_course') and await pg.input_value('#sf_tees') == 'Blue' and 'Course set' in await pg.inner_text('#ostat .scset'))
     await pg.fill('#sf_course', 'down'); await pg.click('#ostat [data-a=csearch]'); await pg.wait_for_selector('#ostat .serr'); await shot('17c_course_list_down_sample_courses'); t = await txt()
     ok('live list down: a clear message, Try again, and the labelled sample courses', "Couldn't reach the course list. Try again." in t and 'Sample courses saved in the app' in t and await pg.locator('#ostat [data-a=cpick]').count() > 0 and 'Or enter the course yourself' in t.replace('OR ENTER THE COURSE YOURSELF', 'Or enter the course yourself'), t[:500])
     await back(); await ctx.close()
@@ -122,14 +128,27 @@ async def run(b, theme, W):
     await pg.evaluate("window.OddStats.open({t:'rec', id:'%s'})" % seed['lateId']); await pg.wait_for_timeout(800); await shot('24b_record_logged_too_late'); ok('logged more than 7 days after it was played: no link, and it says why', 'more than 7 days after it was played' in await txt() and not await pg.locator('#ostat [data-a=cfask]').count())
     await pg.evaluate("window.OddStats.open({t:'rec', id:'%s'})" % seed['lockId']); await pg.wait_for_timeout(800); await shot('23_record_locked_after_48_hours'); t = await txt(); ok('an entry older than 48 hours is locked: no Edit, no Delete', 'Locked' in t and not await pg.locator('#ostat [data-a=del]').count(), t[-300:])
     await pg.evaluate("window.OddStats.open()"); await pg.wait_for_selector('#ostat .stile'); await pg.click('#ostat [data-a=gone]'); await shot('24c_deleted_entries'); t = await txt(); ok('deleted entries are listed', 'Deleted entries' in t and 'Bowling' in t and '142' in t, t); await back()
-    await pg.click('#ostat [data-a=rating][data-s=pickleball]'); await shot('25_pickleball_rating'); t = await txt(); ok('rating page: seeding waits for 3 different confirmers and says so; no DUPR', 'games confirmed' in t and 'For seeding in events and tournaments' in t and 'needs games confirmed by 3 different players' in t and 'DUPR' not in t, t[:500]); await back()
-    await pg.click('#ostat [data-a=rating][data-s="other:cornhole"]'); await shot('25b_cornhole_rating'); t = await txt(); ok('Cornhole has its own rating, seeded from 3 confirmers', 'Cornhole rating' in t and '1546' in t and 'confirmed by 3 players' in t and 'Darts' not in t, t[:500]); await back()
+    await pg.click('#ostat [data-a=rating][data-s=pickleball]'); await shot('25_pickleball_rating'); t = await txt(); ok('rating page: seeding waits for confirmed games and says so; the make-up names who confirmed; no DUPR', 'games confirmed' in t and 'For seeding in events and tournaments' in t and 'needs 3 confirmed games (2 so far)' in t and 'BobBirdie' in t and 'Joined Oddable' in t and 'DUPR' not in t, t[:700]); await back()
+    await pg.click('#ostat [data-a=rating][data-s="other:cornhole"]'); await shot('25b_cornhole_rating'); t = await txt(); ok('Cornhole has its own rating; on 3 confirmed games it is PROVISIONAL (8 needed) and says the organizer approves it', 'Cornhole rating' in t and '1546' in t and 'PROVISIONAL' in t and 'built on 3 confirmed games (8 needed)' in t and 'confirmed by 3 players' in t and 'Darts' not in t, t[:700]); await back()
     await pg.click('#ostat [data-a=guests]'); await pg.wait_for_selector('#ostat [data-a=guest]'); await shot('26_players_list'); await pg.click('#ostat [data-a=guest] >> text=Gary'); await pg.wait_for_timeout(600); await shot('26b_guest_player'); await back(); await back()
     await pg.click('#ostat [data-a=courses]'); await pg.wait_for_timeout(500); await pg.click('#ostat .srowc >> text=Cedar Ridge'); await pg.wait_for_selector('#ostat .strow'); await shot('27_course_view_money_index_and_why'); t = await txt()
     ok('course view: own account names, "n of m rounds confirmed", the money-game index or why there is none', 'BobBirdie' in t and 'Somebody Else' not in t and 'rounds confirmed' in t and 'No money-game index: needs 3 confirmed rounds' in t, t[:500])
     await pg.click('#ostat [data-a=ctab][data-k=rounds]'); await pg.wait_for_timeout(700); await shot('28_course_rounds_how_confirmed'); ok('course rounds say typed vs scored and who confirmed', 'Self-logged (typed total), not confirmed' in await txt())
     await pg.click('#ostat [data-a=ctab][data-k=flights]'); await shot('29_course_flights')
-    await pg.click('#ostat [data-a=ctab][data-k=prefill]'); await pg.fill('#sv_cr', '71.3'); await pg.fill('#sv_slope', '125'); await pg.fill('#sv_par', '72'); await pg.click('#ostat [data-a=prefill]'); await pg.wait_for_function("document.querySelectorAll('#ostat .strow').length > 0 && /Course handicaps come from/.test(document.querySelector('#ostat').innerText)", timeout=15000); await shot('30_course_golf_day_handicaps'); ok('golf day prefill: players without a money-game index show "set it"', 'set it' in await txt())
+    await pg.click('#ostat [data-a=ctab][data-k=prefill]'); await pg.wait_for_selector('#sv_cr')
+    PRE = "document.querySelectorAll('#ostat .strow').length > 0 && /Course handicaps come from/.test(document.querySelector('#ostat').innerText)"
+    # Review 4, L3 (the script timed out here 1 run in 11): the tab's own data can arrive and redraw the screen while the script is typing, and a value
+    # typed into the box that was just replaced is lost (a person cannot type that fast; the app keeps what is typed, see the H2 checks). So: type,
+    # make sure all three boxes hold their numbers, tap, and do it again if the answer does not come.
+    for attempt in range(4):
+        for k, v in [('cr', '71.3'), ('slope', '125'), ('par', '72')]: await pg.fill('#sv_' + k, v)
+        await pg.wait_for_timeout(400)
+        if [await pg.input_value('#sv_cr'), await pg.input_value('#sv_slope'), await pg.input_value('#sv_par')] != ['71.3', '125', '72']: continue
+        await pg.click('#ostat [data-a=prefill]')
+        try: await pg.wait_for_function(PRE, timeout=10000); break
+        except Exception:
+            if attempt == 3: ok('golf day prefill answered', False, (await txt())[:900]); raise
+    await shot('30_course_golf_day_handicaps'); ok('golf day prefill: players without a money-game index show "set it"', 'set it' in await txt())
     # ---- voice sheet: the "Read it" button
     await pg.evaluate("window.OddStats.open()"); await pg.wait_for_selector('#ostat [data-a=voice]'); await pg.click('#ostat [data-a=voice] >> nth=0'); await pg.wait_for_selector('#ovoice .vp'); await shot('30b_voice_sheet', '#ovoice'); ok('L8: the voice sheet\'s "Read it" button is at least 4.5:1', not report[-1][1]['low'], report[-1][1]['low']); await pg.click('#ovoice .vx')
     # ---- owner dashboard: "not known", plain period words
@@ -141,9 +160,9 @@ async def run(b, theme, W):
     try: await pg5.wait_for_function("document.querySelector('#ostct') && /cannot confirm/.test(document.querySelector('#ostct').textContent)", timeout=15000)
     except Exception: ok('the confirm sheet opened for someone who did not play', False, await pg5.evaluate("(document.querySelector('#ostcons')||document.body).innerText.slice(0,400) + ' || join=' + sessionStorage.getItem('ostat-join') + ' tok=' + localStorage.getItem('odd-tok')"))
     await shot('31a_confirm_sheet_not_a_player', '#ostcons', pg5)
-    ok('someone who did not play sees why they cannot confirm, and no Yes button', 'Only a player recorded on this entry can confirm it' in await pg5.inner_text('#ostcons') and not await pg5.locator('#ostcy').count()); await ctx.close()
+    t5 = await pg5.inner_text('#ostcons'); ok('someone who did not play sees why they cannot confirm, no Yes button, and nothing about the entry (no name, course, date or score)', 'Only a player recorded on this entry can confirm it' in t5 and not await pg5.locator('#ostcy').count() and 'Sir Oddable' not in t5 and 'Cedar' not in t5 and '87' not in t5, t5); await ctx.close()
     ctx, pg2 = await ctx_for('t-bob', 'BobBirdie', '/index.html?join=confirm.' + seed['confirm']); await pg2.wait_for_selector('#ostcons #ostcy', timeout=15000); await shot('31_confirm_sheet_recorded_player', '#ostcons', pg2); t = await pg2.inner_text('#ostcons')
-    ok('the recorded player sees who asks, that they are down as playing, one Yes button (no side to choose), 4.5:1', 'Sir Oddable asks you to confirm' in t and 'has you down as playing in this round' in t and 'This link works once' in t and not await pg2.locator('#ostcp').count() and not report[-1][1]['low'], [t, report[-1][1]['low']])
+    ok('the recorded player sees who asks, that they are down as playing, one Yes button (no side to choose), 4.5:1', 'Sir Oddable asks you to confirm' in t and 'has you down as playing in this round' in t and 'This link works once' in t and 'Who sees your name' in t and 'organizers of money games and to course directors' in t and not await pg2.locator('#ostcp').count() and not report[-1][1]['low'], [t, report[-1][1]['low']])
     if theme == THEMES[-1] and W == WIDTHS[-1]:  # the link works ONCE: use it up only in the last run
         await pg2.click('#ostcy'); await pg2.wait_for_function("document.querySelector('#ostct').textContent === 'Confirmed'"); await shot('32_confirmed', '#ostcons', pg2)
     await ctx.close()

@@ -127,7 +127,9 @@ const codeBlocked = (k) => (RL.get(k) || []).filter((x) => D.now() - x < 900e3).
 // ---------- the groups row ----------
 async function load() { const r = await D.S.dbGet(ROW); return r || null; }
 async function mutate(fn) { // read, change, write only if nobody wrote in between; else read again and redo (lost updates are impossible)
-  for (let i = 0; i < 6; i++) {
+  // Stats review 4, L4: 14 tries (was 6). A write only loses to another write that went through, so with N writers at once nobody needs more than N tries;
+  // 6 tries failed the 12-joiner check about 1 run in 5. (Stage-1 file: groups-v1 queues its writes instead. Do not port this file from stats-v1.)
+  for (let i = 0; i < 14; i++) {
     let row = await load();
     if (!row) { await D.S.dbPut({ id: ROW, salt: 'x', pinhash: 'x', data: { groups: {} }, updated: 1 }, true); row = await load(); if (!row) continue; }
     const data = clone(row.data || {}); data.groups = data.groups || {};

@@ -7,6 +7,11 @@ process.env.SUPABASE_URL = 'https://fake.supabase.co'; process.env.SUPABASE_KEY 
 const B = (process.env.STATS_DIR ? path.resolve(process.env.STATS_DIR) : __dirname) + '/';
 const S = require(B + 'stats'), D = S._deps, R = require(B + 'ratings'), SY = require(B + 'sync');
 if (typeof S._isolate === 'function') S._isolate();
+// Review 4 (Nov 17 2026): a confirmer must be an account at least 30 days old with 3 games of its own, and a number on fewer than 8 counting rounds is
+// provisional. Those guards have their own suite (stats-r4.test.js). HERE every confirmer is treated as an established account, so these groups keep
+// testing what they were written for.
+S._deps.confirmer = async (ref) => ({ key: ref, name: '', since: Date.parse('2025-01-01T12:00:00Z'), acts: 99 });
+S.CONF.fullRounds = S.CONF.minRounds; // ... and a number on 3 confirmed rounds is used as before (the provisional step, 3 to 7 rounds, is tested in stats-r4.test.js)
 let db = {}, slow = false;
 const nap = () => (slow ? new Promise((ok) => setTimeout(ok, Math.random() * 6)) : null);
 const FDB = {
@@ -63,11 +68,11 @@ srv.listen(0, async () => {
 
   await check('H1b. diversity: one friend cannot set a money-game handicap. Max 2 of 20 from one confirmer, typed totals max 5 of 20, 3 different confirmers needed; the make-up is returned', async () => {
     const g = {}; for (const f of ['bob', 'cat', 'dir', 'dan']) g[f] = await pal('ann', f);
-    const add = async (friend, total, o) => { const id = await logRound('ann', day(1), total, [g[friend]], o); ok(await confirm('ann', id, friend), friend + ' confirms'); return id; };
+    const add = async (friend, total, o) => { NOW += DAY; /* review 4: one link-confirmed round counts per date played and 3 logged per day, so each round has its own day */ const id = await logRound('ann', day(0), total, [g[friend]], o); ok(await confirm('ann', id, friend), friend + ' confirms'); return id; };
     for (let i = 0; i < 3; i++) await add('bob', 130); // the review's attack: three typed 130s, one friend taps Confirm three times
     h = await S.handicapFor(K('ann')); assert.deepStrictEqual([h.use, h.needsSet, h.confirmedRounds], [null, true, 2], 'two count from one confirmer, the third does not; no number'); assert.ok(/3 confirmed rounds/.test(h.why), h.why);
     assert.ok(h.oddable.index != null, 'the full Oddable index (every round) is still there for casual play'); assert.strictEqual((await S.handicapFor(K('ann'), { casual: true })).use, h.oddable.index);
-    j = ok(await call('ann', 'me')); assert.ok(j.records.some((x) => /already confirmed 2 of your last 20 by link/.test(x.extra.confirmWhy || '')), 'the third round says why it does not count');
+    j = ok(await call('ann', 'me')); assert.ok(j.records.some((x) => /already confirmed 2 of your last 20 counting rounds by link/.test(x.extra.confirmWhy || '')), 'the third round says why it does not count');
     await add('cat', 130); await add('cat', 130);
     h = await S.handicapFor(K('ann')); assert.deepStrictEqual([h.use, h.needsSet, h.confirmedRounds, h.makeup.confirmers], [null, true, 4, 2]); assert.strictEqual(h.why, 'needs rounds confirmed by 3 different players');
     assert.ok(/needs rounds confirmed by 3 different players/.test(h.ask));
@@ -79,7 +84,7 @@ srv.listen(0, async () => {
     h = await S.handicapFor(K('ann')); assert.strictEqual(h.confirmedRounds, 5, 'typed totals stop at 5 of 20');
     await add('dan', 100, { total: undefined, strokes: holesFor(100), pars: PARS }); // hole by hole: not a typed total
     h = await S.handicapFor(K('ann')); assert.deepStrictEqual([h.confirmedRounds, h.makeup.linked, h.makeup.typed], [6, 1, 5]);
-    j = ok(await call('ann', 'me')); assert.deepStrictEqual([j.golfHcp.moneyIndex, j.golfHcp.makeup.confirmers], [h.use, 4], 'My handicap shows the same number and make-up');
+    j = ok(await call('ann', 'me')); assert.deepStrictEqual([j.golfHcp.moneyIndex, j.golfHcp.makeup.confirmers], [h.use, 3], 'My handicap shows the same number and make-up (review 4: the limits run over the counting rounds from the newest back, so the five newest typed totals count and Bob\'s older ones do not)');
   });
 
   await check('H1c. a game round is confirmed only with hole scores, another account with a scored card and a card confirmed by an account on another team', async () => {
@@ -96,7 +101,7 @@ srv.listen(0, async () => {
     set(Array.from({ length: 20 }, (_, i) => cardRound('w' + i, day(40 - i), 90, refs[i < 12 ? 0 : i < 17 ? 1 : 2]))); h = await S.handicapFor(A); // a regular game: Bob marks the first 12 cards, Cat the next 5, Dir the last 3
     assert.deepStrictEqual([h.confirmedRounds, h.makeup.who.map((w) => w.n)], [16, [8, 5, 3]], 'Bob: 8 of his 12 count; Cat 5; Dir 3');
     assert.ok(h.makeup.who.every((w) => w.n <= 8), 'no confirmer accounts for more than 8 of the last 20 game rounds: ' + JSON.stringify(h.makeup.who)); assert.ok(h.confirmedRounds > 6 && h.use != null, 'a regular foursome is no longer held to 6 counting rounds (' + h.confirmedRounds + ' count)');
-    j = ok(await call('ann', 'me')); assert.ok(j.records.some((x) => /already confirmed 8 of your last 20 rounds scored in games/.test(x.extra.confirmWhy || '')), 'the 9th card from one marker says why it does not count'); assert.strictEqual(j.confirmRules.gamePerBy, 8);
+    j = ok(await call('ann', 'me')); assert.ok(j.records.some((x) => /already confirmed 8 of your last 20 counting rounds/.test(x.extra.confirmWhy || '')), 'the 9th card from one marker says why it does not count'); assert.strictEqual(j.confirmRules.gamePerBy, 8);
     set([0, 1, 2].map((i) => cardRound('f' + i, day(10 + i), 90, refs[i], { confirmed: false }))); h = await S.handicapFor(A); assert.strictEqual(h.confirmedRounds, 0, 'the engine said not confirmed: believed');
   });
 

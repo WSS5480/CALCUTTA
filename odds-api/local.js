@@ -981,7 +981,24 @@ function groupScrub(o, n) { // n = the people limit limits.maxPeople gives this 
 }
 const signedIn = (req) => { try { return D.acct().who(req) || null; } catch (e) { return null; } };
 const allowed = (e) => { try { return !!D.grp().onFor(e); } catch (er) { return false; } };
-async function lapsed(e) { if (!e) return false; try { const A = D.acct(); return typeof A.expired === 'function' ? !!(await A.expired(e)) : false; } catch (er) { return false; } }
+// v276 (server review A2): "has this account's time ended?" is asked on every /local call. acct.expired() answers false when My Apps is down, after up
+// to 25 s and with no cache, so a slow My Apps stalled scoring. Same rule as the Calcutta's lapsed() (odds-api/calcutta.js): the answer is kept per
+// account; a KNOWN answer is good for 2 minutes and then re-asked in the background while it is still served; My Apps not answering ('unknown',
+// acct.expiredState) never changes a known answer (asked again 30 s later); an account never answered for waits at most 1.2 s, then is let in
+// provisionally and asked again on the next call 30 s later.
+const LAPSE = new Map(), LAPSE_MS = 120e3, LAPSE_RETRY = 30e3, LAPSE_WAIT = 1200;
+const lapseSleep = (ms, v) => new Promise((ok) => { const t = setTimeout(() => ok(v), ms); if (t.unref) t.unref(); });
+async function lapseAsk(e) { // -> 'ended' | 'ok' | 'unknown'
+  try { const A = D.acct(); if (typeof A.expiredState === 'function') { const v = await A.expiredState(e); return v === 'ended' || v === 'ok' ? v : 'unknown'; }
+    return typeof A.expired === 'function' ? ((await A.expired(e)) ? 'ended' : 'ok') : 'ok'; } catch (er) { return 'unknown'; } }
+function lapsed(e) { if (!e) return Promise.resolve(false); const h = LAPSE.get(e), now = D.now();
+  if (h && h.at && now >= h.at && now - h.at < h.ttl) return Promise.resolve(h.v);
+  let p = h && h.busy; if (!p) { p = lapseAsk(e).then((a) => { const x = LAPSE.get(e) || {}, known = a !== 'unknown';
+        const v = known ? a === 'ended' : (x.known ? x.v : false); // 'unknown': keep what was last KNOWN (or let in, provisionally, if nothing was)
+        LAPSE.set(e, { at: D.now(), v, known: known || !!x.known, ttl: known ? LAPSE_MS : LAPSE_RETRY }); if (LAPSE.size > 5000) LAPSE.delete(LAPSE.keys().next().value); return v; });
+    LAPSE.set(e, Object.assign({}, h || { at: 0, v: false, known: false, ttl: LAPSE_RETRY }, { busy: p })); }
+  if (h && h.at) return Promise.resolve(h.v); // answered before: that answer now, the new one for the next call
+  return Promise.race([p, lapseSleep(LAPSE_WAIT, null)]).then((v) => { if (v !== null) return v; const x = LAPSE.get(e); if (x && x.busy === p && !x.at) LAPSE.set(e, { at: D.now(), v: false, known: false, ttl: LAPSE_RETRY, busy: p }); return false; }); } // no answer in time: let in for now, ask again 30 s later
 // create / edit inside a group: pickleball only, and no money (entry, split, take, pot) whatever the phone sent
 function groupRules(b) {
   if (String(b.sport || 'pickleball') !== 'pickleball') throw bad(400, G.SOON);
@@ -1026,4 +1043,4 @@ async function handle(req, res) {
   return true;
 }
 
-module.exports = { handle, _core: core, GROUP: G, groupRules, groupScrub, PICKLEBALL_FORMATS: FMTS.slice(), statsFor, ratingFor, STAND, LIMSTAND, openTies, pickPoints, _billed: () => BILLQ, snapRatings, moneyFor, pairHistory, ADAPTER, limits, SPORTS, FMTN, cleanRules, checkGames, roundRobin, buildElim, seedOrder, poolTable, places, potSummary, people, _deps: D, _mkOf: mkOf, _reset: () => { RL.clear(); RC.clear(); ENTF.clear(); BILL.clear(); }, _idxQueue: () => [...IDXQ], _idxRepairNow: async () => { if (IDXRUN) await IDXRUN; await idxRepair(); }, _idxIdle: async () => { for (let i = 0; i < 200 && IDXRUN; i++) await IDXRUN; }, _idxRestart: () => { IDXQ.clear(); if (IDXT) clearTimeout(IDXT); IDXT = null; } /* tests: what a server restart forgets */ };
+module.exports = { _lapse: LAPSE, _lapsed: lapsed, handle, _core: core, GROUP: G, groupRules, groupScrub, PICKLEBALL_FORMATS: FMTS.slice(), statsFor, ratingFor, STAND, LIMSTAND, openTies, pickPoints, _billed: () => BILLQ, snapRatings, moneyFor, pairHistory, ADAPTER, limits, SPORTS, FMTN, cleanRules, checkGames, roundRobin, buildElim, seedOrder, poolTable, places, potSummary, people, _deps: D, _mkOf: mkOf, _reset: () => { RL.clear(); RC.clear(); ENTF.clear(); BILL.clear(); }, _idxQueue: () => [...IDXQ], _idxRepairNow: async () => { if (IDXRUN) await IDXRUN; await idxRepair(); }, _idxIdle: async () => { for (let i = 0; i < 200 && IDXRUN; i++) await IDXRUN; }, _idxRestart: () => { IDXQ.clear(); if (IDXT) clearTimeout(IDXT); IDXT = null; } /* tests: what a server restart forgets */ };

@@ -173,7 +173,7 @@
   function lookup(code) { const c = normCode(code); cur().code = String(code || ''); if (!c) { err = 'That code is not complete. It has 8 letters and numbers.'; return paint(); } act('preview', { code: c }, async (j) => { const s = cur(); s.code = c; s.pv = j.group; paint(); }); }
   function doJoin() { const s = cur(); act('join', { code: s.code }, async (j) => { s.done = j.pending ? { pending: true, text: j.text || 'Request sent. The commissioner approves who joins.' } : { pending: false, text: 'You joined ' + (j.group ? j.group.name : 'the group') + '.' }; s.gr = j.pending ? null : j.group; H = null; paint(); blStatus(); }); }
   // An invite link (?join=g.<code>) lands here once the person is signed in (index.html grpJoinRun, also through gate.js afterSignIn('group:g:<code>')).
-  function openJoin(code) { WANT = String(code || ''); WANTG = false; open(true); if (window.OddLocal) { try { window.OddLocal.close(); } catch (x) {} } stack = [{ t: 'home' }, { t: 'join', code: WANT }]; err = ''; paint(); if (expired()) return; WANT = ''; lookup(cur().code); }
+  function openJoin(code) { WANT = String(code || ''); WANTG = false; open(true); if (window.OddLocal) { try { window.OddLocal.close(); } catch (x) {} } try { if (window.oddCalc && window.oddCalc.close) window.oddCalc.close(); } catch (x) {} /* v276 (review A4): a join link closes the Calcutta too */ stack = [{ t: 'home' }, { t: 'join', code: WANT }]; err = ''; paint(); if (expired()) return; WANT = ''; lookup(cur().code); }
 
   // ---------- invite ----------
   async function invite() {
@@ -377,7 +377,7 @@
   function open(keep) {
     css(); let e = el(); if (!e) { e = document.createElement('div'); e.id = 'ogrp'; e.setAttribute('role', 'dialog'); e.setAttribute('aria-label', 'Groups'); e.innerHTML = '<div class="ogin0"></div>'; document.body.appendChild(e); e.addEventListener('click', click); window.addEventListener('resize', fit); }
     fit(); try { if (window.navRender) window.navRender(); } catch (x) {} fit(); if (window.OddLocal) { try { window.OddLocal.fit(); } catch (x) {} }
-    if (keep) return; WANTG = false; if (window.OddLocal) { try { window.OddLocal.close(); } catch (x) {} } stack = [{ t: 'home' }]; err = ''; paint(); if (!expired()) loadHome(); // the Groups tab again = my groups, Pickleball closed
+    if (keep) return; WANTG = false; if (window.OddLocal) { try { window.OddLocal.close(); } catch (x) {} } try { if (window.oddCalc && window.oddCalc.close) window.oddCalc.close(); } catch (x) {} /* v276 (review A4): and the Calcutta */ stack = [{ t: 'home' }]; err = ''; paint(); if (!expired()) loadHome(); // the Groups tab again = my groups, Pickleball closed
   }
   function close() { try { if (window.oddCalc && window.oddCalc.close) window.oddCalc.close(); } catch (x) {} const e = el(); if (!e) return; if (window.OddGolfDay) { try { window.OddGolfDay.stop(); } catch (x) {} } if (window.OddLocal) { try { window.OddLocal.close(); } catch (x) {} } e.remove(); window.removeEventListener('resize', fit); busy = false; try { if (window.navRender) window.navRender(); } catch (x) {} }
   // gate.js tells the page when the lock changes (paid, signed out, time ended): the open screen follows without a reload.

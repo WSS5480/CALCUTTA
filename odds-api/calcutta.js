@@ -281,7 +281,7 @@ async function mutRow(rowId, init, fn, after) {
   }
   throw bad(409, 'Busy, try again');
 }
-const mutCalc = (id, fn, mk) => { let pre = null; return mutRow(ROW(id), null, async (c) => { if (c.deleted || (mk && !memberOf(c, mk))) throw bad(404, 'Calcutta not found'); pre = before(c); const t = D.now(); settle(c, t); return fn(c, t); } /* L9: fn gets the clock the lazy settle used */, (row) => { RC.set(String(row.id).slice(10), { at: D.now(), row }); recordPlayers(row.data); activity(pre, row.data); }); };
+const mutCalc = (id, fn, mk) => { let pre = null; return mutRow(ROW(id), null, async (c) => { if (c.deleted || (mk && !memberOf(c, mk))) throw bad(404, 'Calcutta not found'); pre = before(c); const t = D.now(); settle(c, t); return fn(c, t); } /* L9: fn gets the clock the lazy settle used */, (row) => { RC.set(String(row.id).slice(10), { at: D.now(), row }); recordPlayers(row.data); activity(pre, row.data); if (pre && row.data && row.data.a && row.data.a.status !== pre.st) syncIdx(row.data).catch(() => {}); /* v276 (server review A1): a status change made by the lazy clock (the timer selling the last lot inside a poll or a bid) reaches the index too, so the Games card, the open-Calcutta cap and F12 see it closed; not awaited */ }); };
 // MAIN: the owner's Activity (events.js -> My Apps). Taken from the row BEFORE the change (and before the lazy clock sells anything) and compared with the
 // row that was WRITTEN, so every sale is told once whichever request made it (a bid's timer ringing during a poll, Sold now, an entered result).
 // Called only after the conditional write succeeded; it never throws and never waits (events.js queues and sends on a timer). Keys: the auction id

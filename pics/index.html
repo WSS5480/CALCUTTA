@@ -210,16 +210,24 @@ html.cb .ntk.a{background:rgba(198,203,215,.12);border-color:rgba(198,203,215,.4
 html.cb .sbtn,html.cb #syncsheet .sbtn{background:#c6cbd7;border-color:#c6cbd7;color:#041e42}html.cb #syncsheet .sbtn.x{background:none;color:#c6cbd7}
 html.cb .ng.lv,html.cb .gc.lv{border-color:#c6cbd7}
 html.cb .pinhd{opacity:.85}
+/* v257 several bet screenshots: wrapped cards, nothing scrolls sideways */
+#sqbox{scroll-margin-top:110px}.sqp{border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin:8px 0 12px;background:var(--panel)}.sqp .gh{margin-top:0}
+.sqc{display:flex;gap:10px;align-items:flex-start;border-top:1px solid var(--line);padding:10px 0}.sqc img{flex:0 0 56px;width:56px;height:74px;object-fit:cover;border-radius:8px;border:1px solid var(--line);background:var(--panel2)}
+.sqb{flex:1;min-width:0;overflow-wrap:anywhere}.sqh{display:flex;justify-content:space-between;gap:6px 8px;align-items:center;flex-wrap:wrap}.sqh small{color:var(--muted);font-size:12px}
+.sqt{font:700 12px system-ui;padding:3px 9px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}.sqt.ok{color:var(--green)}.sqt.lk{color:#ffb020}.sqt.no{color:var(--red)}.sqt.rd{color:var(--muted)}
+.sqw{font-size:16px;margin:4px 0 2px}.sqw small,.sqleg small{color:var(--muted);font-weight:400}.sqleg{font-size:14px;margin:2px 0}.sqy{color:#ffb020;font-size:13px;margin:3px 0}
+.sqbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;border:1px solid var(--blue);border-radius:14px;padding:8px 12px;margin:8px 0;background:var(--panel);font-size:14px}.sqbar button,.sqadd{border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:10px;padding:8px 14px;font:600 14px inherit;cursor:pointer;min-height:44px;box-sizing:border-box}#sqbox .sqadd{display:inline-flex;align-items:center;font-size:14px;font-weight:600;margin:0}
+#addmenu label small{display:block;font-weight:400;font-size:12px;color:var(--muted);margin-top:2px}#addmenu{max-width:min(300px,calc(100vw - 32px))}
 html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}button,a,select,input,label,[onclick],.pill,.tab,.card{touch-action:manipulation}button,[onclick]{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}button:active,[onclick]:active{opacity:.78}
 .bbtn{flex-wrap:wrap}
 </style>
 </head>
 <body>
 <div id="sc">
-<!-- Pics v256 -->
+<!-- Pics v257 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v256</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v257</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
   <div id="arbbar" class="arbbar" hidden onclick="arbBarTap()" role="button" aria-label="Arbitrage alert"><span class="mq" id="arbmq"></span></div>
   <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">NCAA</button><button onclick="location.href='pickleball.html'">🏓 Pickleball</button><button data-sp="nba">NBA</button><button data-sp="mlb">MLB</button><button data-sp="nhl">NHL</button><button data-sp="ncaab">NCAAB</button></div>
   <div class="srow"><input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team"><select id="conf" aria-label="Conference"><option value="">All</option></select></div>
@@ -227,7 +235,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v256 (team pages)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v257 (several bet screenshots at once)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -246,7 +254,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </div>
 <div id="plb" hidden></div>
 <nav class="bn" id="bn"></nav>
-<script src="trophy.js?v=256"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
+<script src="trophy.js?v=257"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
 <script>
 const SC = document.getElementById('sc');
 // The page scrolls inside #sc so the banner and bottom bar (outside it) can never drift on iOS
@@ -536,6 +544,9 @@ const betsStamp = () => { const sn = window.__bsnap || (window.__bsnap = {}); BE
 window.betsSeed();
 const betsSave = () => { betsStamp(); try { localStorage.setItem('bets26', JSON.stringify(BETS)); } catch (e) { try { let t = document.getElementById('savefail'); if (!t) { t = document.createElement('div'); t.id = 'savefail'; t.style.cssText = 'position:fixed;left:12px;right:12px;bottom:80px;z-index:300;background:#7a1f1f;color:#fff;padding:12px 14px;border-radius:12px;font:700 14px system-ui'; document.body.appendChild(t); setTimeout(() => t.remove(), 8000); } t.textContent = 'Could not save your bets on this phone (storage is full or blocked). Turn on cloud sync so they are not lost.'; } catch (e2) {} } };
 let BF = null; // form state (not rebuilt by the minute refresh, so typing is never wiped)
+// v257: several bet screenshots at once. SQ = the in-memory list of slips being read / reviewed (never stored: pictures do not belong in localStorage). SQMAX: 10 at a time, for a phone's memory and the AI reader's 40-an-hour limit (each picture is 1 call, 2 when the backup reader is needed).
+const SQMAX = 10, SQ = { items: [], n: 0, run: false, cur: null, ids: null, busy: false, msg: '', aiOff: 0, gap: 1200, wait: 5000, pause: 120000 };
+const betNewId = () => { let t = Date.now(); while (BETS.some((b) => b.id === 'b' + t)) t++; return 'b' + t; }; // two saves in the same millisecond (Save all ready) must never share an id
 const escH = (x) => String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const sgn = (n) => (n > 0 ? '+' : '') + n;
 function legGrade(l) {
@@ -661,7 +672,7 @@ const bSport1 = (o) => { const lg = (o.lg || '').toLowerCase(); if (lg === 'cfb'
 const bSports = (b) => new Set(b.kind === 'parlay' ? (b.legs || []).map(bSport1) : [bSport1(b)]);
 function bSportSet(v) { BSP = v || 'all'; try { localStorage.setItem('pics-bsp', BSP); } catch (e) {} BDRILL = null; betsRender(true); }
 function betsRender(force) {
-  const el = $('#betspage'); if (!el) return; try { spReconcile(); } catch (e) {} kLegLink(); if (!force && scrolling()) { clearTimeout(window.__bdef); window.__bdef = setTimeout(() => betsRender(), 800); return; } try { betSync(); } catch (e) {}
+  const el = $('#betspage'); if (!el) return; if (SQ.cur && !BF && !SQ.busy) sqReviewEnd(); try { spReconcile(); } catch (e) {} kLegLink(); if (!force && scrolling()) { clearTimeout(window.__bdef); window.__bdef = setTimeout(() => betsRender(), 800); return; } try { betSync(); } catch (e) {}
   const done = BETS.map((b) => ({ b, r: betGrade(b) })), fin = done.filter((x) => ['won', 'lost', 'push'].includes(x.r.st));
   { let ch = false; fin.forEach(({ b, r }) => { if (!b.fin) { b.fin = r.st; b.finPL = Math.round(betPL(b, r.st) * 100) / 100; ch = true; } }); if (ch) betsSave(); }
   const vis = (x) => BSP === 'all' || bSports(x.b).has(BSP), doneV = done.filter(vis), finV = fin.filter(vis);
@@ -736,13 +747,14 @@ function betsRender(force) {
     drillHtml = `<div class="lpg"><button class="pill" style="margin:4px 0 10px" onclick="bDrill(null)">← Back</button><div class="bh"><h2>${ttl}</h2></div><div class="sub" style="margin-bottom:8px">${rows.length} bet${rows.length === 1 ? '' : 's'}${D.k !== 'open' && rows.length ? ' · ' + money(net) : ''}</div>${rows.slice().sort(sortF).map(cardHtml).join('') || '<div class="note">Nothing here yet.</div>'}<button class="pill" style="margin:10px 0" onclick="bDrill(null)">← Back to My Bets</button></div>`;
   }
   const sportSel = Object.keys(spCnt).length > 1 ? `<div class="srow" style="margin:0 0 8px"><select onchange="bSportSet(this.value)" aria-label="Filter bets by sport"><option value="all">All sports (${done.length})</option>${Object.keys(BSPN).filter((k) => spCnt[k]).map((k) => `<option value="${k}" ${BSP === k ? 'selected' : ''}>${BSPN[k]} (${spCnt[k]})</option>`).join('')}</select></div>${BSP !== 'all' ? `<div class="sub" style="margin:-2px 0 8px">Showing ${BSPN[BSP]} only · the TODAY box and daily log still count every sport</div>` : ''}` : '';
-  const html = drillHtml || `<div class="lpg"><div class="bh"><h2>My Bets</h2><div class="pillw"><button class="pill" onclick="aiOpen(null,'Analyze all my open bets one by one: for each say keep, hedge or leave alone with a one-line reason using the model numbers, then give an overall risk summary.')">🤖 Analyze</button><button class="pill" onclick="addMenu()">＋ Add bet ▾</button><div id="addmenu" ${window.__addm ? '' : 'hidden'}><button onclick="addMenu(0);betNew()">✍️ Add a bet</button><label>📷 Import screenshot<input type="file" accept="image/*" hidden onchange="addMenu(0);betImport(this.files[0]);this.value=''"></label><button onclick="addMenu(0);slipPaste()">📋 Paste slip text</button><button onclick="addMenu(0);aiOpen()">🤖 Ask Claude</button>${lsg('kal-id') ? `<button onclick="addMenu(0);kalshiSync(true)">🔄 Sync Kalshi now</button><button onclick="addMenu(0);kalshiOff()">⛓️‍💥 Disconnect Kalshi</button>` : `<button onclick="addMenu(0);kalshiConnect()">⚡ Connect Kalshi</button>`}</div></div></div>
+  const html = drillHtml || `<div class="lpg"><div class="bh"><h2>My Bets</h2><div class="pillw"><button class="pill" onclick="aiOpen(null,'Analyze all my open bets one by one: for each say keep, hedge or leave alone with a one-line reason using the model numbers, then give an overall risk summary.')">🤖 Analyze</button><button class="pill" onclick="addMenu()">＋ Add bet ▾</button><div id="addmenu" ${window.__addm ? '' : 'hidden'}><button onclick="addMenu(0);betNew()">✍️ Add a bet</button><label>📷 Upload bet screenshots (one or many)<small>Pick several pictures at once. Each picture is one slip.</small><input type="file" accept="image/*" multiple hidden onchange="addMenu(0);betImportFiles(this.files);this.value=''"></label><button onclick="addMenu(0);slipPaste()">📋 Paste slip text</button><button onclick="addMenu(0);aiOpen()">🤖 Ask Claude</button>${lsg('kal-id') ? `<button onclick="addMenu(0);kalshiSync(true)">🔄 Sync Kalshi now</button><button onclick="addMenu(0);kalshiOff()">⛓️‍💥 Disconnect Kalshi</button>` : `<button onclick="addMenu(0);kalshiConnect()">⚡ Connect Kalshi</button>`}</div></div></div>
     <div class="sums">${stat('Overall', all, stake ? ' · ' + usd(stake) + ' staked' : '', 'all')}${stat('Against the app', agA, '', 'against')}${stat('With the app', withA, '', 'with')}<div class="sum" data-dr="1" onclick="bDrill('open')"><b>${doneV.length - finV.length}</b><span>Open bets</span><small>${doneV.length} total</small></div></div>
-    ${KFORM && !(lsg('kal-id') && lsg('kal-pem')) ? kalshiFormHtml() : ''}${sportSel}${perfHtml}<div class="sub" style="margin:0 0 6px"><span id="kst"></span></div><div class="sub" id="impst" style="margin:-4px 0 8px">${IMP}</div><div id="bform">${BF ? betFormHtml() : ''}</div>${logHtmlF()}${list || '<div class="note">No bets yet. Tap “Add a bet”, pick a game, then set your side and the line you got.</div>'}</div>`;
+    ${KFORM && !(lsg('kal-id') && lsg('kal-pem')) ? kalshiFormHtml() : ''}${sportSel}${perfHtml}<div class="sub" style="margin:0 0 6px"><span id="kst"></span></div><div class="sub" id="impst" style="margin:-4px 0 8px">${IMP}</div><div id="sqbox"></div><div id="bform">${BF ? betFormHtml() : ''}</div>${logHtmlF()}${list || '<div class="note">No bets yet. Tap “Add a bet”, pick a game, then set your side and the line you got.</div>'}</div>`;
   const kt = lsg('kal-id') ? (KST || 'Kalshi connected') : (KST || '');
   const hh = html.replace('<span id="kst"></span>', '');
   if (el.__h !== hh) { el.innerHTML = html; el.__h = hh; }
   const ke = $('#kst'); if (ke) ke.textContent = kt;
+  sqPaint();
 }
 
 
@@ -878,7 +890,7 @@ function aiCtx(gid) {
 async function aiSlipData(cv) {
   if (!(await aiReady())) throw new Error('the AI reader is not available');
   const r = await fetch(AIURL + '/slipjson', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ image: cv.toDataURL('image/jpeg', 0.85) }) });
-  const j = await r.json().catch(() => ({})); if (!r.ok || !j.data) throw new Error(j.error || ('reader error ' + r.status)); return j.data;
+  const j = await r.json().catch(() => ({})); if (!r.ok || !j.data) { const e = new Error(j.error || ('reader error ' + r.status)); e.status = r.status; throw e; } return j.data;
 }
 function slipFromData(d) {
   const num = (x) => { const n = parseFloat(x); return isFinite(n) ? n : null; };
@@ -928,19 +940,24 @@ async function slipSports(s) {
   const g = found, at = (t) => { const x = nn(s.pos); return Math.max(x.lastIndexOf(nn((t.name || '').split(' ').pop())), x.lastIndexOf(nn(t.name || ''))); }, side = at(g.home) >= at(g.away) ? g.home.abbr : g.away.abbr;
   XL[g.id] = g;
   if (BETS.some((b) => b.gid === g.id && b.side === side && b.type === (s.type || 'ml') && Math.abs((b.stake || 0) - (s.stake || 0)) < 0.01)) { setImp('That bet is already in My Bets.'); betsRender(); return; }
-  const b = { id: 'b' + Date.now(), gid: g.id, lg: g.lg, week: 0, away: g.away.abbr, home: g.home.abbr, day: dayKey(g.start), t: Date.now(), side, type: s.type || 'ml', line: s.type === 'sp' ? (s.line || 0) : 0, stake: s.stake || null, mult: s.mult || null, odds: s.mult ? -110 : -110, appSu: side, appConf: 0, appAts: null, appLine: null, noApp: true, note: 'Imported from slip' }; spApply(b);
+  const b = { id: betNewId(), gid: g.id, lg: g.lg, week: 0, away: g.away.abbr, home: g.home.abbr, day: dayKey(g.start), t: Date.now(), side, type: s.type || 'ml', line: s.type === 'sp' ? (s.line || 0) : 0, stake: s.stake || null, mult: s.mult || null, odds: s.mult ? -110 : -110, appSu: side, appConf: 0, appAts: null, appLine: null, noApp: true, note: 'Imported from slip' }; spApply(b);
   BETS.push(b); betsSave(); BF = null; betsRender();
   setImp(`Saved ${g.lg.toUpperCase()}: ${side} ${b.type === 'sp' ? sgn(b.line) : 'to win'} (${g.away.abbr} @ ${g.home.abbr})${b.mult ? ' · ' + b.mult + 'x' : ''}${b.stake ? ' · ' + usd(b.stake) : ''}.` + (s.stakeGuess ? ` I couldn't read the cost reliably (saw ${usd(s.stakeGuess)}); edit the stake.` : ''));
 }
-function betApplySlip(s) {
-  if (!s.t1 || !s.pos) { setImp('Could not read a bet from that image. Try a clearer screenshot, or add it by hand.'); BF = { step: 'pick' }; betsRender(); return; }
+// The form a one-game slip pre-fills, worked out without touching the screen: betApplySlip shows it, the several-pictures list keeps it as a draft
+function slipSingleBF(s) {
+  if (!s.t1 || !s.pos) return { none: true, bf: { step: 'pick' }, imp: 'Could not read a bet from that image. Try a clearer screenshot, or add it by hand.' };
     // find the game
   const cand = Object.values(ALL).concat(Object.values(XL).filter((x) => !ALL[x.id])).filter((g) => g.state !== 'post' || Math.abs(g.start - Date.now()) < 3 * 864e5).map((g) => ({ g, sc: Math.min(Math.max(teamMatch(s.t1, g.home.abbr), teamMatch(s.t1, g.away.abbr)), 9) + Math.max(teamMatch(s.t2, g.home.abbr), teamMatch(s.t2, g.away.abbr)), both: Math.max(teamMatch(s.t1, g.home.abbr), teamMatch(s.t1, g.away.abbr)) > 0 && Math.max(teamMatch(s.t2, g.home.abbr), teamMatch(s.t2, g.away.abbr)) > 0 })).filter((x) => x.both).sort((a, b) => b.sc - a.sc);
-  if (!cand.length && s.res) { const L = s.type === 'sp' ? (s.line < 0 ? ' -' + Math.abs(s.line) + ' spread' : ' +' + s.line + ' spread') : ' to win'; BF = { step: 'prop', text: `${s.pos}${L} (${s.t1} vs ${s.t2})`, stake: s.stake || '', odds: s.mult || '', pt: 'x', day: dayKey(Date.now()), res: s.res, note: `Already played: ${s.res.toUpperCase()}${s.paid ? ' · paid out $' + s.paid : ''}. Set the date if it was another day, then Save.` }; setImp(''); betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
-  if (!cand.length) { slipSports(s); return; }
+  if (!cand.length && s.res) { const L = s.type === 'sp' ? (s.line < 0 ? ' -' + Math.abs(s.line) + ' spread' : ' +' + s.line + ' spread') : ' to win'; return { top: true, imp: '', bf: { step: 'prop', text: `${s.pos}${L} (${s.t1} vs ${s.t2})`, stake: s.stake || '', odds: s.mult || '', pt: 'x', day: dayKey(Date.now()), res: s.res, note: `Already played: ${s.res.toUpperCase()}${s.paid ? ' · paid out $' + s.paid : ''}. Set the date if it was another day, then Save.` } }; }
+  if (!cand.length) return { sports: true };
   const g = cand[0].g; const side = teamMatch(s.pos, g.home.abbr) >= teamMatch(s.pos, g.away.abbr) ? g.home.abbr : g.away.abbr;
-  BF = { step: 'form', gid: g.id, side, type: s.type || 'sp', line: s.line || 0, stake: s.stake || '', odds: s.mult || '', pt: s.mult ? 'x' : 'am', note: `Imported: ${s.pos} ${s.type === 'sp' ? (s.line < 0 ? 'wins by over ' + Math.abs(s.line) : 'loses by fewer than ' + s.line) : 'wins'}${s.mult ? ' · ' + s.mult + 'x' : ''}${s.stake ? ' · cost $' + s.stake : ''}. Check it, then Save.` };
-  setImp(s.stakeGuess ? `I couldn't read the cost reliably (saw ${usd(s.stakeGuess)}). Check the stake below.` : ''); betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' });
+  const bf = { step: 'form', gid: g.id, side, type: s.type || 'sp', line: s.line || 0, stake: s.stake || '', odds: s.mult || '', pt: s.mult ? 'x' : 'am', note: `Imported: ${s.pos} ${s.type === 'sp' ? (s.line < 0 ? 'wins by over ' + Math.abs(s.line) : 'loses by fewer than ' + s.line) : 'wins'}${s.mult ? ' · ' + s.mult + 'x' : ''}${s.stake ? ' · cost $' + s.stake : ''}. Check it, then Save.` };
+  return { top: true, bf, imp: s.stakeGuess ? `I couldn't read the cost reliably (saw ${usd(s.stakeGuess)}). Check the stake below.` : '' };
+}
+function betApplySlip(s) {
+  const r = slipSingleBF(s); if (r.sports) { slipSports(s); return; }
+  BF = r.bf; setImp(r.imp); betsRender(); if (r.top) window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 function parseMulti(raw) {
   const L = raw.split(/\n/).map((x) => x.replace(/[|_]/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean);
@@ -986,7 +1003,8 @@ function parseMulti(raw) {
   return o.legs.length ? o : null;
 }
 const expLine = (g, side) => (g.line === null || g.line === undefined ? null : side === g.home.abbr ? -g.line : g.line);
-async function betApplyMulti(s) {
+// The parlay form a multi-leg slip pre-fills (game matching lives here, once)
+async function slipMultiBF(s) {
   try { await xlLoad(true); } catch (e) {}
   const pool = Object.values(ALL).concat(Object.values(XL).filter((x) => !ALL[x.id])), warn = [];
   const legs = s.legs.map((l) => {
@@ -1014,7 +1032,10 @@ async function betApplyMulti(s) {
   if (s.stake && s.payout && s.mult && Math.abs(s.payout / s.stake - s.mult) > 0.03 * s.mult) warn.push('payout and multiplier do not match, check them');
   if (!s.mult) warn.push('could not read the payout multiplier');
   const flagged = legs.filter((l) => l.flag).length;
-  BF = { step: 'parlay', legs, stake: s.stake || '', odds: s.mult || '', pt: 'x', note: `Imported ${legs.length}-leg parlay${s.mult ? ' at ' + s.mult + 'x' : ''}${s.stake ? ' · $' + s.stake + (s.payout ? ' to win $' + s.payout : '') : ''}.${warn.length ? ' ⚠ ' + warn.join('; ') + '.' : ''}${flagged ? ' ⚠ ' + flagged + ' leg(s) marked below.' : ''} Check it, then Save.` };
+  return { step: 'parlay', legs, stake: s.stake || '', odds: s.mult || '', pt: 'x', note: `Imported ${legs.length}-leg parlay${s.mult ? ' at ' + s.mult + 'x' : ''}${s.stake ? ' · $' + s.stake + (s.payout ? ' to win $' + s.payout : '') : ''}.${warn.length ? ' ⚠ ' + warn.join('; ') + '.' : ''}${flagged ? ' ⚠ ' + flagged + ' leg(s) marked below.' : ''} Check it, then Save.` };
+}
+async function betApplyMulti(s) {
+  BF = await slipMultiBF(s);
   setImp(''); betsRender(); window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 function slipFromText(txt) {
@@ -1033,28 +1054,190 @@ async function slipPaste() {
   try { history.replaceState(null, '', location.pathname); } catch (e) {}
   let tries = 0; const go = () => { if (typeof ALL !== 'undefined' && Object.keys(ALL).length) { setView('bets'); slipFromText(t); } else if (++tries < 40) setTimeout(go, 500); }; setTimeout(go, 1200);
 })();
+// Read ONE slip picture and say what it is, without touching the bet form (v257: shared by the one-picture import and the several-pictures list, so there is one reader).
+// Returns { k:'multi', s } (parlay), { k:'single', s } (one game) or { k:'bf', bf, imp, none } (a ready form state: a prop, or nothing found).
+async function slipRead(file, opt) {
+  opt = opt || {}; const say = opt.say || setImp;
+  const bmp = await createImageBitmap(file); const sc = Math.min(1, 1800 / Math.max(bmp.width, bmp.height)); const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * sc); cv.height = Math.round(bmp.height * sc); cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height); try { bmp.close(); } catch (e) {}
+  if (opt.ai !== false) {
+    say('Claude is reading the slip…'); let aiErr = '';
+    try { const sd = slipFromData(await aiSlipData(cv)); window.__slip = sd;
+      if (sd.legs.length >= 2) return { k: 'multi', s: { legs: sd.legs, mult: sd.mult, n: sd.legs.length, stake: sd.stake, payout: sd.payout } };
+      if (sd.legs.length === 1) { const l = sd.legs[0]; if (l.manual) return { k: 'bf', bf: { step: 'prop', text: l.text, stake: sd.stake || '', odds: sd.mult || '', pt: 'x', day: dayKey(Date.now()) }, imp: '' }; return { k: 'single', s: { t1: l.pos, t2: l.opp || '', pos: l.pos, type: l.type, line: l.line, stake: sd.stake, mult: sd.mult, payout: sd.payout, raw: '' } }; }
+      aiErr = 'it found no bets on the slip';
+    } catch (e) { if (opt.stop429 && e.status === 429) throw e; aiErr = e.message || String(e); }
+    say('Claude could not read it (' + aiErr + '). Trying the backup reader…'); let aiT = null; try { aiT = await aiSlipText(cv); } catch (e) {}
+    if (aiT) { window.__slip = aiT; const ms0 = parseMulti(aiT); if (ms0 && ms0.legs.length) return { k: 'multi', s: ms0 }; const s0 = parseSlip(aiT); if (s0.t1 && s0.pos) return { k: 'single', s: s0 }; }
+  }
+  say('Loading the screenshot reader…'); await loadTess();
+  const O = location.origin + location.pathname.replace(/[^/]*$/, ''); const w = await Tesseract.createWorker('eng', 1, { workerPath: O + 'tess-worker.min.js', corePath: O, langPath: O, gzip: true, logger: (x) => { if (x.status === 'recognizing text') say('Reading the screenshot… ' + Math.round(x.progress * 100) + '%'); } });
+  let txt = '', ms = null;
+  for (const mode of ['11', '4', '6']) { await w.setParameters({ tessedit_pageseg_mode: mode }); const { data } = await w.recognize(cv); const t = data.text || ''; const r = parseMulti(t); if (!txt) txt = t; if (r && (!ms || r.legs.length > ms.legs.length)) { ms = r; txt = t; } if (ms && ms.n && ms.legs.length >= ms.n) break; }
+  await w.terminate(); window.__slip = ms || txt;
+  if (ms) return { k: 'multi', s: ms };
+  const s = parseSlip(txt);
+  if (!s.t1 || !s.pos) return { k: 'bf', none: true, bf: { step: 'kind' }, imp: 'Read the image but could not find a bet. Text I saw: "' + txt.replace(/\s+/g, ' ').slice(0, 160) + '". Send me that and I will fix the reader.' };
+  return { k: 'single', s };
+}
+// One picture: hand the result to the bet form for the user to confirm (what the import has always done)
+async function slipApply(r) {
+  if (r.k === 'multi') return betApplyMulti(r.s);
+  if (r.k === 'single') return betApplySlip(r.s);
+  if (r.none) { setImp(r.imp); BF = r.bf; betsRender(); return; }
+  BF = r.bf; setImp(r.imp); betsRender();
+}
 async function betImport(file) {
   if (!file) return;
+  try { await slipApply(await slipRead(file)); }
+  catch (e) { setImp('Import failed: ' + (e.message || e) + '. You can still add the bet by hand.'); }
+}
+
+// ---- v257: several bet screenshots at once. Each picture is one slip. They are read one after another, kept as drafts, and nothing is saved until the user taps a save button. ----
+function betImportFiles(files) {
+  const fs = Array.from(files || []).filter(Boolean); if (!fs.length) return;
+  if (fs.length === 1 && !SQ.items.length) return betImport(fs[0]); // one picture and no list open: exactly the old one-picture flow
+  sqAdd(fs);
+}
+const sqSleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sqGet = (id) => SQ.items.find((d) => d.id === id);
+const sqFree = (d) => { if (d.url) { try { URL.revokeObjectURL(d.url); } catch (e) {} d.url = ''; } };
+const sqFocus = () => setTimeout(() => { const e = $('#sqbox'); if (e && e.firstChild) e.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 60);
+function sqAdd(fs) {
+  const room = Math.max(0, SQMAX - SQ.items.filter((d) => !d.saved).length), over = Math.max(0, fs.length - room); fs = fs.slice(0, room);
+  fs.forEach((f) => { const sig = [f.name, f.size, f.lastModified].join('|'), twin = SQ.items.find((d) => d.sig === sig); let url = ''; try { url = URL.createObjectURL(f); } catch (e) {}
+    SQ.items.push({ id: ++SQ.n, file: f, name: f.name || '', sig, url, st: twin ? 'same' : 'wait', twin: twin ? twin.id : 0, say: '' }); }); // the same picture twice is not read twice (saves an AI call); "Read it anyway" overrides
+  SQ.msg = over ? `Up to ${SQMAX} slips at a time: ${fs.length ? 'took the first ' + fs.length + ' and left out ' + over : 'the list is full, so ' + over + ' ' + (over === 1 ? 'was' : 'were') + ' left out'}. Save or skip some, then add the rest. (The limit keeps the phone's memory and the AI reader's hourly allowance safe.)` : '';
+  setImp(''); betsRender(true); sqFocus(); sqPump();
+}
+async function sqPump() { // one picture at a time, never in parallel
+  if (SQ.run) return; SQ.run = true;
+  try { let d; while ((d = SQ.items.find((x) => x.st === 'wait'))) { await sqReadOne(d); sqPaint(); if (SQ.items.some((x) => x.st === 'wait')) await sqSleep(SQ.gap); } }
+  finally { SQ.run = false; sqPaint(); }
+}
+async function sqReadOne(d) {
+  d.st = 'read'; d.say = ''; d.why = ''; d.err = ''; sqPaint();
+  const say = (m) => { d.say = m; const e = $('#sqs' + d.id); if (e) e.textContent = m; };
   try {
-    const bmp = await createImageBitmap(file); const sc = Math.min(1, 1800 / Math.max(bmp.width, bmp.height)); const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * sc); cv.height = Math.round(bmp.height * sc); cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
-    setImp('Claude is reading the slip…'); let aiErr = '';
-    try { const sd = slipFromData(await aiSlipData(cv)); window.__slip = sd;
-      if (sd.legs.length >= 2) { await betApplyMulti({ legs: sd.legs, mult: sd.mult, n: sd.legs.length, stake: sd.stake, payout: sd.payout }); return; }
-      if (sd.legs.length === 1) { const l = sd.legs[0]; if (l.manual) { BF = { step: 'prop', text: l.text, stake: sd.stake || '', odds: sd.mult || '', pt: 'x', day: dayKey(Date.now()) }; setImp(''); betsRender(); return; } betApplySlip({ t1: l.pos, t2: l.opp || '', pos: l.pos, type: l.type, line: l.line, stake: sd.stake, mult: sd.mult, payout: sd.payout, raw: '' }); return; }
-      aiErr = 'it found no bets on the slip';
-    } catch (e) { aiErr = e.message || String(e); }
-    setImp('Claude could not read it (' + aiErr + '). Trying the backup reader…'); let aiT = null; try { aiT = await aiSlipText(cv); } catch (e) {}
-    if (aiT) { window.__slip = aiT; const ms0 = parseMulti(aiT); if (ms0 && ms0.legs.length) { betApplyMulti(ms0); return; } const s0 = parseSlip(aiT); if (s0.t1 && s0.pos) { betApplySlip(s0); return; } }
-    setImp('Loading the screenshot reader…'); await loadTess();
-    const O = location.origin + location.pathname.replace(/[^/]*$/, ''); const w = await Tesseract.createWorker('eng', 1, { workerPath: O + 'tess-worker.min.js', corePath: O, langPath: O, gzip: true, logger: (x) => { if (x.status === 'recognizing text') setImp('Reading the screenshot… ' + Math.round(x.progress * 100) + '%'); } });
-    let txt = '', ms = null;
-    for (const mode of ['11', '4', '6']) { await w.setParameters({ tessedit_pageseg_mode: mode }); const { data } = await w.recognize(cv); const t = data.text || ''; const r = parseMulti(t); if (!txt) txt = t; if (r && (!ms || r.legs.length > ms.legs.length)) { ms = r; txt = t; } if (ms && ms.n && ms.legs.length >= ms.n) break; }
-    await w.terminate(); window.__slip = ms || txt;
-    if (ms) { betApplyMulti(ms); return; }
-    const s = parseSlip(txt);
-    if (!s.t1 || !s.pos) { setImp('Read the image but could not find a bet. Text I saw: "' + txt.replace(/\s+/g, ' ').slice(0, 160) + '". Send me that and I will fix the reader.'); BF = { step: 'kind' }; betsRender(); return; }
-    betApplySlip(s);
-  } catch (e) { setImp('Import failed: ' + (e.message || e) + '. You can still add the bet by hand.'); }
+    let r; const ai = Date.now() >= SQ.aiOff;
+    try { r = await slipRead(d.file, { say, ai, stop429: true }); }
+    catch (e) { if (e.status !== 429) throw e; // the AI reader's hourly limit: wait once, try again, then read on the phone and leave the AI alone for a while
+      say('The AI reader is at its limit. Waiting a few seconds, then one more try…'); await sqSleep(SQ.wait);
+      try { r = await slipRead(d.file, { say, stop429: true }); }
+      catch (e2) { if (e2.status !== 429) throw e2; SQ.aiOff = Date.now() + SQ.pause; d.dev = true; r = await slipRead(d.file, { say, ai: false }); } }
+    if (!ai) d.dev = true;
+    if (d.gone) return;
+    const x = r.k === 'multi' ? { bf: await slipMultiBF(r.s), imp: '' } : r.k === 'single' ? slipSingleBF(r.s) : r;
+    d.bf = x.sports ? null : x.bf; d.imp = x.imp || ''; d.sports = !!x.sports; d.s = r.s || null;
+    if (x.none) { d.st = 'fail'; d.why = x.imp; d.bf = null; } else { d.st = 'ok'; d.key = sqKey(d); }
+  } catch (e) { d.st = 'fail'; const m = (e && e.message) || String(e); d.why = (e && e.name === 'InvalidStateError') || /decod|image source|createImageBitmap/i.test(m) ? 'This picture could not be opened. The browser cannot read this kind of file (an iPhone HEIC photo, for example). Take a screenshot of the slip and upload that.' : 'Import failed: ' + m + '.'; }
+}
+// what a draft / a saved bet amounts to, for the duplicate check: same game, pick, line and stake (a prop: same words, stake and day)
+const sqCents = (x) => Math.round((parseFloat(x) || 0) * 100);
+const sqLegKey = (l) => (l.gid ? [l.gid, l.side, l.type, l.type === 'sp' ? Number(l.line) || 0 : 0].join(',') : 't:' + nn(l.text));
+function sqKey(d) {
+  if (d.sports && d.s) return ['x', nn(d.s.pos), nn(d.s.t2), d.s.type || 'ml', Number(d.s.line) || 0, sqCents(d.s.stake)].join('|');
+  const b = d.bf; if (!b) return '';
+  if (b.step === 'form') return ['s', b.gid, b.side, b.type, b.type === 'sp' ? Number(b.line) || 0 : 0, sqCents(b.stake)].join('|');
+  if (b.step === 'parlay') return 'p|' + b.legs.map(sqLegKey).sort().join('+') + '|' + sqCents(b.stake);
+  if (b.step === 'prop') return ['r', nn(b.text), sqCents(b.stake), b.day || ''].join('|');
+  return '';
+}
+const sqBetKey = (b) => (b.kind === 'parlay' ? 'p|' + (b.legs || []).map(sqLegKey).sort().join('+') + '|' + sqCents(b.stake) : b.kind === 'prop' ? ['r', nn(b.text), sqCents(b.stake), b.day || ''].join('|') : ['s', b.gid, b.side, b.type, b.type === 'sp' ? Number(b.line) || 0 : 0, sqCents(b.stake)].join('|'));
+function sqDup(d) {
+  if (!d.key || d.saved) return '';
+  const i = SQ.items.indexOf(d), j = SQ.items.findIndex((x) => x !== d && x.key === d.key); if (j >= 0 && j < i) return 'the same bet as slip ' + (j + 1) + ' above';
+  return BETS.some((b) => sqBetKey(b) === d.key) ? 'this bet is already in My Bets' : '';
+}
+function sqIssues(d) { // why a read slip is not "Ready"
+  const b = d.bf, o = []; if (d.err) o.push(d.err); if (d.sports) { o.push('that game is not on this football board'); return o; } if (!b) return o;
+  const st = parseFloat(b.stake) > 0, od = parseFloat(b.odds);
+  if (b.step === 'form') { if (!ALL[b.gid]) o.push('that game is on the other football page (NFL / college), so it cannot be filled in here'); if (!st) o.push('no stake read'); if (!(b.pt === 'x' ? od > 1 : Math.abs(od) >= 100)) o.push('no odds or multiplier read (it would save as −110)'); }
+  else if (b.step === 'parlay') { const miss = b.legs.filter((l) => !l.gid).length, fl = b.legs.filter((l) => l.gid && l.flag).length;
+    if (b.legs.length < 2) o.push('only ' + b.legs.length + ' leg read, a parlay needs 2'); if (miss) o.push(miss + ' leg' + (miss === 1 ? '' : 's') + ' not matched to a game (you would grade ' + (miss === 1 ? 'it' : 'them') + ' by hand)'); if (fl) o.push(fl + ' line' + (fl === 1 ? '' : 's') + ' to check');
+    if (/slip says \d+ picks/.test(b.note || '')) o.push('the slip shows a different number of picks'); if (/payout and multiplier do not match/.test(b.note || '')) o.push('payout and multiplier do not match');
+    if (!st) o.push('no stake read'); if (!(od > 1)) o.push('no payout multiplier read'); }
+  else if (b.step === 'prop') { o.push('a prop or total: check the wording, you grade it yourself'); if (!st) o.push('no stake read'); }
+  return o;
+}
+const sqReady = (d) => d.st === 'ok' && !d.saved && !sqIssues(d).length && !sqDup(d);
+function sqPayTxt(b, s) { const st = parseFloat(b.stake) || 0, od = parseFloat(b.odds), x = b.pt === 'x' && od > 1 ? od : 0, pay = s && s.payout > 0 ? s.payout : st && x ? st * x : 0; return [st ? 'stake ' + usd(st) : 'no stake', x ? x + 'x' : Math.abs(od) >= 100 ? 'odds ' + sgn(od) : 'no odds', pay ? 'pays ' + usd(pay) : ''].filter(Boolean).join(' · '); }
+function sqWhat(d) {
+  const b = d.bf;
+  if (d.sports && d.s) return `<div class="sqw"><b>${escH(d.s.pos)} ${d.s.type === 'sp' ? escH(sgn(Number(d.s.line) || 0)) + ' spread' : 'to win'}</b> <small>${escH(d.s.t1)}${d.s.t2 ? ' vs ' + escH(d.s.t2) : ''}</small></div><div class="sub">Single · ${sqPayTxt({ stake: d.s.stake, odds: d.s.mult, pt: 'x' }, d.s)}</div>`;
+  if (!b) return '';
+  if (b.step === 'form') { const g = gameOf(b.gid); return `<div class="sqw"><b>${escH(b.side)} ${b.type === 'sp' ? escH(sgn(Number(b.line) || 0)) + ' spread' : 'to win'}</b>${g ? ` <small>${escH(g.away.abbr)} @ ${escH(g.home.abbr)} · ${new Date(g.start).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</small>` : ''}</div><div class="sub">Single · ${sqPayTxt(b, d.s)}</div>`; }
+  if (b.step === 'parlay') return `<div class="sqw"><b>${b.legs.length}-leg parlay</b></div>${b.legs.map((l) => `<div class="sqleg">${legText(l)}${l.flag ? `<small style="display:block;color:#ffb020">⚠ ${escH(l.flag)}</small>` : ''}</div>`).join('')}<div class="sub">Parlay · ${sqPayTxt(b, d.s)}</div>`;
+  if (b.step === 'prop') return `<div class="sqw"><b>${escH(b.text)}</b></div><div class="sub">Prop · ${sqPayTxt(b, d.s)}${b.day ? ' · ' + escH(b.day) : ''}</div>`;
+  return '';
+}
+function sqCard(d, i) {
+  const B = (fn, t, pri) => `<button ${pri ? 'class="pri" ' : ''}onclick="${fn}(${d.id})">${t}</button>`, skip = B('sqSkip', 'Skip');
+  let tag, cls, why = '', btn;
+  if (d.saved) { tag = 'Saved ✓'; cls = 'ok'; btn = ''; }
+  else if (d.st === 'wait') { tag = 'Waiting'; cls = 'rd'; btn = skip; }
+  else if (d.st === 'read') { tag = 'Reading…'; cls = 'rd'; why = `<div class="sub" id="sqs${d.id}">${escH(d.say || 'Opening the picture…')}</div>`; btn = skip; }
+  else if (d.st === 'same') { const j = SQ.items.findIndex((x) => x.id === d.twin); tag = 'Looks like a duplicate'; cls = 'lk'; why = `<div class="sqy">The same picture as ${j >= 0 ? 'slip ' + (j + 1) : 'one already chosen'} (same file), so it was not read again.</div>`; btn = B('sqRetry', 'Read it anyway') + skip; }
+  else if (d.st === 'fail') { tag = 'Could not read'; cls = 'no'; why = `<div class="sqy" style="color:var(--red)">${escH(d.why || 'No bet found in this picture.')}</div>`; btn = B('sqRetry', 'Try again') + B('sqHand', 'Enter by hand') + skip; }
+  else { const dup = sqDup(d), is = sqIssues(d), other = d.bf && d.bf.step === 'form' && !ALL[d.bf.gid];
+    if (dup) { tag = 'Looks like a duplicate'; cls = 'lk'; why = `<div class="sqy">Looks like a duplicate: ${escH(dup)}. It is left out of “Save all ready”. Open it only if it is a second bet you really placed.</div>`; }
+    else if (is.length) { tag = 'Needs a look'; cls = 'lk'; } else { tag = 'Ready'; cls = 'ok'; }
+    if (is.length) why += `<div class="sqy">Needs a look: ${escH(is.join('; '))}.</div>`;
+    if (d.imp) why += `<div class="sqy">${escH(d.imp)}</div>`; if (d.dev) why += `<div class="sub">Read on this phone (the AI reader was at its limit), so check it closely.</div>`;
+    if (d.sports) why += `<div class="sub">“Find game &amp; save” looks for it in NBA / NHL / MLB / college basketball and saves it straight away if it is there.</div>`;
+    btn = (d.sports ? B('sqReview', 'Find game &amp; save', 1) : other ? '' : B('sqReview', 'Review &amp; save', 1)) + (d.sports || other ? B('sqHand', 'Enter by hand') : '') + skip; }
+  return `<div class="sqc">${d.url ? `<img src="${d.url}" alt="Picture of slip ${i + 1}" onerror="this.style.visibility='hidden'">` : ''}<div class="sqb"><div class="sqh"><span><b>Slip ${i + 1}</b>${d.name ? ` <small>${escH(d.name.length > 26 ? d.name.slice(0, 12) + '…' + d.name.slice(-10) : d.name)}</small>` : ''}</span><span class="sqt ${cls}">${tag}</span></div>${sqWhat(d)}${why}${btn ? `<div class="bbtn">${btn}</div>` : ''}</div></div>`;
+}
+function sqHtml() {
+  const L = SQ.items; if (!L.length) return '';
+  if (SQ.cur) { const i = L.findIndex((d) => d.id === SQ.cur); return `<div class="sqbar"><span><b>Slip ${i + 1} of ${L.length}</b> · ${SQ.busy ? 'looking for the game…' : 'check it below, then Save. Nothing is saved until you do.'}</span>${SQ.busy ? '' : '<button onclick="sqBack()">← Back to the list</button>'}</div>`; }
+  const rd = L.findIndex((d) => d.st === 'read'), wt = L.some((d) => d.st === 'wait'), ready = L.filter(sqReady).length, saved = L.filter((d) => d.saved).length, look = L.length - saved - ready;
+  const prog = rd >= 0 ? `Reading slip ${rd + 1} of ${L.length}…` : wt ? 'Getting the next slip…' : `Done reading: ${ready} ready, ${look} need${look === 1 ? 's' : ''} a look${saved ? ', ' + saved + ' saved' : ''}.`;
+  return `<div class="sqp"><div class="gh">Bet screenshots · ${L.length} slip${L.length === 1 ? '' : 's'}</div><div class="sub" id="sqprog" role="status">${prog}</div>${SQ.msg ? `<div class="note" id="sqmsg" style="color:var(--ink)">${escH(SQ.msg)}</div>` : ''}
+    ${L.map(sqCard).join('')}
+    <div class="bbtn" style="border-top:1px solid var(--line);padding-top:10px">${ready ? `<button class="pri" onclick="sqSaveAll()">Save all ready (${ready})</button>` : ''}<label class="sqadd">＋ Add more pictures<input type="file" accept="image/*" multiple hidden onchange="betImportFiles(this.files);this.value=''"></label>${saved && saved < L.length ? '<button onclick="sqClear(1)">Clear saved</button>' : ''}<button onclick="sqClear()">Close list</button></div>
+    <div class="sub" style="margin-top:8px">One picture is one slip (a single bet or a parlay), up to ${SQMAX} at a time, read one after another. Nothing is saved until you tap a save button. The list stays while the app is open; reloading the app clears slips that were not saved.</div></div>`;
+}
+function sqPaint() { const e = $('#sqbox'); if (!e) return; const h = sqHtml(); if (e.__h !== h) { e.innerHTML = h; e.__h = h; } }
+function sqSaved(d, bet) { // show what actually went into My Bets (the user may have changed it on the form)
+  d.saved = true; d.betId = bet.id; d.err = ''; d.imp = ''; d.sports = false; d.st = 'ok'; d.s = null; d.file = null; sqFree(d);
+  d.bf = bet.kind === 'parlay' ? { step: 'parlay', legs: bet.legs || [] } : bet.kind === 'prop' ? { step: 'prop', text: bet.text, day: bet.day } : { step: 'form', gid: bet.gid, side: bet.side, type: bet.type, line: bet.line };
+  Object.assign(d.bf, { stake: bet.stake || '', odds: bet.mult || (bet.odds && bet.odds !== -110 ? bet.odds : ''), pt: bet.mult ? 'x' : 'am' });
+}
+function sqReviewEnd() { // the form opened from a slip has closed (called by betsRender): saved if a new bet appeared, otherwise the slip just goes back to the list
+  const d = sqGet(SQ.cur), ids = SQ.ids || new Set(); SQ.cur = null; SQ.ids = null; if (!d) return;
+  const nb = BETS.filter((b) => !ids.has(b.id) && b.src !== 'kalshi'); if (nb.length) { sqSaved(d, nb[nb.length - 1]); SQ.msg = 'Saved ✓ Slip ' + (SQ.items.indexOf(d) + 1) + ' is in My Bets.'; }
+  sqFocus();
+}
+function sqOpen(d) { if (SQ.cur || SQ.busy) return false; if (BF) { SQ.msg = 'Finish or cancel the bet form that is open first.'; sqPaint(); return false; } SQ.msg = ''; SQ.cur = d.id; SQ.ids = new Set(BETS.map((b) => b.id)); return true; }
+async function sqReview(id) {
+  const d = sqGet(id); if (!d || d.st !== 'ok' || d.saved) return; if (d.bf && d.bf.step === 'form' && !ALL[d.bf.gid]) return sqHand(id); if (!sqOpen(d)) return;
+  if (d.sports) { SQ.busy = true; sqPaint(); try { await slipSports(d.s); } catch (e) { setImp('Could not look that game up: ' + (e.message || e)); } finally { SQ.busy = false; } betsRender(true); sqFocus(); return; } // slipSports saves it if it finds the game (the user tapped "Find game & save"), else leaves the pick-a-game form open
+  BF = JSON.parse(JSON.stringify(d.bf)); setImp(d.imp || ''); betsRender(true); sqFocus(); // the same pre-filled form the one-picture import shows
+}
+function sqHand(id) { const d = sqGet(id); if (!d || d.saved || !sqOpen(d)) return; BF = { step: 'kind' }; setImp(''); betsRender(true); sqFocus(); }
+function sqBack() { if (SQ.busy) return; BF = null; betsRender(true); }
+function sqSkip(id) { const d = sqGet(id); if (!d || SQ.cur === id) return; d.gone = true; sqFree(d); SQ.items = SQ.items.filter((x) => x !== d); if (!SQ.items.length) SQ.msg = ''; sqPaint(); }
+function sqRetry(id) { const d = sqGet(id); if (!d || d.saved || !d.file || d.st === 'read') return; d.st = 'wait'; d.twin = 0; d.bf = null; d.key = ''; d.why = ''; d.err = ''; d.dev = false; SQ.msg = ''; sqPaint(); sqPump(); }
+function sqClear(savedOnly) {
+  if (SQ.cur || SQ.busy) return; const out = SQ.items.filter((d) => (savedOnly ? d.saved : true)), open = out.filter((d) => !d.saved).length;
+  if (open && !confirm('Close the list? ' + open + ' slip' + (open === 1 ? ' has' : 's have') + ' not been saved and will be dropped.')) return;
+  out.forEach((d) => { d.gone = true; sqFree(d); }); SQ.items = SQ.items.filter((d) => !out.includes(d)); SQ.msg = ''; sqPaint();
+}
+// Save every Ready slip through the normal save functions (betSave / parlaySave), one after another. Needs-a-look, duplicates and unread slips are left for the user.
+function sqSaveAll() {
+  if (SQ.cur || SQ.busy) return; if (BF) { SQ.msg = 'Finish or cancel the bet form that is open first.'; sqPaint(); return; }
+  const bfEl = $('#bform'); if (bfEl) bfEl.innerHTML = ''; // the save functions read any form fields on screen; make sure there are none
+  let n = 0;
+  for (const d of SQ.items.slice()) {
+    if (!sqReady(d)) continue; // checked again for each one, so two copies of the same bet can never both go in
+    const ids = new Set(BETS.map((b) => b.id)); BF = JSON.parse(JSON.stringify(d.bf));
+    try { (BF.step === 'parlay' ? parlaySave : betSave)(); } catch (e) {}
+    const nb = BETS.find((b) => !ids.has(b.id)); BF = null;
+    if (nb) { sqSaved(d, nb); n++; } else d.err = 'it did not save, open it and check';
+  }
+  const left = SQ.items.filter((d) => !d.saved).length;
+  setImp('');
+  SQ.msg = 'Saved ' + n + (left ? ', ' + left + ' need' + (left === 1 ? 's' : '') + ' a look' : '') + '.'; betsRender(true); sqFocus();
 }
 function betFromGame(gid) { setView('bets'); betPick(gid); window.scrollTo(0, 0); }
 (function midnight() { const n = new Date(); const ms = new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1, 0, 0, 2) - n; setTimeout(() => { if (typeof render === 'function' && VIEW === 'bets') render(); midnight(); }, ms); })();
@@ -1131,14 +1314,14 @@ function legDrop(i) { betSync(); BF.legs.splice(i, 1); betsRender(); }
 function parlaySave() {
   betSync(); if (BF.legs.length < 2) { BF.note = 'A parlay needs at least 2 legs.'; betsRender(); return; }
   const old = BF.id ? BETS.find((x) => x.id === BF.id) : null; const first = BF.legs.find((l) => l.gid && gameOf(l.gid));
-  const b = old || { id: 'b' + Date.now(), kind: 'parlay', t: Date.now(), week: first ? gameOf(first.gid).week : CUR, day: first ? dayKey(Math.min(...BF.legs.filter((l) => l.gid && gameOf(l.gid)).map((l) => gameOf(l.gid).start))) : dayKey(Date.now()) };
+  const b = old || { id: betNewId(), kind: 'parlay', t: Date.now(), week: first ? gameOf(first.gid).week : CUR, day: first ? dayKey(Math.min(...BF.legs.filter((l) => l.gid && gameOf(l.gid)).map((l) => gameOf(l.gid).start))) : dayKey(Date.now()) };
   b.legs = BF.legs.map((l) => { const c = { ...l }; delete c.flag; delete c.miss; return c; }); applyPay(b); delete b.fin; delete b.finPL; if (!old) BETS.push(b); betsSave(); BF = null; betsRender();
 }
 function propSave() {
   betSync(); const tr = BF.pg && (BF.pl || '').trim() && BF.pn !== undefined && BF.pn !== '' && !isNaN(parseFloat(BF.pn)); if (!(BF.text || '').trim() && !tr) { BF.note = 'Describe the bet first, or fill in the live tracking fields.'; betsRender(); return; }
   if (tr && !(BF.text || '').trim()) { const g0 = ALL[BF.pg]; BF.text = `${BF.pl.trim()} ${BF.pr === 'under' ? 'under' : 'over'} ${parseFloat(BF.pn)} ${(PSTATS[BF.ps] || 'rushing yards').toLowerCase()}${g0 ? ' (' + g0.away.abbr + '@' + g0.home.abbr + ')' : ''}`; }
   const old = BF.id ? BETS.find((x) => x.id === BF.id) : null;
-  const b = old || { id: 'b' + Date.now(), kind: 'prop', t: Date.now(), week: CUR };
+  const b = old || { id: betNewId(), kind: 'prop', t: Date.now(), week: CUR };
   b.text = BF.text.trim(); b.day = BF.day || dayKey(Date.now()); if (tr) { b.pp = { gid: BF.pg, name: BF.pl.trim(), stat: BF.ps || 'rushYds', line: parseFloat(BF.pn), dir: BF.pr === 'under' ? 'under' : 'over' }; const g1 = ALL[BF.pg]; if (g1) b.day = dayKey(g1.start); if (b.auto) { delete b.res; delete b.auto; } } else { delete b.pp; } if (!old && BF.res) b.res = BF.res; applyPay(b); delete b.fin; delete b.finPL; if (!old) BETS.push(b); betsSave(); BF = null; betsRender(); setTimeout(() => { try { propTick(); } catch (e) {} }, 400);
 }
 function addMenu(v) { window.__addm = v === undefined ? !window.__addm : !!v; const m = $('#addmenu'); if (m) m.hidden = !window.__addm; }
@@ -1191,7 +1374,7 @@ function betFormHtml() {
 function betSave() {
   betSync(); const g = ALL[BF.gid]; if (!g) return; const p = pred(g);
   const old = BF.id ? BETS.find((x) => x.id === BF.id) : null;
-  const b = old || { id: 'b' + Date.now(), gid: g.id, week: g.week, away: g.away.abbr, home: g.home.abbr, day: dayKey(g.start), t: Date.now(), appSu: p.su.abbr, appConf: +p.conf.toFixed(3), appAts: p.ats ? p.ats.side.abbr : null, appLine: g.line };
+  const b = old || { id: betNewId(), gid: g.id, week: g.week, away: g.away.abbr, home: g.home.abbr, day: dayKey(g.start), t: Date.now(), appSu: p.su.abbr, appConf: +p.conf.toFixed(3), appAts: p.ats ? p.ats.side.abbr : null, appLine: g.line };
   b.side = BF.side; b.type = BF.type; b.line = BF.type === 'sp' ? BF.line : 0; b.stake = parseFloat(BF.stake) || null; if (BF.pt === 'x' && parseFloat(BF.odds) > 1) { b.mult = parseFloat(BF.odds); b.odds = -110; } else { b.mult = null; b.odds = Math.abs(parseFloat(BF.odds)) >= 100 ? parseFloat(BF.odds) : -110; }
   if (!old) BETS.push(b);
   betsSave(); BF = null; betsRender();
@@ -1599,7 +1782,7 @@ async function alertPush() {
   ASQ = Date.now();
   try { const r = await fetch(ALU, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': alertTok() }, body: JSON.stringify({ week: CUR, rec: { lock: a.lock, dogs: a.dogs, helper: { id: h.g.id, abbr: h.abbr, conf: h.conf } } }) }); if (!r.ok) return; const j = await r.json(); if (j && j.rec && j.week === CUR && alertTake(Object.assign({}, ASV, { [CUR]: j.rec }))) render(); } catch (e) {}
 }
-async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=256')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
+async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=257')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
 const trGrade = (p) => { const g = ALL[p.id]; if (!g || g.state !== 'post') return null; const m = (g.home.abbr === p.abbr ? 1 : -1) * (g.home.score - g.away.score) + p.line; return m === 0 ? 'push' : m > 0 ? 'hit' : 'miss'; };
 function trophyData() {
   if (CFB || !window.Trophy || !Trophy.ready()) return null;
@@ -2783,6 +2966,6 @@ if ('serviceWorker' in navigator) {
 })();
 </script>
 <script>setTimeout(()=>{const l=document.querySelector('.lg'),o=l&&l.querySelector('.on');if(o)l.scrollLeft=Math.max(0,o.offsetLeft-60);},500);</script>
-<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=256"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
+<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=257"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
 </body>
 </html>

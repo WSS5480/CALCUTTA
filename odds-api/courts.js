@@ -25,14 +25,13 @@ const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.k
 const GOOGLE = 'https://places.googleapis.com/v1/places:searchText';
 const GOOGLE_FIELDS = 'places.id,places.displayName,places.formattedAddress,places.location';
 const R_DEF = 15, R_MAX = 50, R_MIN = 1, PAD = 1; // miles; PAD covers the rounding of the point
-const SET_TTL = 5 * 6e4, SET_RETRY = 6e4, SET_WAIT = 6000;
 const GEO_TTL = 864e5, GEO_MISS_TTL = 36e5, GEO_GAP = 1100, GEO_MAX = 500, GEO_QUEUE = 5;
 const CT_TTL = 6 * 36e5, FB_TTL = 10 * 6e4, CT_MAX = 300, MAX_OUT = 60, MAX_EL = 400, DEDUP_M = 60;
 const RL_MAX = 12; // requests a minute per IP
 const SRC = { osm: 'OpenStreetMap contributors', google: 'Google' };
 
-let SET, GEO, CT, RL, geoChain, geoLast, geoWaiting, KEYS;
-function reset() { SET = { t: 0, good: null, job: null }; GEO = new Map(); CT = new Map(); RL = new Map(); geoChain = Promise.resolve(); geoLast = 0; geoWaiting = 0; KEYS = new Set(); }
+let GEO, CT, RL, geoChain, geoLast, geoWaiting, KEYS;
+function reset() { require('./appsettings')._reset(); GEO = new Map(); CT = new Map(); RL = new Map(); geoChain = Promise.resolve(); geoLast = 0; geoWaiting = 0; KEYS = new Set(); }
 reset();
 
 const send = (res, code, o) => { res.statusCode = code; res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json'); res.setHeader('Cache-Control', 'no-store'); res.end(JSON.stringify(o)); };
@@ -44,23 +43,11 @@ const timeout = (ms) => (typeof AbortSignal !== 'undefined' && AbortSignal.timeo
 // ---------- settings ----------
 const provName = (v) => { const s = String(v == null ? '' : v).trim().toLowerCase(); return s === 'google' || s === 'google_places' || s === 'places' ? 'google' : s === 'osm' || s === 'openstreetmap' || s === 'free' ? 'osm' : ''; };
 const keyOf = (v) => { const s = typeof v === 'string' ? v.trim() : ''; return s && s.length <= 200 && !/\s/.test(s) ? s : ''; };
-async function readMyApps() {
-  let ready = false; try { ready = !!D.maReady(); } catch (e) {}
-  if (!ready) return null;
-  let timer; const late = new Promise((r) => { timer = setTimeout(() => r(null), SET_WAIT); });
-  try {
-    const r = await Promise.race([D.ma('/api/v1/app/settings', {}), late]);
-    const s = r && r.ok && r.j && r.j.ok === true && r.j.settings && typeof r.j.settings === 'object' ? r.j.settings : null;
-    return s ? { provider: provName(s.courts_provider), key: keyOf(s.google_places_key) } : null;
-  } catch (e) { log('settings read failed'); return null; } finally { clearTimeout(timer); }
-}
+// The My Apps read (5-minute cache, last good answer kept) is shared with /appcfg: appsettings.js. Only the two court fields are taken from it.
+const readSettings = () => require('./appsettings').get({ ma: (p, d) => D.ma(p, d), maReady: () => D.maReady(), now: () => D.now(), log: (m) => log(m) });
 async function settings() {
-  const now = D.now();
-  if (!SET.t || now >= SET.t) {
-    if (!SET.job) SET.job = readMyApps().then((v) => { if (v) { SET.good = v; SET.t = D.now() + SET_TTL; } else SET.t = D.now() + SET_RETRY; }).catch(() => { SET.t = D.now() + SET_RETRY; }).then(() => { SET.job = null; });
-    await SET.job;
-  }
-  const m = SET.good || {}, envP = provName(D.env('COURTS_PROVIDER')), envK = keyOf(D.env('GOOGLE_PLACES_API_KEY'));
+  let raw = null; try { raw = await readSettings(); } catch (e) {}
+  const m = raw ? { provider: provName(raw.courts_provider), key: keyOf(raw.google_places_key) } : {}, envP = provName(D.env('COURTS_PROVIDER')), envK = keyOf(D.env('GOOGLE_PLACES_API_KEY'));
   const key = m.key || envK, want = m.provider || envP || 'osm';
   if (key) KEYS.add(key);
   return { provider: want === 'google' && key ? 'google' : 'osm', key, from: m.provider || m.key ? 'myapps' : envP || envK ? 'env' : 'default' };

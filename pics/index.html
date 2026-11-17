@@ -146,6 +146,27 @@ html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
 .chips button,.lm .tg button,.legbtn button,.bbtn button,#bform .card>button,.nbar button,.nchips button,.lkbar button,.swk button,.svrow button,.svwk button,.pill,.lchips button{min-height:44px}.chips button,.lm .tg button,.legbtn button{padding-left:14px;padding-right:14px}.ibtn{padding:12px!important;top:0!important;right:2px!important;min-width:44px;min-height:44px;box-sizing:border-box;text-align:center}.ish button{width:44px;height:44px}.lg button,.gvbar button,.hrow button{min-height:44px}.bn button{min-height:48px}
 .dsc{margin-top:6px;font-size:12px}.dsc summary{cursor:pointer;opacity:.85;font-weight:600;list-style:none}.dsc summary::-webkit-details-marker{display:none}.dsc[open] summary{margin-bottom:4px}
 /* v256 team page: above Multiview (250) and the info sheet (300), far above the My Bets banner (40) */
+/* v260: bet cards (score pop-up + Today's bets). Every colour comes from the --bc-* properties of the wrapper .bc; a preset class swaps them. */
+.bc{--bc-bg:linear-gradient(135deg,#003594,#041e42);--bc-border:#8a97b3;--bc-text:#ffffff;--bc-dim:#c9d3e6;--bc-win-bg:#0c4a2b;--bc-win-text:#a7f3c5;--bc-lose-bg:#5a1a20;--bc-lose-text:#ffc7c7;--bc-neutral-bg:#0a1f47;--bc-neutral-text:#e3eaf7}
+.bc.bc-black{--bc-bg:#111111;--bc-border:#26324d;--bc-text:#ffffff;--bc-dim:#9aa6bd;--bc-win-bg:#143d1c;--bc-win-text:#b9f5c2;--bc-lose-bg:#4a1616;--bc-lose-text:#ffc2c2;--bc-neutral-bg:#1d2740;--bc-neutral-text:#c9d6f2}
+.bc.bc-light{--bc-bg:#ffffff;--bc-border:#c3cad8;--bc-text:#1a2233;--bc-dim:#4d586b;--bc-win-bg:#dcf5e6;--bc-win-text:#0b5a30;--bc-lose-bg:#fde3e3;--bc-lose-text:#8f1a1a;--bc-neutral-bg:#e8ecf3;--bc-neutral-text:#1a2233}
+.bc.bc-green{--bc-bg:linear-gradient(135deg,#0e5a36,#083d24);--bc-border:#5fae84;--bc-text:#ffffff;--bc-dim:#cfe8da;--bc-win-bg:#052a17;--bc-win-text:#a7f3c5;--bc-lose-bg:#5a1a20;--bc-lose-text:#ffc7c7;--bc-neutral-bg:#06301c;--bc-neutral-text:#e6f4ec}
+.scc{background:var(--bc-bg);color:var(--bc-text);border:1px solid var(--bc-border);border-radius:20px;padding:12px 14px;margin:0 0 10px;font:14px/1.25 system-ui;text-align:left;box-sizing:border-box}
+.sct{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 8px}.scc.hasx>.sct:first-child{padding-right:36px;min-height:28px}.sct.scb{margin-top:8px;justify-content:flex-start}
+.scl{min-width:0;overflow-wrap:anywhere}.scl b{font-size:15px;font-weight:700}.scl small{color:var(--bc-dim);font-size:13px}
+.scp{border-radius:999px;padding:4px 10px;font:700 12.5px/1.3 system-ui;background:var(--bc-neutral-bg);color:var(--bc-neutral-text);overflow-wrap:anywhere}.scp.g{background:var(--bc-win-bg);color:var(--bc-win-text)}.scp.r{background:var(--bc-lose-bg);color:var(--bc-lose-text)}
+.scg{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1.15fr) auto minmax(0,1fr);align-items:center;gap:6px;margin:10px 0 4px;text-align:center}
+.scT b{display:block;font-size:19px;font-weight:900;letter-spacing:.02em}.scT small{display:block;color:var(--bc-text);font-size:12.5px;font-weight:600;overflow-wrap:anywhere}.scT .scto{color:var(--bc-dim);letter-spacing:2px;font-size:9px}.scbar{display:block;width:26px;height:3px;border-radius:2px;margin:2px auto 3px}.scball{font-size:12px;margin-right:3px}
+.scS{font:800 36px/1 system-ui;font-variant-numeric:tabular-nums;padding:0 2px}.scS.pre{color:var(--bc-dim)}
+.scC{min-width:0}.scC b{display:block;font-size:15px}.scC small{display:block;color:var(--bc-dim);font-size:12.5px;font-weight:600;overflow-wrap:anywhere}
+.scf{margin-top:6px;color:var(--bc-text);font-size:12.5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}.scm{margin-top:4px;color:var(--bc-dim);font-size:12px}
+.scdot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#ef4444;margin-right:5px;vertical-align:middle}
+#spop{position:fixed;left:8px;right:8px;bottom:76px;margin:0 auto;max-width:460px;z-index:400;border-radius:20px;box-shadow:0 8px 26px #000b;opacity:0;transition:opacity .2s}#spop.in{opacity:1}#spop[hidden]{display:none}
+@media (prefers-reduced-motion:reduce){#spop{transition:none}}
+#spop .spb{display:block;width:100%;background:none;border:0;padding:0;margin:0;color:inherit;font:inherit;text-align:left;cursor:pointer;border-radius:20px}#spop .scc{margin:0}
+#spop .spx{position:absolute;top:0;right:0;width:44px;height:44px;background:none;border:0;color:var(--bc-dim);font:700 17px system-ui;cursor:pointer;border-radius:0 20px 0 12px}
+.tbback{padding:8px 12px;min-height:40px;border:1px solid var(--line);border-radius:9px;background:none;color:inherit;font-weight:700}
+#spset{margin-top:8px}#spset label{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-weight:700}#spsel{min-height:44px;padding:8px 10px;border:1px solid rgba(255,255,255,.55);border-radius:12px;background:rgba(0,0,0,.28);color:#fff;font:700 14px system-ui}#spsel option{color:#111;background:#fff}
 #teampage{position:fixed;inset:0;z-index:350;background:var(--bg,#0b0f17);color:var(--ink);overflow:hidden}#teampage[hidden]{display:none}
 .tpw{display:flex;flex-direction:column;height:100%;max-width:820px;margin:0 auto}
 .tph{display:flex;align-items:center;gap:8px;padding:calc(10px + env(safe-area-inset-top)) 12px 10px;color:#fff}
@@ -234,10 +255,10 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v259 -->
+<!-- Pics v260 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v259</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v260</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
   <div id="arbbar" class="arbbar" hidden onclick="arbBarTap()" role="button" aria-label="Arbitrage alert"><span class="mq" id="arbmq"></span></div>
   <div class="mrow" id="mrow"><label><span>League</span><select id="lgsel" aria-label="League" autocomplete="off"><option value="nfl">🏈 NFL</option><option value="cfb">🎓 NCAA</option><option value="pickleball">🏓 Pickleball</option><option value="nba">🏀 NBA</option><option value="mlb">⚾ MLB</option><option value="nhl">🏒 NHL</option><option value="ncaab">🏀 NCAAB</option></select></label><label id="gvlab"><span>View</span><select id="gvsel" aria-label="View" autocomplete="off" onchange="gvSet(this.value)"></select></label></div>
   <div class="srow"><input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team"><select id="conf" aria-label="Conference"><option value="">All</option></select></div>
@@ -245,8 +266,9 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v259 (find local pickleball courts)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v260 (score pop-ups · today's bets cards)</div>
   <div class="sub nsw" id="nsw"></div>
+  <div class="sub" id="spset"><label>Score pop-ups <select id="spsel" aria-label="Score pop-ups" autocomplete="off" onchange="spSet(this.value)"><option value="mine">My bets only</option><option value="all">All live games</option><option value="off">Off</option></select></label><div style="font-size:11px;opacity:.75;margin-top:4px">A card pops up when a live game scores or ends, with where your bets stand right now.</div></div>
   </details>
 </header>
 <main>
@@ -263,7 +285,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </div>
 <div id="plb" hidden></div>
 <nav class="bn" id="bn"></nav>
-<script src="trophy.js?v=259"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
+<script src="trophy.js?v=260"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
 <script>
 const SC = document.getElementById('sc');
 // The page scrolls inside #sc so the banner and bottom bar (outside it) can never drift on iOS
@@ -568,7 +590,7 @@ function legGrade(l) {
     const margin = (l.side === g.home.abbr ? 1 : -1) * (g.home.score - g.away.score), m = isOU ? (/^O/i.test(l.side || '') ? tot - Number(l.line) : Number(l.line) - tot) : l.type === 'sp' ? margin + Number(l.line) : margin;
     if (!isFinite(m)) return { st: 'pending', g };
     const r = m > 0 ? 'won' : m < 0 ? 'lost' : 'push';
-    return g.state === 'in' ? { st: 'live', cur: r, g } : { st: r, g };
+    return g.state === 'in' ? { st: 'live', cur: r, g, m } : { st: r, g, m };
   }
   return { st: l.res === 'void' ? 'push' : l.res || 'pending' };
 }
@@ -594,7 +616,7 @@ function betGradeOne(b) {
   const m = isOU ? (/^O/i.test(b.side || '') ? tot - Number(b.line) : Number(b.line) - tot) : b.type === 'sp' ? margin + Number(b.line) : margin;
   if (!isFinite(m)) return { st: 'pending', g };
   const r = m > 0 ? 'won' : m < 0 ? 'lost' : 'push';
-  return g.state === 'in' ? { st: 'live', cur: r, g } : { st: r, g };
+  return g.state === 'in' ? { st: 'live', cur: r, g, m } : { st: r, g, m };
 }
 
 // Games from the other league (e.g. a college bet while the NFL tab is open): light scoreboard so bets still grade
@@ -610,8 +632,9 @@ async function xlLoad(full) {
   const dts = new Set();
   if (full) for (let k = 0; k <= 3; k++) { const d = new Date(); d.setDate(d.getDate() + k); dts.add(d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0')); } // a slip import: also fetch today and the next 3 days of the other league (its default 'current week' can still be LAST week on a Saturday)
   BETS.forEach((b) => { const miss = (b.kind === 'parlay' ? b.legs : [b]).some((l) => l.gid && !ALL[l.gid] && !(XL[l.gid] && XL[l.gid].state === 'post')); if (miss && b.day && !b.lg) { for (let k = -1; k <= 3; k++) { const d = new Date(b.day + 'T12:00:00'); d.setDate(d.getDate() + k); dts.add(d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0')); } } });
-  const urls = ['?seasontype=2' + sx, ...[...weeks].map((w) => '?week=' + w + '&seasontype=2' + sx), ...[...dts].slice(0, 14).map((d) => '?dates=' + d + (CFB ? '' : '&groups=80&limit=400'))]; let changed = false;
-  for (const u of urls) { try { const j = await (await fetch(base + u)).json(); (j.events || []).forEach((e) => { const c = e.competitions[0], t = e.status.type, cs = c.competitors.map((x) => ({ abbr: ab(x.team.abbreviation), name: x.team.displayName || x.team.location || '', logo: x.team.logo || '', score: parseInt(x.score, 10) || 0, home: x.homeAway === 'home' })).sort((a, b) => a.home - b.home); const g = { id: e.id, week: (j.week && j.week.number) || 0, start: +new Date(e.date), state: t.state, detail: t.shortDetail || '', away: cs[0], home: cs[1], line: null }; const o = XL[g.id]; if (!o || o.state !== g.state || o.away.score !== g.away.score || o.home.score !== g.home.score) changed = true; XL[g.id] = g; }); } catch (e) {} }
+  const urls = ['?seasontype=2' + sx, ...[...weeks].map((w) => '?week=' + w + '&seasontype=2' + sx), ...[...dts].slice(0, 14).map((d) => '?dates=' + d + (CFB ? '' : '&groups=80&limit=400'))]; let changed = false; const got = [];
+  for (const u of urls) { try { const j = await (await fetch(base + u)).json(); (j.events || []).forEach((e) => { const c = e.competitions[0], t = e.status.type, cs = c.competitors.map((x) => ({ abbr: ab(x.team.abbreviation), name: x.team.displayName || x.team.location || '', logo: x.team.logo || '', score: parseInt(x.score, 10) || 0, home: x.homeAway === 'home' })).sort((a, b) => a.home - b.home); const g = { id: e.id, week: (j.week && j.week.number) || 0, start: +new Date(e.date), state: t.state, detail: t.shortDetail || '', per: (e.status && e.status.period) || 0, away: cs[0], home: cs[1], line: null }; const o = XL[g.id]; if (!o || o.state !== g.state || o.away.score !== g.away.score || o.home.score !== g.home.score) changed = true; XL[g.id] = g; got.push(g); }); } catch (e) {} }
+  try { spScan(got, 'xl'); } catch (e) {}
   XLBUSY = 0; if (changed) xlPersist(); if (changed && !BF && !KFORM) betsRender();
 }
 setInterval(() => { if (!document.hidden) xlLoad(); }, 60000); setTimeout(xlLoad, 4000);
@@ -622,8 +645,9 @@ let XSBUSY = 0;
 async function xlSports() {
   if (XSBUSY && Date.now() - XSBUSY < 50000) return; const need = {};
   BETS.forEach((b) => { if (['nba', 'mlb', 'nhl', 'ncaab'].includes(b.lg) && b.gid && b.day && !(XL[b.gid] && XL[b.gid].state === 'post')) { need[b.lg] = need[b.lg] || new Set(); const d = new Date(b.day + 'T12:00:00'); [-1, 0, 1].forEach((k) => { const e = new Date(d); e.setDate(e.getDate() + k); need[b.lg].add(e.getFullYear() + String(e.getMonth() + 1).padStart(2, '0') + String(e.getDate()).padStart(2, '0')); }); } });
-  const L = Object.keys(need); if (!L.length) return; XSBUSY = Date.now(); let changed = false;
-  for (const lg of L) for (const dt of need[lg]) { try { const j = await (await fetch('https://site.api.espn.com/apis/site/v2/sports/' + ({ nba: 'basketball/nba', mlb: 'baseball/mlb', nhl: 'hockey/nhl', ncaab: 'basketball/mens-college-basketball' }[lg]) + '/scoreboard?dates=' + dt + '&limit=400' + (lg === 'ncaab' ? '&groups=50' : ''))).json(); (j.events || []).forEach((e) => { const c = e.competitions[0], t = e.status.type, cs = c.competitors.map((x) => ({ abbr: x.team.abbreviation, name: x.team.displayName || '', logo: x.team.logo || '', score: parseInt(x.score, 10) || 0, home: x.homeAway === 'home' })).sort((a, b) => a.home - b.home); const g = { id: e.id, week: 0, start: +new Date(e.date), state: t.state, detail: t.shortDetail || '', away: cs[0], home: cs[1], line: null }; const o = XL[g.id]; if (!o || o.state !== g.state || o.away.score !== g.away.score || o.home.score !== g.home.score) changed = true; XL[g.id] = g; }); } catch (e) {} }
+  const L = Object.keys(need); if (!L.length) return; XSBUSY = Date.now(); let changed = false; const got = [];
+  for (const lg of L) for (const dt of need[lg]) { try { const j = await (await fetch('https://site.api.espn.com/apis/site/v2/sports/' + ({ nba: 'basketball/nba', mlb: 'baseball/mlb', nhl: 'hockey/nhl', ncaab: 'basketball/mens-college-basketball' }[lg]) + '/scoreboard?dates=' + dt + '&limit=400' + (lg === 'ncaab' ? '&groups=50' : ''))).json(); (j.events || []).forEach((e) => { const c = e.competitions[0], t = e.status.type, cs = c.competitors.map((x) => ({ abbr: x.team.abbreviation, name: x.team.displayName || '', logo: x.team.logo || '', score: parseInt(x.score, 10) || 0, home: x.homeAway === 'home' })).sort((a, b) => a.home - b.home); const g = { id: e.id, week: 0, start: +new Date(e.date), state: t.state, detail: t.shortDetail || '', per: (e.status && e.status.period) || 0, away: cs[0], home: cs[1], line: null }; const o = XL[g.id]; if (!o || o.state !== g.state || o.away.score !== g.away.score || o.home.score !== g.home.score) changed = true; XL[g.id] = g; got.push(g); }); } catch (e) {} }
+  try { spScan(got, 'xl'); } catch (e) {}
   XSBUSY = 0; if (changed) xlPersist(); if (changed && !BF && !KFORM) betsRender();
 }
 setInterval(() => { if (!document.hidden) xlSports(); }, 60000); setTimeout(xlSports, 4500);
@@ -713,7 +737,7 @@ function betsRender(force) {
   const pb = $('#plb'); if (pb) {
     pb.className = net >= 0 ? 'pos' : 'neg';
     pb.innerHTML = `<small class="lbl">TODAY</small><span class="amt">${money(net)}</span><small>risked ${riskTxt(td.risk)} · ${td.w}-${td.l}${td.p ? '-' + td.p : ''}</small>${td.live || td.settled ? `<small>settled ${money(td.settled)} · live ${money(td.live)}</small>` : ''}<small>tap for each bet ▾</small><div id="plbd" ${window.__plbo ? '' : 'hidden'}>${brk || '<div class="bk"><span>No bets today</span></div>'}<div class="bk tot"><span>Total wagered</span><b>${riskTxt(td.risk)}</b></div><div class="bk tot2"><span>Net today</span><b>${money(net)}</b></div></div>`;
-    try { localStorage.setItem('plbhtml26', pb.innerHTML); } catch (e) {} setTimeout(plbFit, 0); pb.onclick = () => { window.__plbo = !window.__plbo; const d = $('#plbd'); if (d) d.hidden = !window.__plbo; clearTimeout(window.__plbt); if (window.__plbo) window.__plbt = setTimeout(plbClose, 7000); };
+    try { localStorage.setItem('plbhtml26', pb.innerHTML); } catch (e) {} setTimeout(plbFit, 0); pb.onclick = () => tbOpen(); /* v260: the banner opens Today's bets (one card per game) instead of the drop-down list */
   }
   const allDays = { ...snap, ...days };
   // a parlay with legs on several days also shows up in each earlier day's log (its result still counts once, on its main day)
@@ -1794,7 +1818,7 @@ async function alertPush() {
   ASQ = Date.now();
   try { const r = await fetch(ALU, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': alertTok() }, body: JSON.stringify({ week: CUR, rec: { lock: a.lock, dogs: a.dogs, helper: { id: h.g.id, abbr: h.abbr, conf: h.conf } } }) }); if (!r.ok) return; const j = await r.json(); if (j && j.rec && j.week === CUR && alertTake(Object.assign({}, ASV, { [CUR]: j.rec }))) render(); } catch (e) {}
 }
-async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=259')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
+async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=260')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
 const trGrade = (p) => { const g = ALL[p.id]; if (!g || g.state !== 'post') return null; const m = (g.home.abbr === p.abbr ? 1 : -1) * (g.home.score - g.away.score) + p.line; return m === 0 ? 'push' : m > 0 ? 'hit' : 'miss'; };
 function trophyData() {
   if (CFB || !window.Trophy || !Trophy.ready()) return null;
@@ -2934,16 +2958,177 @@ async function loadOdds() {
   } catch (e) { ODDS_AT = Date.now() - 8 * 60 * 1000; }
 }
 
+// ---- v260: score pop-up with My Bets status (in-app only), and the "Today's bets" sheet behind the My Bets banner. Both draw the same card (scCard). ----
+// The pop-up fires only when a live game's score changes or a game goes final, from the polls the app already runs (tick, xlLoad, xlSports). No second poller, no push.
+// Card colours: CSS custom properties (--bc-*) on the wrapper class .bc; presets .bc-oddable (default) / .bc-black / .bc-light / .bc-green. The preset comes from My Apps through GET /appcfg on the odds server.
+const SPK = 'pics-spop', SPMODES = { mine: 'My bets only', all: 'All live games', off: 'Off' };
+let SPM = (() => { try { const v = localStorage.getItem(SPK); return SPMODES[v] ? v : 'mine'; } catch (e) { return 'mine'; } })();
+const SP = { seen: {}, q: [], more: 0, cur: null, t: null, w: null, r: null, ms: 5000, gap: 300, max: 3 };
+const BCTHEMES = ['oddable', 'black', 'light', 'green'], BCK = 'pics-cardth', CFGU = ALU.replace(/\/alert$/, '/appcfg');
+let BCT = (() => { try { const v = localStorage.getItem(BCK); return BCTHEMES.includes(v) ? v : 'oddable'; } catch (e) { return 'oddable'; } })();
+const bcCls = () => 'bc bc-' + BCT;
+function bcApply(v) { if (!BCTHEMES.includes(v)) return; BCT = v; try { localStorage.setItem(BCK, v); } catch (e) {} document.querySelectorAll('.bc').forEach((e) => { e.className = e.className.replace(/\bbc-[a-z]+\b/g, '').replace(/\s+/g, ' ').trim() + ' bc-' + v; }); }
+async function bcLoad() { if (window.MIRROR) return; try { const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 8000); const j = await (await fetch(CFGU, { signal: ctl.signal })).json(); clearTimeout(to); if (j && j.ok === true && BCTHEMES.includes(j.card_theme)) bcApply(j.card_theme); } catch (e) {} } // a failed read keeps the saved (or default) colours; nothing is shown
+function spSet(v) { SPM = SPMODES[v] ? v : 'mine'; try { localStorage.setItem(SPK, SPM); } catch (e) {} if (SPM === 'off') spFlush(); spSetPaint(); }
+function spSetPaint() { const s = document.getElementById('spsel'); if (s && s.value !== SPM) s.value = SPM; }
+const scN = (n) => String(+Math.abs(n).toFixed(1));
+const scMoney = (n) => (BETS.some((x) => x.stake) ? (n < 0 ? '−$' : '+$') + Math.abs(n).toFixed(2) : (n < 0 ? '−' : '+') + (+Math.abs(n).toFixed(2)) + 'u');
+const scStake = (b) => (b.stake ? '$' + escH(b.stake) : BETS.some((x) => x.stake) ? '' : '1u');
+const scLg = (id) => { const b = BETS.find((x) => x.lg && String(x.gid) === String(id)); return b ? b.lg : ''; };
+const scFast = (id) => { const l = scLg(id); return l === 'nba' || l === 'ncaab'; }; // basketball: no pop-up on every basket
+// Status of one graded bet or leg, in words. x = the result of the app's own grading (legGrade / betGradeOne): 'live' + cur while the game is on, won / lost / push when final.
+function scPill(l, x, leg) {
+  const isOU = l.type === 'ou' || l.type === 'tot', over = /^O/i.test(l.side || '');
+  if (x.st === 'won' || x.st === 'lost' || x.st === 'push') return { c: x.st === 'won' ? 'g' : x.st === 'lost' ? 'r' : 'n', t: leg ? 'Leg ' + x.st : x.st === 'won' ? 'Won' : x.st === 'lost' ? 'Lost' : 'Push', fin: 1 };
+  if (x.st !== 'live') return { c: 'n', t: x.g && x.g.state === 'pre' ? 'Not started' : 'Pending' };
+  const m = Number.isFinite(x.m) ? scN(x.m) : '', by = m ? ' by ' + m : '';
+  if (x.cur === 'push') return { c: 'n', t: (isOU ? 'right on the total' : l.type === 'sp' ? 'push' : 'tied') + ' right now' };
+  if (x.cur === 'won') return { c: 'g', t: '▲ ' + (isOU ? (over ? 'over the total' : 'under the total') + by : l.type === 'sp' ? 'covering' + by : 'winning' + by) + ' right now' };
+  return { c: 'r', t: '▼ ' + (isOU ? (over ? (Number.isFinite(x.m) ? 'needs ' + (Math.floor(Math.abs(x.m)) + 1) + ' more' : 'under the total') : 'over the total' + by) : l.type === 'sp' ? 'not covering' + (m ? ', ' + m + ' short' : '') : 'losing' + by) + ' right now' };
+}
+const scLab = (l) => (l.type === 'ou' || l.type === 'tot' ? (/^O/i.test(l.side || '') ? 'Over ' : 'Under ') + escH(l.line) : escH(l.side) + ' ' + (l.type === 'sp' ? sgn(Number(l.line) || 0) : 'ML'));
+// Every bet of the owner's that touches this game: singles first, then parlay legs, then tracked player props.
+function scBets(id) {
+  id = String(id); const one = [], par = [], pr = [], g = gameOf(id);
+  BETS.forEach((b) => { try {
+    if (b.kind === 'parlay') { const L = (b.legs || []).map(legGrade); (b.legs || []).forEach((l, i) => { if (!l || String(l.gid) !== id) return; const hit = L.filter((y) => y.st === 'won' || (y.st === 'live' && y.cur === 'won')).length, dead = L.some((y) => y.st === 'lost'); par.push({ lab: scLab(l), sub: L.length + '-leg parlay · ' + (dead ? 'parlay lost' : hit + ' of ' + L.length + ' hitting'), p: scPill(l, L[i], true) }); }); return; }
+    if (b.kind === 'prop') { if (!b.pp || String(b.pp.gid) !== id) return; const x = pVal(b), over = b.pp.dir !== 'under'; pr.push({ lab: escH(b.pp.name) + ' ' + (over ? 'over' : 'under') + ' ' + escH(b.pp.line) + ' ' + escH((PSTATS[b.pp.stat] || b.pp.stat || '').toLowerCase()), sub: scStake(b), p: b.res === 'won' || b.res === 'lost' || b.res === 'push' ? scPill({}, { st: b.res }) : { c: 'n', t: g && g.state === 'pre' ? 'Not started' : x && x.v !== null ? x.v + ' so far' : 'Tracking' } }); return; }
+    if (b.kind || String(b.gid) !== id) return;
+    const r = betGrade(b), p = scPill(b, r); if (p.fin && r.st !== 'push') { const pl = betPL(b, r.st); if (pl) p.t += ' ' + scMoney(pl); }
+    const wp = !p.fin && r.st === 'live' && b.type === 'ml' && g && g.sit && Number.isFinite(g.sit.wp) && g.sit.wp >= 0 && g.sit.wp <= 1 ? Math.round((b.side === g.home.abbr ? g.sit.wp : 1 - g.sit.wp) * 100) : null; // ESPN's win chance for the game: only a moneyline bet can use it
+    one.push({ lab: scLab(b), sub: scStake(b), p, wp });
+  } catch (e) {} });
+  return [...one, ...par, ...pr];
+}
+const scPlayKind = (t) => (/touchdown/i.test(t) ? 'Touchdown' : /field goal/i.test(t) && /good|made/i.test(t) ? 'Field goal' : /safety/i.test(t) ? 'Safety' : '');
+// The card. o.bets = scBets(); o.all = list every bet (Today's bets) instead of the first one + "+N more" (pop-up); o.sub = text under the clock; o.play = last play line; o.x = leave room for the ✕.
+function scCard(g, o) {
+  o = o || {}; const bets = o.bets || [], on = g.state === 'in', pre = g.state === 'pre', s = on ? g.sit : null, nm = (t) => (ALL[g.id] && NAMES[t.abbr]) || t.name || ''; /* NAMES is this league's: a game from another sport uses the name its own feed gave */
+  const row = (b, cls) => `<div class="sct${cls || ''}"><span class="scl"><b>${b.lab}</b>${b.sub ? ` <small>· ${b.sub}</small>` : ''}</span><span class="scp ${b.p.c}">${escH(b.p.t)}${b.wp !== null && b.wp !== undefined ? ` · Live ${b.wp}%` : ''}</span></div>`;
+  const top = bets.length ? row(bets[0]) : `<div class="sct"><span class="scl"><b>${escH(g.away.abbr)} @ ${escH(g.home.abbr)}</b></span>${o.nobet ? '<span class="scp n">No bet on this game</span>' : ''}</div>`;
+  const hex = (c) => (/^#[0-9a-fA-F]{6}$/.test(c || '') ? c : '');
+  const to = (n) => (s && Number.isFinite(n) ? `<small class="scto" aria-label="${n} timeouts left">${'●'.repeat(Math.max(0, Math.min(3, n)))}${'○'.repeat(3 - Math.max(0, Math.min(3, n)))}</small>` : '');
+  const team = (t, n) => `<div class="scT"><b>${s && s.poss === t.abbr ? '<span class="scball" aria-label="has the ball">🏈</span>' : ''}${escH(t.abbr)}</b>${hex(t.color) ? `<i class="scbar" style="background:${hex(t.color)}"></i>` : ''}<small>${escH(nm(t))}</small>${to(n)}</div>`;
+  const mid = pre ? new Date(g.start).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : g.state === 'post' ? 'Final' : String(g.detail || 'Live').replace(/^(\d{1,2}:\d\d) - (.+)$/, '$2 $1'); // ESPN's "1:56 - 2nd" reads "2nd 1:56" on the card
+  const sub = o.sub !== undefined ? o.sub : pre ? new Date(g.start).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : on ? 'Live' : '';
+  const sc = (v) => `<div class="scS${pre ? ' pre' : ''}">${pre ? '–' : escH(v)}</div>`;
+  const play = o.play !== undefined ? o.play : (s && (s.ptxt || s.text)) || '';
+  return `<div class="scc${o.x ? ' hasx' : ''}">${top}<div class="scg">${team(g.away, s ? s.ato : null)}${sc(g.away.score)}<div class="scC"><b>${on ? '<i class="scdot"></i>' : ''}${escH(mid)}</b>${sub ? `<small>${escH(sub)}</small>` : ''}</div>${sc(g.home.score)}${team(g.home, s ? s.hto : null)}</div>${o.all ? bets.slice(1).map((b) => row(b, ' scb')).join('') : ''}${play ? `<div class="scf">${escH(play)}</div>` : ''}${o.foot ? `<div class="scm">${o.foot}</div>` : ''}</div>`;
+}
+// --- pop-up: detect changes ---
+// list = games just read from a feed (never stale ones). A game seen for the first time is recorded silently, so opening the app or coming back to it never bursts.
+function spScan(list, src) {
+  if (document.hidden || window.top !== window) return; /* not in the hidden copy sports.html loads for the banner */ const evs = [];
+  (list || []).forEach((g) => { try {
+    const id = String(g.id); if (src === 'xl' && ALL[id]) return;
+    const c = { a: Number(g.away.score) || 0, h: Number(g.home.score) || 0, st: g.state, d: g.detail || '', per: g.per || 0 }, o = SP.seen[id]; SP.seen[id] = c; if (!o || o.st === 'post') return;
+    let kind = '';
+    if (c.st === 'post') { if (o.st === 'in') kind = 'final'; }
+    else if (c.st === 'in') {
+      const up = c.a > o.a || c.h > o.h, down = c.a < o.a || c.h < o.h, brk = /^(end|half)/i;
+      if (scFast(id)) { if ((brk.test(c.d) && c.d !== o.d) || (c.per > o.per && o.per > 0 && !brk.test(o.d))) kind = 'period'; }
+      else if (down) kind = 'fix'; else if (up) kind = 'score';
+    }
+    if (kind) evs.push({ id, kind, da: c.a - o.a, dh: c.h - o.h, t: Date.now() });
+  } catch (e) {} });
+  if (SPM === 'off' || !evs.length) return;
+  evs.forEach((ev) => { if ((src === 'xl' || SPM === 'mine') && !scBets(ev.id).length) return; const i = SP.q.findIndex((x) => x.id === ev.id); if (i >= 0) { SP.q[i] = ev.kind === 'score' && SP.q[i].kind === 'score' ? { ...ev, da: ev.da + SP.q[i].da, dh: ev.dh + SP.q[i].dh } : ev; return; } if (SP.q.length >= SP.max + (SP.cur ? 0 : 1)) { SP.more++; return; } SP.q.push(ev); });
+  spPump();
+}
+function spFlush() { SP.q = []; SP.more = 0; clearTimeout(SP.r); spHide(true); }
+document.addEventListener('visibilitychange', () => { if (document.hidden) { SP.seen = {}; spFlush(); } }); // away: forget everything; the first poll after coming back is silent
+function spEl() { let e = document.getElementById('spop'); if (!e) { e = document.createElement('div'); e.id = 'spop'; e.className = bcCls(); e.setAttribute('role', 'status'); e.setAttribute('aria-live', 'polite'); e.hidden = true; document.body.appendChild(e); } return e; }
+function spHtml(ev) {
+  if (ev.kind === 'more') return `<button type="button" class="spb" onclick="spGo()" aria-label="Open the Live page"><div class="scc hasx"><div class="sct"><span class="scl"><b>+${ev.n} more score${ev.n === 1 ? '' : 's'}</b></span></div><div class="scm">Several games changed at once · tap to open Live</div></div></button>`;
+  const g = gameOf(ev.id); if (!g) return ''; const bets = scBets(ev.id);
+  const txt = ev.kind === 'score' && g.sit && g.sit.text && ((g.sit.lp && g.sit.lp.scoringPlay) || /touchdown|field goal|safety|extra point|two-point|kick is good/i.test(g.sit.text)) ? g.sit.text : '', pk = txt ? scPlayKind(txt) : '';
+  const who = ev.da > 0 && ev.dh > 0 ? 'Both teams scored' : ev.da > 0 ? `${pk || 'Score'} ${g.away.abbr} +${ev.da}` : `${pk || 'Score'} ${g.home.abbr} +${ev.dh}`;
+  const sub = ev.kind === 'final' ? '' : ev.kind === 'fix' ? 'Score corrected' : ev.kind === 'period' ? 'Score update' : who;
+  const foot = (bets.length > 1 ? `+${bets.length - 1} more bet${bets.length > 2 ? 's' : ''} on this game · ` : '') + (bets.length ? 'tap to open My Bets' : 'tap to open the game');
+  return `<button type="button" class="spb" onclick="spGo()" aria-label="Open ${bets.length ? 'My Bets' : 'this game'}">${scCard(g, { bets, nobet: !bets.length, sub, foot, x: 1, play: ev.kind === 'score' ? txt : '' })}</button>`;
+}
+// Fixed UI the user cannot scroll out of the way (tab bar, banner, an overlay's Back / close, a dialog's buttons). Content inside a scroller that can scroll is not: it passes under the card the way it passes under the tab bar.
+function spChrome(el) {
+  const c = el && el.closest ? el.closest('button,a[href],select,input,textarea,summary,label,[onclick],[role="button"],[data-team]') : null; if (!c) return null;
+  for (let n = c; n && n !== document.body && n.nodeType === 1; n = n.parentElement) { const cs = getComputedStyle(n); if (cs.position === 'sticky') return c; if (/(auto|scroll)/.test(cs.overflowY) && n.scrollHeight > n.clientHeight + 1) return null; if (cs.position === 'fixed') return c; }
+  return c;
+}
+function spBlock(e) { // the highest thing the card would cover, or null
+  const r = e.getBoundingClientRect(), hits = [], cut = (b) => b.width > 0 && b.height > 0 && b.left < r.right && b.right > r.left && b.top < r.bottom && b.bottom > r.top;
+  ['plb', 'bn', 'savefail', 'gtoast'].forEach((id) => { const x = document.getElementById(id); if (!x || x.hidden || x.classList.contains('away')) return; const b = x.getBoundingClientRect(); if (cut(b)) hits.push(b); });
+  document.querySelectorAll('header select,header input,header button,header summary').forEach((x) => { const b = x.getBoundingClientRect(); if (!cut(b)) return; const t = (document.elementsFromPoint((Math.max(b.left, r.left) + Math.min(b.right, r.right)) / 2, (Math.max(b.top, r.top) + Math.min(b.bottom, r.bottom)) / 2) || []).find((n) => !e.contains(n)); if (t && (t === x || x.contains(t))) hits.push(b); }); // the header menus and buttons scroll with the page, but the card never sits on them
+  for (let i = 0; i <= 6; i++) for (let j = 0; j <= 4; j++) { const px = r.left + 3 + (r.width - 6) * i / 6, py = r.top + 3 + (r.height - 6) * j / 4; const top = (document.elementsFromPoint(px, py) || []).find((n) => !e.contains(n)); const c = top && spChrome(top); if (c) hits.push(c.getBoundingClientRect()); }
+  return hits.length ? hits.reduce((a, b) => (b.top < a.top ? b : a)) : null;
+}
+function spPlace(e) { // sit just above the bottom tab bar; if fixed UI is there, step above it; false = no free place
+  if (document.getElementById('gate')) return false; const bn = document.getElementById('bn'), br = bn ? bn.getBoundingClientRect() : null;
+  let bot = (br && br.height && br.width > innerWidth * 0.6 && br.top > innerHeight / 2 ? Math.max(0, innerHeight - br.top) : 0) + 8; // on wide screens the tab bar is a rail on the left, not a bar along the bottom
+  for (let i = 0; i < 6; i++) { e.style.bottom = bot + 'px'; const r = e.getBoundingClientRect(); if (r.top < 4) return false; const b = spBlock(e); if (!b) return true; const nb = innerHeight - b.top + 8; if (nb <= bot) return false; bot = nb; }
+  return false;
+}
+// Extra scroll room at the end of the page while the card is up, so whatever is under it can be scrolled clear. Nothing on screen moves.
+function spRoom(on, h) {
+  if (on) { [SC, document.querySelector('#infosheet:not([hidden]) .isb')].forEach((el) => { if (!el || el.__spr || (el !== SC && el.scrollHeight <= el.clientHeight + 1)) return; /* a sheet that does not scroll would grow and move: its buttons are handled by spBlock instead */ const add = Math.round(h) + 16; el.__spr = { v: el.style.paddingBottom, add }; el.style.paddingBottom = (parseFloat(getComputedStyle(el).paddingBottom) || 0) + add + 'px'; }); return; }
+  document.querySelectorAll('#sc,.isb').forEach((el) => { if (!el.__spr || el.__spw) return;
+    const undo = () => { if (!el.__spr) { el.removeEventListener('scroll', undo); el.__spw = 0; return; } if (SP.cur) return; if (el.scrollTop + el.clientHeight > el.scrollHeight - el.__spr.add + 1) return; /* scrolled into the extra room: taking it back now would move the page, so wait for the next scroll */ el.style.paddingBottom = el.__spr.v; el.__spr = null; el.removeEventListener('scroll', undo); el.__spw = 0; };
+    el.__spw = 1; el.addEventListener('scroll', undo, { passive: true }); setTimeout(undo, SP.gap + 200); });
+}
+function spShow(ev) {
+  const e = spEl(), h = spHtml(ev); if (!h) return null;
+  e.className = bcCls(); e.innerHTML = h + '<button type="button" class="spx" aria-label="Dismiss" onclick="spHide()">✕</button>'; e.style.visibility = 'hidden'; e.hidden = false;
+  if (!spPlace(e)) { e.hidden = true; e.style.visibility = ''; e.innerHTML = ''; return false; }
+  e.style.visibility = ''; void e.offsetWidth; e.classList.add('in'); SP.cur = ev; spRoom(true, e.getBoundingClientRect().height);
+  clearTimeout(SP.t); SP.t = setTimeout(() => spHide(), SP.ms);
+  clearInterval(SP.w); SP.w = setInterval(() => { if (!SP.cur || e.hidden) return; if (spBlock(e) && !spPlace(e)) spHide(); }, 400); // something fixed opened under it: move, or get out of the way
+  return true;
+}
+function spHide(all) { const e = document.getElementById('spop'); clearTimeout(SP.t); clearInterval(SP.w); const had = SP.cur; SP.cur = null; if (e) { e.hidden = true; e.classList.remove('in'); e.innerHTML = ''; } spRoom(false); if (had && all !== true) { clearTimeout(SP.r); SP.r = setTimeout(spPump, SP.gap); } }
+function spPump() {
+  if (SP.cur || document.hidden) return; clearTimeout(SP.r);
+  while (SP.q.length || SP.more) {
+    const ev = SP.q.length ? SP.q[0] : { kind: 'more', n: SP.more, t: Date.now() }, drop = () => { if (SP.q.length) SP.q.shift(); else SP.more = 0; };
+    if (Date.now() - ev.t > 45000) { drop(); continue; } // too old to be news
+    const ok = spShow(ev); if (ok) { drop(); return; } if (ok === null) { drop(); continue; }
+    SP.r = setTimeout(spPump, 1500); return; // no free place right now (a dialog is open): try again shortly
+  }
+}
+function spGo() {
+  const ev = SP.cur; if (!ev) return; spHide();
+  try { tpClose(); sheetClose(); mvClose(); if (window.liveClose) liveClose(); const d = document.getElementById('odash'); if (d) d.remove(); } catch (e) {}
+  if (ev.kind === 'more') return setView('live');
+  const g = ALL[ev.id]; if (scBets(ev.id).length || !g) return setView('bets');
+  if (g.state === 'in' && !CFB) return fvOpen(ev.id);
+  if (VIEW !== 'main') { VIEW = 'main'; try { localStorage.setItem('pics-view', 'main'); } catch (e) {} } lkOpenGame(ev.id);
+}
+// --- Today's bets: the same card for every game the owner has a bet on today. Opened by tapping the My Bets banner. ---
+function tbInner() {
+  const today = dayKey(Date.now()), ids = [], other = [], add = (id) => { id = String(id); if (!ids.includes(id)) ids.push(id); };
+  BETS.forEach((b) => { try {
+    if (b.kind === 'parlay') { let any = false; (b.legs || []).forEach((l) => { const g = l && l.gid ? gameOf(l.gid) : null; if (g && dayKey(g.start) === today) { add(l.gid); any = true; } }); if (!any && betDay(b) === today) other.push(b); return; }
+    if (betDay(b) !== today) return; const gid = b.kind === 'prop' ? b.pp && b.pp.gid : b.gid; if (gid && gameOf(gid)) add(gid); else other.push(b);
+  } catch (e) {} });
+  const rank = (g) => (g.state === 'in' ? 0 : g.state === 'pre' ? 1 : 2), gs = ids.map(gameOf).sort((a, b) => rank(a) - rank(b) || a.start - b.start);
+  const cards = gs.map((g) => scCard(g, { bets: scBets(g.id), all: true, play: g.state === 'in' ? undefined : '' })).join('');
+  const oth = other.map((b) => { const r = betGrade(b), st = r.st === 'live' ? 'live' : r.st; return `<div class="scc"><div class="sct"><span class="scl"><b>${b.kind === 'parlay' ? (b.legs || []).length + '-leg parlay' : escH(b.text || ((b.side || '') + ' ' + (b.type === 'sp' ? sgn(Number(b.line) || 0) : 'ML')))}</b>${scStake(b) ? ` <small>· ${scStake(b)}</small>` : ''}</span><span class="scp ${st === 'won' ? 'g' : st === 'lost' ? 'r' : 'n'}">${st === 'won' ? 'Won' : st === 'lost' ? 'Lost' : st === 'push' ? 'Push' : st === 'live' ? 'Live' : 'Pending'}</span></div></div>`; }).join('');
+  const any = cards || oth, live = gs.some((g) => g.state === 'in');
+  return `<button onclick="sheetClose()" class="tbback">‹ Back</button><h3 style="margin:10px 0 2px">Today's bets</h3><div class="sub" style="margin-bottom:8px">${new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}${any ? ' · one card per game' : ''}</div>${any ? `<div class="${bcCls()}">${cards}${oth ? `<div class="sub" style="margin:10px 0 6px">Other bets today (no game to follow)</div>${oth}` : ''}</div>${live ? '<div class="sub" style="font-size:12px">"Right now" is where a live bet stands at this score. It is not a result.</div>' : ''}` : '<div class="note">No bets today.</div>'}<button onclick="sheetClose();setView('bets')" class="tbback" style="margin-top:12px">Open My Bets ›</button>`;
+}
+function tbOpen() { plbClose(); sheetOpen(`<div id="tbbody" style="max-width:560px;margin:0 auto">${tbInner()}</div>`); }
+function tbPaint() { const e = document.getElementById('tbbody'), sh = document.getElementById('infosheet'); if (!e || !sh || sh.hidden || touching()) return; const h = tbInner(); if (e.__h !== h) { e.innerHTML = h; e.__h = h; } }
+setTimeout(bcLoad, 2500);
+
+spSetPaint();
 async function tick() {
   clearTimeout(window.__t);
   try {
     const j = await getJson(SB + 'scoreboard' + (CFB ? '?' + SCX.slice(1) : ''));
     CUR = (j.week && j.week.number) || CUR;
-    merge(parseEvents(j, CUR)); loadBooks(); lkPull(); alertPull(); try { windLoad(); } catch (e) {} trophyLoad();
+    const evs = parseEvents(j, CUR); merge(evs); try { spScan(evs, 'sb'); } catch (e) {} loadBooks(); lkPull(); alertPull(); try { windLoad(); } catch (e) {} trophyLoad();
     LAST = new Date();
     renderBg();
     liveFetch();
     fillLive();
+    try { tbPaint(); } catch (e) {}
   } catch (e) { $('#upd').textContent = 'Live scores unavailable · retrying'; }
   const g = Object.values(ALL);
   const hot = g.some((x) => x.state === 'in') || g.some((x) => x.state === 'pre' && x.start - Date.now() < 20 * 60 * 1000 && x.start - Date.now() > -3600e3);
@@ -3056,6 +3241,6 @@ if ('serviceWorker' in navigator) {
   });
 })();
 </script>
-<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=259"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
+<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=260"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
 </body>
 </html>

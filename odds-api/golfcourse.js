@@ -1,6 +1,8 @@
 // 📍 Golf GPS data (v264). Used by pics/golfgps.js. Everything here comes from OpenStreetMap (volunteer map): nothing is invented.
 //   GET  /golfcourse/search?q=<course name or city>[&r=<miles>]   or   ?lat=<n>&lon=<n>[&r=<miles>]      r: default 15, 1..50
-//        -> { ok, center, radius, courses:[{ id:'way/123', name, lat, lon, miles, holes, holesMapped }], count, source, asOf, stale?, note? }
+//        -> { ok, center, radius, courses:[{ id:'way/123', name, lat, lon, miles, holes, holesMapped }], count, source, asOf, stale?, partial?, note? }
+//           partial:true = the list came from the Nominatim fallback (below): hole counts are NOT known, so each course has holesKnown:false and
+//           holesMapped:'?' (the v264 phone prints "? of 18 holes mapped"; a number there would have been a made-up count).
 //   GET  /golfcourse/holes?id=<way|relation|node>/<number>      (x-token optional: only used to say whether THIS account may change the flag colours)
 //        -> { ok, id, name, center, holes:[{ n, par?, handicap?, mapped, tee?, line?, green?:{center, front?, back?, outline?, marked?, approx?}, hazards:[] }],
 //             holeCount, holesMapped, marks, flags?:{ map:{red:'short',...}, locked:true, at, canChange }, source, asOf, stale?, note? }
@@ -19,9 +21,12 @@
 //        /golfcourse/holes gives pendingFlags { flags, at, note, from } only to an account that may change the colours; everyone else gets flagsPending:true.
 //        Both live in ONE shared row per course in oddable_sync: id 'lock:golfmark:<way-123>' (the 'lock:' prefix keeps it out of player lists,
 //        like alert.js), data { course, marks:{ '5:green':{lat,lon,by,at} }, flags:{ map, by, at }, pendingFlags? }. Who and when are stored, never sent back out.
-// The map servers are asked the way courts.js asks them (several public Overpass servers in turn, ~12 s each, one retry when busy, the one that
-// answered last first, a time budget, an old answer with stale:true when none answers). That code is COPIED here, not shared: courts.test.js
-// replaces courts.js's own fetch, so pulling it into a shared file would have meant rewriting those tests. Nominatim: own 1.1 s queue.
+// The map servers are asked through osmfall.js (shared with courts.js): Overpass first (8 s a server, stops after two have failed, then left alone
+// for 10 minutes), and when it does not answer:
+//   search: an older FULL list in memory (stale:true), else Nominatim (nomiCourses: "golf course" inside a box the size of the radius, kept 7 days) -> partial:true.
+//   holes:  the main OSM API (holesViaApi: /api/0.6/map.json for the course's box + ~150 m, turned into the same elements Overpass gives, so build() and
+//           everything after it is the same code), else an older copy in memory (stale:true), else 502.
+// Nominatim and the OSM API go through ONE queue shared with courts.js: at most 1 request a second in total, real User-Agent.
 // FRONT / BACK of a green = where the line of play (the last leg of the golf=hole way, or tee -> green centre) enters and leaves the green outline,
 // taken through the green's centre. The phone labels them Short / Long (owner's words: "Long center short").
 const D = {
@@ -37,11 +42,11 @@ const D = {
   hasDb: () => !!(process.env.SUPABASE_URL && process.env.SUPABASE_KEY), log: (...a) => console.error(...a)
 };
 const UA = 'Oddable/1.0 (golf GPS; https://steves-pics.onrender.com)';
-const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
-const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter'];
-const OSM_TIMEOUT = 12000, OSM_BUDGET = 36000, OSM_BACKOFF = 1500, OSM_GOOD_TTL = 10 * 6e4, OSM_BUSY = [429, 502, 503, 504];
+const F = require('./osmfall');
+const NOMINATIM = F.NOMINATIM, OVERPASS = F.OVERPASS;
+const FB_TTL = 10 * 6e4, NM_TTL = 7 * 864e5, NM_TIMEOUT = 8000, NM_BUDGET = 20000, API_TIMEOUT = 20000, API_PAD_M = 150; // worst case for holes: map 18 s + two OSM API reads (1.1 s apart, 20 s each) = 60 s, under the phone's 70 s
 const R_DEF = 15, R_MAX = 50, R_MIN = 1;
-const GEO_TTL = 864e5, GEO_MISS_TTL = 36e5, GEO_GAP = 1100, GEO_MAX = 300, GEO_QUEUE = 5;
+const GEO_TTL = 864e5, GEO_MISS_TTL = 36e5, GEO_MAX = 300, GEO_QUEUE = 5;
 const SEARCH_TTL = 864e5, HOLES_TTL = 7 * 864e5, STALE_HOLD = 2 * 6e4, C_MAX = 200, MAX_OUT = 40;
 const MARK_KM = 3, MARK_MAX = 60, ROW_TTL = 30000, HOLE_MAX = 36;
 const RL_MAX = 20, RL_MARK = 10; // a minute per IP
@@ -105,8 +110,8 @@ function toLine(p, line) {
 const GEOM = { metres, yards, toXY, fromXY, centroid, inside, frontBack, greenFor, toLine, okPt };
 // ======================= end of pure geometry =======================
 
-let GEO, SEARCH, HOLES, ROWS, RL, RPT, geoChain, geoLast, geoWaiting, osmGood;
-function reset() { GEO = new Map(); SEARCH = new Map(); HOLES = new Map(); ROWS = new Map(); RL = new Map(); RPT = new Map(); geoChain = Promise.resolve(); geoLast = 0; geoWaiting = 0; osmGood = null; }
+let GEO, SEARCH, HOLES, ROWS, RL, RPT, NM, BOX, geoWaiting;
+function reset() { F._reset(); GEO = new Map(); SEARCH = new Map(); HOLES = new Map(); ROWS = new Map(); RL = new Map(); RPT = new Map(); NM = new Map(); BOX = new Map(); geoWaiting = 0; }
 reset();
 const send = (res, code, o) => { res.statusCode = code; res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json'); res.setHeader('Cache-Control', 'no-store'); res.end(JSON.stringify(o)); };
 const log = (...a) => { try { D.log('golfcourse:', ...a); } catch (e) {} };
@@ -132,7 +137,7 @@ function parse(url) {
 }
 
 // ---------- Nominatim (text -> point), one request at a time, at least GEO_GAP apart ----------
-function geoTurn(fn) { const run = geoChain.then(async () => { const wait = geoLast + GEO_GAP - D.now(); if (wait > 0) await D.sleep(wait); geoLast = D.now(); return fn(); }); geoChain = run.then(() => {}, () => {}); return run; }
+const geoTurn = (fn) => F.turn(D, fn); // the queue shared with courts.js (osmfall.js)
 async function geocode(text) {
   const k = text.toLowerCase(), c = GEO.get(k), now = D.now();
   if (c && c.v && now - c.t < (c.v.miss ? GEO_MISS_TTL : GEO_TTL)) return c.v;
@@ -151,39 +156,20 @@ async function geocode(text) {
   GEO.set(k, { t: 0, v: c && c.v, job }); return job;
 }
 
-// ---------- Overpass (same server rotation as courts.js) ----------
-const hostOf = (u) => { try { return new URL(u).host; } catch (e) { return 'map'; } };
-function osmOrder() { const g = osmGood && D.now() - osmGood.t < OSM_GOOD_TTL && OVERPASS.includes(osmGood.u) ? osmGood.u : ''; return g ? [g].concat(OVERPASS.filter((u) => u !== g)) : OVERPASS.slice(); }
-async function osmAsk(u, body, ms) {
-  const r = await D.fetch(u, { method: 'POST', headers: { 'User-Agent': UA, 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' }, body, signal: timeout(ms) });
-  if (!r.ok) { const e = new Error('overpass ' + (+r.status || 0)); e.busy = OSM_BUSY.includes(+r.status); throw e; }
-  let j; try { j = await r.json(); } catch (e) { throw new Error('overpass bad answer'); }
-  if (!j || !Array.isArray(j.elements)) throw new Error('overpass bad answer');
-  if (!j.elements.length && /error|timed out|out of memory/i.test(String(j.remark || ''))) throw new Error('overpass gave up'); // a timed-out query is not "nothing there"
-  return j.elements;
+// ---------- Overpass (osmfall.js: shared with courts.js) ----------
+const overpass = async (query, end) => (await F.overpass(D, query, { ua: UA, log, end })).elements;
+// Each course's box on the map, remembered from the search lists (Overpass "bb" or Nominatim's boundingbox), for the OSM API fallback of /holes.
+function keepBox(id, b) {
+  if (!ID_RE.test(id) || !b || ![b.minlat, b.maxlat, b.minlon, b.maxlon].every((n) => typeof n === 'number' && isFinite(n))) return;
+  BOX.delete(id); BOX.set(id, { minlat: b.minlat, maxlat: b.maxlat, minlon: b.minlon, maxlon: b.maxlon }); while (BOX.size > 2000) BOX.delete(BOX.keys().next().value);
 }
-async function overpass(query, end) {
-  const body = 'data=' + encodeURIComponent(query), left = () => end - D.now(); let err;
-  for (const u of osmOrder()) {
-    for (let n = 0; n < 2; n++) { // a second try only when the server said "busy"
-      if (left() < 1500) { log('map lookup stopped (out of time)'); throw err || new Error('overpass out of time'); }
-      try { const v = await osmAsk(u, body, Math.min(OSM_TIMEOUT, left())); osmGood = { u, t: D.now() }; return v; }
-      catch (e) {
-        err = e; log('map lookup failed (' + hostOf(u) + ': ' + String(e && e.message).slice(0, 60) + ')');
-        if (osmGood && osmGood.u === u) osmGood = null;
-        if (!(e && e.busy) || n > 0 || left() < OSM_BACKOFF + 1500) break;
-        await D.sleep(OSM_BACKOFF);
-      }
-    }
-  }
-  throw err || new Error('overpass');
-}
-// A cached job: fresh answer inside ttl, one request at a time per key, the old answer (stale:true) when the map does not answer.
+// A cached job: fresh answer inside ttl (or the answer's own shorter v.ttl), one request at a time per key, the old answer (stale:true) when the map
+// does not answer. make(old) is given the old answer, if any.
 function cached(M, k, ttl, make) {
   const now = D.now(), c = M.get(k);
   if (c && c.v && now - c.t < c.ttl) return Promise.resolve(c.v);
   if (c && c.job) return c.job;
-  const job = make().then((v) => { M.delete(k); M.set(k, { t: D.now(), ttl, v }); while (M.size > C_MAX) M.delete(M.keys().next().value); return v; },
+  const job = make(c && c.v).then((v) => { M.delete(k); M.set(k, { t: D.now(), ttl: v.ttl || ttl, v }); while (M.size > C_MAX) M.delete(M.keys().next().value); return v; },
     (e) => { if (c && c.v && !e.status) { const old = Object.assign({}, c.v, { stale: true }); M.delete(k); M.set(k, { t: D.now(), ttl: STALE_HOLD, v: old }); return old; } M.delete(k); throw e; });
   M.set(k, { t: c ? c.t : 0, ttl: c ? c.ttl : 0, v: c && c.v, job }); return job;
 }
@@ -210,13 +196,48 @@ function courseList(els) {
 }
 async function searchFor(lat, lon, r) {
   const cLat = Math.round(lat * 100) / 100, cLon = Math.round(lon * 100) / 100, k = cLat.toFixed(2) + '|' + cLon.toFixed(2) + '|' + r;
-  return cached(SEARCH, k, SEARCH_TTL, async () => ({ at: D.now(), list: courseList(await overpass(searchQuery(cLat, cLon, r + 1), D.now() + OSM_BUDGET)) }));
+  return cached(SEARCH, k, SEARCH_TTL, async (old) => {
+    let err;
+    if (!F.down(D)) {
+      try { const a = await F.overpass(D, searchQuery(cLat, cLon, r + 1), { ua: UA, log }); a.elements.forEach((el) => { if (el && el.tags && el.tags.leisure === 'golf_course' && el.bounds) keepBox(el.type + '/' + el.id, el.bounds); }); return { at: D.now(), list: courseList(a.elements), via: 'overpass ' + a.host }; }
+      catch (e) { err = e; }
+    } else err = new Error('overpass marked busy');
+    if (old && !old.partial) throw err; // an older full list (with hole counts) beats the short one: cached() sends it with stale:true
+    const fb = await nomiCourses(cLat, cLon, r + 1);
+    return { at: fb.at, list: fb.list, partial: true, ttl: FB_TTL, via: 'nominatim' };
+  });
+}
+// The fallback list: Nominatim's own search inside a box the size of the radius. "golf course" is one of Nominatim's special phrases (= leisure=golf_course);
+// "golf club" catches courses by name; "[golf course]" is the older spelling of the special phrase, asked only when the first two found nothing.
+// Only leisure=golf_course results are kept. Nominatim does not say how many holes are drawn, so holesMapped is '?' (holesKnown:false), never a number.
+function nomiCourse(f) {
+  if (!f || typeof f !== 'object' || String(f.category || f.class || '') !== 'leisure' || String(f.type || '') !== 'golf_course') return null;
+  const id = F.osmId(f), p = { lat: +f.lat, lon: +f.lon }; if (!ID_RE.test(id) || !okPt(p)) return null;
+  const x = (f.extratags && typeof f.extratags === 'object' && f.extratags) || {}, name = txt(typeof f.name === 'string' ? f.name : String(f.display_name || '').split(',')[0], 100);
+  const o = { id, name: name || 'Golf course (no name on the map)', lat: r6(p.lat), lon: r6(p.lon), holes: holeNo(x.holes) || 18, holesMapped: '?', holesKnown: false }; if (!name) o.unnamed = true;
+  return { o, box: F.bbox(f) };
+}
+async function nomiCourses(lat, lon, mi) {
+  const k = lat.toFixed(2) + '|' + lon.toFixed(2) + '|' + mi, c = NM.get(k), end = D.now() + NM_BUDGET;
+  if (c && D.now() - c.at < NM_TTL) return c;
+  const box = F.viewbox(lat, lon, mi), seen = new Map(); let answered = 0, failed = 0, err;
+  for (const q of ['golf course', 'golf club', '[golf course]']) {
+    if (q === '[golf course]' && (seen.size || !answered)) break;
+    const left = end - D.now(); if (left < 2500) { failed++; err = err || new Error('course list out of time'); break; }
+    try { const a = await F.nominatim(D, { q, viewbox: box, bounded: 1, limit: 40, extratags: 1 }, { ua: UA, ms: Math.min(NM_TIMEOUT, left) }); answered++; a.slice(0, 40).forEach((f) => { const g = nomiCourse(f); if (g && !seen.has(g.o.id)) { seen.set(g.o.id, g.o); if (g.box) keepBox(g.o.id, g.box); } }); }
+    catch (e) { failed++; err = e; log('course list lookup failed (' + String(e && e.message).slice(0, 60) + ')'); if (e && (e.busy || e.http === 429 || e.http === 403)) break; } // told to slow down: stop asking
+  }
+  if (!answered) throw err || new Error('course list');
+  const v = { at: D.now(), list: [...seen.values()] };
+  if (!failed) { NM.set(k, v); while (NM.size > C_MAX) NM.delete(NM.keys().next().value); } // only a complete list is kept for 7 days
+  return v;
 }
 function searchAnswer(v, center, r) {
   const mi = (p) => metres(center, p) / 1609.344;
   const courses = v.list.map((c) => Object.assign({}, c, { miles: mi(c) })).filter((c) => c.miles <= r + 1e-9).sort((a, b) => a.miles - b.miles || a.name.localeCompare(b.name)).slice(0, MAX_OUT).map((c) => { c.miles = Math.round(c.miles * 10) / 10; return c; });
   const o = { ok: true, center: { lat: Math.round(center.lat * 100) / 100, lon: Math.round(center.lon * 100) / 100, label: center.label }, radius: r, courses, count: courses.length, source: SRC, asOf: new Date(v.at).toISOString() };
   const notes = []; if (v.stale) { o.stale = true; notes.push('The course map is not answering right now. This is the last list we have.'); }
+  if (v.partial) { o.partial = true; if (courses.length) notes.push('The detailed map server is busy, so the holes of these courses are not checked yet. Open a course to load its holes.'); }
   if (!courses.length) notes.push('No golf courses are mapped on OpenStreetMap within ' + r + ' miles. Try a bigger distance or the course name.');
   if (notes.length) o.note = notes.join(' ');
   return o;
@@ -276,16 +297,49 @@ function build(id, course, els) {
 }
 async function holesFor(id) {
   return cached(HOLES, id, HOLES_TTL, async () => {
-    const m = ID_RE.exec(id), end = D.now() + OSM_BUDGET, no = (msg) => Object.assign(new Error(msg), { status: 404 });
+    if (!F.down(D)) { try { return await holesViaOverpass(id); } catch (e) { if (e.status) throw e; } } // 404 = Overpass answered: not a course. Anything else = it did not answer
+    return holesViaApi(id);
+  });
+}
+const NO = (msg) => Object.assign(new Error(msg), { status: 404 });
+const isCourse = (el) => !!(el && el.tags && (el.tags.leisure === 'golf_course' || el.tags.golf));
+const boxAround = (p) => { const d = 0.011, dl = d / Math.max(0.2, Math.cos(p.lat * RAD)); return { minlat: p.lat - d, maxlat: p.lat + d, minlon: p.lon - dl, maxlon: p.lon + dl }; };
+const oneCourse = (b) => b.maxlat - b.minlat <= 0.12 && b.maxlon - b.minlon <= 0.2;
+async function holesViaOverpass(id) {
+  {
+    const m = ID_RE.exec(id), end = D.now() + F.BUDGET, no = NO;
     const ce = await overpass('[out:json][timeout:10];' + m[1] + '(' + m[2] + ');out geom tags;', end), course = ce.find((e) => e && e.type === m[1] && String(e.id) === m[2]);
     if (!course) throw no('no such course');
     if (!course.tags || (course.tags.leisure !== 'golf_course' && !course.tags.golf)) throw no('not a golf course');
     let b = course.bounds;
-    if (!b) { const p = elPt(course); if (!okPt(p)) throw no('no place'); const d = 0.011, dl = d / Math.max(0.2, Math.cos(p.lat * RAD)); b = { minlat: p.lat - d, maxlat: p.lat + d, minlon: p.lon - dl, maxlon: p.lon + dl }; }
-    if (!(b.maxlat - b.minlat <= 0.12 && b.maxlon - b.minlon <= 0.2)) throw no('too big to be one course');
+    if (!b) { const p = elPt(course); if (!okPt(p)) throw no('no place'); b = boxAround(p); }
+    if (!oneCourse(b)) throw no('too big to be one course');
+    keepBox(id, b);
     const pad = 0.0005, els = await overpass('[out:json][timeout:20];nwr["golf"](' + [b.minlat - pad, b.minlon - pad, b.maxlat + pad, b.maxlon + pad].map((x) => (+x).toFixed(6)).join(',') + ');out geom tags 4000;', end);
-    return Object.assign(build(id, course, els), { at: D.now() });
-  });
+    return Object.assign(build(id, course, els), { at: D.now(), via: 'overpass' });
+  }
+}
+// The same answer without Overpass: the raw map of the course's box from the main OSM API (limits there: 0.25 square degrees and 50,000 points; one course is
+// far smaller), turned into Overpass-style elements by osmfall.toElements, then the SAME build(). The box comes from the search list this server already gave
+// (BOX), else from one extra read of the course itself (/way/<id>/full.json). 404 / 410 there = no such course; 400 / 509 / no answer = the map is not answering (502).
+async function holesViaApi(id) {
+  const m = ID_RE.exec(id), same = (e) => e && e.type === m[1] && String(e.id) === m[2];
+  const read = async (path) => { try { return F.toElements(await F.osmApi(D, path, { ua: UA, ms: API_TIMEOUT })); } catch (e) { if (e && (e.http === 404 || e.http === 410)) throw NO('no such course'); log('OSM API lookup failed (' + String(e && e.message).slice(0, 60) + ')'); throw e; } };
+  let b = BOX.get(id) || null, course = null;
+  for (let pass = 0; pass < 2; pass++) {
+    if (!b) {
+      course = (await read('/' + m[1] + '/' + m[2] + (m[1] === 'node' ? '.json' : '/full.json'))).find(same);
+      if (!course) throw NO('no such course'); if (!isCourse(course)) throw NO('not a golf course');
+      b = course.bounds || (okPt(elPt(course) || {}) ? boxAround(elPt(course)) : null); if (!b) throw NO('no place');
+    }
+    if (!oneCourse(b)) throw NO('too big to be one course');
+    const padLat = API_PAD_M / (RAD * EARTH), padLon = padLat / Math.max(0.2, Math.cos(((b.minlat + b.maxlat) / 2) * RAD));
+    const all = await read('/map.json?bbox=' + [b.minlon - padLon, b.minlat - padLat, b.maxlon + padLon, b.maxlat + padLat].map((x) => (+x).toFixed(6)).join(',')); // left,bottom,right,top
+    course = course || all.find(same);
+    if (course) { if (!isCourse(course)) throw NO('not a golf course'); keepBox(id, course.bounds || b); return Object.assign(build(id, course, all.filter((el) => el.tags && el.tags.golf)), { at: D.now(), via: 'osm api' }); }
+    BOX.delete(id); b = null; // the remembered box did not hold the course: read the course itself and go round once more
+  }
+  throw NO('no such course');
 }
 
 // ---------- the shared row per course: players' marks + what the flag colours mean ----------
@@ -450,7 +504,8 @@ async function handle(req, res) {
     if (path === '/golfcourse/holes') {
       let id = ''; try { id = new URL(req.url, 'http://x').searchParams.get('id') || ''; } catch (e) {}
       if (!ID_RE.test(id)) { send(res, 400, { ok: false, error: 'Unknown course.' }); return true; }
-      let v; try { v = await holesFor(id); } catch (e) { send(res, e.status === 404 ? 404 : 502, { ok: false, error: e.status === 404 ? 'That course is not on the map.' : 'The course map is not answering right now. Try again in a minute.' }); return true; }
+      const t0 = D.now(); let v; try { v = await holesFor(id); } catch (e) { if (e.status !== 404) log('holes answered by nobody (502)'); send(res, e.status === 404 ? 404 : 502, { ok: false, error: e.status === 404 ? 'That course is not on the map.' : 'The course map is not answering right now. Try again in a minute.' }); return true; }
+      log('holes answered by ' + (v.via || 'the map') + (v.stale ? ' (saved copy, the map is not answering)' : v.at < t0 ? ' (from memory)' : ''));
       const row = await rowFor(id); let can = false; if (row.flags && req.headers['x-token']) can = await mayChangeFlags(req, id, row.flags);
       send(res, 200, holesAnswer(v, row, can)); return true;
     }
@@ -461,9 +516,10 @@ async function handle(req, res) {
       if (g.miss) { send(res, 404, { ok: false, error: 'Could not find that place. Try the course name with its city, or a city and state.' }); return true; }
       center = { lat: g.lat, lon: g.lon, label: g.label };
     }
-    let v; try { v = await searchFor(center.lat, center.lon, p.r); } catch (e) { send(res, 502, { ok: false, error: 'The course map is not answering right now. Try again in a minute.' }); return true; }
+    const t0 = D.now(); let v; try { v = await searchFor(center.lat, center.lon, p.r); } catch (e) { log('search answered by nobody (502)'); send(res, 502, { ok: false, error: 'The course map is not answering right now. Try again in a minute.' }); return true; }
+    log('search answered by ' + (v.via || 'the map') + (v.stale ? ' (saved list, the map is not answering)' : v.at < t0 ? ' (from memory)' : '')); // the source only, never the search
     send(res, 200, searchAnswer(v, center, p.r));
   } catch (e) { log('error (' + String(e && e.message).slice(0, 80) + ')'); send(res, e.status || 500, { ok: false, error: e.status ? e.message : 'Golf course error.' }); }
   return true;
 }
-module.exports = { handle, geom: GEOM, mayChangeFlags, notifyOwner, _deps: D, _reset: reset, _parse: parse, _build: build, _courseList: courseList, _merge: merge, _cleanMark: cleanMark, _cleanMarks: cleanMarks, _cleanFlags: cleanFlags, _rowId: rowId, _OVERPASS: OVERPASS };
+module.exports = { handle, geom: GEOM, mayChangeFlags, notifyOwner, _deps: D, _reset: reset, _parse: parse, _build: build, _courseList: courseList, _merge: merge, _cleanMark: cleanMark, _cleanMarks: cleanMarks, _cleanFlags: cleanFlags, _rowId: rowId, _OVERPASS: OVERPASS, _nomiCourse: nomiCourse };

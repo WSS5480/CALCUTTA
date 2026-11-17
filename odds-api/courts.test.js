@@ -1,18 +1,19 @@
 // Run: node odds-api/courts.test.js   (no network: Nominatim, Overpass, Google, My Apps, the clock, the pauses and the log are in-memory fakes)
 const assert = require('assert'), http = require('http'), C = require('./courts'), D = C._deps;
 const KEY = 'AIzaSyTEST-key_0123456789abcdefghijklmn', KEY2 = 'envKEY-zzzz-1111-2222-3333';
-let NOW, calls, logs, sent, nomi, over, goog, myapps, maOn, env, slept, lim;
+let NOW, calls, logs, sent, nomi, over, goog, myapps, maOn, env, slept, lim, fb;
 const jres = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => { if (body === 'BAD') throw new Error('not json'); return body; } });
 function start() {
-  C._reset(); NOW = Date.parse('2026-11-16T18:00:00Z'); calls = { nomi: [], over: [], goog: [], ma: 0 }; logs = []; sent = []; slept = []; lim = [];
+  C._reset(); NOW = Date.parse('2026-11-16T18:00:00Z'); calls = { nomi: [], over: [], goog: [], fb: [], ma: 0 }; logs = []; sent = []; slept = []; lim = [];
   nomi = () => jres(200, [{ lat: '26.2034', lon: '-98.2300', display_name: 'McAllen, Hidalgo County, Texas, United States' }]);
-  over = () => jres(200, { elements: [] }); goog = () => jres(200, { places: [] }); myapps = () => ({ ok: false, status: 404, j: {} }); maOn = true; env = {};
+  over = () => jres(200, { elements: [] }); fb = () => jres(503, {}); goog = () => jres(200, { places: [] }); myapps = () => ({ ok: false, status: 404, j: {} }); maOn = true; env = {};
 }
 D.now = () => NOW; D.sleep = async (ms) => { slept.push(ms); NOW += ms; }; D.log = (...a) => logs.push(a.join(' ')); D.env = (k) => env[k]; const realSignal = D.signal; D.signal = (ms) => { lim.push(ms); return realSignal(Math.max(ms, 60000)); }; // the limit is recorded; the fake clock decides the time
 D.maReady = () => maOn; D.ma = async (path, data) => { calls.ma++; assert.strictEqual(path, '/api/v1/app/settings'); assert.deepStrictEqual(data, {}, 'slug and secret are added by acct.js ma()'); return myapps(); };
 D.fetch = async (url, opt) => {
   sent.push(String(url) + ' ' + JSON.stringify(opt || {}));
-  if (String(url).startsWith('https://nominatim.openstreetmap.org/search?')) { calls.nomi.push({ url, opt }); return nomi(url); }
+  if (String(url).startsWith('https://nominatim.openstreetmap.org/search?') && /[?&]viewbox=/.test(url)) { calls.fb.push({ url, opt, at: NOW }); return fb(url, opt); } // the short list when Overpass is down (off by default: start())
+  if (String(url).startsWith('https://nominatim.openstreetmap.org/search?')) { calls.nomi.push({ url, opt, at: NOW }); return nomi(url); }
   if (/overpass/.test(url)) { calls.over.push({ url, opt }); return over(url, opt); }
   if (String(url) === 'https://places.googleapis.com/v1/places:searchText') { calls.goog.push({ url, opt }); return goog(url, opt); }
   throw new Error('unexpected url ' + url);
@@ -101,8 +102,9 @@ srv.listen(0, '127.0.0.1', async () => {
     start(); nomi = () => jres(200, []); r = await get('?q=Zzzzqqq'); assert.strictEqual(r.s, 404); assert.strictEqual(r.j.ok, false); assert.ok(/Could not find that place/.test(r.j.error)); assert.strictEqual(calls.over.length, 0);
     await get('?q=zzzzqqq'); assert.strictEqual(calls.nomi.length, 1, 'a miss is remembered for an hour'); NOW += 61 * 6e4; await get('?q=zzzzqqq'); assert.strictEqual(calls.nomi.length, 2);
     start(); nomi = () => jres(503, {}); r = await get('?q=McAllen'); assert.strictEqual(r.s, 503); assert.ok(/place lookup is not answering/.test(r.j.error)); nomi = () => jres(200, [{ lat: '26.2', lon: '-98.2', display_name: 'McAllen' }]); r = await get('?q=McAllen'); assert.strictEqual(r.s, 200, 'a failed geocode is not cached');
-    start(); over = () => jres(504, {}); r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 502); assert.strictEqual(r.j.ok, false); assert.strictEqual(r.j.courts, undefined, 'no courts invented'); assert.strictEqual(calls.over.length, 8, 'four map servers, each asked again once after a busy answer'); assert.deepStrictEqual(calls.over.map((c) => c.url), C._OVERPASS.flatMap((u) => [u, u])); assert.deepStrictEqual(slept, [1500, 1500, 1500, 1500], 'a short wait before each second try');
-    over = (u) => (/overpass-api\.de/.test(u) ? jres(429, {}) : jres(200, OSM)); r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 200, 'failure not cached; the mirror answers'); assert.strictEqual(r.j.count, 2);
+    start(); over = () => jres(504, {}); r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 502); assert.strictEqual(r.j.ok, false); assert.strictEqual(r.j.courts, undefined, 'no courts invented'); assert.strictEqual(calls.over.length, 4, 'the map step stops after TWO servers, each asked again once after a busy answer'); assert.deepStrictEqual(calls.over.map((c) => c.url), C._OVERPASS.slice(0, 2).flatMap((u) => [u, u])); assert.deepStrictEqual(slept, [1500, 1500, 1100], 'a short wait before each second try, then the two short-list searches 1.1 s apart'); assert.strictEqual(calls.fb.length, 2, 'the short list was tried (it is down in this test)');
+    over = (u) => (/overpass-api\.de/.test(u) ? jres(429, {}) : jres(200, OSM)); r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 502, 'Overpass is left alone for 10 minutes'); assert.strictEqual(calls.over.length, 4);
+    NOW += 10 * 6e4 + 1; r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 200, 'failure not cached; after the 10 minutes Overpass is asked again'); assert.strictEqual(r.j.count, 2); assert.strictEqual(r.j.partial, undefined);
     start(); over = () => jres(200, { elements: [], remark: 'runtime error: Query timed out in "query" at line 1 after 26 seconds.' }); r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 502, 'a timed-out map query is not "no courts"');
     start(); over = () => jres(200, 'BAD'); r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 502);
     // 5b. backup map servers (v261). Live on Nov 16 2026: overpass-api.de answered 502 "server at capacity" and the search timed out.
@@ -119,26 +121,88 @@ srv.listen(0, '127.0.0.1', async () => {
     NOW += 10 * 6e4 + 1; over = () => jres(200, OSM); await get('?lat=29.2&lon=-98.2'); assert.deepStrictEqual(calls.over.slice(5).map(host), [HOSTS[0]], 'after 10 quiet minutes the first server is tried first again');
     // the remembered server fails: it is forgotten and the others are asked in order
     start(); over = (u) => (/private\.coffee/.test(u) ? jres(200, OSM) : jres(503, {})); await get('?lat=26.2&lon=-98.2'); over = (u) => (/kumi/.test(u) ? jres(200, OSM) : jres(500, {})); calls.over = [];
-    r = await get('?lat=27.2&lon=-98.2'); assert.strictEqual(r.s, 200); assert.deepStrictEqual(calls.over.map(host), [HOSTS[1], HOSTS[0], HOSTS[2]], 'last good first, then the rest in order; a plain 500 is not asked twice');
+    r = await get('?lat=27.2&lon=-98.2'); assert.strictEqual(r.s, 502, 'two servers failed: the step stops (the short list is down in this test)'); assert.deepStrictEqual(calls.over.map(host), [HOSTS[1], HOSTS[0]], 'last good first, then the list in order; a plain 500 is not asked twice; no third server');
+    NOW += 10 * 6e4 + 1; calls.over = []; r = await get('?lat=27.2&lon=-98.2'); assert.strictEqual(r.s, 200); assert.deepStrictEqual(calls.over.map(host), [HOSTS[2]], 'after the 10 minutes the two servers that were NOT tried go first');
     // an error that is not "busy" (500, 404, a dropped connection, a bad answer) moves on at once, with no wait
-    start(); over = (u) => { if (/overpass-api\.de/.test(u)) throw new Error('fetch failed'); if (/private\.coffee/.test(u)) return jres(200, 'BAD'); if (/kumi/.test(u)) return jres(404, {}); return jres(200, OSM); };
-    r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 200); assert.strictEqual(r.j.count, 2); assert.deepStrictEqual(calls.over.map(host), HOSTS); assert.deepStrictEqual(slept, []);
+    start(); over = (u) => { if (/overpass-api\.de/.test(u)) throw new Error('fetch failed'); return jres(200, OSM); };
+    r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 200); assert.strictEqual(r.j.count, 2); assert.deepStrictEqual(calls.over.map(host), HOSTS.slice(0, 2)); assert.deepStrictEqual(slept, []);
+    for (const second of [() => jres(200, 'BAD'), () => jres(404, {}), () => jres(500, {})]) { start(); over = (u) => { if (/overpass-api\.de/.test(u)) throw new Error('fetch failed'); return second(); }; r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 502); assert.deepStrictEqual(calls.over.map(host), HOSTS.slice(0, 2), 'two servers, one try each, no third'); assert.deepStrictEqual(slept, [1100], 'no wait in the map step (1100 = the gap between the two short-list searches)'); }
     // every server down, nothing saved for the area: 502, nothing invented, and it stays inside the time budget
-    start(); over = () => { throw new Error('fetch failed'); }; r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 502); assert.strictEqual(r.j.ok, false); assert.strictEqual(r.j.courts, undefined); assert.strictEqual(calls.over.length, 4);
-    // slow servers: each try may take 12 s at most and the whole map step stops inside 36 s (the phone waits 70 s)
+    start(); over = () => { throw new Error('fetch failed'); }; r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 502); assert.strictEqual(r.j.ok, false); assert.strictEqual(r.j.courts, undefined); assert.strictEqual(calls.over.length, 2);
+    // slow servers: each try may take 8 s at most and the map step stops after two servers / inside 18 s (the phone waits 70 s)
     start(); const t0 = NOW; over = () => { NOW += lim[lim.length - 1]; throw new Error('The operation was aborted due to timeout'); };
-    r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 502); assert.strictEqual(calls.over.length, 3, 'three 12 s tries fit in 36 s; the fourth server is not started'); assert.ok(NOW - t0 <= 36000, 'map step took ' + (NOW - t0) + ' ms'); assert.ok(logs.some((l) => /out of time/.test(l))); assert.deepStrictEqual(lim, [12000, 12000, 12000], 'each try is limited to 12 s');
-    start(); const t1 = NOW; over = () => { NOW += Math.min(5000, lim[lim.length - 1]); return jres(504, {}); }; r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 502); assert.ok(NOW - t1 <= 36000 + 1, 'busy answers + waits stay inside the budget: ' + (NOW - t1)); assert.ok(calls.over.length >= 5 && calls.over.length <= 7, 'tries: ' + calls.over.length); assert.ok(lim.every((ms) => ms > 0 && ms <= 12000), 'limits: ' + lim);
+    r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 502); assert.strictEqual(calls.over.length, 2, 'two 8 s tries; the third server is not started'); assert.strictEqual(calls.fb[0].at - t0, 16000, 'the short list is asked 16 s in, not 48 s'); assert.deepStrictEqual(lim, [8000, 8000], 'each try is limited to 8 s'); assert.ok(logs.some((l) => /marked busy for 10 minutes/.test(l)));
+    start(); const t1 = NOW; over = () => { NOW += Math.min(5000, lim[lim.length - 1]); return jres(504, {}); }; r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 502); assert.ok(calls.fb[0].at - t1 <= 18000, 'busy answers + waits stay inside the 18 s budget: ' + (calls.fb[0].at - t1)); assert.strictEqual(calls.over.length, 3, 'tries: ' + calls.over.length); assert.ok(lim.every((ms) => ms > 0 && ms <= 8000), 'limits: ' + lim);
+    start(); const t2 = NOW; over = () => { NOW += 8500; return jres(504, {}); }; r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 502); assert.strictEqual(calls.over.length, 2, 'slow busy answers: the second server is not even started'); assert.ok(logs.some((l) => /out of time/.test(l))); assert.ok(calls.fb[0].at - t2 <= 18500);
     // every server down but a saved list exists for the area: that list, marked stale, with ITS time; held 2 minutes so the next tap does not wait
     start(); over = () => jres(200, OSM); r = await get('?lat=26.2&lon=-98.2'); const asOf0 = r.j.asOf; NOW += 7 * 36e5; over = () => jres(502, {}); calls.over = [];
-    r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 200); assert.strictEqual(r.j.ok, true); assert.strictEqual(r.j.stale, true); assert.strictEqual(r.j.asOf, asOf0, 'asOf is when the saved list was made, 7 hours ago'); assert.strictEqual(r.j.count, 2); assert.ok(/last list/.test(r.j.note)); assert.strictEqual(calls.over.length, 8);
-    r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.j.stale, true); assert.strictEqual(calls.over.length, 8, 'the saved list answers at once for 2 minutes');
-    NOW += 2 * 6e4 + 1; r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.j.stale, true); assert.strictEqual(r.j.asOf, asOf0); assert.strictEqual(calls.over.length, 16, 'then the map is tried again; still down = still the saved list');
-    NOW += 2 * 6e4 + 1; over = () => jres(200, OSM); r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.j.stale, undefined, 'the map is back: a fresh list'); assert.notStrictEqual(r.j.asOf, asOf0); assert.strictEqual(r.j.note, undefined);
+    r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 200); assert.strictEqual(r.j.ok, true); assert.strictEqual(r.j.stale, true); assert.strictEqual(r.j.asOf, asOf0, 'asOf is when the saved list was made, 7 hours ago'); assert.strictEqual(r.j.count, 2); assert.ok(/last list/.test(r.j.note)); assert.strictEqual(calls.over.length, 4); assert.strictEqual(calls.fb.length, 0, 'a saved FULL list beats the short list: Nominatim is not asked'); assert.strictEqual(r.j.partial, undefined);
+    r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.j.stale, true); assert.strictEqual(calls.over.length, 4, 'the saved list answers at once for 2 minutes');
+    NOW += 2 * 6e4 + 1; r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.j.stale, true); assert.strictEqual(r.j.asOf, asOf0); assert.strictEqual(calls.over.length, 4, 'Overpass is left alone for its 10 busy minutes: still the saved list, at once'); assert.strictEqual(calls.fb.length, 0);
+    NOW += 10 * 6e4 + 1; over = () => jres(200, OSM); r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.j.stale, undefined, 'the map is back: a fresh list'); assert.notStrictEqual(r.j.asOf, asOf0); assert.strictEqual(r.j.note, undefined);
     // another area has no saved list: still a plain 502 while the map is down
     over = () => jres(502, {}); osmGoodReset(); r = await get('?lat=40.2&lon=-98.2'); assert.strictEqual(r.s, 502);
     // the map goes down after a good answer: the old list is served and says so
     start(); over = () => jres(200, OSM); await get('?lat=26.2&lon=-98.2'); NOW += 7 * 36e5; over = () => jres(500, {}); r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 200); assert.strictEqual(r.j.stale, true); assert.strictEqual(r.j.count, 2); assert.ok(/last list/.test(r.j.note));
+
+    // 5c. THE SHORT LIST: Overpass down -> Nominatim search by name (invented test data in Nominatim's jsonv2 shape)
+    const nm = (id, cat, type, name, lat, lon, extratags, address, osmType) => ({ place_id: id, licence: 'x', osm_type: osmType || 'way', osm_id: id, lat: String(lat), lon: String(lon), category: cat, type, place_rank: 30, importance: 0.1, addresstype: type, name, display_name: name + ', Main St, McAllen, Hidalgo County, Texas, 78501, United States', boundingbox: [String(lat - 0.0002), String(lat + 0.0002), String(lon - 0.0002), String(lon + 0.0002)], extratags: extratags || null, address: address || { road: 'Main St', city: 'McAllen', state: 'Texas', postcode: '78501', country: 'United States' } });
+    const NM1 = [
+      nm(501, 'leisure', 'pitch', 'Test Park Pickleball Courts', 26.2100, -98.2300, { sport: 'pickleball', lit: 'yes', courts: '6' }),
+      nm(502, 'leisure', 'park', 'Test Park Pickle-ball <b>', 26.2102, -98.2301, null, { house_number: '100', road: 'Main St', town: 'McAllen', state: 'Texas', postcode: '78501' }, 'node'), // 25 m from 501: the same place
+      nm(503, 'shop', 'sports', 'Pickleball Pro Shop', 26.2150, -98.2350), // a shop: not a place to play
+      nm(504, 'highway', 'residential', 'Pickleball Lane', 26.2160, -98.2360), // a street
+      nm(505, 'leisure', 'sports_centre', 'Test Rec Center', 26.25, -98.20, { sport: 'tennis;pickleball', access: 'customers', website: 'https://example.org/rec', fee: 'yes' }), // no "pickleball" in the name, but tagged for it
+      nm(506, 'leisure', 'pitch', 'Private Pickleball Court', 26.22, -98.25, { access: 'private' }),
+      nm(507, 'leisure', 'pitch', 'Far Pickleball Courts', 26.60, -98.23), // about 27 miles north
+      nm(508, 'leisure', 'park', 'Plain Park', 26.23, -98.23), // nothing says pickleball
+      null, { osm_type: 'x', osm_id: 1, lat: '26.2', lon: '-98.2', category: 'leisure', type: 'pitch', name: 'Bad Pickleball' }, { osm_type: 'way', osm_id: 510, lat: 'abc', lon: '-98.2', category: 'leisure', type: 'pitch', name: 'No Place Pickleball' }
+    ];
+    const NM2 = [NM1[0], Object.assign(nm(509, 'amenity', 'community_centre', 'Test Pickleball Club', 26.19, -98.24, null, { house_number: '5', road: 'Oak Ave', village: 'McAllen', state: 'Texas' }), { category: undefined, class: 'amenity', name: undefined, display_name: 'Test Pickleball Club, 5 Oak Ave, McAllen' })]; // the older "class" spelling, name only in display_name
+    const fbq = (c) => new URL(c.url).searchParams, shortList = (u) => { const q = new URL(u).searchParams.get('q'); return jres(200, q === 'pickleball' ? NM1 : q === 'pickleball court' ? NM2 : []); };
+    start(); over = () => { throw new Error('fetch failed'); }; fb = shortList;
+    r = await get('?q=McAllen,%20TX');
+    assert.strictEqual(r.s, 200); assert.strictEqual(r.j.ok, true); assert.strictEqual(r.j.provider, 'osm'); assert.strictEqual(r.j.source, 'OpenStreetMap contributors'); assert.strictEqual(r.j.partial, true); assert.strictEqual(r.j.stale, undefined); assert.strictEqual(r.j.fallback, undefined);
+    assert.strictEqual(r.j.note, 'Short list: the detailed map server is busy, so only named pickleball places are shown.'); assert.strictEqual(r.j.note, C._PARTIAL_NOTE);
+    assert.strictEqual(calls.over.length, 2, 'two Overpass servers, then the short list'); assert.strictEqual(calls.fb.length, 3);
+    assert.deepStrictEqual(calls.fb.map((c) => fbq(c).get('q')), ['pickleball', 'pickleball court', 'pickleball courts McAllen, TX']);
+    for (const c of calls.fb) { const q = fbq(c); assert.strictEqual(q.get('format'), 'jsonv2'); assert.strictEqual(q.get('bounded'), '1'); assert.strictEqual(q.get('limit'), '40'); assert.strictEqual(q.get('extratags'), '1'); assert.strictEqual(q.get('addressdetails'), '1'); assert.ok(/^Oddable\//.test(c.opt.headers['User-Agent'])); assert.ok(c.opt.signal);
+      const [l, t, rr, b] = q.get('viewbox').split(',').map(Number); assert.ok(l < -98.23 && rr > -98.23 && t > 26.2 && b < 26.2, 'left,top,right,bottom around the centre'); assert.ok(Math.abs((t - b) * 69.05 - 32) < 0.1, 'the box is the radius (15 + 1 miles) each way: ' + (t - b) * 69.05); assert.ok(Math.abs((rr - l) * 69.17 * Math.cos(26.2 * Math.PI / 180) - 32) < 0.1); }
+    const stamps = calls.nomi.concat(calls.fb).map((c) => c.at); for (let i = 1; i < stamps.length; i++) assert.ok(stamps[i] - stamps[i - 1] >= 1100, 'Nominatim: at least 1.1 s between requests (place lookup + the three searches): ' + stamps.map((t) => t - stamps[0]));
+    assert.strictEqual(r.j.count, 3, 'park + its courts are one place; the rec centre; the club. Not the shop, the street, the private court, the plain park, the far one: ' + JSON.stringify(r.j.courts.map((c) => c.name)));
+    const sp = r.j.courts.find((c) => /Test Park/.test(c.name)); assert.strictEqual(sp.name, 'Test Park Pickle-ball <b>', 'the park names the place (text only, the page escapes it)'); assert.strictEqual(sp.courts, 6); assert.strictEqual(sp.courtsFrom, 'tag'); assert.strictEqual(sp.lit, true); assert.strictEqual(sp.address, 'Main St, McAllen, Texas 78501', 'the first address in the group (the courts: a street, no number)'); assert.strictEqual(sp.unnamed, undefined); assert.ok(sp.miles < 1); assert.ok(/^https:\/\/www\.google\.com\/maps\/search\/\?api=1&query=26\.21/.test(sp.maps));
+    const rc = r.j.courts.find((c) => c.name === 'Test Rec Center'); assert.deepStrictEqual([rc.shared, rc.access, rc.fee, rc.website, rc.address], [['tennis'], 'customers', true, 'https://example.org/rec', 'Main St, McAllen, Texas 78501']);
+    const cl = r.j.courts.find((c) => c.name === 'Test Pickleball Club'); assert.ok(cl, 'class= spelling and a name taken from display_name'); assert.strictEqual(cl.shared, undefined); assert.strictEqual(cl.address, '5 Oak Ave, McAllen, Texas');
+    assert.deepStrictEqual(r.j.courts.map((c) => c.miles), r.j.courts.map((c) => c.miles).slice().sort((a, b) => a - b), 'nearest first');
+    assert.ok(logs.some((l) => /courts: answered by nominatim short list$/.test(l)), 'one line says which source answered: ' + logs.join(' | ')); assert.ok(!logs.some((l) => /McAllen/i.test(l)), 'the search is not logged');
+    // the filter on its own
+    assert.strictEqual(C._nomiPlace(NM1[2]), null); assert.strictEqual(C._nomiPlace(NM1[3]), null); assert.strictEqual(C._nomiPlace(NM1[7]), null); assert.strictEqual(C._nomiPlace(null), null); assert.strictEqual(C._nomiPlace(NM1[9]), null); assert.strictEqual(C._nomiPlace(NM1[10]), null);
+    assert.deepStrictEqual(C._nomiPlace(nm(1, 'leisure', 'pitch', 'Courts', 26.2, -98.2, { pickleball: 'yes', sport: 'tennis' }, {})), { type: 'node', id: 'way/1', lat: 26.2, lon: -98.2, tags: { pickleball: 'yes', sport: 'tennis;pickleball', name: 'Courts', leisure: 'pitch' } });
+    assert.strictEqual(C._nomiPlace(Object.assign(nm(7, 'leisure', 'pitch', 'PICKLEBALL courts', 26.2, -98.2), { osm_type: 'W' })).id, 'way/7', 'one-letter osm_type');
+    // "down for 10 minutes": another area inside that time does not wait on Overpass at all
+    const o0 = calls.over.length; r = await get('?lat=26.3&lon=-98.2'); assert.strictEqual(r.s, 200); assert.strictEqual(r.j.partial, true); assert.strictEqual(calls.over.length, o0, 'no Overpass try while it is marked busy'); assert.strictEqual(calls.fb.length, 5, 'by location there is no place name: two searches');
+    // the same area again: the answer is in memory; after its 10 minutes the 7-day short list answers without asking Nominatim again while Overpass is still marked busy
+    r = await get('?q=McAllen,%20TX'); assert.strictEqual(calls.fb.length, 5); assert.ok(logs.some((l) => /answered by nominatim short list \(from memory\)$/.test(l)));
+    NOW += 9 * 6e4; over = () => jres(200, OSM); r = await get('?lat=26.4&lon=-98.2'); assert.strictEqual(r.j.partial, true, 'minute 9: still the short list'); assert.strictEqual(calls.over.length, o0);
+    // minute 10+: Overpass is asked again and its full list replaces the short one
+    NOW += 6e4 + 1; r = await get('?q=McAllen,%20TX'); assert.strictEqual(r.s, 200); assert.strictEqual(r.j.partial, undefined, 'Overpass is back: the full list'); assert.strictEqual(r.j.note, undefined); assert.strictEqual(r.j.count, 2); assert.strictEqual(calls.over.length, o0 + 1); assert.ok(logs.some((l) => /answered by overpass overpass\.kumi\.systems$/.test(l)), logs.slice(-3).join(' | '));
+    // Overpass down again later: the area that has a full list gets that (stale); a short list kept for 7 days is not asked for twice
+    start(); over = () => jres(500, {}); fb = shortList; r = await get('?lat=26.2&lon=-98.23'); assert.strictEqual(r.j.partial, true); assert.strictEqual(calls.fb.length, 2);
+    NOW += 3 * 864e5; r = await get('?lat=26.2&lon=-98.23'); assert.strictEqual(r.j.partial, true); assert.strictEqual(calls.fb.length, 2, 'day 3: the saved short list, Nominatim not asked again'); assert.strictEqual(r.j.asOf, '2026-11-16T18:00:01.100Z', 'asOf = when the short list was made (two searches, 1.1 s apart)');
+    NOW += 5 * 864e5; r = await get('?lat=26.2&lon=-98.23'); assert.strictEqual(calls.fb.length, 4, 'day 8: asked again');
+    // honest empty state
+    start(); over = () => jres(502, {}); fb = () => jres(200, [NM1[2], NM1[7]]); r = await get('?lat=26.2&lon=-98.2');
+    assert.strictEqual(r.s, 200); assert.strictEqual(r.j.count, 0); assert.deepStrictEqual(r.j.courts, []); assert.strictEqual(r.j.partial, true); assert.strictEqual(r.j.note, C._PARTIAL_NOTE + ' No named pickleball places were found within 15 miles. Try again in a few minutes, or a bigger distance.');
+    // one of the searches fails: what the others found is still shown, but it is not kept for 7 days
+    start(); over = () => jres(502, {}); fb = (u) => (new URL(u).searchParams.get('q') === 'pickleball' ? jres(500, {}) : shortList(u)); r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 200); assert.strictEqual(r.j.count, 2, 'the park courts (501) and the club from the second search');
+    NOW += 11 * 6e4; over = () => jres(502, {}); r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(calls.fb.length, 4, 'an incomplete short list is asked for again');
+    // Nominatim says slow down (429): no more searches in that request; nothing invented
+    start(); over = () => jres(502, {}); fb = () => jres(429, {}); r = await get('?q=McAllen'); assert.strictEqual(r.s, 502); assert.strictEqual(calls.fb.length, 1, 'stopped after the 429'); assert.strictEqual(r.j.courts, undefined); assert.ok(logs.some((l) => /answered by nobody/.test(l)));
+    // Google is the first choice whenever a key is set; when Google AND Overpass fail the short list still answers, and says both
+    start(); myapps = () => ({ ok: true, status: 200, j: { ok: true, settings: { courts_provider: 'google', google_places_key: KEY } } }); goog = () => jres(200, GPL); over = () => { throw new Error('must not be called'); }; fb = () => { throw new Error('must not be called'); };
+    r = await get('?q=McAllen'); assert.strictEqual(r.j.provider, 'google'); assert.strictEqual(r.j.partial, undefined); assert.strictEqual(calls.over.length + calls.fb.length, 0); assert.ok(logs.some((l) => /answered by google$/.test(l)));
+    start(); myapps = () => ({ ok: true, status: 200, j: { ok: true, settings: { courts_provider: 'google', google_places_key: KEY } } }); goog = () => jres(403, {}); over = () => jres(504, {}); fb = shortList;
+    r = await get('?q=McAllen'); assert.strictEqual(r.s, 200); assert.deepStrictEqual([r.j.provider, r.j.fallback, r.j.partial, r.j.count], ['osm', true, true, 3]); assert.ok(/Google did not answer/.test(r.j.note) && r.j.note.includes(C._PARTIAL_NOTE)); assert.ok(!r.t.includes(KEY) && !sent.some((x) => /nominatim|overpass/.test(x) && x.includes(KEY)));
 
     // 6. settings: My Apps first
     start(); myapps = () => ({ ok: true, status: 200, j: { ok: true, settings: { courts_provider: 'google', google_places_key: KEY } } }); env = { COURTS_PROVIDER: 'osm', GOOGLE_PLACES_API_KEY: KEY2 }; goog = () => jres(200, GPL);

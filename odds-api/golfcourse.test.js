@@ -78,17 +78,19 @@ const ELS = [
 eq(GC._parse('/golfcourse/search?q=McAllen%2C%20TX'), { q: 'McAllen, TX', r: 15 }); eq(GC._parse('/golfcourse/search?lat=26.2&lon=-98.23&r=80').r, 50, 'radius capped at 50'); ok(GC._parse('/golfcourse/search?lat=26.2').error && GC._parse('/golfcourse/search?q=a').error && GC._parse('/golfcourse/search?q=%3Cscript%3E').error && GC._parse('/golfcourse/search?lat=95&lon=0').error && GC._parse('/golfcourse/search?q=x&r=abc').error, 'bad input refused');
 
 // ---------- over HTTP with fakes ----------
-const db = {}; let NOW = Date.parse('2026-11-16T15:00:00Z'), osmDown = false, asked = [], signed = true, hasDb = true, failPatch = 0;
+const db = {}; let NOW = Date.parse('2026-11-16T15:00:00Z'), osmDown = false, asked = [], signed = true, hasDb = true, failPatch = 0, nmFb = null, api = null, logs = [];
 GC._deps.S = {
   dbGet: async (id) => (db[id] ? JSON.parse(JSON.stringify(db[id])) : null),
   dbPut: async (row, ign) => { if (db[row.id] && ign) return; db[row.id] = JSON.parse(JSON.stringify(row)); },
   dbPatchIf: async (id, was, data, upd) => { if (failPatch) { failPatch--; db[id].updated++; return false; } if (!db[id] || db[id].updated !== Number(was)) return false; db[id].data = JSON.parse(JSON.stringify(data)); db[id].updated = upd; return true; }
 };
-GC._deps.now = () => NOW; GC._deps.sleep = async () => {}; GC._deps.log = () => {}; GC._deps.hasDb = () => hasDb;
+GC._deps.now = () => NOW; GC._deps.sleep = async () => {}; GC._deps.log = (...a) => logs.push(a.join(' ')); GC._deps.hasDb = () => hasDb;
 GC._deps.check = async (req) => signed && !!req.headers['x-token']; GC._deps.who = (req) => req.headers['x-token'] || null; GC._deps.owner = (req) => req.headers['x-token'] === 'owner';
 const J = (o, s) => ({ ok: !s || s < 400, status: s || 200, json: async () => o });
 GC._deps.fetch = async (u, opt) => {
   asked.push(u);
+  if (u.startsWith('https://nominatim') && /[?&]viewbox=/.test(u)) return nmFb ? nmFb(new URL(u).searchParams, opt) : J([], 503); // the fallback course list (down unless a test turns it on)
+  if (u.startsWith('https://api.openstreetmap.org/')) return api ? api(u, opt) : J({}, 504); // the main OSM API (down unless a test turns it on)
   if (u.startsWith('https://nominatim')) { const q = new URL(u).searchParams.get('q'); return J(/nowhere/i.test(q) ? [] : [{ lat: String(at(380, 420).lat), lon: String(at(380, 420).lon), display_name: 'McAllen, Hidalgo County, Texas, United States' }]); }
   if (osmDown) return J({}, 504);
   const q = decodeURIComponent(String(opt.body).replace(/^data=/, ''));
@@ -99,6 +101,93 @@ GC._deps.fetch = async (u, opt) => {
   if (/nwr\["golf"\]\(/.test(q)) return J({ elements: ELS });
   return J({}, 400);
 };
+// ---------- fallbacks when Overpass is down (Nominatim course list, OSM API holes) ----------
+// The OSM API's JSON (api.openstreetmap.org/api/0.6/map.json, .../way/<id>/full.json): { elements:[ {type:'node',id,lat,lon,tags?}, {type:'way',id,nodes:[ids],tags?},
+// {type:'relation',id,members:[{type,ref,role}],tags?} ] }. apiJson() writes that shape from the SAME coordinates as the Overpass-style fixtures above
+// (one node per different coordinate, so a closed way starts and ends on the same node id, as on the real map). A fully hand-typed one is in osmfall.test.js.
+function apiJson(els) {
+  const elements = [], ids = new Map(); let next = 9000; const meta = { timestamp: '2026-01-01T00:00:00Z', version: 1, changeset: 1, user: 'test', uid: 1 };
+  const node = (p) => { const k = p.lat + ',' + p.lon; if (!ids.has(k)) { ids.set(k, ++next); elements.push(Object.assign({ type: 'node', id: next, lat: p.lat, lon: p.lon }, meta)); } return ids.get(k); };
+  els.forEach((el) => {
+    if (!el) return;
+    if (el.type === 'node') elements.push(Object.assign({ type: 'node', id: el.id, lat: el.lat, lon: el.lon }, meta, { tags: el.tags }));
+    else if (el.type === 'way') elements.push(Object.assign({ type: 'way', id: el.id }, meta, { nodes: (el.geometry || []).map(node), tags: el.tags }));
+    else if (el.type === 'relation') { el.members.forEach((m) => elements.push(Object.assign({ type: 'way', id: m.ref }, meta, { nodes: m.geometry.map(node) }))); elements.push(Object.assign({ type: 'relation', id: el.id }, meta, { members: el.members.map((m) => ({ type: m.type, ref: m.ref, role: m.role })), tags: el.tags })); }
+  });
+  return { version: '0.6', generator: 'test', copyright: 'OpenStreetMap and contributors', bounds: { minlat: 0, minlon: 0, maxlat: 0, maxlon: 0 }, elements };
+}
+const rel = (id, tags, ref, pts) => ({ type: 'relation', id, tags, bounds: way(0, {}, pts).bounds, members: [{ type: 'way', ref, role: 'outer', geometry: geo(pts) }] });
+const C200 = way(200, { leisure: 'golf_course', name: 'Test Links Two', holes: '9' }, SQ), C201 = way(201, { leisure: 'golf_course', name: 'Test Links Three' }, SQ), R300 = rel(300, { type: 'multipolygon', leisure: 'golf_course', name: 'Test Relation Links' }, 3001, SQ);
+const ELS2 = ELS.concat([rel(61, { type: 'multipolygon', golf: 'water_hazard' }, 610, rect(at(120, 130), 10, 10, 0))]); // a pond drawn as a relation, 7 m from hole 2's line
+const NOISE = [way(900, { building: 'yes' }, rect(at(50, 50), 10, 10, 0)), way(901, { highway: 'path' }, [at(0, 0), at(900, 900)]), { type: 'node', id: 902, lat: at(10, 10).lat, lon: at(10, 10).lon, tags: { natural: 'tree' } }];
+const strip = (c) => { const o = JSON.parse(JSON.stringify(c)); delete o.at; delete o.via; return o; };
+async function fallbacks(get) {
+  const F = require('./osmfall'), golf = (e) => e.tags && e.tags.golf, isApi = (u) => /api\.openstreetmap\.org/.test(u), isOver = (u) => /interpreter/.test(u);
+  // (1) the converter: OSM API JSON -> the SAME elements Overpass gives, so build() gives the SAME course (pure, no network)
+  for (const [id, C] of [['way/200', C200], ['relation/300', R300]]) {
+    const conv = F.toElements(apiJson([C, C201].concat(ELS2, NOISE))), course = conv.find((e) => e.type + '/' + e.id === id);
+    eq(course, C, 'the course element itself comes out exactly as Overpass "out geom" gives it (' + id + ')');
+    eq(GC._build(id, course, conv.filter(golf)), GC._build(id, C, ELS2), 'identical holes, greens, front/back, hazards from the OSM API fixture and the Overpass fixture (' + id + ')');
+  }
+  ok(GC._build('way/200', C200, ELS2).holes[1].hazards.some((z) => z.type === 'water'), 'the relation pond belongs to hole 2 (so relations are really compared)');
+  // (2) end to end for way/100: the answer through Overpass, then the answer through the OSM API with Overpass down, must be the same
+  GC._reset(); osmDown = false; nmFb = null; api = null; NOW += 1000;
+  const viaOver = (await get('/golfcourse/holes?id=way/100')).j; ok(viaOver.ok && viaOver.holes.length >= 4 && !viaOver.stale);
+  GC._reset(); osmDown = true; asked = []; logs = []; let MAP = apiJson([COURSE].concat(ELS, NOISE)), apiStatus = 0;
+  api = (u, opt) => {
+    ok(/^Oddable\//.test(opt.headers['User-Agent']) && opt.signal, 'OSM API: real User-Agent and a time limit');
+    if (apiStatus) return J({}, apiStatus);
+    const path = u.split('/api/0.6/')[1], m = /^(way|relation)\/(\d+)\/full\.json$/.exec(path) || /^(node)\/(\d+)\.json$/.exec(path);
+    if (path.startsWith('map.json?bbox=')) return J(MAP);
+    if (m) { const el = [COURSE, C200, C201, R300, way(555, { building: 'yes' }, SQ), { type: 'node', id: 77, lat: at(400, 400).lat, lon: at(400, 400).lon, tags: { leisure: 'golf_course', name: 'Dot Links' } }].find((e) => e.type === m[1] && String(e.id) === m[2]); return el ? J(apiJson([el])) : J({}, m[2] === '998' ? 410 : 404); }
+    return J({}, 400);
+  };
+  let r = await get('/golfcourse/holes?id=way/100'); eq(r.s, 200);
+  eq(r.j.holes, viaOver.holes, 'HOLES THROUGH THE OSM API = HOLES THROUGH OVERPASS (same course, same marks)'); eq([r.j.name, r.j.center, r.j.holeCount, r.j.holesMapped, r.j.note, r.j.flags, r.j.source], [viaOver.name, viaOver.center, viaOver.holeCount, viaOver.holesMapped, viaOver.note, viaOver.flags, viaOver.source]); eq(r.j.stale, undefined);
+  eq(asked.filter(isOver).length, 4, 'Overpass: two servers (each once more after "busy"), then the fallback'); eq(asked.filter(isApi).map((u) => u.split('/api/0.6/')[1].replace(/\?.*/, '')), ['way/100/full.json', 'map.json'], 'box not known yet: the course itself, then the map of its box');
+  ok(logs.some((l) => /golfcourse: holes answered by osm api$/.test(l)), 'one line says which source answered: ' + logs.join(' | '));
+  { const bb = new URL(asked.filter(isApi)[1]).searchParams.get('bbox').split(',').map(Number), b = COURSE.bounds; // left,bottom,right,top = the course's box + about 150 m
+    near((b.minlat - bb[1]) * 111195, 150, 2, 'bottom pad'); near((bb[3] - b.maxlat) * 111195, 150, 2, 'top pad'); near((b.minlon - bb[0]) * 111195 * Math.cos(26.2 * Math.PI / 180), 150, 2, 'left pad'); near((bb[2] - b.maxlon) * 111195 * Math.cos(26.2 * Math.PI / 180), 150, 2, 'right pad'); ok((bb[2] - bb[0]) * (bb[3] - bb[1]) < 0.25, 'far under the API limit of 0.25 square degrees'); }
+  const n0 = asked.length; NOW += 1000; r = await get('/golfcourse/holes?id=way/100'); eq(asked.length, n0, 'kept in memory (7 days)'); ok(logs.some((l) => /holes answered by osm api \(from memory\)$/.test(l)));
+  NOW += 6 * 864e5; await get('/golfcourse/holes?id=way/100'); eq(asked.length, n0, 'day 6: still from memory');
+  // (3) the course list from Nominatim (invented data in its jsonv2 shape); Overpass is still marked busy, so it is not asked at all
+  GC._reset(); asked = []; logs = []; MAP = apiJson([C200, C201, R300].concat(ELS2, NOISE));
+  const g = (id, type, name, p, pts, extra) => Object.assign({ place_id: id, licence: 'x', osm_type: 'way', osm_id: id, lat: String(p.lat), lon: String(p.lon), category: 'leisure', type, place_rank: 30, importance: 0.2, addresstype: 'leisure', name, display_name: name + ', Main St, McAllen, Texas, United States', boundingbox: ((b) => [b.minlat, b.maxlat, b.minlon, b.maxlon].map(String))(way(0, {}, pts).bounds), extratags: null }, extra);
+  const NMG = [g(200, 'golf_course', 'Test Links Two', at(400, 400), SQ, { extratags: { holes: '9', website: 'https://example.org' } }), g(300, 'golf_course', 'Test Relation Links', at(410, 400), SQ, { osm_type: 'relation' }),
+    g(701, 'miniature_golf', 'Putt Putt', at(100, 100), SQ), g(702, 'hotel', 'Golf Course Inn', at(100, 100), SQ, { category: 'tourism' }), g(777, 'golf_course', 'Far Links', { lat: 27.3, lon: -98.23 }, SQ),
+    g(778, 'golf_course', '', at(700, 100), SQ, { display_name: 'Main St, McAllen, Texas' }), g(600, 'golf_course', 'Whole County Links', at(450, 400), [{ lat: 26.0, lon: -98.5 }, { lat: 26.5, lon: -98.0 }]), null, { osm_type: 'way', osm_id: 'abc', lat: '26.2', lon: '-98.2', category: 'leisure', type: 'golf_course' }];
+  const nq = []; nmFb = (q, opt) => { nq.push(q); ok(/^Oddable\//.test(opt.headers['User-Agent']) && opt.signal, 'Nominatim: real User-Agent and a time limit'); return J(q.get('q') === 'golf course' ? NMG : q.get('q') === 'golf club' ? [NMG[0], Object.assign(g(201, 'golf_course', 'x', at(420, 400), SQ), { category: undefined, class: 'leisure', name: undefined, display_name: 'Test Links Three, McAllen' })] : []); };
+  r = await get('/golfcourse/search?q=McAllen%2C%20TX'); eq(r.s, 200); eq([r.j.ok, r.j.partial, r.j.stale, r.j.source, r.j.radius], [true, true, undefined, 'OpenStreetMap contributors', 15]);
+  eq(asked.filter(isOver).length, 4, 'Overpass first: two servers, then the fallback');
+  eq(nq.map((q) => q.get('q')), ['golf course', 'golf club'], 'two searches; the third spelling is only for when these find nothing');
+  nq.forEach((q) => { eq([q.get('format'), q.get('bounded'), q.get('limit'), q.get('extratags')], ['jsonv2', '1', '40', '1']); const [l, t, rr, b] = q.get('viewbox').split(',').map(Number); ok(l < -98.23 && rr > -98.23 && t > 26.2 && b < 26.2 && Math.abs((t - b) * 69.05 - 32) < 0.1, 'viewbox = left,top,right,bottom, the radius (15 + 1 miles) each way'); });
+  eq(r.j.courses.map((c) => c.id), ['way/200', 'relation/300', 'way/201', 'way/600', 'way/778'], 'only leisure=golf_course inside the radius, nearest first: not the mini golf, the hotel, the far one or the junk');
+  eq(r.j.courses[0], { id: 'way/200', name: 'Test Links Two', lat: +at(400, 400).lat.toFixed(6), lon: +at(400, 400).lon.toFixed(6), holes: 9, holesMapped: '?', holesKnown: false, miles: 0 }, 'same shape as the Overpass list; hole count not known = "?" (the v264 phone prints "? of 9 holes mapped"), never a made-up number');
+  eq(r.j.courses[2].name, 'Test Links Three', 'class= spelling, name from display_name'); eq([r.j.courses[4].name, r.j.courses[4].unnamed, r.j.courses[4].holes], ['Golf course (no name on the map)', true, 18], 'a course with no name is not given its street as a name');
+  ok(/holes of these courses are not checked yet/.test(r.j.note), 'the note says why: ' + r.j.note); ok(logs.some((l) => /golfcourse: search answered by nominatim$/.test(l)) && !logs.some((l) => /McAllen/i.test(l)), 'source logged, search not logged');
+  eq(GC._nomiCourse(NMG[2]), null); eq(GC._nomiCourse(NMG[3]), null); eq(GC._nomiCourse(null), null); eq(GC._nomiCourse(NMG[8]), null);
+  // "down for 10 minutes": other searches and the holes go straight to the fallbacks
+  const o1 = asked.filter(isOver).length; osmDown = false; // Overpass would answer now, but it is left alone until the 10 minutes are over
+  r = await get('/golfcourse/search?lat=26.2&lon=-98.23&r=5'); eq([r.s, r.j.partial], [200, true]); eq(asked.filter(isOver).length, o1, 'no Overpass try while it is marked busy'); eq(nq.length, 4);
+  r = await get('/golfcourse/search?q=mcallen%2C%20tx'); eq(nq.length, 4, 'the same search again: from memory');
+  // holes for a course from that list: its box is known from the list, so ONE OSM API read
+  let a0 = asked.length; r = await get('/golfcourse/holes?id=way/200'); eq(r.s, 200); eq(asked.slice(a0).map((u) => u.split('/api/0.6/')[1].replace(/\?.*/, '')), ['map.json'], 'box known from the search list: one read, no Overpass');
+  eq(r.j.holes, strip(GC._build('way/200', C200, ELS2)).holes, 'the holes the Overpass fixture gives'); eq([r.j.name, r.j.holeCount, r.j.holesMapped], ['Test Links Two', 9, 3]); ok(r.j.holes[1].hazards.some((z) => z.type === 'water'));
+  r = await get('/golfcourse/holes?id=relation/300'); eq(r.s, 200); eq(r.j.holes, strip(GC._build('relation/300', R300, ELS2)).holes, 'a course drawn as a relation'); eq(r.j.name, 'Test Relation Links');
+  a0 = asked.length; r = await get('/golfcourse/holes?id=node/77'); eq(r.s, 200); eq(r.j.name, 'Dot Links'); eq(asked.slice(a0).map((u) => u.split('/api/0.6/')[1].replace(/\?.*/, '')), ['node/77.json', 'map.json'], 'a course that is only a point: a box around it'); ok(r.j.holes.some((h) => h.n === 9), 'no outline, so its box decides');
+  // refusals
+  a0 = asked.length; r = await get('/golfcourse/holes?id=way/600'); eq(r.s, 404, 'a box too big to be one course is refused...'); eq(asked.length, a0, '...before anything is asked of the OSM API');
+  r = await get('/golfcourse/holes?id=way/999'); eq(r.s, 404, 'OSM API 404: no such course'); r = await get('/golfcourse/holes?id=way/998'); eq(r.s, 404, 'OSM API 410 (deleted): no such course'); r = await get('/golfcourse/holes?id=way/555'); eq(r.s, 404, 'not a golf course');
+  for (const st of [400, 509, 500]) { apiStatus = st; r = await get('/golfcourse/holes?id=way/201'); eq([r.s, r.j.error], [502, 'The course map is not answering right now. Try again in a minute.'], 'OSM API ' + st + ' (too many points / rate limited / down): the usual 502, nothing invented'); }
+  apiStatus = 400; NOW += 8 * 864e5; osmDown = true; r = await get('/golfcourse/holes?id=way/200'); eq([r.s, r.j.stale], [200, true], 'the OSM API refuses and an older copy exists: that copy, marked stale'); apiStatus = 0; osmDown = false; NOW += 10 * 6e4 + 1;
+  // after the 10 minutes Overpass is asked again, and its full list (with hole counts) replaces the short one
+  logs = []; r = await get('/golfcourse/search?q=McAllen%2C%20TX'); eq([r.s, r.j.partial, r.j.courses[0].id, r.j.courses[0].holesMapped], [200, undefined, 'way/100', 1], 'Overpass is back'); ok(asked.filter(isOver).length > o1 && logs.some((l) => /search answered by overpass /.test(l)));
+  // nothing found by the two searches: the bracket spelling is tried; still nothing = an honest empty list
+  GC._reset(); osmDown = true; nq.length = 0; nmFb = (q) => { nq.push(q); return J([NMG[2]]); }; r = await get('/golfcourse/search?lat=30&lon=-90'); eq([r.s, r.j.count, r.j.partial], [200, 0, true]); eq(nq.map((q) => q.get('q')), ['golf course', 'golf club', '[golf course]']); ok(/No golf courses are mapped/.test(r.j.note));
+  // Nominatim says slow down: one request, then 502
+  GC._reset(); nq.length = 0; nmFb = (q) => { nq.push(q); return J([], 429); }; r = await get('/golfcourse/search?lat=31&lon=-90'); eq([r.s, nq.length], [502, 1]);
+  osmDown = false; nmFb = null; api = null;
+}
 const srv = http.createServer(async (req, res) => { if (!(await GC.handle(req, res))) { res.statusCode = 404; res.end('{}'); } });
 srv.listen(0, async () => {
   const P = srv.address().port, get = async (p, tok) => { const r = await fetch('http://127.0.0.1:' + P + p, { headers: tok ? { 'x-token': tok } : {} }); return { s: r.status, j: await r.json() }; };
@@ -181,11 +270,14 @@ srv.listen(0, async () => {
     // no database: marks and colours are simply absent, posting says so
     hasDb = false; NOW += 31000; r = await get('/golfcourse/holes?id=way/100'); eq([r.s, r.j.marks, r.j.flags], [200, 0, undefined]); r = await post({ id: 'way/100', n: 1, what: 'tee', point: at(0, 1) }, 'ann', '9.9.9.4'); eq(r.s, 503); hasDb = true;
     // the map servers go down: an old copy is served and says so; a course never read gives 502
-    NOW += 8 * 864e5; osmDown = true;
+    NOW += 8 * 864e5; osmDown = true; const a2 = asked.filter((u) => /interpreter/.test(u)).length;
     r = await get('/golfcourse/holes?id=way/100'); eq(r.s, 200); eq(r.j.stale, true); ok(/not answering/.test(r.j.note) && r.j.holes.length >= 4, 'stale copy');
     r = await get('/golfcourse/search?q=McAllen%2C%20TX'); eq([r.s, r.j.stale, r.j.courses.length], [200, true, 1], 'stale search list');
     r = await get('/golfcourse/holes?id=way/101'); eq(r.s, 502); r = await get('/golfcourse/search?lat=40&lon=-80'); eq(r.s, 502);
-    const tried = new Set(asked.filter((u) => /interpreter/.test(u))); eq(tried.size, 4, 'all four map servers were tried');
+    const tried = new Set(asked.filter((u) => /interpreter/.test(u))); eq(tried.size, 2, 'the map step stops after two servers; then Overpass is left alone for 10 minutes');
+    eq(asked.filter((u) => /interpreter/.test(u)).length, a2 + 4, 'two servers, each asked again once after "busy" (504), for the FIRST request only: the next three went straight to the fallbacks');
+    ok(asked.some((u) => /api\.openstreetmap\.org\/api\/0\.6\/map\.json/.test(u)) && asked.some((u) => /api\.openstreetmap\.org\/api\/0\.6\/way\/101\/full\.json/.test(u)), 'the OSM API was tried for the holes (it is down in this part)'); ok(asked.some((u) => /nominatim.*viewbox=/.test(u)), 'the Nominatim course list was tried (down in this part)');
+    await fallbacks(get);
     console.log('golfcourse.test.js: ' + n + ' checks passed');
   } catch (e) { console.error('FAILED', e); process.exitCode = 1; }
   srv.close();

@@ -3,10 +3,15 @@
 // Providers:
 //   osm (default, free): Nominatim turns q into a point (real User-Agent, at most 1 request a second, cached for a day),
 //     then Overpass lists everything tagged for pickleball inside the radius. Overpass is a free, shared service that is often full
-//     ("server at capacity", 502 / 504, or no answer), so the list is asked of several public Overpass servers in turn (OVERPASS below):
-//     about 12 s each, one more try after a short wait when a server says busy (429 / 502 / 503 / 504), the server that answered last
-//     is asked first for the next 10 minutes, and the whole map step stops after OSM_BUDGET so the phone (70 s wait) always gets an answer.
-//     If none answers and an older list for that area is still in memory, that list is sent with stale:true and its own asOf time.
+//     ("server at capacity", 502 / 504, or no answer), so the list is asked of the public Overpass servers in osmfall.js:
+//     8 s each, one more try after a short wait when a server says busy (429 / 502 / 503 / 504), the server that answered last
+//     is asked first for the next 10 minutes, and the step STOPS after two servers have failed (about 16-18 s). Then, in this order:
+//       1. an older FULL list for that area still in memory is sent with stale:true and its own asOf time;
+//       2. otherwise the SHORT LIST (fromNominatim below): up to three Nominatim searches inside a box the size of the radius
+//          ("pickleball", "pickleball court", "pickleball courts <what was typed>"), keeping sports pitches / centres / parks whose name or
+//          sport tag says pickleball. It misses courts that have no name on the map, so the answer says partial:true + a note. Kept 7 days.
+//     Overpass is then left alone for 10 minutes (osmfall.js down()) so nobody waits on it again, and tried again after that.
+//     Nominatim requests (place lookup + short list, and golfcourse.js's too) share ONE queue: at most 1 request a second in total.
 //   google: Places API (New) Text Search "pickleball courts" around the point. Only when the provider is google AND a key is set.
 //     If Google fails (quota, bad key, network) the answer comes from OpenStreetMap instead and says so (provider:'osm', fallback:true).
 // Where the provider and the key come from, in this order:
@@ -24,20 +29,21 @@ const D = {
   env: (k) => process.env[k], log: (...a) => console.error(...a),
   signal: (ms) => timeout(ms) // the time limit of one map-server try (the tests read it)
 };
+const F = require('./osmfall');
 const UA = 'Oddable/1.0 (pickleball court finder; https://steves-pics.onrender.com)';
-const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
-const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter'];
-const OSM_TIMEOUT = 12000, OSM_BUDGET = 36000, OSM_BACKOFF = 1500, OSM_GOOD_TTL = 10 * 6e4, OSM_BUSY = [429, 502, 503, 504]; // worst case for one search: place 10 s + settings 6 s + Google 12 s + map 36 s = 64 s, under the phone's 70 s
+const NOMINATIM = F.NOMINATIM, OVERPASS = F.OVERPASS;
+const NM_BUDGET = 20000, NM_TIMEOUT = 8000, NM_TTL = 7 * 864e5; // worst case for one search: place 10 s + settings 6 s + Google 12 s + map 18 s + short list 20 s = 66 s, under the phone's 70 s
 const GOOGLE = 'https://places.googleapis.com/v1/places:searchText';
 const GOOGLE_FIELDS = 'places.id,places.displayName,places.formattedAddress,places.location';
 const R_DEF = 15, R_MAX = 50, R_MIN = 1, PAD = 1; // miles; PAD covers the rounding of the point
-const GEO_TTL = 864e5, GEO_MISS_TTL = 36e5, GEO_GAP = 1100, GEO_MAX = 500, GEO_QUEUE = 5;
+const GEO_TTL = 864e5, GEO_MISS_TTL = 36e5, GEO_MAX = 500, GEO_QUEUE = 5;
 const CT_TTL = 6 * 36e5, FB_TTL = 10 * 6e4, STALE_HOLD = 2 * 6e4, CT_MAX = 300, MAX_OUT = 60, MAX_EL = 400, DEDUP_M = 60;
 const RL_MAX = 12; // requests a minute per IP
 const SRC = { osm: 'OpenStreetMap contributors', google: 'Google' };
+const PARTIAL_NOTE = 'Short list: the detailed map server is busy, so only named pickleball places are shown.';
 
-let GEO, CT, RL, geoChain, geoLast, geoWaiting, KEYS, osmGood;
-function reset() { require('./appsettings')._reset(); GEO = new Map(); CT = new Map(); RL = new Map(); geoChain = Promise.resolve(); geoLast = 0; geoWaiting = 0; KEYS = new Set(); osmGood = null; }
+let GEO, CT, NM, RL, geoWaiting, KEYS;
+function reset() { require('./appsettings')._reset(); F._reset(); GEO = new Map(); CT = new Map(); NM = new Map(); RL = new Map(); geoWaiting = 0; KEYS = new Set(); }
 reset();
 
 const send = (res, code, o) => { res.statusCode = code; res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json'); res.setHeader('Cache-Control', 'no-store'); res.end(JSON.stringify(o)); };
@@ -88,10 +94,7 @@ const mapLink = (lat, lon, pid) => 'https://www.google.com/maps/search/?api=1&qu
 const txt = (v, n) => String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n || 120);
 
 // ---------- Nominatim (place text -> point) ----------
-function geoTurn(fn) { // one at a time, at least GEO_GAP apart
-  const run = geoChain.then(async () => { const wait = geoLast + GEO_GAP - D.now(); if (wait > 0) await D.sleep(wait); geoLast = D.now(); return fn(); });
-  geoChain = run.then(() => {}, () => {}); return run;
-}
+const geoTurn = (fn) => F.turn(D, fn); // one at a time, at least 1.1 s apart, in the queue shared with golfcourse.js (osmfall.js)
 async function geocode(text) {
   const k = text.toLowerCase(), c = GEO.get(k), now = D.now();
   if (c && c.v && now - c.t < (c.v.miss ? GEO_MISS_TTL : GEO_TTL)) return c.v;
@@ -153,32 +156,52 @@ function osmCourts(json) {
     return o;
   });
 }
-const hostOf = (u) => { try { return new URL(u).host; } catch (e) { return 'map'; } };
-// The servers in the order to ask them: the one that answered last (for 10 minutes) first, then the list as written.
-function osmOrder() { const g = osmGood && D.now() - osmGood.t < OSM_GOOD_TTL && OVERPASS.includes(osmGood.u) ? osmGood.u : ''; return g ? [g].concat(OVERPASS.filter((u) => u !== g)) : OVERPASS.slice(); }
-async function osmAsk(u, body, ms) {
-  const r = await D.fetch(u, { method: 'POST', headers: { 'User-Agent': UA, 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' }, body, signal: D.signal(ms) });
-  if (!r.ok) { const e = new Error('overpass ' + (+r.status || 0)); e.busy = OSM_BUSY.includes(+r.status); throw e; }
-  let j; try { j = await r.json(); } catch (e) { throw new Error('overpass bad answer'); }
-  if (!j || !Array.isArray(j.elements)) throw new Error('overpass bad answer');
-  if (!j.elements.length && /error|timed out|out of memory/i.test(String(j.remark || ''))) throw new Error('overpass gave up'); // a timed-out query is not "no courts"
-  return osmCourts(j);
-}
+// Overpass (osmfall.js: 8 s a server, stops after two have failed, then marked busy for 10 minutes).
 async function fromOsm(lat, lon, mi) {
-  const body = 'data=' + encodeURIComponent(overpassQuery(lat, lon, mi)), end = D.now() + OSM_BUDGET, left = () => end - D.now(); let err;
-  for (const u of osmOrder()) {
-    for (let n = 0; n < 2; n++) { // a second try only when the server said "busy"
-      if (left() < 1500) { log('map lookup stopped (out of time)'); throw err || new Error('overpass out of time'); }
-      try { const v = await osmAsk(u, body, Math.min(OSM_TIMEOUT, left())); osmGood = { u, t: D.now() }; return v; }
-      catch (e) {
-        err = e; log('map lookup failed (' + hostOf(u) + ': ' + scrub(e && e.message).slice(0, 60) + ')');
-        if (osmGood && osmGood.u === u) osmGood = null;
-        if (!(e && e.busy) || n > 0 || left() < OSM_BACKOFF + 1500) break;
-        await D.sleep(OSM_BACKOFF);
-      }
-    }
+  const a = await F.overpass(D, overpassQuery(lat, lon, mi), { ua: UA, log, clean: scrub });
+  return { list: osmCourts({ elements: a.elements }), host: a.host };
+}
+
+// ---------- the short list when Overpass is down: Nominatim search by name ----------
+const NM_KINDS = { leisure: ['pitch', 'sports_centre', 'sports_hall', 'park', 'recreation_ground', 'fitness_centre', 'stadium', 'track'], amenity: ['community_centre'], club: ['sport'], landuse: ['recreation_ground'] };
+const PB = /pickle[\s-]?ball/i;
+// One Nominatim result -> the element osmPlace() reads (a tagged point), or null when it is not a pickleball place.
+function nomiPlace(f) {
+  if (!f || typeof f !== 'object') return null;
+  const cat = String(f.category || f.class || ''), type = String(f.type || ''), x = (f.extratags && typeof f.extratags === 'object' && f.extratags) || {}, ad = (f.address && typeof f.address === 'object' && f.address) || {};
+  const lat = +f.lat, lon = +f.lon, id = F.osmId(f); if (!id || !isFinite(lat) || !isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  const name = txt(typeof f.name === 'string' ? f.name : String(f.display_name || '').split(',')[0], 100), tagged = PB.test(String(x.sport || '')) || /^(yes|designated|only)$/.test(String(x.pickleball || ''));
+  if (!tagged && !((NM_KINDS[cat] || []).includes(type) && PB.test(name))) return null; // a shop or a street with "pickleball" in its name is not a place to play
+  const tags = {}; Object.keys(x).slice(0, 60).forEach((k) => { if (typeof x[k] === 'string') tags[k] = x[k]; });
+  tags.name = name; if (cat === 'leisure') tags.leisure = type;
+  tags.sport = PB.test(String(x.sport || '')) ? x.sport : x.sport ? x.sport + ';pickleball' : 'pickleball';
+  const put = (k, v) => { if (!tags[k] && typeof v === 'string' && v) tags[k] = v; };
+  put('addr:housenumber', ad.house_number); put('addr:street', ad.road); put('addr:city', ad.city || ad.town || ad.village || ad.hamlet || ad.municipality); put('addr:state', ad.state); put('addr:postcode', ad.postcode);
+  return { type: 'node', id, lat, lon, tags };
+}
+async function fromNominatim(lat, lon, mi, place) {
+  const k = lat.toFixed(2) + '|' + lon.toFixed(2) + '|' + mi, c = NM.get(k), end = D.now() + NM_BUDGET;
+  if (c && D.now() - c.at < NM_TTL) return c;
+  const box = F.viewbox(lat, lon, mi), asks = ['pickleball', 'pickleball court'], seen = new Map(); if (place) asks.push('pickleball courts ' + place);
+  let answered = 0, err;
+  for (const q of asks) {
+    const left = end - D.now(); if (left < 2500) { err = err || new Error('short list out of time'); break; }
+    try { const a = await F.nominatim(D, { q, viewbox: box, bounded: 1, limit: 40, extratags: 1, addressdetails: 1 }, { ua: UA, ms: Math.min(NM_TIMEOUT, left) }); answered++; a.slice(0, 40).forEach((f) => { const el = nomiPlace(f); if (el && !seen.has(el.id)) seen.set(el.id, el); }); }
+    catch (e) { err = e; log('short list lookup failed (' + scrub(e && e.message).slice(0, 60) + ')'); if (e && (e.busy || e.http === 429 || e.http === 403)) break; } // told to slow down: stop asking
   }
-  throw err || new Error('overpass');
+  if (!answered) throw err || new Error('short list');
+  const v = { at: D.now(), list: osmCourts({ elements: [...seen.values()] }) };
+  if (answered === asks.length) { NM.set(k, v); while (NM.size > CT_MAX) NM.delete(NM.keys().next().value); } // only a complete short list is kept for 7 days
+  return v;
+}
+// The free map: Overpass, else an older full list (the caller's stale path), else the short list.
+async function osmList(lat, lon, mi, place, haveOld) {
+  let err;
+  if (!F.down(D)) { try { const a = await fromOsm(lat, lon, mi); return { provider: 'osm', at: D.now(), list: a.list, ttl: CT_TTL, via: 'overpass ' + a.host }; } catch (e) { err = e; } }
+  else err = new Error('overpass marked busy');
+  if (haveOld) throw err;
+  const fb = await fromNominatim(lat, lon, mi, place);
+  return { provider: 'osm', partial: true, at: fb.at, list: fb.list, ttl: FB_TTL, via: 'nominatim short list' };
 }
 
 // ---------- Google Places (New) Text Search ----------
@@ -202,17 +225,17 @@ async function fromGoogle(lat, lon, mi, key) {
 }
 
 // ---------- lookup with the 6-hour list cache ----------
-async function listFor(prov, key, lat, lon, r) {
+async function listFor(prov, key, lat, lon, r, place) {
   const cLat = Math.round(lat * 100) / 100, cLon = Math.round(lon * 100) / 100, k = prov + '|' + cLat.toFixed(2) + '|' + cLon.toFixed(2) + '|' + r, now = D.now(), c = CT.get(k);
   if (c && c.v && now - c.t < c.ttl) return c.v;
   if (c && c.job) return c.job;
   const job = (async () => {
     let v;
     if (prov === 'google') {
-      try { v = { provider: 'google', at: D.now(), list: await fromGoogle(cLat, cLon, r + PAD, key), ttl: CT_TTL }; }
+      try { v = { provider: 'google', at: D.now(), list: await fromGoogle(cLat, cLon, r + PAD, key), ttl: CT_TTL, via: 'google' }; }
       catch (e) { log('google lookup failed (' + scrub(e && e.message).slice(0, 40) + '), using OpenStreetMap');
-        const o = await listFor('osm', '', lat, lon, r); v = { provider: 'osm', fallback: true, at: o.at, list: o.list, ttl: FB_TTL }; }
-    } else v = { provider: 'osm', at: D.now(), list: await fromOsm(cLat, cLon, r + PAD), ttl: CT_TTL };
+        const o = await listFor('osm', '', lat, lon, r, place); v = { provider: 'osm', fallback: true, at: o.at, list: o.list, ttl: FB_TTL, via: o.via }; if (o.partial) v.partial = true; }
+    } else v = await osmList(cLat, cLon, r + PAD, place, !!(c && c.v && !c.v.partial));
     return v;
   })().then((v) => { CT.delete(k); CT.set(k, { t: D.now(), ttl: v.ttl, v }); while (CT.size > CT_MAX) CT.delete(CT.keys().next().value); return v; },
     (e) => { if (c && c.v) { const old = Object.assign({}, c.v, { stale: true }); CT.delete(k); CT.set(k, { t: D.now(), ttl: STALE_HOLD, v: old }); return old; } CT.delete(k); throw e; }); // the map is down: an old list beats none, and it says so (stale:true, its own asOf). It is held for 2 minutes so the next taps answer at once instead of waiting on the map servers again
@@ -228,7 +251,9 @@ function answer(v, center, r) {
   const notes = [];
   if (v.fallback) notes.push('Google did not answer, so this list is from OpenStreetMap.');
   if (v.stale) notes.push('The court map is not answering right now. This is the last list we have.');
-  if (!courts.length) notes.push(v.provider === 'osm' ? 'No pickleball courts are mapped on OpenStreetMap within ' + r + ' miles. Volunteers fill in that map, so courts can be missing. Try a bigger distance.' : 'Google lists no pickleball courts within ' + r + ' miles. Try a bigger distance.');
+  if (v.partial) { o.partial = true; notes.push(PARTIAL_NOTE); }
+  if (!courts.length && v.partial) notes.push('No named pickleball places were found within ' + r + ' miles. Try again in a few minutes, or a bigger distance.');
+  else if (!courts.length) notes.push(v.provider === 'osm' ? 'No pickleball courts are mapped on OpenStreetMap within ' + r + ' miles. Volunteers fill in that map, so courts can be missing. Try a bigger distance.' : 'Google lists no pickleball courts within ' + r + ' miles. Try a bigger distance.');
   if (notes.length) o.note = notes.join(' ');
   return o;
 }
@@ -246,10 +271,11 @@ async function handle(req, res) {
       if (g.miss) { send(res, 404, { ok: false, error: 'Could not find that place. Try a city and state, or a ZIP code.' }); return true; }
       center = { lat: g.lat, lon: g.lon, label: g.label };
     }
-    const s = await settings(); let v;
-    try { v = await listFor(s.provider, s.key, center.lat, center.lon, p.r); } catch (e) { send(res, 502, { ok: false, error: 'The court map is not answering right now. Try again in a minute.' }); return true; }
+    const s = await settings(), t0 = D.now(); let v;
+    try { v = await listFor(s.provider, s.key, center.lat, center.lon, p.r, p.q || ''); } catch (e) { log('answered by nobody (502)'); send(res, 502, { ok: false, error: 'The court map is not answering right now. Try again in a minute.' }); return true; }
+    log('answered by ' + (v.via || v.provider) + (v.stale ? ' (saved list, the map is not answering)' : v.at < t0 ? ' (from memory)' : '')); // the source only: never the search, never a key
     send(res, 200, JSON.parse(scrub(JSON.stringify(answer(v, center, p.r)))));
   } catch (e) { log('error (' + scrub(e && e.message).slice(0, 80) + ')'); send(res, 500, { ok: false, error: 'Court search error.' }); }
   return true;
 }
-module.exports = { handle, _deps: D, _reset: reset, _parse: parse, _settings: settings, _osmCourts: osmCourts, _group: group, _miles: miles, _scrub: scrub, _overpassQuery: overpassQuery, _OVERPASS: OVERPASS };
+module.exports = { handle, _deps: D, _reset: reset, _parse: parse, _settings: settings, _osmCourts: osmCourts, _group: group, _miles: miles, _scrub: scrub, _overpassQuery: overpassQuery, _OVERPASS: OVERPASS, _nomiPlace: nomiPlace, _PARTIAL_NOTE: PARTIAL_NOTE };

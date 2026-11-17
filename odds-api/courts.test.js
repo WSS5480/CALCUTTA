@@ -1,14 +1,14 @@
 // Run: node odds-api/courts.test.js   (no network: Nominatim, Overpass, Google, My Apps, the clock, the pauses and the log are in-memory fakes)
 const assert = require('assert'), http = require('http'), C = require('./courts'), D = C._deps;
 const KEY = 'AIzaSyTEST-key_0123456789abcdefghijklmn', KEY2 = 'envKEY-zzzz-1111-2222-3333';
-let NOW, calls, logs, sent, nomi, over, goog, myapps, maOn, env, slept;
+let NOW, calls, logs, sent, nomi, over, goog, myapps, maOn, env, slept, lim;
 const jres = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => { if (body === 'BAD') throw new Error('not json'); return body; } });
 function start() {
-  C._reset(); NOW = Date.parse('2026-11-16T18:00:00Z'); calls = { nomi: [], over: [], goog: [], ma: 0 }; logs = []; sent = []; slept = [];
+  C._reset(); NOW = Date.parse('2026-11-16T18:00:00Z'); calls = { nomi: [], over: [], goog: [], ma: 0 }; logs = []; sent = []; slept = []; lim = [];
   nomi = () => jres(200, [{ lat: '26.2034', lon: '-98.2300', display_name: 'McAllen, Hidalgo County, Texas, United States' }]);
   over = () => jres(200, { elements: [] }); goog = () => jres(200, { places: [] }); myapps = () => ({ ok: false, status: 404, j: {} }); maOn = true; env = {};
 }
-D.now = () => NOW; D.sleep = async (ms) => { slept.push(ms); NOW += ms; }; D.log = (...a) => logs.push(a.join(' ')); D.env = (k) => env[k];
+D.now = () => NOW; D.sleep = async (ms) => { slept.push(ms); NOW += ms; }; D.log = (...a) => logs.push(a.join(' ')); D.env = (k) => env[k]; const realSignal = D.signal; D.signal = (ms) => { lim.push(ms); return realSignal(Math.max(ms, 60000)); }; // the limit is recorded; the fake clock decides the time
 D.maReady = () => maOn; D.ma = async (path, data) => { calls.ma++; assert.strictEqual(path, '/api/v1/app/settings'); assert.deepStrictEqual(data, {}, 'slug and secret are added by acct.js ma()'); return myapps(); };
 D.fetch = async (url, opt) => {
   sent.push(String(url) + ' ' + JSON.stringify(opt || {}));
@@ -35,6 +35,7 @@ const GPL = { places: [
   { id: 'x', displayName: {}, location: { latitude: 26.2, longitude: -98.2 } }
 ] };
 
+const osmGoodReset = () => { NOW += 11 * 6e4; };
 const srv = http.createServer(async (req, res) => { try { if (!(await C.handle(req, res))) { res.statusCode = 404; res.end('{}'); } } catch (e) { res.statusCode = 500; res.end('{"crash":true}'); } });
 srv.listen(0, '127.0.0.1', async () => {
   const port = srv.address().port, all = [];
@@ -100,10 +101,42 @@ srv.listen(0, '127.0.0.1', async () => {
     start(); nomi = () => jres(200, []); r = await get('?q=Zzzzqqq'); assert.strictEqual(r.s, 404); assert.strictEqual(r.j.ok, false); assert.ok(/Could not find that place/.test(r.j.error)); assert.strictEqual(calls.over.length, 0);
     await get('?q=zzzzqqq'); assert.strictEqual(calls.nomi.length, 1, 'a miss is remembered for an hour'); NOW += 61 * 6e4; await get('?q=zzzzqqq'); assert.strictEqual(calls.nomi.length, 2);
     start(); nomi = () => jres(503, {}); r = await get('?q=McAllen'); assert.strictEqual(r.s, 503); assert.ok(/place lookup is not answering/.test(r.j.error)); nomi = () => jres(200, [{ lat: '26.2', lon: '-98.2', display_name: 'McAllen' }]); r = await get('?q=McAllen'); assert.strictEqual(r.s, 200, 'a failed geocode is not cached');
-    start(); over = () => jres(504, {}); r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 502); assert.strictEqual(r.j.ok, false); assert.strictEqual(r.j.courts, undefined, 'no courts invented'); assert.strictEqual(calls.over.length, 2, 'main server, then the mirror');
+    start(); over = () => jres(504, {}); r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 502); assert.strictEqual(r.j.ok, false); assert.strictEqual(r.j.courts, undefined, 'no courts invented'); assert.strictEqual(calls.over.length, 8, 'four map servers, each asked again once after a busy answer'); assert.deepStrictEqual(calls.over.map((c) => c.url), C._OVERPASS.flatMap((u) => [u, u])); assert.deepStrictEqual(slept, [1500, 1500, 1500, 1500], 'a short wait before each second try');
     over = (u) => (/overpass-api\.de/.test(u) ? jres(429, {}) : jres(200, OSM)); r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 200, 'failure not cached; the mirror answers'); assert.strictEqual(r.j.count, 2);
     start(); over = () => jres(200, { elements: [], remark: 'runtime error: Query timed out in "query" at line 1 after 26 seconds.' }); r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 502, 'a timed-out map query is not "no courts"');
     start(); over = () => jres(200, 'BAD'); r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 502);
+    // 5b. backup map servers (v261). Live on Nov 16 2026: overpass-api.de answered 502 "server at capacity" and the search timed out.
+    const HOSTS = ['overpass-api.de', 'overpass.private.coffee', 'overpass.kumi.systems', 'maps.mail.ru'], host = (c) => new URL(c.url).host;
+    assert.deepStrictEqual(C._OVERPASS.map((u) => new URL(u).host), HOSTS); assert.ok(C._OVERPASS.every((u) => /^https:\/\/[^/]+\/.*api\/interpreter$/.test(u)));
+    // first server 502 (twice: one more try after a wait), second answers
+    start(); over = (u) => (/overpass-api\.de/.test(u) ? jres(502, {}) : jres(200, OSM)); r = await get('?lat=26.2&lon=-98.2');
+    assert.strictEqual(r.s, 200); assert.strictEqual(r.j.count, 2); assert.strictEqual(r.j.stale, undefined); assert.deepStrictEqual(calls.over.map(host), [HOSTS[0], HOSTS[0], HOSTS[1]]); assert.deepStrictEqual(slept, [1500]);
+    assert.ok(logs.some((l) => /map lookup failed \(overpass-api\.de: overpass 502\)/.test(l)), 'the log names the server that failed: ' + logs.join(' | '));
+    assert.ok(calls.over.every((c) => c.opt.signal && c.opt.method === 'POST' && /^Oddable\//.test(c.opt.headers['User-Agent'])), 'every try has a time limit and the real User-Agent');
+    // the server that answered is asked FIRST for the next 10 minutes, then the list order is back
+    r = await get('?lat=27.2&lon=-98.2'); assert.strictEqual(r.s, 200); assert.deepStrictEqual(calls.over.slice(3).map(host), [HOSTS[1]], 'the one that worked last goes first');
+    NOW += 9 * 6e4; await get('?lat=28.2&lon=-98.2'); assert.deepStrictEqual(calls.over.slice(4).map(host), [HOSTS[1]], 'still first after 9 minutes');
+    NOW += 10 * 6e4 + 1; over = () => jres(200, OSM); await get('?lat=29.2&lon=-98.2'); assert.deepStrictEqual(calls.over.slice(5).map(host), [HOSTS[0]], 'after 10 quiet minutes the first server is tried first again');
+    // the remembered server fails: it is forgotten and the others are asked in order
+    start(); over = (u) => (/private\.coffee/.test(u) ? jres(200, OSM) : jres(503, {})); await get('?lat=26.2&lon=-98.2'); over = (u) => (/kumi/.test(u) ? jres(200, OSM) : jres(500, {})); calls.over = [];
+    r = await get('?lat=27.2&lon=-98.2'); assert.strictEqual(r.s, 200); assert.deepStrictEqual(calls.over.map(host), [HOSTS[1], HOSTS[0], HOSTS[2]], 'last good first, then the rest in order; a plain 500 is not asked twice');
+    // an error that is not "busy" (500, 404, a dropped connection, a bad answer) moves on at once, with no wait
+    start(); over = (u) => { if (/overpass-api\.de/.test(u)) throw new Error('fetch failed'); if (/private\.coffee/.test(u)) return jres(200, 'BAD'); if (/kumi/.test(u)) return jres(404, {}); return jres(200, OSM); };
+    r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 200); assert.strictEqual(r.j.count, 2); assert.deepStrictEqual(calls.over.map(host), HOSTS); assert.deepStrictEqual(slept, []);
+    // every server down, nothing saved for the area: 502, nothing invented, and it stays inside the time budget
+    start(); over = () => { throw new Error('fetch failed'); }; r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 502); assert.strictEqual(r.j.ok, false); assert.strictEqual(r.j.courts, undefined); assert.strictEqual(calls.over.length, 4);
+    // slow servers: each try may take 12 s at most and the whole map step stops inside 36 s (the phone waits 70 s)
+    start(); const t0 = NOW; over = () => { NOW += lim[lim.length - 1]; throw new Error('The operation was aborted due to timeout'); };
+    r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 502); assert.strictEqual(calls.over.length, 3, 'three 12 s tries fit in 36 s; the fourth server is not started'); assert.ok(NOW - t0 <= 36000, 'map step took ' + (NOW - t0) + ' ms'); assert.ok(logs.some((l) => /out of time/.test(l))); assert.deepStrictEqual(lim, [12000, 12000, 12000], 'each try is limited to 12 s');
+    start(); const t1 = NOW; over = () => { NOW += Math.min(5000, lim[lim.length - 1]); return jres(504, {}); }; r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 502); assert.ok(NOW - t1 <= 36000 + 1, 'busy answers + waits stay inside the budget: ' + (NOW - t1)); assert.ok(calls.over.length >= 5 && calls.over.length <= 7, 'tries: ' + calls.over.length); assert.ok(lim.every((ms) => ms > 0 && ms <= 12000), 'limits: ' + lim);
+    // every server down but a saved list exists for the area: that list, marked stale, with ITS time; held 2 minutes so the next tap does not wait
+    start(); over = () => jres(200, OSM); r = await get('?lat=26.2&lon=-98.2'); const asOf0 = r.j.asOf; NOW += 7 * 36e5; over = () => jres(502, {}); calls.over = [];
+    r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 200); assert.strictEqual(r.j.ok, true); assert.strictEqual(r.j.stale, true); assert.strictEqual(r.j.asOf, asOf0, 'asOf is when the saved list was made, 7 hours ago'); assert.strictEqual(r.j.count, 2); assert.ok(/last list/.test(r.j.note)); assert.strictEqual(calls.over.length, 8);
+    r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.j.stale, true); assert.strictEqual(calls.over.length, 8, 'the saved list answers at once for 2 minutes');
+    NOW += 2 * 6e4 + 1; r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.j.stale, true); assert.strictEqual(r.j.asOf, asOf0); assert.strictEqual(calls.over.length, 16, 'then the map is tried again; still down = still the saved list');
+    NOW += 2 * 6e4 + 1; over = () => jres(200, OSM); r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.j.stale, undefined, 'the map is back: a fresh list'); assert.notStrictEqual(r.j.asOf, asOf0); assert.strictEqual(r.j.note, undefined);
+    // another area has no saved list: still a plain 502 while the map is down
+    over = () => jres(502, {}); osmGoodReset(); r = await get('?lat=40.2&lon=-98.2'); assert.strictEqual(r.s, 502);
     // the map goes down after a good answer: the old list is served and says so
     start(); over = () => jres(200, OSM); await get('?lat=26.2&lon=-98.2'); NOW += 7 * 36e5; over = () => jres(500, {}); r = await get('?lat=26.2&lon=-98.2'); assert.strictEqual(r.s, 200); assert.strictEqual(r.j.stale, true); assert.strictEqual(r.j.count, 2); assert.ok(/last list/.test(r.j.note));
 

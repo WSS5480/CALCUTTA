@@ -513,13 +513,18 @@ ${sc && top.length ? `<div class="sub2">${d ? '🏆 ' : 'Leading: '}${esc(top.sl
     const d = CT.data; if (CT.st !== 'ok' || !d) return '';
     const L = Array.isArray(d.courts) ? d.courts : [], where = d.center && d.center.label ? String(d.center.label) : 'that spot', rad = +d.radius || CT.r, google = d.provider === 'google';
     let h = `<div class="gh">${L.length ? L.length + (L.length === 1 ? ' place' : ' places') : 'No courts found'} <small>within ${esc(rad)} miles of ${esc(where)}</small></div>`;
-    if (d.note) h += `<div class="card note">${esc(d.note)}</div>`; else if (!L.length) h += `<div class="card note">No pickleball courts were found within ${esc(rad)} miles. Try a bigger distance.</div>`;
+    /* v261: the map servers did not answer and the server sent the list it had saved (stale:true): say so first, with that list's own time */
+    let when0 = ''; try { const t0 = new Date(d.asOf); if (!isNaN(t0)) when0 = t0.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch (e) {}
+    const stale = d.stale === true;
+    if (stale) h += `<div class="card note" role="status"><b>Saved list${when0 ? ' from ' + esc(when0) : ''}.</b> The court map is not answering right now, so this is the last list we have. Try again in a few minutes for a fresh one.</div>`;
+    const note = stale ? String(d.note || '').replace('The court map is not answering right now. This is the last list we have.', '').trim() : d.note;
+    if (note) h += `<div class="card note">${esc(note)}</div>`; else if (!L.length) h += `<div class="card note">No pickleball courts were found within ${esc(rad)} miles. Try a bigger distance.</div>`;
     L.forEach((c) => { const tags = ctTags(c), m = ctMaps(c), mi = +c.miles;
       h += `<div class="card ct"><div class="cth"><b>${esc(c.name || 'Pickleball courts')}</b>${isFinite(mi) ? `<span class="b">${esc(mi.toFixed(1))} mi</span>` : ''}</div>
 ${c.address ? `<div class="sub2">${esc(c.address)}</div>` : ''}${c.unnamed ? `<div class="sub2">No name on the map for this one.</div>` : ''}
 ${tags.length ? `<div class="tags">${tags.map((x) => `<span class="b">${esc(x)}</span>`).join('')}</div>` : ''}
 ${m ? `<a class="pill ctm" href="${esc(m)}" target="_blank" rel="noopener noreferrer">Open in Maps</a>` : ''}</div>`; });
-    let when = ''; try { const t = new Date(d.asOf); if (!isNaN(t)) when = ' · list from ' + t.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch (e) {}
+    let when = ''; try { const t = new Date(d.asOf); if (!isNaN(t)) when = (stale ? ' · saved list from ' : ' · list from ') + t.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch (e) {}
     h += `<div class="note src">${google ? 'Courts from Google' : 'Courts from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>'}${esc(when)}. ${google ? 'A listing' : 'Volunteers keep that map, so a listing'} can be missing, closed or out of date. Check before you drive over.</div>`;
     return h;
   }

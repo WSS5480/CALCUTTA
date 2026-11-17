@@ -2,7 +2,11 @@
 //   /courts?q=<city or ZIP>[&r=<miles>]      or      /courts?lat=<n>&lon=<n>[&r=<miles>]      r: default 15, 1..50
 // Providers:
 //   osm (default, free): Nominatim turns q into a point (real User-Agent, at most 1 request a second, cached for a day),
-//     then Overpass lists everything tagged for pickleball inside the radius.
+//     then Overpass lists everything tagged for pickleball inside the radius. Overpass is a free, shared service that is often full
+//     ("server at capacity", 502 / 504, or no answer), so the list is asked of several public Overpass servers in turn (OVERPASS below):
+//     about 12 s each, one more try after a short wait when a server says busy (429 / 502 / 503 / 504), the server that answered last
+//     is asked first for the next 10 minutes, and the whole map step stops after OSM_BUDGET so the phone (70 s wait) always gets an answer.
+//     If none answers and an older list for that area is still in memory, that list is sent with stale:true and its own asOf time.
 //   google: Places API (New) Text Search "pickleball courts" around the point. Only when the provider is google AND a key is set.
 //     If Google fails (quota, bad key, network) the answer comes from OpenStreetMap instead and says so (provider:'osm', fallback:true).
 // Where the provider and the key come from, in this order:
@@ -17,21 +21,23 @@
 const D = {
   fetch: (...a) => fetch(...a), now: () => Date.now(), sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
   ma: (path, data) => require('./acct').ma(path, data), maReady: () => require('./acct').maReady(),
-  env: (k) => process.env[k], log: (...a) => console.error(...a)
+  env: (k) => process.env[k], log: (...a) => console.error(...a),
+  signal: (ms) => timeout(ms) // the time limit of one map-server try (the tests read it)
 };
 const UA = 'Oddable/1.0 (pickleball court finder; https://steves-pics.onrender.com)';
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
-const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter'];
+const OSM_TIMEOUT = 12000, OSM_BUDGET = 36000, OSM_BACKOFF = 1500, OSM_GOOD_TTL = 10 * 6e4, OSM_BUSY = [429, 502, 503, 504]; // worst case for one search: place 10 s + settings 6 s + Google 12 s + map 36 s = 64 s, under the phone's 70 s
 const GOOGLE = 'https://places.googleapis.com/v1/places:searchText';
 const GOOGLE_FIELDS = 'places.id,places.displayName,places.formattedAddress,places.location';
 const R_DEF = 15, R_MAX = 50, R_MIN = 1, PAD = 1; // miles; PAD covers the rounding of the point
 const GEO_TTL = 864e5, GEO_MISS_TTL = 36e5, GEO_GAP = 1100, GEO_MAX = 500, GEO_QUEUE = 5;
-const CT_TTL = 6 * 36e5, FB_TTL = 10 * 6e4, CT_MAX = 300, MAX_OUT = 60, MAX_EL = 400, DEDUP_M = 60;
+const CT_TTL = 6 * 36e5, FB_TTL = 10 * 6e4, STALE_HOLD = 2 * 6e4, CT_MAX = 300, MAX_OUT = 60, MAX_EL = 400, DEDUP_M = 60;
 const RL_MAX = 12; // requests a minute per IP
 const SRC = { osm: 'OpenStreetMap contributors', google: 'Google' };
 
-let GEO, CT, RL, geoChain, geoLast, geoWaiting, KEYS;
-function reset() { require('./appsettings')._reset(); GEO = new Map(); CT = new Map(); RL = new Map(); geoChain = Promise.resolve(); geoLast = 0; geoWaiting = 0; KEYS = new Set(); }
+let GEO, CT, RL, geoChain, geoLast, geoWaiting, KEYS, osmGood;
+function reset() { require('./appsettings')._reset(); GEO = new Map(); CT = new Map(); RL = new Map(); geoChain = Promise.resolve(); geoLast = 0; geoWaiting = 0; KEYS = new Set(); osmGood = null; }
 reset();
 
 const send = (res, code, o) => { res.statusCode = code; res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json'); res.setHeader('Cache-Control', 'no-store'); res.end(JSON.stringify(o)); };
@@ -109,7 +115,7 @@ async function geocode(text) {
 function overpassQuery(lat, lon, mi) {
   const a = '(around:' + Math.round(mi * 1609.344) + ',' + lat + ',' + lon + ')';
   // sport=pickleball, leisure=pitch or sports centres whose sport list has pickleball (sport=tennis;pickleball), and pickleball=yes
-  return '[out:json][timeout:25];(nwr["sport"~"pickleball",i]' + a + ';nwr["pickleball"~"^(yes|designated|only)$"]' + a + ';);out center tags ' + MAX_EL + ';';
+  return '[out:json][timeout:10];(nwr["sport"~"pickleball",i]' + a + ';nwr["pickleball"~"^(yes|designated|only)$"]' + a + ';);out center tags ' + MAX_EL + ';';
 }
 const yn = (v) => { const s = String(v == null ? '' : v).toLowerCase(); return !s ? null : s === 'no' ? false : s === 'unknown' ? null : true; };
 function osmPlace(el) {
@@ -147,16 +153,30 @@ function osmCourts(json) {
     return o;
   });
 }
+const hostOf = (u) => { try { return new URL(u).host; } catch (e) { return 'map'; } };
+// The servers in the order to ask them: the one that answered last (for 10 minutes) first, then the list as written.
+function osmOrder() { const g = osmGood && D.now() - osmGood.t < OSM_GOOD_TTL && OVERPASS.includes(osmGood.u) ? osmGood.u : ''; return g ? [g].concat(OVERPASS.filter((u) => u !== g)) : OVERPASS.slice(); }
+async function osmAsk(u, body, ms) {
+  const r = await D.fetch(u, { method: 'POST', headers: { 'User-Agent': UA, 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' }, body, signal: D.signal(ms) });
+  if (!r.ok) { const e = new Error('overpass ' + (+r.status || 0)); e.busy = OSM_BUSY.includes(+r.status); throw e; }
+  let j; try { j = await r.json(); } catch (e) { throw new Error('overpass bad answer'); }
+  if (!j || !Array.isArray(j.elements)) throw new Error('overpass bad answer');
+  if (!j.elements.length && /error|timed out|out of memory/i.test(String(j.remark || ''))) throw new Error('overpass gave up'); // a timed-out query is not "no courts"
+  return osmCourts(j);
+}
 async function fromOsm(lat, lon, mi) {
-  const body = 'data=' + encodeURIComponent(overpassQuery(lat, lon, mi)); let err;
-  for (const u of OVERPASS) {
-    try {
-      const r = await D.fetch(u, { method: 'POST', headers: { 'User-Agent': UA, 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' }, body, signal: timeout(30000) });
-      if (!r.ok) throw new Error('overpass ' + r.status);
-      const j = await r.json(); if (!j || !Array.isArray(j.elements)) throw new Error('overpass bad answer');
-      if (!j.elements.length && /error|timed out|out of memory/i.test(String(j.remark || ''))) throw new Error('overpass gave up'); // a timed-out query is not "no courts"
-      return osmCourts(j);
-    } catch (e) { err = e; log('map lookup failed (' + scrub(e && e.message).slice(0, 60) + ')'); }
+  const body = 'data=' + encodeURIComponent(overpassQuery(lat, lon, mi)), end = D.now() + OSM_BUDGET, left = () => end - D.now(); let err;
+  for (const u of osmOrder()) {
+    for (let n = 0; n < 2; n++) { // a second try only when the server said "busy"
+      if (left() < 1500) { log('map lookup stopped (out of time)'); throw err || new Error('overpass out of time'); }
+      try { const v = await osmAsk(u, body, Math.min(OSM_TIMEOUT, left())); osmGood = { u, t: D.now() }; return v; }
+      catch (e) {
+        err = e; log('map lookup failed (' + hostOf(u) + ': ' + scrub(e && e.message).slice(0, 60) + ')');
+        if (osmGood && osmGood.u === u) osmGood = null;
+        if (!(e && e.busy) || n > 0 || left() < OSM_BACKOFF + 1500) break;
+        await D.sleep(OSM_BACKOFF);
+      }
+    }
   }
   throw err || new Error('overpass');
 }
@@ -195,7 +215,7 @@ async function listFor(prov, key, lat, lon, r) {
     } else v = { provider: 'osm', at: D.now(), list: await fromOsm(cLat, cLon, r + PAD), ttl: CT_TTL };
     return v;
   })().then((v) => { CT.delete(k); CT.set(k, { t: D.now(), ttl: v.ttl, v }); while (CT.size > CT_MAX) CT.delete(CT.keys().next().value); return v; },
-    (e) => { if (c && c.v) { CT.set(k, { t: c.t, ttl: c.ttl, v: c.v }); return Object.assign({}, c.v, { stale: true }); } CT.delete(k); throw e; }); // the map is down: an old list beats none, and it says so
+    (e) => { if (c && c.v) { const old = Object.assign({}, c.v, { stale: true }); CT.delete(k); CT.set(k, { t: D.now(), ttl: STALE_HOLD, v: old }); return old; } CT.delete(k); throw e; }); // the map is down: an old list beats none, and it says so (stale:true, its own asOf). It is held for 2 minutes so the next taps answer at once instead of waiting on the map servers again
   CT.set(k, { t: c ? c.t : 0, ttl: c ? c.ttl : 0, v: c && c.v, job }); return job;
 }
 function answer(v, center, r) {
@@ -232,4 +252,4 @@ async function handle(req, res) {
   } catch (e) { log('error (' + scrub(e && e.message).slice(0, 80) + ')'); send(res, 500, { ok: false, error: 'Court search error.' }); }
   return true;
 }
-module.exports = { handle, _deps: D, _reset: reset, _parse: parse, _settings: settings, _osmCourts: osmCourts, _group: group, _miles: miles, _scrub: scrub, _overpassQuery: overpassQuery };
+module.exports = { handle, _deps: D, _reset: reset, _parse: parse, _settings: settings, _osmCourts: osmCourts, _group: group, _miles: miles, _scrub: scrub, _overpassQuery: overpassQuery, _OVERPASS: OVERPASS };

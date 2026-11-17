@@ -90,7 +90,7 @@
     if (e.fmt === 'de') rows.push(['Bracket reset', r.reset === 'game15' ? 'One game to 15, win by 2 (pickleball rulebook)' : 'A full match, same rules']);
     if (e.fmt === 'ladder') rows.push(['Challenges', 'Up to ' + r.reach + ' spot' + (r.reach > 1 ? 's' : '') + ' above, play within ' + r.expDays + ' days, else ' + (r.expire === 'void' ? 'cancelled' : 'challenger wins by forfeit')], ['Winner moves', r.move === 'swap' ? 'Swap places' : 'Take the spot, the rest move down one']);
     if (r.pickem) rows.push(["Pick'em", 'Pick each match before it starts (not your own matches); ' + (r.weight === 'round' ? 'later rounds are worth more, the final the most' : '1 point per right pick') + "; tiebreak: the final's total points"]);
-    rows.push(['Entry', e.money.entry ? usd(e.money.entry) + ' per player' : 'No entry'], ['Pot', e.money.pot === 'side' ? 'Side pot' : 'Main pot'], ['Payout split', SPLITN[e.money.split]], ["Commissioner's take", e.takeText], ['Joining', (e.join.self ? 'Players can add themselves' : 'The commissioner adds the players') + (e.join.spectators ? ', spectators welcome' : '')]);
+    if (e.money) rows.push(['Entry', e.money.entry ? usd(e.money.entry) + ' per player' : 'No entry'], ['Pot', e.money.pot === 'side' ? 'Side pot' : 'Main pot'], ['Payout split', SPLITN[e.money.split]], ["Commissioner's take", e.takeText], ['Joining', (e.join.self ? 'Players can add themselves' : 'The commissioner adds the players') + (e.join.spectators ? ', spectators welcome' : '')]);
     return '<div class="erules">' + rows.map(([k, v]) => '<div><small>' + esc(k) + '</small><span>' + esc(v) + '</span></div>').join('') + '</div>';
   }
 
@@ -117,6 +117,8 @@
     if (st === 'ask') h += 'It is for the members of ' + nm + '. Ask to join the group: the commissioner approves who joins. Once you are in, this event opens here again.<button class="epri efull" data-a="gask">Ask to join ' + nm + '</button>';
     else if (st === 'pending') h += 'Your request to join ' + nm + ' is with the commissioner. Once you are in, this event opens here again.<button class="esec efull" data-a="gcheck">Check again</button>';
     else if (st === 'closed') h += nm + ' is not taking requests right now. Ask the person who sent you the link to have the commissioner invite you to the group.';
+    else if (st === 'late') h += 'Joining ' + nm + ' has closed (the group has started), so this event cannot be joined.';
+    else if (st === 'full') h += nm + ' is full, so there is no room to join it or this event.';
     else if (st === 'no') h += 'The commissioner of ' + nm + ' did not let you into the group, so this event cannot be joined.';
     else h += 'It is for the group\'s members. Join the group first, then open the event from the group.';
     return h + '</div>';
@@ -144,7 +146,7 @@
     if (!e && s.peek) return '<h1>' + esc(s.peek.title) + '</h1><div class="emeta">' + esc(s.peek.kind) + '</div><div class="ecard">You were invited to this game. Sign up for Oddable (or sign in), then open the invite link again to join.</div>';
     if (!e) return s.fail ? '<h1>Event</h1><div class="ecard emut">This event could not be opened from the group.</div>' : '<div class="ecard">Loading…</div>';
     if (e.role && e.role !== 'none') return '<h1>' + esc(e.title) + '</h1><button class="epri efull" data-a="open" data-id="' + att(e.id) + '">You are in this event. Open it ›</button>';
-    if (e.groupOnly) return groupAskV(e) + '<h1>' + esc(e.title) + '</h1><div class="emeta">' + fmtLine(e) + ' · run by ' + esc(e.commName) + '</div><div class="ecard">' + rulesList(e) + '</div>'; // review H1: the way in comes first
+    if (e.groupOnly) return groupAskV(e) + '<h1>' + esc(e.title) + '</h1><div class="emeta">' + fmtLine(e) + '</div><div class="ecard">' + rulesList(e) + '</div>'; // review H1: the way in comes first. Re-check: a stranger's preview has no money, people or commissioner name (rulesList skips what is not sent)
     let h = '<h1>' + esc(e.title) + '</h1><div class="emeta">' + fmtLine(e) + ' · run by ' + esc(e.commName) + '</div>' + (s.gj ? '<div class="enote">This event is on your group. Members of the group can join it here.</div>' : '') + '<div class="ecard">' + rulesList(e) + '</div>';
     h += '<div class="enote">' + e.people + ' of ' + e.cap + ' people so far. ' + esc(MONEY) + '</div>';
     const open = (e.open || []).filter((x) => x.open > 0);

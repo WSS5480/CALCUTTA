@@ -732,9 +732,19 @@ async function groupRole(groupId, accountId) {
 // Review H1 (a brand-new person opened an event link): what the phone needs to ASK to join the event's group, and nothing else. The group's name and whether
 // it takes requests / already has this person's request: no members, no codes (the group's invite code is never handed out: the commissioner's code can join
 // without approval). The ask itself is Groups' own POST /groups/request {id} (commissioner approval, cap, closed and "said no" all enforced there).
+// Re-check must-fix (Nov 17): someone NOT in the event's group, with only the event code, gets ONLY what the H1 screen draws: the event's own name, format,
+// sport, start and game rules, and the ask state. No open seats (names / seat ids), no pot or money, no counts, no commissioner name, no code.
+function strangerView(evt, now, ask) {
+  const R = evt.rules || {}, rules = {}; ['tset', 'unit', 'to', 'winBy', 'bestOf', 'scoring', 'seeding', 'courts', 'scorer', 'side', 'pools', 'playoff', 'pickem', 'weight', 'reset', 'reach', 'expDays', 'expire', 'move', 'low', 'unitLabel'].forEach((k) => { if (k in R) rules[k] = R[k]; }); // the game settings only (create() builds rules from exactly these)
+  return { id: evt.id, title: evt.title, sport: evt.sport, fmt: evt.fmt, fmtName: FMTN[evt.fmt], start: evt.start, endDay: evt.endDay, rules, started: now >= evt.start, locked: now >= evt.start || !!evt.drawn, fin: evt.fin || 0,
+    inGroup: true, group: { id: evt.group.gid }, role: 'none', groupOnly: true, groupAsk: ask, open: [] };
+}
 async function groupAsk(groupId, accountId) {
   try { const gid = String(groupId || ''); if (!/^[A-Z2-9]{10}$/.test(gid) || !accountId) return null; const r = await D.S.dbGet('lock:grp:' + gid), g = r && r.data; if (!g || g.deleted || !g.id) return null;
-    const mk = crypto.createHash('sha256').update('oddable-group|' + accountId).digest('hex').slice(0, 24), st = (g.denied || []).includes(mk) ? 'no' : (g.reqs || []).some((q) => q.mk === mk) ? 'pending' : g.join && g.join.requests ? 'ask' : 'closed';
+    const mk = crypto.createHash('sha256').update('oddable-group|' + accountId).digest('hex').slice(0, 24); let st = (g.denied || []).includes(mk) ? 'no' : (g.reqs || []).some((q) => q.mk === mk) ? 'pending' : g.join && g.join.requests ? 'ask' : 'closed';
+    if (st === 'ask') { // L-b: the reasons Groups would refuse the ask anyway (it still checks them itself: this only changes what the button says)
+      try { const ix = await D.S.dbGet('lock:gidx'), I = ix && ix.data && ix.data.g && ix.data.g[gid]; if (I && Number(I.jc) && D.now() >= Number(I.jc)) st = 'late'; } catch (x) {}
+      if (st === 'ask') { try { const L = D.limits(), cap = Math.min(Number(g.join.max) || 8, await L.maxPeople(g.owner, g.id)); if ((g.members || []).length >= cap) st = 'full'; } catch (x) {} } }
     return { name: String(g.name || '').slice(0, 60), state: st };
   } catch (e) { return null; }
 }
@@ -804,7 +814,7 @@ async function handleOn(req, res) {
       if (codeBlocked('ec|a|' + u.mk) || codeBlocked('ec|i|' + ip, WRONG_IP)) throw bad(429, 'Too many wrong codes. Wait 15 minutes.');
       rate('join', u.mk, ip); const code = normCode(b.code), id = code ? await byCode(code) : null;
       if (!id) { codeFail('ec|a|' + u.mk); codeFail('ec|i|' + ip); throw bad(404, 'No event with that code'); }
-      if (op === 'preview') { const r = await load(id); if (!r) throw bad(404, 'No event with that code'); const evt = r.data; tick(evt, now); const cap = await capOf(evt); const o = memberOf(evt, u.mk) ? full(evt, u.mk, now, cap) : previewOf(evt, now, cap); if (evt.group && o.role === 'none') { o.groupOnly = !(await groupRole(evt.group.gid, u.e)); if (o.groupOnly) o.groupAsk = await groupAsk(evt.group.gid, u.e); } send(res, 200, { event: o }); return true; }
+      if (op === 'preview') { const r = await load(id); if (!r) throw bad(404, 'No event with that code'); const evt = r.data; tick(evt, now); const cap = await capOf(evt); const o = memberOf(evt, u.mk) ? full(evt, u.mk, now, cap) : previewOf(evt, now, cap); if (evt.group && o.role === 'none') { if (!(await groupRole(evt.group.gid, u.e))) { send(res, 200, { event: strangerView(evt, now, await groupAsk(evt.group.gid, u.e)) }); return true; } o.groupOnly = false; } send(res, 200, { event: o }); return true; } // a group member: the preview as before
       const r0 = await load(id); if (r0 && r0.data.group) await needGroup(r0.data, u); // an event that belongs to a group is for that group's members, also by code
       const { evt, cap } = await joinEvent(id, u, b); await idxSet(id, () => idxEntry(evt)); send(res, 200, { event: full(evt, u.mk, now, cap) }); return true;
     }

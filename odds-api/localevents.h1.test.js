@@ -72,6 +72,30 @@ srv.listen(0, '127.0.0.1', async () => {
     r = await post('/groups/request', { id: g2.id, myName: 'Other' }, H(ppl.Other.token)); assert.strictEqual(r.s, 409, 'a closed group takes no requests');
     t('a "no" from the commissioner shows state "no"; a group not taking requests shows "closed" and Groups refuses the ask');
 
+    // re-check must-fix: a stranger's preview carries nothing about people or money; a member's preview is unchanged
+    const dbl = (await post('/levents/create', Object.assign(ev0(), { groupId: gid, title: 'Doubles Dink', unit: 'doubles', entry: 10, split: '100' }), H(ppl.Steve.token))).j.event;
+    r = await post('/levents/join', { code: dbl.code, as: 'player', myName: 'Tess', entryName: 'Tess and partner' }, H(ppl.Tess.token)); assert.strictEqual(r.s, 200, J(r.j));
+    const row = DB['lock:evt:' + dbl.id].data, seatIds = []; row.entrants.forEach((e) => (e.players || []).forEach((p) => { if (p.gid) seatIds.push(p.gid); })); assert.ok(seatIds.length, 'seats exist');
+    const memberView = (await post('/levents/preview', { code: dbl.code }, H(ppl.Newbie.token))).j.event; // Newbie is a member of the group now (approved above), not in this event
+    assert.ok(!memberView.groupOnly && memberView.open.length >= 1 && memberView.money && memberView.money.entry === 10 && memberView.pot && memberView.commName === 'Steve' && /Tess/.test(J(memberView.open)), 'member preview unchanged: ' + J(memberView).slice(0, 300));
+    const pubKeys = ['group', 'id', 'title', 'sport', 'fmt', 'fmtName', 'start', 'endDay', 'rules', 'money', 'join', 'takeText', 'pot', 'entries', 'people', 'commName', 'started', 'drawn', 'locked', 'fin', 'inGroup', 'entText', 'role', 'cap', 'open', 'groupOnly'];
+    assert.deepStrictEqual(Object.keys(memberView).filter((k) => !pubKeys.includes(k)), [], 'member preview: the same fields as before'); 
+    const sv = (await post('/levents/preview', { code: dbl.code }, H(ppl.Other.token))).j.event, st = J(sv);
+    assert.strictEqual(sv.groupOnly, true); assert.deepStrictEqual(sv.open, []);
+    for (const nm of ['Tess', 'Steve', 'Newbie', 'partner']) assert.ok(!st.includes(nm), 'no member name: ' + nm);
+    for (const id of seatIds) assert.ok(!st.includes(id), 'no seat id');
+    for (const k of ['money', 'pot', 'takeText', 'entText', 'people', 'entries', 'cap', 'commName', 'code', 'join', 'members', 'entrants']) assert.ok(!(k in sv), 'no ' + k);
+    assert.deepStrictEqual(Object.keys(sv).sort(), ['endDay', 'fin', 'fmt', 'fmtName', 'group', 'groupAsk', 'groupOnly', 'id', 'inGroup', 'locked', 'open', 'role', 'rules', 'sport', 'start', 'started', 'title'].sort(), 'exactly the H1 fields');
+    assert.ok(!/\$|entry|split|take/i.test(J(sv.rules)), 'rules carry no money');
+    t('re-check must-fix: a stranger\'s preview = only the H1 fields (no member or commissioner name, no seat ids, no money / pot / counts / code); a member\'s preview is unchanged');
+
+    // L-b: a full group says so (no "ask"); joining closed says so
+    const g3 = await grp('Tiny crew', true); DB['lock:grp:' + g3.id].data.join.max = 1; r = await post('/levents/create', Object.assign(ev0(), { groupId: g3.id, title: 'Tiny night' }), H(ppl.Steve.token)); assert.strictEqual(r.s, 200, J(r.j));
+    const tiny = r.j.event; r = await post('/levents/preview', { code: tiny.code }, H(ppl.Other.token)); assert.deepStrictEqual(r.j.event.groupAsk, { name: 'Tiny crew', state: 'full' });
+    DB['lock:grp:' + g3.id].data.join.max = 8; DB['lock:gidx'].data.g[g3.id].jc = Date.now() - 1000; r = await post('/levents/preview', { code: tiny.code }, H(ppl.Other.token)); assert.deepStrictEqual(r.j.event.groupAsk, { name: 'Tiny crew', state: 'late' });
+    const pj0 = require('fs').readFileSync(require('path').join(__dirname, '..', 'pics', 'localevents.js'), 'utf8'); assert.ok(/st === 'late'\) h \+= 'Joining /.test(pj0) && /st === 'full'\) h \+= nm \+ ' is full/.test(pj0), 'the phone shows the plain reason, no button');
+    t('L-b: groupAsk says "full" when the group has no room and "late" when joining has closed; the phone shows the reason instead of the button');
+
     // the phone: the box comes first in the preview, with the ask button; the wait is wiped with the person's data
     const fs = require('fs'), path = require('path'), pj = fs.readFileSync(path.join(__dirname, '..', 'pics', 'localevents.js'), 'utf8'), gt = fs.readFileSync(path.join(__dirname, '..', 'pics', 'gate.js'), 'utf8');
     assert.ok(/if \(e\.groupOnly\) return groupAskV\(e\) \+ '<h1>'/.test(pj), 'the group box is drawn before the title');

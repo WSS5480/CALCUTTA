@@ -68,7 +68,7 @@ srv.listen(0, async () => {
     await assert.rejects(S.cosignToken(EV('c1'), K('mo'), 30, 'guest:zzzzzz111111'), /Sign in/, 'a guest cannot even ask for a code');
     await S.eventAccept(EV('c1'), K('tia')); // tia accepted her seat on the other team, but has no sign-up stamp on file
     await assert.rejects(S.cosignToken(EV('c1'), K('mo'), 30, K('tia')), /cannot co-sign/, 'no sign-up stamp: refused');
-    old('tia'); S._reset(); assert.ok((await S.cosignToken(EV('c1'), K('mo'), 30, K('tia'))).code, 'once stamped, an accepted player on the other team may');
+    active('tia'); S._reset(); assert.ok((await S.cosignToken(EV('c1'), K('mo'), 30, K('tia'))).code, 'once stamped (30+ days, 3 confirmed plays), an accepted player on the other team may');
   }, true);
 
   await check('H2. A co-organizer counts only after accepting; an appointee never signs the appointer\'s number (or the other way round); no mutual approval; the log says who added and who accepted', async () => {
@@ -78,7 +78,7 @@ srv.listen(0, async () => {
     await assert.rejects(S.eventApprove(EV('a1'), K('ann'), null, K('zed')), /Only this event/, '(a) not accepted yet: no role at all');
     j = await S.eventAccept(EV('a1'), K('zed')); assert.deepStrictEqual([j.coOrganizer, j.seat], [true, true]); await S.eventAccept(EV('a1'), K('gus'));
     await assert.rejects(S.eventApprove(EV('a1'), K('mo'), sugMo, K('zed')), /organizer who added them/, '(a) his appointee cannot approve the organizer\'s number');
-    await assert.rejects(S.cosignToken(EV('a1'), K('mo'), sugMo, K('gus')), /cannot co-sign/, '(b) an appointee on the other team cannot co-sign it either');
+    await assert.rejects(S.cosignToken(EV('a1'), K('mo'), sugMo, K('gus')), /organizer who added them/, '(b) an appointee on the other team cannot co-sign it either');
     await assert.rejects(S.eventApprove(EV('a1'), K('zed'), null, K('mo')), /You added this co-organizer/, 'nor can the organizer approve his appointee\'s');
     const a = await S.eventApprove(EV('a1'), K('ann'), null, K('zed')); assert.strictEqual(a.by, 'Zed Real (co-organizer added by Coach Mo)');
     // (c) mutual: gus approves zed's number; zed then cannot approve gus's
@@ -129,7 +129,7 @@ srv.listen(0, async () => {
     const c1 = ok(await call('bob', 'event/cosign', { eventId: id, pid, value: sug })).code; assert.ok(/^cs[a-z0-9]{10}$/.test(c1));
     await assert.rejects(S.eventOverride(K('mo'), id, K('mo'), { hcp: 30, reason: 'x', cosign: c1 }), /different player or number/, 'bound to the exact value');
     await assert.rejects(S.eventApprove(id, K('mo'), sug, K('mo'), { cosign: 'csaaaaaaaaaa' }), /not valid/, 'a guessed code');
-    j = await S.eventApprove(id, K('mo'), sug, K('mo'), { cosign: c1 }); assert.deepStrictEqual([j.by, j.cosign], ['Coach Mo', 'Bob Real']);
+    j = await S.eventApprove(id, K('mo'), sug, K('mo'), { cosign: c1 }); assert.deepStrictEqual([j.by, j.cosign], ['Coach Mo', 'Bob Real (joined Oct 2025)']);
     await assert.rejects(S.eventApprove(id, K('mo'), sug, K('mo'), { cosign: c1 }), /not valid|already used/, 'single use');
     const c2 = await code(id, 'mo', 30, 'bob'); NOW += 10 * 60e3 + 1; await assert.rejects(S.eventOverride(K('mo'), id, K('mo'), { hcp: 30, reason: 'x', cosign: c2 }), /not valid/, 'older than 10 minutes');
     const c3 = await code(id, 'mo', 30, 'bob'); assert.strictEqual((await S.eventOverride(K('mo'), id, K('mo'), { hcp: 30, reason: 'x', cosign: c3 })).changed, true, 'a set value with its own code');

@@ -142,7 +142,7 @@ srv.listen(0, async () => {
   });
 
   await check('D. An organizer can never approve or set his OWN number: it needs a different organizer / director, or a player on another team, and both names are recorded', async () => {
-    const approve = mustHave('eventApprove'); old('mo', 'ann', 'bob', 'cat');
+    const approve = mustHave('eventApprove'); old('mo', 'ann', 'cat'); active('bob'); // review 7: a seat co-signer is 30+ days old with 3 confirmed plays
     for (let i = 0; i < 4; i++) await logRound('mo', day(5 + i), 160, []); // Coach Mo logs 160s: a 54.0
     const mo = await S.handicapFor(K('mo')); assert.strictEqual(mo.suggested.value, 54); assert.strictEqual(mo.suggested.confirmed, false);
     await S.eventSetup(K('mo'), 'golf:NASSAUxx', { title: 'Nassau', sport: 'golf', money: true, lockAt: NOW + DAY, players: [{ key: K('mo'), team: 'A' }, { key: K('ann'), team: 'A' }, { key: K('bob'), team: 'B' }] });
@@ -151,10 +151,10 @@ srv.listen(0, async () => {
     await S.eventAccept('golf:NASSAUxx', K('ann')); await S.eventAccept('golf:NASSAUxx', K('bob')); // review 6: seats count once accepted; a co-sign is a code from the co-signer's own phone
     await assert.rejects(S.cosignToken('golf:NASSAUxx', K('mo'), 54, K('ann')), /cannot co-sign/, 'his own teammate cannot co-sign'); await assert.rejects(S.cosignToken('golf:NASSAUxx', K('mo'), 54, K('cat')), /not a player|cannot co-sign/i, 'nor someone outside the event');
     await assert.rejects(approve('golf:NASSAUxx', K('mo'), 54, K('mo'), { cosign: K('bob') }), /co-sign/, 'a bare account id is refused');
-    const ok2 = await approve('golf:NASSAUxx', K('mo'), 54, K('mo'), { cosign: (await S.cosignToken('golf:NASSAUxx', K('mo'), 54, K('bob'))).code }); assert.deepStrictEqual([ok2.by, ok2.cosign], ['Coach Mo', 'Bob Real'], 'a player on the other team co-signs');
-    h = await S.handicapFor(K('mo'), { eventId: 'golf:NASSAUxx' }); assert.ok(/54\.0 approved by Coach Mo with Bob Real · Oddable 54\.0/.test(h.shown), h.shown);
-    j = ok(await call('ann', 'event/log', { eventId: 'golf:NASSAUxx' })); assert.ok(j.log.some((l) => l.player === 'Coach Mo' && l.by === 'Coach Mo' && l.cosign === 'Bob Real'), 'both names in the log every player reads');
-    say('Organizer approving his own 54.0: refused alone, refused with his own teammate or an outsider co-signing; allowed only with a player on the other team (or another organizer / director) co-signing; the log every player reads says "54.0 approved by Coach Mo with Bob Real".');
+    const ok2 = await approve('golf:NASSAUxx', K('mo'), 54, K('mo'), { cosign: (await S.cosignToken('golf:NASSAUxx', K('mo'), 54, K('bob'))).code }); assert.deepStrictEqual([ok2.by, ok2.cosign], ['Coach Mo', 'Bob Real (joined Oct 2025)'], 'a player on the other team co-signs (review 7: with his join month)');
+    h = await S.handicapFor(K('mo'), { eventId: 'golf:NASSAUxx' }); assert.ok(/54\.0 approved by Coach Mo with Bob Real \(joined Oct 2025\) · Oddable 54\.0/.test(h.shown), h.shown);
+    j = ok(await call('ann', 'event/log', { eventId: 'golf:NASSAUxx' })); assert.ok(j.log.some((l) => l.player === 'Coach Mo' && l.by === 'Coach Mo' && l.cosign === 'Bob Real (joined Oct 2025)'), 'both names in the log every player reads');
+    say('Organizer approving his own 54.0: refused alone, refused with his own teammate or an outsider co-signing; allowed only with a player on the other team (or another organizer / director) co-signing; the log every player reads says "54.0 approved by Coach Mo with Bob Real (joined Oct 2025)".');
   });
 
   await check('C. SEASON: an approval stands until the suggested number moves by 1.0 or more; a one-off game approval stands for that game', async () => {

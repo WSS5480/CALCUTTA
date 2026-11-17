@@ -33,6 +33,7 @@ async function run(o) {
   const { db, phoneEmail, sinceKey } = o, now = o.now || Date.now(), deploy = o.deploy || now, log = o.log || (() => {});
   const all = await allIds(db), plog = all.map((id) => /^plog:(\d{4}-\d{2}-\d{2})-(\d{2})$/.exec(String(id))).filter(Boolean).map((m) => Date.parse(m[1] + 'T' + m[2] + ':00:00Z')).filter(Number.isFinite);
   const launch = Number(o.launch) > 1.4e12 ? Number(o.launch) : plog.length ? Math.min(...plog) : null, fallback = Math.max(deploy - 30 * DAY, launch || 0);
+  if (launch && launch > now) throw new Error('The launch date is in the future: check --launch'); // review 7 (L4)
   if (o.write && !launch) throw new Error('Oddable launch date unknown: pass --launch=YYYY-MM-DD (no price-log row to take it from)');
   const cur = await db.dbGet('lock:acctsince'), have = (cur && cur.data && cur.data.t) || {}, add = {}, rep = { rows: 0, skipped: 0, bet: 0, log: 0, fallback: 0, kept: 0, write: !!o.write, deploy, launch, launchFrom: Number(o.launch) > 1.4e12 ? '--launch' : launch ? 'earliest price-log row' : 'unknown', fallback, sample: [] };
   const ids = all.filter((id) => { if (ACCT_ID.test(String(id))) return true; rep.skipped++; return false; });

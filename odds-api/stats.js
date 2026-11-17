@@ -958,6 +958,7 @@ async function eventSetup(organizerE, eventId, o, from) {
       if (Object.keys(d.pl).length > 400) throw bad(400, 'At most 400 players in one event');
       if (x.money != null) d.money = !!x.money;
     }
+    if (!fromRoute && d.org === dk && x.clubId != null) d.club = okCid(x.clubId) || undefined; // review 7: the club whose vouch lets a seat co-sign
     d.title = clean(x.title, 60) || d.title || 'Tournament'; if (sport) d.sport = sport; d.sport = d.sport || 'golf'; d.lockAt = d.lockAt || null; return {}; });
   return { ok: true };
 }
@@ -969,21 +970,33 @@ function signBlock(ev, signerE, playerRef) {
   const sk = rkOf(signerE), pk0 = rkOf(playerRef), ci = ev.coInfo || {}, spk = pkeyOf(signerE), ppk = pkeyOf(playerRef);
   if (sk && pk0 && ci[sk] && ci[sk].by === pk0) return 'A co-organizer cannot approve, set or co-sign the number of the organizer who added them';
   if (sk && pk0 && ci[pk0] && ci[pk0].by === sk) return 'You added this co-organizer, so you cannot approve, set or co-sign their number. A director or another organizer approves it, or they approve it themselves with a co-sign from a player on another team';
-  if ((ev.log || []).some((l) => l.pk === spk && l.new != null && (l.kind === 'approve' || l.kind === 'set') && (l.bpk === ppk || l.cpk === ppk))) return 'No mutual approval: this player already approved or co-signed your number in this event';
+  if ((ev.signed && ev.signed[ppk + '>' + spk]) || (ev.log || []).some((l) => l.pk === spk && l.new != null && (l.kind === 'approve' || l.kind === 'set') && (l.bpk === ppk || l.cpk === ppk))) return 'No mutual approval: this player already approved or co-signed your number in this event';
   return null;
 }
 // Who may co-sign when the player approves or sets HIS OWN number (review 6, H1): a real Oddable account with a sign-up stamp (never a guest), that is
 // either another organizer / accepted co-organizer / director of this event, or a player on ANOTHER team who ACCEPTED their seat on their own phone; and
 // that is not blocked by signBlock. -> the co-signer's name, or null.
-async function cosignOk(ev, playerE, cosignE) {
-  if (!cosignE || /^guest:/.test(String(cosignE)) || pkeyOf(cosignE) === pkeyOf(playerE)) return null;
-  if (!(await sinceOf(cosignE)).known) return null;
-  if (signBlock(ev, cosignE, playerE)) return null;
-  if (await roleOf(ev, cosignE)) return (await nameOf(cosignE)) || 'Organizer';
+// Review 7 (M1): a SEAT co-signer (not a director or accepted co-organizer) must also pass the round-confirmer test: joined Oddable at least
+// CONF.byAgeDays (30) days before AND at least CONF.byActs (3) finished plays of their own confirmed by another account (ownPlay), OR vouched by this
+// event's club (eventSetup {clubId}). An account with no stamp that is stamped on first look is stamped NOW, so it is 0 days old: it fails the age test.
+// The co-signer's join month goes into the name every player reads: "Tia Real (joined Nov 2026)". -> { name, why }
+const joinMonth = (t) => new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', month: 'short', year: 'numeric' }).format(new Date(t));
+const COTOONEW = 'co-signer too new: a player who co-signs needs an Oddable account at least ' + CONF.byAgeDays + ' days old with at least ' + CONF.byActs + ' finished plays confirmed by another account, or a vouch from this event\'s club';
+async function cosignInfo(ev, playerE, cosignE) {
+  const no = (why) => ({ name: null, why: why || 'You cannot co-sign this number: a co-signer is another organizer or director, or a player on another team who accepted their seat, with an Oddable account' });
+  if (!cosignE || /^guest:/.test(String(cosignE)) || pkeyOf(cosignE) === pkeyOf(playerE)) return no();
+  const si = await sinceOf(cosignE); if (!si.known) return no();
+  const sb = signBlock(ev, cosignE, playerE); if (sb) return no(sb);
+  const nm = async (fb) => ((await nameOf(cosignE)) || fb) + ' (joined ' + joinMonth(si.t) + ')';
+  if (await roleOf(ev, cosignE)) return { name: await nm('Organizer') };
   const me = ev.pl && ev.pl[pkeyOf(playerE)], them = ev.pl && ev.pl[pkeyOf(cosignE)];
-  if (me && them && them.acc && me.team && them.team && me.team !== them.team) return (await nameOf(cosignE)) || them.name || 'Player';
-  return null;
+  if (!(me && them && them.acc && me.team && them.team && me.team !== them.team)) return no();
+  const club = okCid(ev.club), vouched = !!club && vouchIdsOf(await vouchRow(), mkOf(cosignE)).includes(club);
+  if (!vouched) { const own = oppKeyFor(mkOf(cosignE)), acts = (await cached(cosignE)).recs.filter((r) => ownPlay(r, own)).length;
+    if (D.now() - si.t < CONF.byAgeDays * DAY || acts < CONF.byActs) return no(COTOONEW); }
+  return { name: await nm(them.name || 'Player') };
 }
+const cosignOk = async (ev, playerE, cosignE) => (await cosignInfo(ev, playerE, cosignE)).name;
 const SELF = 'You cannot approve or set your own number alone. A player on another team (who accepted their seat) or another organizer or director confirms it on their own phone and gives you a co-sign code';
 const NOTOKEN = 'A co-sign is a code the co-signer gets on their own phone (Co-sign), not an account';
 const nowNumber = async (userKey, ev) => (fieldOf(ev) === 'hcp' ? await handicapFor(userKey) : await ratingFor(userKey, ev.sport));
@@ -999,7 +1012,7 @@ async function cosignToken(eventId, playerRef, value, account) {
   if (evLocked(ev)) throw bad(409, 'The event has started; numbers are locked');
   const pk = pkeyOf(playerRef), p = ev.pl && ev.pl[pk]; if (!p) throw bad(404, 'Not a player in this event');
   const field = fieldOf(ev), v = value == null || value === '' ? null : Number(value); if (v != null && !Number.isFinite(v)) throw bad(400, 'Bad number');
-  const name = await cosignOk(ev, p.u, account); if (!name) throw bad(403, 'You cannot co-sign this number: a co-signer is another organizer or director, or a player on another team who accepted their seat, with an Oddable account');
+  const ci = await cosignInfo(ev, p.u, account), name = ci.name; if (!name) throw bad(403, ci.why);
   const code = 'cs' + rnd(10), now = D.now();
   await rowMutate(EVR(id), null, (d) => { d.tok = d.tok || {}; Object.keys(d.tok).forEach((h) => { if (d.tok[h].exp <= now) delete d.tok[h]; }); if (Object.keys(d.tok).length >= CS.max) throw bad(429, 'Too many open co-sign codes. Wait a few minutes.');
     d.tok[sha('oddable-cosign|' + code)] = { pk, ce: String(account), field, value: v, exp: now + CS.ttl }; return {}; });
@@ -1011,9 +1024,11 @@ async function tokCheck(ev, code, pk, field, value) {
   const h = sha('oddable-cosign|' + code), t = ev.tok && ev.tok[h];
   if (!t || t.exp <= D.now()) throw bad(403, 'That co-sign code is not valid (wrong, used or older than 10 minutes). Ask for a new one.');
   if (t.pk !== pk || t.field !== field || !sameVal(t.value, value)) throw bad(403, 'That co-sign code was given for a different player or number');
-  const p = ev.pl && ev.pl[pk], name = p && (await cosignOk(ev, p.u, t.ce)); if (!name) throw bad(403, 'That co-signer can no longer co-sign this number');
+  const p = ev.pl && ev.pl[pk], ci = p ? await cosignInfo(ev, p.u, t.ce) : { why: 'Not a player in this event' }, name = ci.name; if (!name) throw bad(403, 'That co-signer can no longer co-sign this number (' + ci.why + ')');
   return { name, h, cpk: pkeyOf(t.ce) };
 }
+// Review 7 (L5): who signed whose number, kept apart from the 2,000-line log: d.signed { '<signer key>><player key>': 1 } (server only).
+const markSigned = (d, signerPk, playerPk) => { if (!signerPk || !playerPk) return; d.signed = d.signed || {}; if (Object.keys(d.signed).length < 20000) d.signed[signerPk + '>' + playerPk] = 1; };
 const useTok = (d, tk) => { if (!tk) return; const t = d.tok && d.tok[tk.h]; if (!t || t.exp <= D.now()) throw bad(403, 'That co-sign code was already used or has run out. Ask for a new one.'); delete d.tok[tk.h]; };
 const byLine = async (ev, e, role) => { const nm = (await nameOf(e)) || (role === 'dir' ? 'Tournament director' : 'Organizer'), ci = ev.coInfo && ev.coInfo[rkOf(e)]; return role === 'co' && ci ? nm + ' (co-organizer added by ' + (ci.byName || 'the organizer') + ')' : nm; };
 // eventApprove(eventId, playerRef, value, approverAccount, {cosign: <co-sign code>, reason}): the organizer approves the number he was shown (`value`, or
@@ -1032,6 +1047,7 @@ async function eventApprove(eventId, playerRef, value, approverE, opts) {
     if (!d.pl[pk]) throw bad(404, 'Not a player in this event'); useTok(d, tk);
     const old = d.ap[pk] && d.ap[pk][field] != null ? d.ap[pk][field] : null;
     d.ap[pk] = Object.assign({}, d.ap[pk], { [field]: want, base: sug.value, confirmed: !!sug.confirmed, at: D.now(), name, by, cosign: cosign || undefined });
+    markSigned(d, pkeyOf(approverE), pk); if (tk) markSigned(d, tk.cpk, pk);
     d.log.push({ at: D.now(), by, cosign: cosign || undefined, player: name, pk, bpk: pkeyOf(approverE), cpk: tk ? tk.cpk : undefined, field, kind: 'approve', old, new: want, oddable: real == null ? null : real, reason: clean(o.reason, 120) || (sug.confirmed ? 'Oddable number approved (confirmed)' : 'Oddable number approved (UNCONFIRMED)') }); if (d.log.length > 2000) d.log = d.log.slice(-2000);
     return {}; });
   await evIndexAdd(pk, id); if (!o._batch) CACHE.clear(); // review 6, M3: approve-all clears the cache once, at the end
@@ -1041,6 +1057,7 @@ async function eventApprove(eventId, playerRef, value, approverE, opts) {
 // a co-sign; a player with no Oddable number is left for a typed one. -> { ok, approved: [{name, value, confirmed}], skipped: [{name, why}] }
 async function eventApproveAll(eventId, approverE, opts) {
   const ev = await evRow(eidOf(eventId)); if (!ev) throw bad(404, 'Event not found'); if (!(await roleOf(ev, approverE))) throw bad(403, NOROLE);
+  if (evLocked(ev)) throw bad(409, 'The event has started; numbers are locked'); // review 7 (L3)
   const field = fieldOf(ev), out = { ok: true, approved: [], skipped: [] };
   try {
     for (const pk of Object.keys(ev.pl || {})) {
@@ -1073,6 +1090,7 @@ async function eventOverride(directorE, eventId, userKey, o) {
     const nx = Object.assign({}, cur, { at: D.now(), reason, name: name || cur.name || '', by, cosign: cosign || undefined }); if (val == null) delete nx[field]; else nx[field] = val;
     if (nx.hcp == null && nx.rating == null) delete d.set[pk]; else d.set[pk] = nx;
     if (!d.pl[pk]) d.pl[pk] = { u: String(userKey), name: nx.name, team: '' };
+    if (val != null) { markSigned(d, pkeyOf(directorE), pk); if (tk) markSigned(d, tk.cpk, pk); }
     d.log.push({ at: D.now(), by, cosign: cosign || undefined, player: nx.name || 'Player', pk, bpk: pkeyOf(directorE), cpk: tk ? tk.cpk : undefined, field, kind: 'set', old: old == null ? null : old, new: val, oddable: real == null ? null : real, reason }); if (d.log.length > 2000) d.log = d.log.slice(-2000); // pk / bpk / cpk = player keys (server only, stripped by logOut)
     return { ok: true, changed: true, old: old == null ? null : old, new: val };
   });
@@ -1107,7 +1125,8 @@ async function evNumbers(ev, eventId) {
   for (const pk of Object.keys(ev.pl || {})) { const p = ev.pl[pk], f = field === 'hcp' ? await handicapFor(p.u, { eventId }) : await ratingFor(p.u, ev.sport, { eventId });
     numbers.push({ name: p.name, userKey: p.u, team: p.team || '', field, use: f.use, setBy: f.setBy, by: f.by || '', cosign: f.cosign || '', lapsed: !!f.lapsed, oddable: field === 'hcp' ? f.oddable.index : f.oddable.rating, confirmed: !!(f.suggested && f.suggested.confirmed), shown: f.shown || '' }); }
   const missing = numbers.filter((n) => n.use == null).map((n) => n.name), noStart = needsStart(ev) && !ev.lockAt;
-  return { ready: numbers.length > 0 && !missing.length && !noStart, why: noStart ? 'no start time' : !numbers.length ? 'no players' : missing.length ? 'no approved number: ' + missing.slice(0, 10).join(', ') : '', missing, numbers };
+  const dead = evLocked(ev) && missing.length > 0; // review 7 (L2): locked with a number missing can never become ready
+  return { ready: numbers.length > 0 && !missing.length && !noStart, why: noStart ? 'no start time' : !numbers.length ? 'no players' : dead ? 'start time passed with numbers missing — make a new game' : missing.length ? 'no approved number: ' + missing.slice(0, 10).join(', ') : '', missing, numbers };
 }
 // eventStart(eventId, account, {gameId}): the organizer / director starts the event at the first tee (H3). Refused unless every player has an approved or
 // set number. A game / flight / tournament locks NOW (after this every approve / set / override is 409) and its numbers are kept as the snapshot. A
@@ -1148,7 +1167,8 @@ async function cosignRoute(e, b) {
     return { ok: true, title: clean(ev.title, 60), locked: evLocked(ev), players: out };
   }
   const k = Object.keys(ev.pl || {}).find((x) => evPid(id, x) === String(b.pid)); if (!k) throw bad(404, 'Player not found');
-  const r = await cosignToken(id, ev.pl[k].u, b.value, e); return { ok: true, code: r.code, exp: r.exp, player: r.player, field: r.field, value: r.value };
+  if (b.clear === true) { if (b.value != null && b.value !== '') throw bad(400, 'Send value or clear: true, not both'); } else if (b.value == null || b.value === '') throw bad(400, 'Send the number you are co-signing (value), or clear: true to clear a set number'); // review 7 (L1)
+  const r = await cosignToken(id, ev.pl[k].u, b.clear === true ? null : b.value, e); return { ok: true, code: r.code, exp: r.exp, player: r.player, field: r.field, value: r.value };
 }
 // ROUTE /stats/vouch {courseId, pid, on}: the Enterprise owner of that course / club vouches for (or un-vouches) one of its consenting members, picked by
 // the course view's pid (course/players). /stats/vouch/log {courseId}: that club's vouch log.
@@ -1181,7 +1201,7 @@ async function eventReview(eventId, callerE) {
   const noStart = needsStart(ev) && !ev.lockAt, missing = rows.filter((r) => r.use == null).map((r) => r.name); // review 6, H3: money / flight / tournament: no start time = not ready
   const co = (ev.co || []).map((k) => { const c = (ev.coInfo || {})[k] || {}; return { name: c.name || 'Co-organizer', addedBy: c.byName || '', accepted: !!c.acc }; });
   return { ok: true, title: clean(ev.title, 60), kind: ev.kind || 'game', sport: ev.sport || 'golf', field: fieldOf(ev), money: !!ev.money, locked: evLocked(ev), lockAt: ev.lockAt || null, needsStart: needsStart(ev), coOrganizers: co, players: rows,
-    ready: rows.length > 0 && !missing.length && !noStart, why: noStart ? 'no start time' : !rows.length ? 'no players' : missing.length ? 'no approved number: ' + missing.slice(0, 10).join(', ') : '', unconfirmed: rows.filter((r) => r.suggested && r.suggested.value != null && !r.suggested.confirmed).map((r) => r.name), noNumber: rows.filter((r) => !r.suggested || r.suggested.value == null).map((r) => r.name) };
+    ready: rows.length > 0 && !missing.length && !noStart, why: noStart ? 'no start time' : !rows.length ? 'no players' : evLocked(ev) && missing.length ? 'start time passed with numbers missing — make a new game' : missing.length ? 'no approved number: ' + missing.slice(0, 10).join(', ') : '', unconfirmed: rows.filter((r) => r.suggested && r.suggested.value != null && !r.suggested.confirmed).map((r) => r.name), noNumber: rows.filter((r) => !r.suggested || r.suggested.value == null).map((r) => r.name) };
 }
 // What the player plays off in one event. -> { use, setBy, by, cosign, event, lapsed, at, reason }
 function evUse(ev, userKey, field, sug) {

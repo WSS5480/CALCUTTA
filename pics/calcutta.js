@@ -44,7 +44,7 @@
   // ROUND 3 #6: every screen honours calc.started: the lock line replaces the Bid / Enter / Buy-back buttons (no more "try it and get an error")
   const lockCard = (c) => (!c ? '' : c.started ? '<div class="cwarn clockd" role="status"><b>🔒 The event has started</b>Who owns what is final. No more sales, buy-backs or player changes.</div>' : c.feedLock ? '<div class="cwarn clockd" role="status"><b>🔒 Locked for now</b>The score feed cannot be read and the event may have started. Sales and buy-backs open again if it has not.</div>' : c.kick ? '<div class="cnote ckick">🔒 Sales, buy-backs and players lock for good when the event starts: ' + esc(fmtTime(c.kick)) + '.</div>' : '');
   const badge = (c) => (c.rules && c.rules.main ? '<span class="cbadge">Main pot</span>' : '<span class="cbadge cy">Side pot</span>');
-  // v275: "Waiting on the …" names each postponed / moved GAME once (board.waitGames: the lotted teams of each game, "A vs B"); an older server's
+  // v276: "Waiting on the …" names each postponed / moved GAME once (board.waitGames: the lotted teams of each game, "A vs B"); an older server's
   // flat team list (board.waiting) still reads as before.
   const andList = (L) => (L.length > 3 ? L.slice(0, 3).join(', ') + ' and ' + (L.length - 3) + ' more' : L.length === 1 ? L[0] : L.slice(0, -1).join(', ') + ' and ' + L[L.length - 1]);
   const waitText = (b) => { const G = Array.isArray(b.waitGames) && b.waitGames.length ? b.waitGames.map((t) => t.join(' vs ')) : b.waiting; return esc(andList(G)) + (G.length === 1 ? ' game' : ' games'); };
@@ -447,7 +447,7 @@
   function down(ev) { const t = ev.target && ev.target.closest && ev.target.closest('[data-a="bid"]'); DOWNAMT = t ? { el: t, amt: t.getAttribute('data-amt'), at: Date.now() } : null; }
   function click(ev) {
     const t = ev.target.closest('button,a,[data-a],[data-tab]'); if (!t || t.disabled) return; const a = t.getAttribute('data-a');
-    if (a === 'close' || (a === 'back' && stack.length < 2)) { window.oddCalc.close(); try { if (window.OddGroups && window.OddGroups.refresh) window.OddGroups.refresh(); } catch (x) {} return; } // back to the group page under it (v275: the Games screen under it asks its states again)
+    if (a === 'close' || (a === 'back' && stack.length < 2)) { window.oddCalc.close(); try { if (window.OddGroups && window.OddGroups.refresh) window.OddGroups.refresh(); } catch (x) {} return; } // back to the group page under it (v276: the Games screen under it asks its states again)
     if (a === 'back') { readDraft(); err = ''; note = ''; if (stack.length > 1) stack.pop(); const s = cur(); if (s.t === 'home') loadHome(); else if (s.t === 'auction' || s.t === 'enter' || s.t === 'members') loadCalc(s); else if (s.t === 'board') loadBoard(s); paint(); sched(); return; }
     if (t.hasAttribute('data-tab') && !a) { const s = cur(); if (s.t === 'board') { s.tab = t.getAttribute('data-tab'); paint(); } else { const o = { t: 'board', id: idOf(), tab: t.getAttribute('data-tab') }; push(o); loadBoard(o); } return; }
     if (t.hasAttribute('data-mode')) { readDraft(); DR.mode = t.getAttribute('data-mode'); paint(); return; }

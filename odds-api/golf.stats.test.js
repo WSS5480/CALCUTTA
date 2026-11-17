@@ -66,7 +66,7 @@ async function round(a, b, over, sign) { later(); let r = ok(await call(a, 'crea
   r = ok(await call('zoe', 'makeup', { id, pid: dan })); assert.ok(/organizer or tournament director sets a handicap/.test(r.j.ask), r.j.ask);
   assert.ok(!JSON.stringify((await call('zoe', 'get', { id })).j.game).includes('@phone'), 'no account id in the game sent to the organizer');
   r = await call('zoe', 'start', { id }); assert.strictEqual(r.s, 409, 'MERGED-BUILD CHECK the stats coder asked for: money game, a player with needsSet and no number entered -> the game refuses to start'); assert.deepStrictEqual(r.j.needHcp, [dan]);
-  r = ok(await call('zoe', 'team', { id, op: 'hcp', pid: dan, hcp: 24 }), 'the organizer does not play here: she sets it alone (the neutral rule), logged'); assert.strictEqual(r.j.game.day.hi[dan].used, 24); ok(await call('zoe', 'start', { id }));
+  r = await call('zoe', 'team', { id, op: 'hcp', pid: dan, hcp: 24 }); assert.strictEqual(r.s, 202, 'round 4: 24 is not the number Dan asked for (30), so Dan signs it, even though the organizer does not play'); r = ok(await call('dan', 'sign', { id, n: r.j.n })); assert.strictEqual(r.j.game.day.hi[dan].used, 24); ok(await call('zoe', 'start', { id }));
   t('money game on the real module: number = stats `use`; the organizer sees every number\'s make-up (rounds, who confirmed, typed or scored); needsSet with no number refuses the start');
   // 5. a missing handicap never reaches the ratings maths (the real strokesOnHole / courseHandicap throw on null)
   assert.throws(() => RT.strokesOnHole(null, 5), 'the real ratings.js throws on a missing handicap'); assert.throws(() => RT.courseHandicap(null, 125, 71.2, 72));

@@ -135,35 +135,73 @@ const newPid = (c) => { let p; do { p = rnd(6); } while (c.members.some((m) => m
 // ======================= THE NEUTRAL RULE (manager, Nov 16 2026; review round 3) =======================
 // ONE rule, used by every route that can change who gets paid (dispute settlements, changes to confirmed holes, forced Final, reopen, did-not-finish,
 // paid / not paid after the start, handicaps, side-game winners, money matches, tiers and payout rules). Nothing below is decided route by route.
-//   INTERESTED = the person acting is on a side of the game: plays on a team (so a team mate plays too), or (in a pool) has an entry. A director who
-//   only keeps a typed-in guest's card is not playing; what he types still needs a confirm from someone else, and a forced Final never covers it.
-//   An interested person's action is only ASKED FOR (`c.pend`): every player sees it, and it changes nothing until a NEUTRAL signs it (`signers`).
-//   A boss (organizer or co-organizer) who is on no side is neutral and acts alone; it is logged (`c.plog`) and every player is told.
-//   Every action is logged with both names and announced to all players (`notify`).
+//   TIGHTENED IN REVIEW ROUND 4 (Nov 17 2026), at these definitions and nowhere else:
+//   INTERESTED (`interested`) = plays on a team, KEEPS or scores ANY card (is a team's scorer, or typed a hole on a card: a typed-in guest's card
+//   counts), has a pool entry, or holds a lot in a linked Calcutta. An organizer or co-organizer is NEUTRAL only when he keeps no card, plays on no
+//   team and holds no stake.
+//   THE AFFECTED SIDE SIGNS (`need`): a change to team X's card, standing, handicap or paid mark by someone who does not play on X needs the signature
+//   of X's OWN account-holding player. A helper on another team is never enough, and a neutral organizer needs it too. If X has no account (all
+//   typed-in guests) a neutral third account signs (or a neutral organizer acts) and the board says "changed without the team's sign-off" (`d.nso`).
+//   Someone who plays on X and changes X's own card needs the OTHER side: an account on a team he is not on.
+//   An interested person's action is only ASKED FOR (`c.pend`): every player sees it, and it changes nothing until it is signed (`signers`).
+//   Every action is logged with both names (`c.plog`) and announced to all players (`notify`).
+//   Not settled by this file (say so in the rules text): two accounts of one person; an organizer and the affected player agreeing a handicap together.
 const isBoss = (c, m) => !!m && !!m.mk && (c.org === m.mk || isCo(c, m));
 // A pool entrant is a side of one: anyone with a pick, and (while picks are still open) anyone who could still pick.
 const proIn = (c, pid) => { const P = c.pro, e = P.entries[pid], O = P.oad || { events: {}, used: {} }; return !!(e && e.picks && e.picks.length) || Object.values(O.events || {}).some((E) => E.picks[pid]) || ((O.used || {})[pid] || []).length > 0 || !(P.game === 'six' && P.lockAt && D.now() >= P.lockAt); };
-const sidesOf = (c, pid) => (!pid ? [] : c.kind === 'day' ? c.day.teams.filter((t) => t.players.includes(pid)).map((t) => t.tid) : proIn(c, pid) ? ['p:' + pid] : []);
+const acctM = (m) => !!m && !!m.mk && !m.guest && !m.left;
+const playsOn = (c, tid, pid) => { const t = c.kind === 'day' ? c.day.teams.find((x) => x.tid === tid) : null; return !!t && t.players.includes(pid); };
+const teamsOfP = (c, pid) => (c.kind === 'day' ? c.day.teams.filter((t) => t.players.includes(pid)).map((t) => t.tid) : []);
+// The accounts that PLAY on these teams: the only people who can sign for the team.
+const acctsOn = (c, tids) => (c.kind === 'day' ? c.members.filter((m) => acctM(m) && c.day.teams.some((t) => tids.includes(t.tid) && t.players.includes(m.pid))).map((m) => m.pid) : []);
+// KEEPS a card = is the team's scorer, or typed any hole that is on its card.
+const keeps = (c, t, pid) => t.scorer === pid || Object.values((c.day.scores || {})[t.tid] || {}).some((h) => h.bp === pid);
+// A STAKE outside the cards: a lot in a linked Calcutta. The Calcutta engine reports who holds lots (`setLotHolders`); until it has, every organizer
+// and co-organizer of a game with a linked Calcutta counts as holding one (the safe side).
+const lotOf = (c, pid) => { if (!c.calcId) return false; const m = c.members.find((x) => x.pid === pid); if (!acctM(m)) return false; return Array.isArray(c.lotMks) ? c.lotMks.includes(m.mk) : isBoss(c, m); };
+// A person's OWN sides: the teams they play on, a typed-in guests' team whose card they keep (nobody else can speak for it), a pool entry, a Calcutta lot.
+// Two people who share one of these never sign for each other.
+const sidesOf = (c, pid) => { if (!pid) return []; const lot = lotOf(c, pid) ? ['lot:' + pid] : [];
+  if (c.kind !== 'day') return (proIn(c, pid) ? ['p:' + pid] : []).concat(lot);
+  return c.day.teams.filter((t) => t.players.includes(pid) || (t.players.length > 0 && keeps(c, t, pid) && !acctsOn(c, [t.tid]).length)).map((t) => t.tid).concat(lot); };
+const sidesOf0 = sidesOf;
+// INTERESTED: an own side, or keeping / scoring ANY card.
+const interested = (c, pid) => !!pid && (sidesOf(c, pid).length > 0 || (c.kind === 'day' && c.day.teams.some((t) => t.players.length > 0 && keeps(c, t, pid))));
+const neutralBoss = (c, m) => isBoss(c, m) && !interested(c, m.pid);
+// Who signs a change to TEAM X's card or standing: someone who plays on X needs the other side; anyone else needs X's own account.
+const affTeam = (c, me, tid) => (playsOn(c, tid, me.pid) ? {} : { need: acctsOn(c, [tid]), nt: [tid] });
+// Who signs a change to ONE PLAYER's own mark (paid, handicap): the player (or, for a typed-in guest, an account on the guest's team).
+const affPlayer = (c, me, pid) => { const ts = c.kind === 'day' ? teamsOfP(c, pid) : ['p:' + pid], tm = c.members.find((m) => m.pid === pid);
+  if (pid === me.pid || ts.some((t) => playsOn(c, t, me.pid))) return { not: ts }; return { need: acctM(tm) ? [pid] : acctsOn(c, ts), nt: ts }; };
+// "Changed without the team's sign-off": kept on the game and shown on the board next to the team.
+const markNso = (c, tids, o) => { if (c.kind !== 'day') return; const d = c.day; d.nso = d.nso || {}; tids.forEach((t) => { if (d.teams.some((x) => x.tid === t)) d.nso[t] = (d.nso[t] || []).concat(o).slice(-10); }); };
 // Is anything at stake that the rule protects? Money shown, or an Enterprise tournament (the course usually collects at the counter).
 const stakes = (c) => (c.kind === 'day' ? !c.day.solo && (moneyOn(c) || !!c.ent) : (c.pot.entry || 0) > 0);
 // STRICT HANDICAPS (H5, M3, M4): any Enterprise tournament (fee or not), any flighted game, any net game with money or a money match. Nobody sets
 // their own number there, nobody plays off 0 by default, and the round does not start until every player has a number.
 const hStrict = (c) => c.kind === 'day' && !c.day.solo && (!!c.ent || !!((c.day.flights || {}).n) || (moneyOn(c) && netOn(c.day)));
 const acctOthers = (c, pid) => c.members.filter((m) => m.mk && !m.guest && !m.left && m.pid !== pid);
-// WHO MAY SIGN an action by `actorPid`. Always: an ACCOUNT (never a typed-in guest), not the actor, on a side (or a boss on no side), and on NO side
-// the actor is on. Then, in order:
+// WHO MAY SIGN an action by `actorPid`.
+//   o.need  THE AFFECTED SIDE: these accounts (team X's own players) and nobody else, whenever one of them exists. Only when X has no account does the
+//           rest of this function pick a neutral third account (never on the actor's side, never on X: o.nt).
+// Otherwise always: an ACCOUNT (never a typed-in guest), not the actor, on a side (or a boss on no side), and on NO side the actor is on. Then, in order:
 //   o.only  only these sides may answer (a press or a match: the other side of the bet)
 //   o.ex    never these people while anyone else can (the person who raised a dispute does not sign its settlement either)
 //   o.aff   the affected side agreeing always counts (team X's own people for a change to team X's card)
 //   1. someone who does not share an organizer role with the actor (actor is organizer / co-organizer -> the signer is neither), not on o.not / o.aff sides
 //   2. if there is nobody like that (every other team has an organizer): anyone on a side other than the actor's and the affected one
 //   3. if there is still nobody (a two-team game): the other side
+// Everyone's own sides in ONE pass over the teams (the same answer as `sidesOf` for each person; a 100-team day asks this for every member).
+function sideIdx(c) { const of = {}, add = (pid, s) => { (of[pid] = of[pid] || []).push(s); }, acct = new Set(c.members.filter(acctM).map((m) => m.pid));
+  c.day.teams.forEach((t) => { t.players.forEach((p) => add(p, t.tid)); if (!t.players.length || t.players.some((p) => acct.has(p))) return; const ks = new Set(); if (t.scorer) ks.add(t.scorer); Object.values((c.day.scores || {})[t.tid] || {}).forEach((h) => { if (h.bp) ks.add(h.bp); }); ks.forEach((p) => { if (!t.players.includes(p)) add(p, t.tid); }); });
+  return (pid) => (of[pid] || []).concat(lotOf(c, pid) ? ['lot:' + pid] : []); }
 function signers(c, actorPid, o) {
-  o = o || {}; const actor = c.members.find((m) => m.pid === actorPid), aS = sidesOf(c, actorPid), aBoss = isBoss(c, actor), hit = (x, l) => !!l && x.s.some((s) => l.includes(s));
-  const base0 = acctOthers(c, actorPid).map((m) => ({ m, s: sidesOf(c, m.pid) })).filter((x) => (x.s.length || isBoss(c, x.m)) && !hit(x, aS)), baseX = base0.filter((x) => !(o.ex || []).includes(x.m.pid)), base = baseX.length ? baseX : base0;
+  o = o || {}; const sidesOf = c.kind === 'day' ? sideIdx(c) : (pid) => sidesOf0(c, pid), actor = c.members.find((m) => m.pid === actorPid), aS = sidesOf(actorPid), aBoss = isBoss(c, actor), hit = (x, l) => !!l && x.s.some((s) => l.includes(s));
+  if (o.need) { const own = acctOthers(c, actorPid).filter((m) => o.need.includes(m.pid)); if (own.length) return own.map((m) => m.pid); }
+  const base0 = acctOthers(c, actorPid).map((m) => ({ m, s: sidesOf(m.pid) })).filter((x) => (x.s.length || isBoss(c, x.m)) && !hit(x, aS)), baseX = base0.filter((x) => !(o.ex || []).includes(x.m.pid)), base = baseX.length ? baseX : base0;
   if (o.only) return base.filter((x) => hit(x, o.only)).map((x) => x.m.pid);
-  const A = base.filter((x) => hit(x, o.aff)), rest = base.filter((x) => !hit(x, o.not) && !hit(x, o.aff));
-  let P = rest.filter((x) => !(aBoss && isBoss(c, x.m))); if (!P.length) P = rest; if (!P.length && !A.length) P = base;
+  const notS = (o.not || []).concat(o.need ? o.nt || [] : []), A = base.filter((x) => hit(x, o.aff)), rest = base.filter((x) => !hit(x, notS) && !hit(x, o.aff));
+  let P = rest.filter((x) => !(aBoss && isBoss(c, x.m))); if (!P.length) P = rest; if (!P.length && !A.length && !o.need) P = base;
   return [...new Set(A.concat(P).map((x) => x.m.pid))];
 }
 const tName = (c, tid) => ((c.day ? c.day.teams : []).find((t) => t.tid === tid) || {}).name || 'Team';
@@ -188,16 +226,21 @@ const ACT = {
     chk(c, me, p) { const d = c.day; liveOnly(d); const t = teamOf(d, p.tid), cur = (d.scores[t.tid] || {})[p.hole]; if (!cur || cur.st !== 'disputed') throw bad(409, 'Hole ' + p.hole + ' is not disputed. Only a disputed hole can be settled.');
       if (p.rev != null && cur.rev !== p.rev) throw bad(409, 'Hole ' + p.hole + ' changed since this was asked for.'); if (!isBoss(c, me) && !sidesOf(c, me.pid).length) throw bad(403, 'Only the organizer or a scorer settles disputes');
       if (cur.dfPid === me.pid) throw bad(403, 'You raised this dispute, so someone else settles it: ' + t.name + '\'s scorer, another team\'s scorer or an organizer who is not playing.'); },
-    sig: (c, me, p) => { const cur = (c.day.scores[p.tid] || {})[p.hole] || {}, ex = cur.dfPid ? [cur.dfPid] : []; return teamSide(teamOf(c.day, p.tid), me.pid) ? {} : { aff: [p.tid], ex }; /* the team's own number may be signed by the one who disputed it (they agree); a third party's number may not */ }, say: (c, me, p) => 'settle ' + tName(c, p.tid) + ' hole ' + p.hole + ' as ' + eTxt(c, p.e), run: (c, me, p, now, s) => putHole(c, me, p, now, s, 'settled') },
+    ref: true, flag: true, // a NEUTRAL organizer is the referee: he settles a dispute alone, and the board says the team did not sign it off
+    sig: (c, me, p) => { const cur = (c.day.scores[p.tid] || {})[p.hole] || {}, ex = cur.dfPid ? [cur.dfPid] : []; return playsOn(c, teamOf(c.day, p.tid).tid, me.pid) ? {} : Object.assign(affTeam(c, me, p.tid), { ex }); },
+    say: (c, me, p) => { const cur = (c.day.scores[p.tid] || {})[p.hole]; return 'settle ' + tName(c, p.tid) + ' hole ' + p.hole + (cur ? ': ' + eTxt(c, cur) + ' → ' : ' as ') + eTxt(c, p.e); }, run: (c, me, p, now, s) => putHole(c, me, p, now, s, 'settled') },
   correct: { always: true, // change a hole that was already confirmed
     chk(c, me, p) { const d = c.day; liveOnly(d); const t = teamOf(d, p.tid), cur = (d.scores[t.tid] || {})[p.hole]; if ((d.wd || {})[t.tid]) throw bad(409, 'This team was marked withdrawn (did not finish).'); if (!cur || cur.st !== 'confirmed') throw bad(409, 'Hole ' + p.hole + ' is not a confirmed hole any more.');
       if (p.rev != null && cur.rev !== p.rev) throw bad(409, 'Hole ' + p.hole + ' changed since this was asked for.'); if (!isBoss(c, me) && t.scorer !== me.pid) throw bad(403, 'Hole ' + p.hole + ' is confirmed. Its scorer or the organizer can ask for a change; someone from another team signs it.'); },
-    sig: (c, me, p) => (teamSide(teamOf(c.day, p.tid), me.pid) ? {} : { aff: [p.tid] }), say: (c, me, p) => 'change ' + tName(c, p.tid) + ' hole ' + p.hole + ' (confirmed) to ' + eTxt(c, p.e), run: (c, me, p, now, s) => putHole(c, me, p, now, s, 'confirmed hole changed') },
+    flag: true, sig: (c, me, p) => affTeam(c, me, teamOf(c.day, p.tid).tid),
+    say: (c, me, p) => { const cur = (c.day.scores[p.tid] || {})[p.hole]; return 'change ' + tName(c, p.tid) + ' hole ' + p.hole + ' (confirmed): ' + (cur ? eTxt(c, cur) : '?') + ' → ' + eTxt(c, p.e); }, run: (c, me, p, now, s) => putHole(c, me, p, now, s, 'confirmed hole changed') },
   withdraw: { nk: 'wd', // mark a team did not finish, or put it back. A team with a COMPLETE card can never be marked withdrawn (H3).
     chk(c, me, p) { const d = c.day; if (!isBoss(c, me)) throw bad(403, 'Only the organizer marks a team withdrawn'); if (d.status !== 'live') throw bad(409, d.status === 'final' ? 'The round is final. Reopen scoring first.' : 'The round has not started'); const t = teamOf(d, p.tid), has = !!(d.wd || {})[t.tid];
       if (p.on === false) { if (!has) throw bad(409, t.name + ' is not marked withdrawn.'); return; } if (has) throw bad(409, t.name + ' is already marked withdrawn.'); why3(p.reason, 'Give a reason for marking the team withdrawn (3+ characters)');
       if (Object.keys(d.scores[t.tid] || {}).length >= d.course.par.length) throw bad(409, t.name + ' has a complete card (' + d.course.par.length + ' of ' + d.course.par.length + ' holes). A team that finished cannot be marked did not finish. Dispute a hole if a score is wrong.', { complete: true }); },
-    sig: (c, me, p) => (teamSide(teamOf(c.day, p.tid), me.pid) ? {} : { aff: [p.tid] }), say: (c, me, p) => (p.on === false ? 'put ' + tName(c, p.tid) + ' back in (undo did not finish)' : 'mark ' + tName(c, p.tid) + ' did not finish: ' + clean(p.reason, 120) + ' (no place, no prize money)'),
+    // The team's own account signs. ONE way out for a team that walked off: no hole entered on its card for 30 minutes -> a neutral third account may
+    // sign instead, and the board says the team did not sign it off (owner rule question in HANDOFF).
+    flag: true, sig: (c, me, p) => { const t = teamOf(c.day, p.tid), o = affTeam(c, me, t.tid); if (!o.need) return o; if (p.on === false) return { not: [t.tid] }; /* putting a team back in helps that team: another side signs */ if (idleT(c, t.tid, D.now())) return { not: [t.tid], nt: [t.tid], idle: true }; return o; }, say: (c, me, p) => (p.on === false ? 'put ' + tName(c, p.tid) + ' back in (undo did not finish)' : 'mark ' + tName(c, p.tid) + ' did not finish: ' + clean(p.reason, 120) + ' (no place, no prize money)'),
     run(c, me, p, now, s) { const d = c.day, t = teamOf(d, p.tid); d.wd = d.wd || {}; if (p.on === false) { delete d.wd[t.tid]; audit(d, { at: now, by: me.name, sig: s ? s.name : undefined, tid: t.tid, what: 'withdrawal undone' }); } else { d.wd[t.tid] = { by: me.name, sig: s ? s.name : undefined, at: now, reason: clean(p.reason, 120) }; audit(d, { at: now, by: me.name, sig: s ? s.name : undefined, tid: t.tid, what: 'withdrawn', note: clean(p.reason, 120) }); } } },
   final: { nk: 'forced', // finish a money round while holes were never confirmed
     chk(c, me, p) { const d = c.day; if (c.org !== me.mk) throw bad(403, 'Only the organizer starts or finishes the round'); if (d.status !== 'live') throw bad(409, d.status === 'final' ? 'The round is already final' : 'The round has not started'); finalBlock(c, me); why3(p.reason, 'Give a reason for finishing with unconfirmed holes (3+ characters)'); },
@@ -205,6 +248,8 @@ const ACT = {
     run(c, me, p, now, s) { const d = c.day, un = unconfirmed(c, me); d.forced = { by: me.name, sig: s ? s.name : undefined, at: now, reason: clean(p.reason, 120), holes: un.n, side: un.side, alone: !acctOthers(c, me.pid).length }; audit(d, { at: now, by: me.name, sig: s ? s.name : undefined, what: 'final forced', note: un.n + ' unconfirmed: ' + clean(p.reason, 120) }); d.status = 'final'; d.finalAt = now; c.pend = []; audit(d, { at: now, by: me.name, what: 'final' }); } },
   reopen: { nk: 'reopen', // only a Final round, only with a reason
     chk(c, me, p) { const d = c.day; if (c.org !== me.mk) throw bad(403, 'Only the organizer starts or finishes the round'); if (d.status !== 'final') throw bad(409, 'Only a finished round can be reopened'); why3(p.reason, 'Give a reason for reopening the round (3+ characters). Every player is told.'); },
+    // H3: where something is at stake a FORCED Final closes the round for good unless someone else signs the reopen, and an interested organizer never reopens alone
+    must: (c, me) => stakes(c) && (!!c.day.forced || interested(c, me.pid)), closed: true,
     sig: () => ({}), say: (c, me, p) => 'reopen the round after it was final. Reason: ' + clean(p.reason, 120) + '. Scores, winners and payouts can change until it is finished again; changed holes need a fresh confirmation',
     run(c, me, p, now, s) { const d = c.day, why = clean(p.reason, 120); d.status = 'live'; delete d.forced; d.reopens = (d.reopens || []).concat({ at: now, by: me.name, sig: s ? s.name : undefined, reason: why }).slice(-20); audit(d, { at: now, by: me.name, sig: s ? s.name : undefined, what: 'reopen', note: why }); } },
   paid: { nk: 'paid', // the paid list. Before the start the organizer keeps it freely; after it every change is a power; a Final game is closed.
@@ -212,8 +257,9 @@ const ACT = {
     chk(c, me, p) { if (c.org !== me.mk) throw bad(403, 'Only the organizer marks entries paid'); const m = c.members.find((x) => x.pid === p.pid); if (!m) throw bad(404, 'Not a member'); if (!!m.paid === !!p.paid) throw bad(409, m.name + ' is already marked ' + (m.paid ? 'paid' : 'not paid') + '.', { same: true });
       if (c.kind === 'day' && c.day.status === 'final') throw bad(409, 'The paid list is closed: the round is final. Reopen scoring (with a reason) to change it.', { frozen: true });
       if (c.kind === 'pro' && p.done) { if (!p.paid) throw bad(409, 'The paid list is closed: this pool is final. Nobody can be marked not paid now.', { frozen: true }); if (clean(p.reason, 120).length < 3) throw bad(409, 'The paid list is closed: this pool is final. To mark a late payment give a reason; everyone in the pool is told.', { frozen: true, needReason: true }); } },
-    sig: (c, me, p) => { const ts = sidesOf(c, p.pid), mine = sidesOf(c, me.pid); return ts.some((s) => mine.includes(s)) ? {} : { aff: ts }; },
-    say: (c, me, p) => 'mark ' + mName(c, p.pid) + (p.paid ? ' paid' : ' not paid') + (clean(p.reason, 120) ? '. Reason: ' + clean(p.reason, 120) : ''),
+    // NOT PAID takes the player's own signature (the affected side). PAID after the start adds a share of the prize money: someone who is not on that player's side signs.
+    flag: true, pin: true, sig: (c, me, p) => { const o = affPlayer(c, me, p.pid); return !o.need ? {} : p.paid ? { not: o.nt } : o; },
+    say: (c, me, p) => 'mark ' + mName(c, p.pid) + (p.paid ? ' paid (was not paid)' : ' not paid (was paid)') + (clean(p.reason, 120) ? '. Reason: ' + clean(p.reason, 120) : ''),
     run(c, me, p, now, s) { const m = c.members.find((x) => x.pid === p.pid); m.paid = !!p.paid; if (ACT.paid.free(c, me, p)) return; if (c.kind === 'pro' && p.done) c.pro.doneAt = c.pro.doneAt || now;
       c.paidLog = (c.paidLog || []).concat({ at: now, by: me.name, sig: s ? s.name : undefined, name: m.name, paid: !!p.paid, reason: clean(p.reason, 120) }).slice(-50); if (c.kind === 'day') audit(c.day, { at: now, by: me.name, sig: s ? s.name : undefined, what: p.paid ? 'marked paid' : 'marked not paid', pid: m.pid, note: m.name }); } },
   hcp: { strict: true, // set or change a player's handicap for this game (in an Enterprise tournament: the director, through the stats module, with a reason)
@@ -221,15 +267,19 @@ const ACT = {
       if (c.ent) { if (c.org !== me.mk) throw bad(403, 'The tournament director sets handicaps'); why3(p.reason, 'Give a reason for the tournament handicap (3+ characters)'); return; }
       if (!isBoss(c, me)) throw bad(403, 'Only the organizer sets other players\' handicaps'); const src = (d.hsrc || {})[p.pid];
       if (src === 'oddable' || src === 'tournament') throw bad(409, src === 'oddable' ? 'This player has an ' + HCP_LABEL + ' from their rounds in the app; it is the handicap. ' + HCP_NOTE : 'The tournament director set this handicap.'); },
-    sig: (c, me, p) => ({ not: sidesOf(c, p.pid) }), say: (c, me, p) => 'set ' + mName(c, p.pid) + '\'s handicap to ' + Number(p.v).toFixed(1) + (clean(p.reason, 80) ? '. Reason: ' + clean(p.reason, 80) : ''),
-    pre: async (c, me, p) => { if (!c.ent) return null; const pm = c.members.find((m) => m.pid === p.pid); if (!pm) throw bad(404, 'Not a member'); await D.eventOverride(c.orgE, EID(c.id), keyOfMember(pm), { hcp: p.v, reason: clean(p.reason, 80), name: pm.name, byName: me.name }); return hcpOf(keyOfMember(pm), hOpts(c)); }, // stored and LOGGED by the stats module (one log)
+    // A number the player ASKED for (the affected side already agreed): someone who is not on that player's team signs. A number nobody asked for:
+    // the player's own account signs (H1). An Enterprise director who is neutral sets tournament numbers alone, with a reason (owner rule E-H).
+    pin: true, ref: (c) => !!c.ent, sig: (c, me, p) => (p.ask ? { not: teamsOfP(c, p.pid) } : affPlayer(c, me, p.pid)),
+    say: (c, me, p) => { const d = c.day, old = (d.hsrc || {})[p.pid] && d.hsrc[p.pid] !== 'none' && d.hcp[p.pid] != null ? Number(d.hcp[p.pid]).toFixed(1) : 'none'; return 'set ' + mName(c, p.pid) + '\'s handicap: ' + old + ' → ' + Number(p.v).toFixed(1) + (p.ask ? ' (the number ' + mName(c, p.pid) + ' asked for)' : '') + (clean(p.reason, 80) ? '. Reason: ' + clean(p.reason, 80) : ''); },
+    pre: async (c, me, p) => { if (!c.ent) return null; if (!D.stats()) return { local: true }; /* Golf alone (no stats module): the director's number is kept on the game */ const pm = c.members.find((m) => m.pid === p.pid); if (!pm) throw bad(404, 'Not a member'); await D.eventOverride(c.orgE, EID(c.id), keyOfMember(pm), { hcp: p.v, reason: clean(p.reason, 80), name: pm.name, byName: me.name }); return hcpOf(keyOfMember(pm), hOpts(c)); }, // stored and LOGGED by the stats module (one log)
     run(c, me, p, now, s, x) { const d = c.day, old = d.hcp[p.pid] == null ? null : d.hcp[p.pid];
-      if (c.ent) { if (!x) throw bad(409, 'Try again'); applyIdx(d, p.pid, x); d.tset = d.tset || {}; d.tset[p.pid] = Object.assign({}, d.tset[p.pid], { v: p.v, by: me.name, sig: s ? s.name : undefined, at: now, reason: clean(p.reason, 80) }); }
+      if (c.ent && x && x.local) { d.hsrc = d.hsrc || {}; d.hcp[p.pid] = p.v; d.hsrc[p.pid] = 'tournament'; if (d.hreq) delete d.hreq[p.pid]; d.tset = d.tset || {}; d.tset[p.pid] = { v: p.v, by: me.name, sig: s ? s.name : undefined, at: now, reason: clean(p.reason, 80), local: true }; }
+      else if (c.ent) { if (!x) throw bad(409, 'Try again'); applyIdx(d, p.pid, x); d.tset = d.tset || {}; d.tset[p.pid] = Object.assign({}, d.tset[p.pid], { v: p.v, by: me.name, sig: s ? s.name : undefined, at: now, reason: clean(p.reason, 80) }); }
       else setTyped(d, p.pid, p.v, me, now, s ? s.name : undefined);
       audit(d, { at: now, by: me.name, sig: s ? s.name : undefined, what: 'handicap', pid: p.pid, from: old, to: p.v }); } },
   extrareopen: { nk: 'side', // reopen a CONFIRMED closest-to-the-pin / longest-drive winner
     chk(c, me, p) { const d = c.day; if (!isBoss(c, me)) throw bad(403, 'Only the organizer reopens a confirmed winner'); liveOnly(d); const cur = ((d.win || {})[p.kind] || {})[p.hole]; if (!cur || cur.st !== 'confirmed') throw bad(409, 'That winner is not confirmed. Enter the right one.'); why3(p.reason, 'Give a reason for reopening this winner (3+ characters). Every player is told.'); },
-    sig: (c, me, p) => { const w = ((c.day.win || {})[p.kind] || {})[p.hole] || {}, ws = c.day.teams.filter((t) => t.tid === w.who || t.players.includes(w.who)).map((t) => t.tid); return ws.some((s) => sidesOf(c, me.pid).includes(s)) ? {} : { aff: ws }; },
+    flag: true, sig: (c, me, p) => { const w = ((c.day.win || {})[p.kind] || {})[p.hole] || {}, ws = c.day.teams.filter((t) => t.tid === w.who || t.players.includes(w.who)).map((t) => t.tid); return ws.some((s) => playsOn(c, s, me.pid)) ? {} : { need: acctsOn(c, ws), nt: ws }; },
     say: (c, me, p) => 'reopen the ' + (p.kind === 'ld' ? 'longest drive' : 'closest to the pin') + ' winner on hole ' + p.hole + '. Reason: ' + clean(p.reason, 120) + '. It needs a fresh confirmation',
     run(c, me, p, now, s) { const d = c.day, cur = d.win[p.kind][p.hole]; cur.st = 'reopened'; cur.ro = { by: me.name, sig: s ? s.name : undefined, at: now, reason: clean(p.reason, 120) }; audit(d, { at: now, by: me.name, sig: s ? s.name : undefined, hole: p.hole, what: p.kind + ' reopened', note: clean(p.reason, 120) }); } },
   tiers: { // pick six: the organizer's own tier order (only before anyone has picked; the check is made INSIDE the write, L1)
@@ -257,22 +307,82 @@ const ACT = {
   setup: { money: (c, p) => stakes(c) || !!p.stk, // a set-up change that touches the format, strokes, flights, side games or which board the money follows
     free: (c, me, p) => !p.touch,
     chk(c, me) { if (c.org !== me.mk) throw bad(403, 'Only the organizer changes the setup'); if (c.day.status !== 'setup') throw bad(409, 'The round has started; setup is closed'); },
-    sig: () => ({}), say: (c, me, p) => 'change the rules of the game: ' + p.touch,
+    pin: true, sig: () => ({}), say: (c, me, p) => 'change the rules of the game: ' + (ruleDiff(c.day, p.x, p.course) || p.touch),
     run(c, me, p, now) { const d = c.day; Object.assign(d, p.x); if (p.course) d.course = p.course; d.teams.forEach((t) => (t.slots = Math.max(t.players.length, Math.min(4, num(t.slots, 1, 4) || d.teamSize)))); demoteSelfTyped(c, now); } },
+  remove: { always: true, flag: true, nk: 'remove', // H7: take a player or a team out of the game. Before the start: the organizer. After it: the rule (the affected side signs).
+    free: (c) => c.day.status === 'setup',
+    // M2: an account that has not played a hole 10 minutes after the start (on no team, or on a team with no hole on its card) is removed by the organizer alone, with a notice
+    solo: (c, me, p, now) => { const d = c.day; if (d.status !== 'live' || !p.pid || (now || D.now()) - (d.startAt || d.lockAt || 0) < 600e3) return false; const ts = teamsOfP(c, p.pid); return !ts.some((t) => Object.keys(d.scores[t] || {}).length > 0); },
+    chk(c, me, p) { const d = c.day; if (c.org !== me.mk) throw bad(403, 'Only the organizer removes a player or a team'); if (d.status === 'final') throw bad(409, 'The round is final. It has to be reopened before anyone is removed.');
+      if (p.tid) teamOf(d, p.tid); else { const m = c.members.find((x) => x.pid === p.pid); if (!m) throw bad(404, 'Not a member'); if (m.mk === c.org) throw bad(409, 'The organizer cannot be removed'); }
+      if (d.status !== 'setup') why3(p.reason, 'Give a reason for removing them (3+ characters). Every player is told.'); },
+    sig: (c, me, p) => (p.tid ? affTeam(c, me, teamOf(c.day, p.tid).tid) : affPlayer(c, me, p.pid)),
+    say: (c, me, p) => 'remove ' + (p.tid ? tName(c, p.tid) + ' (the whole team, with its card)' : mName(c, p.pid) + (teamsOfP(c, p.pid).length ? ' from ' + teamsOfP(c, p.pid).map((t) => tName(c, t)).join(', ') : '')) + ' from the game' + (clean(p.reason, 120) ? '. Reason: ' + clean(p.reason, 120) : '') + (c.day.status !== 'setup' ? '. Prize money and side games are worked out again without them' : ''),
+    run(c, me, p, now, s) { const d = c.day, nm = p.tid ? tName(c, p.tid) : mName(c, p.pid); removeIn(c, p); audit(d, { at: now, by: me.name, sig: s ? s.name : undefined, what: p.tid ? 'team removed' : 'player removed', note: nm + (clean(p.reason, 120) ? ': ' + clean(p.reason, 120) : '') }); } },
+  // ----- one and done (H2): the prize money, the end of the season and a refreshed result all go through the rule -----
+  oadmoney: { always: true, pin: true, nk: 'oad',
+    chk(c, me, p, now) { if (c.org !== me.mk) throw bad(403, 'Only the organizer enters prize money'); const E = c.pro.oad.events[p.ev]; if (!E) throw bad(404, 'No picks for that tournament'); if (!(E.lockAt && now >= E.lockAt)) throw bad(409, 'That tournament has not started'); },
+    sig: () => ({}), say: (c, me, p) => { const E = c.pro.oad.events[p.ev] || { picks: {} }, nm = (id) => (Object.values(E.picks).find((x) => x.g === id) || {}).n || id, f = (v) => '$' + Number(v || 0).toLocaleString('en-US'); return 'enter the prize money for ' + (E.name || 'the tournament') + ' by hand: ' + Object.keys(p.money).map((id) => nm(id) + ' ' + (E.res ? (E.by === 'points' ? (E.res[id] || 0) + ' points' : f(E.res[id])) : 'no result') + ' → ' + f(p.money[id])).join(', '); },
+    run(c, me, p, now, s) { const E = c.pro.oad.events[p.ev]; E.prev = E.res && E.by !== 'money-manual' ? { res: E.res, by: E.by } : E.prev || null; E.res = p.money; E.by = 'money-manual'; E.resAt = E.resAt || now; delete E.read; E.manual = { by: me.name, sig: s ? s.name : undefined, at: now }; c.pro.oad.log = (c.pro.oad.log || []).concat({ at: now, by: me.name, sig: s ? s.name : undefined, what: 'Prize money entered for ' + E.name, money: p.money }).slice(-100); } },
+  endseason: { always: true, nk: 'oad',
+    chk(c, me) { if (c.org !== me.mk) throw bad(403, 'Only the organizer ends the season'); if (c.pro.oad.ended) throw bad(409, 'The season is already over.', { same: true }); },
+    sig: () => ({}), say: () => 'end the season now: the table becomes final and the paid list closes',
+    run(c, me, p, now, s) { c.pro.oad.ended = now; c.pro.oad.log = (c.pro.oad.log || []).concat({ at: now, by: me.name, sig: s ? s.name : undefined, what: 'Season ended' }).slice(-100); } },
+  oadrefresh: { always: true, pin: true, nk: 'oad', // H6: read a stored result again from the tour feed, within 48 hours of the first one
+    chk(c, me, p, now) { if (c.org !== me.mk) throw bad(403, 'Only the organizer refreshes a result'); const E = c.pro.oad.events[p.ev]; if (!E || !E.res) throw bad(409, 'That tournament has no stored result yet.'); if (!E.resAt || now - E.resAt > 48 * 3600e3) throw bad(409, 'A result can be refreshed for 48 hours after it was stored. That time has passed.'); if (c.pro.oad.ended) throw bad(409, 'The season is over. The table is final.'); },
+    sig: () => ({}), say: (c, me, p) => { const E = c.pro.oad.events[p.ev] || { picks: {}, res: {} }, ids = [...new Set(Object.values(E.picks).map((x) => x.g))].filter((id) => ((E.res || {})[id] || 0) !== (p.res[id] || 0)), nm = (id) => (Object.values(E.picks).find((x) => x.g === id) || {}).n || id; return 'refresh the result of ' + (E.name || 'the tournament') + ' from the tour feed' + (ids.length ? ': ' + ids.map((id) => nm(id) + ' ' + ((E.res || {})[id] || 0) + ' → ' + (p.res[id] || 0)).join(', ') : ' (no picked golfer changes)'); },
+    run(c, me, p, now, s) { const E = c.pro.oad.events[p.ev]; E.prev = { res: E.res, by: E.by }; E.res = p.res; E.by = p.by; delete E.manual; E.refreshed = { by: me.name, sig: s ? s.name : undefined, at: now }; c.pro.oad.log = (c.pro.oad.log || []).concat({ at: now, by: me.name, sig: s ? s.name : undefined, what: 'Result refreshed from the tour feed for ' + E.name }).slice(-100); } },
 };
-const gated = (c, me, kind, p) => { const A = ACT[kind]; if (A.free && A.free(c, me, p)) return false; if (!(A.always || (A.money ? A.money(c, p) : A.strict ? hStrict(c) : stakes(c)))) return false; return sidesOf(c, me.pid).length > 0 && acctOthers(c, me.pid).length > 0; };
+// No hole typed on the team's card for 30 minutes (from the start when the card is empty): the team has stopped playing.
+const idleT = (c, tid, now) => { const d = c.day, at = Object.values(d.scores[tid] || {}).map((h) => h.at || 0); return d.status === 'live' && now - Math.max(d.startAt || d.lockAt || 0, ...at) >= 1800e3; };
+// Take a player or a team out (INSIDE a write). Money is always worked out from who is on a team, so pots, payouts, skins and matches follow by themselves.
+function removeIn(c, p) { const d = c.day, live = d.status !== 'setup';
+  const dropT = (tid) => { d.teams = d.teams.filter((t) => t.tid !== tid); delete d.scores[tid]; ['wd', 'nso'].forEach((k) => { if (d[k]) delete d[k][tid]; }); if (d.flights && d.flights.of) delete d.flights.of[tid]; d.matches = d.matches.filter((m) => !(m.kind === 'team' && (m.a === tid || m.b === tid))); ['ctp', 'ld'].forEach((k) => Object.keys(d.win[k] || {}).forEach((h) => { if (d.win[k][h].who === tid) delete d.win[k][h]; })); c.pend = (c.pend || []).filter((q) => q.p.tid !== tid); };
+  const dropP = (pid) => { d.teams.forEach((t) => { if (!t.players.includes(pid)) return; t.players = t.players.filter((x) => x !== pid); if (t.scorer === pid) t.scorer = t.players[0] || null; Object.values(d.scores[t.tid] || {}).forEach((h) => { if (h.p) delete h.p[pid]; }); });
+    d.matches = d.matches.filter((m) => !(m.kind === 'player' && (m.a === pid || m.b === pid))); ['ctp', 'ld'].forEach((k) => Object.keys(d.win[k] || {}).forEach((h) => { if (d.win[k][h].who === pid) delete d.win[k][h]; }));
+    ['hcp', 'hsrc', 'hby', 'hreq', 'odx', 'tset'].forEach((k) => { if (d[k]) delete d[k][pid]; }); c.co = (c.co || []).filter((x) => x !== pid); c.pend = (c.pend || []).filter((q) => q.by !== pid && q.p.pid !== pid); c.members = c.members.filter((m) => m.pid !== pid); };
+  if (p.tid) { const t = teamOf(d, p.tid); t.players.slice().forEach((pid) => { const m = c.members.find((x) => x.pid === pid); if (m && m.guest) dropP(pid); }); dropT(t.tid); } // the team's accounts stay in the game, on no team; its typed-in guests go with it
+  else { dropP(p.pid); if (live) d.teams.filter((t) => !t.players.length && Object.keys(d.scores[t.tid] || {}).length).forEach((t) => dropT(t.tid)); } }
+// What a set-up change changes, old → new, for the people who sign it (M4).
+function ruleDiff(d0, x, course) { if (!x) return ''; const out = [], f = (v) => (v == null || v === '' ? 'none' : Array.isArray(v) ? (v.length ? v.join('/') : 'none') : v === true ? 'on' : v === false ? 'off' : String(v)), $ = (v) => '$' + (Math.round(Number(v || 0) * 100) / 100), pc = (v) => (v == null ? 'none' : v + '%');
+  const add = (label, a, b, fm) => { if (JSON.stringify(a == null ? null : a) !== JSON.stringify(b == null ? null : b)) out.push(label + ' ' + (fm || f)(a) + ' → ' + (fm || f)(b)); }, fn = (v) => (S.FORMATS[v] || {}).name || f(v);
+  add('format', d0.fmt, x.fmt, fn); add('scoring', d0.net, x.net); add('team size', d0.teamSize, x.teamSize); add('team allowances', d0.allow, x.allow); add('handicap percent', d0.pct, x.pct, pc); add('balls that count', d0.count, x.count);
+  add('prize money follows', d0.payBy, x.payBy); add('flights', (d0.flights || {}).n || 0, (x.flights || {}).n || 0); add('drives per player', d0.drives, x.drives); add('missing-drive penalty', d0.drivePen, x.drivePen);
+  const e0 = d0.extras || { skins: {}, ctp: [], ld: [] }, e1 = x.extras || e0; add('skins', !!e0.skins.on, !!e1.skins.on); add('skins', e0.skins.amt, e1.skins.amt, $); add('net skins', !!e0.skins.net, !!e1.skins.net); add('skins left after the last hole', e0.skins.end || 'split', e1.skins.end || 'split'); add('skins of a withdrawn team', e0.skins.wd || 'stand', e1.skins.wd || 'stand');
+  add('closest to the pin holes', e0.ctp, e1.ctp); add('closest to the pin', e0.ctpAmt, e1.ctpAmt, $); add('longest drive holes', e0.ld, e1.ld); add('longest drive', e0.ldAmt, e1.ldAmt, $);
+  const h0 = d0.heads || {}, h1 = x.heads || h0; add('matches', !!h0.on, !!h1.on); add('matches between', h0.kind, h1.kind); add('match type', h0.type, h1.type); add('match amount', h0.amt, h1.amt, $); add('match handicap percent', h0.pct, h1.pct, pc); add('strokes off the low player', h0.offLow !== false, h1.offLow !== false); add('presses', h0.press, h1.press); add('match pairing', h0.pair, h1.pair);
+  if (course) { const cn = (k) => (k ? clean(k.name, 40) + (k.tees ? ' (' + clean(k.tees, 20) + ')' : '') + ', par ' + (k.par || []).reduce((a, v) => a + v, 0) : 'none'); add('course', cn(d0.course), cn(course), (v) => v); if (cn(d0.course) === cn(course) && JSON.stringify([d0.course.par, d0.course.hcp, d0.course.rating, d0.course.slope]) !== JSON.stringify([course.par, course.hcp, course.rating, course.slope])) out.push('the course card (pars, stroke indexes, rating or slope)'); }
+  return out.join(', '); }
+const sigOf = (c, me, kind, p) => { try { return ACT[kind].sig(c, me, p) || {}; } catch (e) { return {}; } };
+// Does this action wait for a signature? free = not a power yet. solo = the organizer's own call (told to everyone). must = always signed. Then: an
+// AFFECTED account exists -> its signature, whoever asks (only a neutral referee is excepted where the action says so). Else: asked by someone
+// INTERESTED while another account is in the game.
+const gated = (c, me, kind, p) => { const A = ACT[kind]; if (A.free && A.free(c, me, p)) return false; if (A.solo && A.solo(c, me, p)) return false; if (A.must && A.must(c, me, p)) return true;
+  if (!(A.always || (A.money ? A.money(c, p) : A.strict ? hStrict(c) : stakes(c)))) return false;
+  const o = sigOf(c, me, kind, p), others = acctOthers(c, me.pid);
+  if (o.need && others.some((m) => o.need.includes(m.pid))) return !((typeof A.ref === 'function' ? A.ref(c, me, p) : A.ref) && neutralBoss(c, me));
+  return interested(c, me.pid) && others.length > 0; };
 const NOSIGN = 'This needs a second signature from a player with an Oddable account on another team, and nobody in this game can give it.';
+const CLOSED = 'This round is closed for good. Reopening it needs the signature of another player with an Oddable account, and nobody in this game can give it.';
 const names = (c, pids) => pids.map((p) => mName(c, p));
 const andList = (a) => (a.length <= 2 ? a.join(' or ') : a.slice(0, 3).join(', ') + (a.length > 3 ? ' or ' + (a.length - 3) + ' more' : ''));
+// After something was carried out: waiting requests that no longer fit the game (the hole was settled another way, the team is gone) are dropped and logged.
+function sweep(c, now) { (c.pend || []).slice().forEach((q) => { if (q.kind === 'final') return; const A = ACT[q.kind], actor = c.members.find((m) => m.pid === q.by); try { if (!actor) throw bad(404, 'gone'); A.chk(c, actor, q.p, now); } catch (e) { if (!e.status || e.status >= 500) return; c.pend = c.pend.filter((y) => y !== q); plog(c, { at: now, st: 'expired', n: q.n, kind: q.kind, text: q.text, by: q.byName }); } }); }
 // Ask for an action (INSIDE a write). Neutral: it is done, logged and announced. Interested: it waits for a signature and changes nothing.
 function propose(c, me, kind, p, now, x) {
-  const A = ACT[kind]; A.chk(c, me, p, now); const text = A.say(c, me, p), free = !!(A.free && A.free(c, me, p));
-  if (!gated(c, me, kind, p)) { const loud = !free && (A.always || stakes(c) || (A.strict && hStrict(c)) || (A.money && A.money(c, p))), solo = !acctOthers(c, me.pid).length; A.run(c, me, p, now, null, x);
-    if (loud) { plog(c, { at: now, st: 'alone', kind, text, by: me.name }); if (!solo) notify(c, A.nk || 'act', me, me.name + (isBoss(c, me) && !sidesOf(c, me.pid).length ? ' (organizer, not playing)' : '') + ': ' + text + '.'); }
-    return { done: true }; }
-  const who = signers(c, me.pid, A.sig(c, me, p)); if (!who.length) throw bad(409, NOSIGN, { noSigner: true });
-  const key = kind + '|' + [p.tid, p.hole, p.pid, p.kind, p.mid, p.a, p.b].filter((v) => v != null).join('|'); c.pend = (c.pend || []).filter((q) => q.key !== key); c.pn = (c.pn || 0) + 1;
-  c.pend.push({ n: c.pn, kind, key, p, by: me.pid, byName: me.name, at: now, text }); if (c.pend.length > 40) c.pend.splice(0, c.pend.length - 40);
+  const A = ACT[kind]; A.chk(c, me, p, now); const text = A.say(c, me, p), free = !!(A.free && A.free(c, me, p)), o = sigOf(c, me, kind, p), must = !!(A.must && A.must(c, me, p));
+  const alone = () => { const loud = !free && (A.always || must || stakes(c) || (A.strict && hStrict(c)) || (A.money && A.money(c, p))), solo = !acctOthers(c, me.pid).length, nb = neutralBoss(c, me); A.run(c, me, p, now, null, x);
+    if ((c.pend || []).length) sweep(c, now);
+    if (loud) { if (A.flag && o.nt && o.nt.length) markNso(c, o.nt, { at: now, by: me.name, what: text }); plog(c, { at: now, st: 'alone', kind, text, by: me.name }); if (!solo) notify(c, A.nk || 'act', me, me.name + (nb ? ' (organizer, not playing)' : '') + ': ' + text + '.'); }
+    return { done: true }; };
+  if (!gated(c, me, kind, p)) return alone();
+  const who = signers(c, me.pid, o);
+  if (!who.length) { if (!must && !stakes(c) && !(A.money && A.money(c, p))) return alone(); /* nothing at stake and nobody who could sign: done, logged */ throw bad(409, A.closed ? CLOSED : NOSIGN, { noSigner: true }); }
+  // M3: a request belongs to the person who asked. Nobody else's request replaces it or pushes it off the list; a person's own newer request for the same thing does.
+  const key = kind + '|' + me.pid + '|' + [p.tid, p.hole, p.pid, p.kind, p.mid, p.a, p.b, p.ev].filter((v) => v != null).join('|'), keep = (c.pend || []).filter((q) => q.key !== key);
+  if (kind !== 'hcp' && keep.filter((q) => q.by === me.pid && q.kind !== 'hcp').length >= 40) throw bad(429, 'You already have 40 requests waiting for a signature. Take one back, or wait until they are answered.', { tooMany: true });
+  if (keep.length >= 400) throw bad(429, 'Too many requests are waiting in this game. Answer some of them first.', { tooMany: true });
+  c.pend = keep; c.pn = (c.pn || 0) + 1; c.pend.push({ n: c.pn, kind, key, p, by: me.pid, byName: me.name, at: now, text });
   plog(c, { at: now, st: 'asked', n: c.pn, kind, text, by: me.name }); // shown to every player as a waiting card (view: pending) and counted in the badge of those who can sign; the notice goes out when it is signed
   return { pending: c.pn, who: names(c, who) };
 }
@@ -283,15 +393,19 @@ function signAct(c, me, n, ok, now, x) {
   let who = []; try { who = signers(c, q.by, A.sig(c, actor, q.p)); } catch (e) { drop(); return { expired: e.message }; }
   if (ok === false) { if (me.pid !== q.by && !who.includes(me.pid)) throw bad(403, 'Only the person who asked, or someone who could sign it, can turn it down.'); drop(); plog(c, { at: now, st: me.pid === q.by ? 'taken back' : 'turned down', n: q.n, kind: q.kind, text: q.text, by: q.byName, sig: me.name }); notify(c, 'act', me, me.name + (me.pid === q.by ? ' took back the request to ' : ' turned down ' + q.byName + '\'s request to ') + q.text + '. Nothing changed.'); return { declined: true }; }
   if (me.pid === q.by) throw bad(403, 'You asked for this. Someone else has to sign it: ' + (andList(names(c, who)) || 'nobody in this game can') + '.');
-  if (!who.includes(me.pid)) throw bad(403, 'You cannot sign this one. It takes a player with an Oddable account who is not on ' + q.byName + '\'s team' + (isBoss(c, actor) ? ' and is not an organizer' : '') + ': ' + (andList(names(c, who)) || 'nobody in this game') + '.');
+  const o = A.sig(c, actor, q.p) || {};
+  if (!who.includes(me.pid)) throw bad(403, o.need && who.some((p) => o.need.includes(p)) ? 'You cannot sign this one. It changes another team\'s card, standing or mark, so only that team\'s own player signs it: ' + andList(names(c, who)) + '.' : 'You cannot sign this one. It takes a player with an Oddable account who is not on ' + q.byName + '\'s team' + (isBoss(c, actor) ? ' and is not an organizer' : '') + ': ' + (andList(names(c, who)) || 'nobody in this game') + '.');
   try { A.chk(c, actor, q.p, now); } catch (e) { if (e.status === 403 || e.status === 409 || e.status === 404 || e.status === 400) { drop(); plog(c, { at: now, st: 'expired', n: q.n, kind: q.kind, text: q.text, by: q.byName }); return { expired: e.message }; } throw e; }
-  const text = A.say(c, actor, q.p); drop(); A.run(c, actor, q.p, now, me, x);
+  const text = A.say(c, actor, q.p);
+  // M4: the signature is for exactly what was shown. If the old values moved since it was asked, it is dropped and has to be asked (and signed) again.
+  if (A.pin && q.text && text !== q.text) { drop(); plog(c, { at: now, st: 'expired', n: q.n, kind: q.kind, text: q.text, by: q.byName }); return { expired: 'What it would change is no longer what was asked for. It has to be asked for again.' }; }
+  drop(); A.run(c, actor, q.p, now, me, x); sweep(c, now); if (A.flag && o.nt && o.nt.length && !(o.need || []).includes(me.pid)) markNso(c, o.nt, { at: now, by: q.byName, sig: me.name, what: text });
   plog(c, { at: now, st: 'signed', n: q.n, kind: q.kind, text, by: q.byName, sig: me.name }); notify(c, A.nk || 'act', me, q.byName + ', signed by ' + me.name + ': ' + text + '.'); return { done: true, kind: q.kind };
 }
 // The Final checks shared by the plain Final and the forced one. -> { un, money }
 function finalBlock(c, me) { const d = c.day, n = d.course.par.length;
   if (d.teams.some((t) => Object.values(d.scores[t.tid] || {}).some((h) => h.st === 'disputed'))) throw bad(409, 'Settle the disputed holes first');
-  const money = moneyOn(c) && !d.solo, bd = dayBoard(c), short = bd.rows.filter((r) => !r.wd && r.thru < n);
+  const money = stakes(c), bd = dayBoard(c), short = bd.rows.filter((r) => !r.wd && r.thru < n);
   if (money && short.length) throw bad(409, short.map((r) => r.name + ' has played ' + r.thru + ' of ' + n + ' holes').join('; ') + '. Finish the card, or mark the team withdrawn (did not finish: no place, no prize money).', { incomplete: short.map((r) => ({ tid: r.tid, name: r.name, thru: r.thru })) });
   const un = unconfirmed(c, me); if (un.n && money) { const others = acctOthers(c, me.pid).length > 0, mine = others ? un.own : 0, msg = un.n + ' hole' + (un.n === 1 ? ' was' : 's were') + ' never confirmed' + (un.side ? ' (' + un.side + ' side-game winner' + (un.side === 1 ? '' : 's') + ' too)' : '');
     if (mine) throw bad(409, msg + '. ' + mine + ' of them ' + (mine === 1 ? 'is' : 'are') + ' on your own team or entered by you: another team\'s scorer has to confirm ' + (mine === 1 ? 'it' : 'them') + '. A forced finish cannot cover your own side.', { unconfirmed: un.n, side: un.side, own: mine, canForce: false }); }
@@ -350,7 +464,7 @@ function cleanDay(b, prev) {
   const drives = fmt === 'texas' ? num(b.drives == null ? F0.drives : b.drives, 1, 9) : null; if (fmt === 'texas' && drives == null) throw bad(400, 'Drives per player: 1 to 9');
   const date = okDay(b.date) ? b.date : chiDay(D.now());
   const ex = b.extras || {}, holesN = (prev && prev.course && prev.course.holes) || 18, hl = (a) => [...new Set((Array.isArray(a) ? a : []).map(Number).filter((h) => Number.isInteger(h) && h >= 1 && h <= holesN))].slice(0, 6);
-  const extras = { skins: { on: !!(ex.skins && ex.skins.on), net: !!(ex.skins && ex.skins.net), amt: num((ex.skins && ex.skins.amt) || 0, 0, 10000) || 0, end: ex.skins && ex.skins.end === 'none' ? 'none' : 'split' }, ctp: hl(ex.ctp), ld: hl(ex.ld), ctpAmt: num(ex.ctpAmt || 0, 0, 10000) || 0, ldAmt: num(ex.ldAmt || 0, 0, 10000) || 0 };
+  const extras = { skins: { on: !!(ex.skins && ex.skins.on), net: !!(ex.skins && ex.skins.net), amt: num((ex.skins && ex.skins.amt) || 0, 0, 10000) || 0, end: ex.skins && ex.skins.end === 'none' ? 'none' : 'split', wd: ex.skins && ex.skins.wd === 'void' ? 'void' : 'stand' }, ctp: hl(ex.ctp), ld: hl(ex.ld), ctpAmt: num(ex.ctpAmt || 0, 0, 10000) || 0, ldAmt: num(ex.ldAmt || 0, 0, 10000) || 0 };
   const hu = b.hu || b.heads || {}, press = hu.press === 'auto2' ? 'auto2' : 'accept', hp = num(hu.pct == null || hu.pct === '' ? (hu.kind === 'player' ? 100 : fmt === 'bestball' ? 90 : pct) : hu.pct, 0, 100);
   const heads = { press, pct: hp == null ? pct : hp, on: !!hu.on, pair: ['bracket', 'foursome', 'pick', 'random'].includes(hu.pair) ? hu.pair : 'pick', kind: hu.kind === 'player' ? 'player' : 'team', type: hu.type === 'nassau' ? 'nassau' : 'match', amt: num(hu.amt || 0, 0, 10000) || 0, auto: press === 'auto2' ? 2 : 0, offLow: hu.offLow !== false };
   const tee = num(b.teeTime, 1e12, 1e14), pl = prev && prev.lockAt, lockAt = tee && prev && prev.status === 'setup' && (!pl || D.now() < pl) ? tee : minT(pl, tee); // L5: the tee time can move later (rain delay) until the old one has come // first tee time = tournament start (handicap edits lock then)
@@ -367,7 +481,19 @@ async function addMine(mk, id) { await mutIdx((d) => { const a = d.mine[mk] || [
 async function byCode(code, k) { const c = normCode(code); if (!c) { fail(k); throw bad(404, 'No golf game with that code'); } const r = await D.S.dbGet(IDX); const codes = (r && r.data && r.data.codes) || {}; let id = null; Object.keys(codes).forEach((x) => { if (sameCode(x, c)) id = codes[x]; }); if (!id) { fail(k); throw bad(404, 'No golf game with that code'); } return getC(id); }
 
 // ---------- pro: feed + tiers ----------
-async function boardOf(c) { try { return await D.feed.board(c.pro.tour, c.pro.eventId); } catch (e) { return null; } }
+// H5 (other session's review): once a pick-six tournament is over its final leaderboard is STORED on the game (`c.pro.fin`), and from then on the pool
+// never asks the tour feed again. It is stored after two matching "final" reads at least 10 minutes apart, and never from an empty field.
+// The first "final" reading is kept too (`c.pro.finRead.b`), only as what is shown when the feed cannot be reached before the second read.
+async function boardOf(c) { if (c.pro.fin && c.pro.fin.b) return c.pro.fin.b; try { return await D.feed.board(c.pro.tour, c.pro.eventId); } catch (e) { return (c.pro.finRead && c.pro.finRead.b) || null; } }
+const readSig = (o) => crypto.createHash('sha256').update(JSON.stringify(o)).digest('hex').slice(0, 20);
+const AGAIN = 600e3; // two matching reads this far apart before a "final" reading is kept
+async function sixSettle(c) { if (c.pro.game !== 'six' || c.pro.fin) return c; let b = null; try { b = await D.feed.board(c.pro.tour, c.pro.eventId); } catch (e) {} if (!b || !b.event || !b.event.done || !(b.golfers || []).length) return c;
+  const sig = readSig(b.golfers.map((g) => [g.id, g.pos, g.toPar, g.st])), now = D.now(), r = c.pro.finRead; if (r && r.sig === sig && now - r.at < AGAIN) return c;
+  return mutC(c.id, (d) => { const P = d.pro, q = P.finRead; if (P.fin) return { nochange: true, v: d }; if (q && q.sig === sig && now - q.at >= AGAIN) { P.fin = { at: now, b: clone(b) }; delete P.finRead; P.doneAt = P.doneAt || now; } else if (!q || q.sig !== sig) P.finRead = { sig, at: now, b: clone(b) }; else return { nochange: true, v: d }; return d; }); }
+// The day's teams with at least one account-holding player each: a MONEY game needs two of them (H3).
+const twoAccounts = (c) => c.kind === 'day' && new Set(c.day.teams.filter((t) => acctsOn(c, [t.tid]).length).map((t) => t.tid)).size >= 2 && new Set(c.day.teams.flatMap((t) => acctsOn(c, [t.tid]))).size >= 2;
+// Take every money amount off a golf day (H3: a guests-only or one-account game is played as a casual game with no money shown).
+function stripMoney(c) { const d = c.day; c.pot.entry = 0; d.extras.skins.amt = 0; d.extras.ctpAmt = 0; d.extras.ldAmt = 0; d.heads.amt = 0; (d.matches || []).forEach((m) => { m.amt = 0; }); }
 function fieldMap(b) { const m = {}; (b ? b.golfers : []).forEach((g) => (m[g.id] = g)); return m; }
 // Pick six tiers (Playbook, Nov 16 2026): the DEFAULT order is neutral so a playing organizer cannot rig it: the world ranking when the free feed carries
 // one for the field (golfer.wr), else alphabetical by last name. An organizer's own list is an EDIT: allowed before anyone picks, logged, and shown to
@@ -472,6 +598,7 @@ function dayBoard(c) {
       if (pen) { r.pen = { strokes: pen, drives: short, each: d.drivePen == null ? 2 : d.drivePen }; r.gross += pen; r.net += pen; r.toParG += pen; r.toParN += pen; } }
     // DID NOT FINISH (review fix): a team the commissioner marked withdrawn, or (once the round is Final) a card short of all its holes. It ranks last,
     // has no place and wins no pot money. While the round is live an unfinished card still ranks by its score to par so far.
+    if (((d.nso || {})[t.tid] || []).length) r.nso = d.nso[t.tid].length; // "changed without the team's sign-off" (H1)
     r.wd = wd[t.tid] ? { by: wd[t.tid].by, at: wd[t.tid].at, reason: wd[t.tid].reason } : null; r.dnf = !!r.wd || (fin && r.thru < n); if (FL) r.flight = FL.of[t.tid] == null ? null : FL.of[t.tid];
     return r; });
   const keyOf = (r, b) => (st ? -(b === 'net' ? r.pts : r.ptsG) : b === 'net' ? r.toParN : r.toParG), key = (r) => keyOf(r, by), ord0 = (r) => (r.dnf ? 2 : r.thru > 0 ? 0 : 1);
@@ -485,9 +612,12 @@ function dayBoard(c) {
   // skins (per team for team-ball formats, per player otherwise)
   if (d.extras.skins.on || d.fmt === 'skins') {
     const net = d.fmt === 'skins' ? d.net !== 'gross' : d.extras.skins.net, ents = [];
-    if (S.FORMATS[d.fmt].ball === 'team') d.teams.filter((t) => t.players.length && !wd[t.tid]).forEach((t) => { const r = S.teamRound(t, holesOf(c, t.tid), teamCtx(c, t, net)); ents.push({ id: t.tid, s: r.per.map((x) => (x ? (net ? x.net : x.gross) : null)) }); });
-    else { const x = dayCtx(c); d.teams.filter((t) => !wd[t.tid]).forEach((t) => t.players.forEach((pid) => { const h = holesOf(c, t.tid); ents.push({ id: pid, s: d.course.par.map((_, i) => { const e = h[i + 1], g = e && e.p && Number(e.p[pid]); return g >= 1 ? g - (net ? S.strokesOn(x.hcp[pid] || 0, d.course.hcp[i], n) : 0) : null; }) }); })); }
-    out.skins = Object.assign(S.skins(ents, n, d.extras.skins.end), { net, end: d.extras.skins.end || 'split' });
+    // A team marked did-not-finish (owner rule question, default "stand"): the skins it won on the holes it played stand, and the skins nobody has won
+    // yet carry among the teams still playing. Set-up option "void": the team is taken out of the skins game altogether.
+    const inS = (t) => !wd[t.tid] || d.extras.skins.wd !== 'void', outS = (t) => (wd[t.tid] ? { out: true } : {});
+    if (S.FORMATS[d.fmt].ball === 'team') d.teams.filter((t) => t.players.length && inS(t)).forEach((t) => { const r = S.teamRound(t, holesOf(c, t.tid), teamCtx(c, t, net)); ents.push(Object.assign({ id: t.tid, s: r.per.map((x) => (x ? (net ? x.net : x.gross) : null)) }, outS(t))); });
+    else { const x = dayCtx(c); d.teams.filter(inS).forEach((t) => t.players.forEach((pid) => { const h = holesOf(c, t.tid); ents.push(Object.assign(outS(t), { id: pid, s: d.course.par.map((_, i) => { const e = h[i + 1], g = e && e.p && Number(e.p[pid]); return g >= 1 ? g - (net ? S.strokesOn(x.hcp[pid] || 0, d.course.hcp[i], n) : 0) : null; }) })); })); }
+    out.skins = Object.assign(S.skins(ents, n, d.extras.skins.end), { net, end: d.extras.skins.end || 'split', wd: d.extras.skins.wd === 'void' ? 'void' : 'stand' });
   }
   out.matches = (d.matches || []).map((m) => matchState(c, m));
   out.extras = { ctp: d.extras.ctp.map((h) => ({ hole: h, win: (d.win.ctp || {})[h] || null })), ld: d.extras.ld.map((h) => ({ hole: h, win: (d.win.ld || {})[h] || null })) };
@@ -533,8 +663,8 @@ async function full(c, u) {
   o.members = c.members.map((m) => Object.assign({ pid: m.pid, name: m.name, org: m.mk === c.org, paid: !!m.paid, guest: !!m.guest }, isCo(c, m) ? { co: true } : {}, m.left ? { left: true } : {}));
   o.g16 = g16(c); o.co = isCo(c, me0);
   // THE NEUTRAL RULE: what is waiting for a second signature (every player sees it), who can sign, and the log of every power used
-  o.pending = (c.pend || []).map((q) => { const A = ACT[q.kind], actor = c.members.find((m) => m.pid === q.by); let who = []; try { who = actor ? signers(c, q.by, A.sig(c, actor, q.p)) : []; } catch (e) {} return { n: q.n, kind: q.kind, text: q.text, by: q.byName, at: q.at, tid: q.p.tid || null, hole: q.p.hole || null, pid: q.p.pid || null, mine: !!me0 && q.by === me0.pid, canSign: !!me0 && who.includes(me0.pid), who: names(c, who) }; });
-  o.plog = (c.plog || []).slice(-40).reverse(); o.stakes = stakes(c); o.interested = !!me0 && sidesOf(c, me0.pid).length > 0 && acctOthers(c, me0.pid).length > 0; o.paidLog = (c.paidLog || []).slice(-10).reverse();
+  o.pending = (c.pend || []).map((q) => { const A = ACT[q.kind], actor = c.members.find((m) => m.pid === q.by); let who = []; try { who = actor ? signers(c, q.by, A.sig(c, actor, q.p)) : []; } catch (e) {} return { n: q.n, kind: q.kind, text: q.text, by: q.byName, at: q.at, tid: q.p.tid || null, hole: q.p.hole || null, pid: q.p.pid || null, mine: !!me0 && q.by === me0.pid, canSign: !!me0 && who.includes(me0.pid), who: names(c, who), v: q.kind === 'hcp' ? q.p.v : undefined }; });
+  o.plog = (c.plog || []).slice(-40).reverse(); o.stakes = stakes(c); o.interested = !!me0 && interested(c, me0.pid) && acctOthers(c, me0.pid).length > 0; o.paidLog = (c.paidLog || []).slice(-10).reverse();
   o.notices = (c.notes || []).slice(-12).reverse().map((x) => ({ n: x.n, at: x.at, kind: x.kind, by: x.by, text: x.text, new: !!me0 && x.n > (me0.seen || 0) && x.bp !== me0.pid })); o.unseen = unseenOf(c, me0);
   if (c.kind === 'pro') { o.payout = payoutView(c);
     const b = await boardOf(c), fm = fieldMap(b), la = lockAt(c, b), locked = isLocked(la, b, now); o.pro.lockAt = la; o.pro.locked = locked;
@@ -554,16 +684,16 @@ async function full(c, u) {
       if (b && b.event.done && ranked.length) { const pm = payPids(c, ranked.map((x) => ({ key: x.pid, place: x.place, pids: [x.pid] }))); o.entries.forEach((e) => (e.payout = (pm[e.pid] || 0) / 100)); }
       if (!locked) o.entries.forEach((e) => { if (e.pid !== o.me) { e.total = null; e.place = null; } });
     } else {
-      const oad = c.pro.oad; o.oad = { pointsLabel: 'Oddable points', log: (oad.log || []).slice(-20).reverse().map((x) => ({ at: x.at, by: x.by, what: x.what })), season: oad.season, events: Object.keys(oad.events).map((ev) => { const E = oad.events[ev], lk = E.lockAt && now >= E.lockAt; return { id: ev, name: E.name, lockAt: E.lockAt, locked: !!lk, res: E.res || null, by: E.by || null, manual: E.manual || null, golfers: lk ? [...new Set(Object.values(E.picks).map((p) => p.g))].map((id) => ({ id, name: (Object.values(E.picks).find((p) => p.g === id) || {}).n })) : [], picks: Object.keys(E.picks).filter((p) => lk || p === o.me).map((p) => ({ pid: p, golfer: E.picks[p].g, name: E.picks[p].n, pts: E.res ? (E.res[E.picks[p].g] || 0) : null })) }; }), used: (oad.used[o.me] || []) };
+      const oad = c.pro.oad; o.oad = { pointsLabel: 'Oddable points', log: (oad.log || []).slice(-20).reverse().map((x) => ({ at: x.at, by: x.by, what: x.what })), season: oad.season, events: Object.keys(oad.events).map((ev) => { const E = oad.events[ev], lk = E.lockAt && now >= E.lockAt; return { id: ev, name: E.name, lockAt: E.lockAt, locked: !!lk, res: E.res || null, by: E.by || null, manual: E.manual || null, resAt: E.resAt || null, canRefresh: !!E.res && !!E.resAt && now - E.resAt <= 48 * 3600e3 && !oad.ended, golfers: lk ? [...new Set(Object.values(E.picks).map((p) => p.g))].map((id) => ({ id, name: (Object.values(E.picks).find((p) => p.g === id) || {}).n })) : [], picks: Object.keys(E.picks).filter((p) => lk || p === o.me).map((p) => ({ pid: p, golfer: E.picks[p].g, name: E.picks[p].n, pts: E.res ? (E.res[E.picks[p].g] || 0) : null })) }; }), used: (oad.used[o.me] || []) };
       const tot = {}; c.members.forEach((m) => (tot[m.pid] = 0)); Object.values(oad.events).forEach((E) => { if (!E.res) return; Object.keys(E.picks).forEach((p) => { tot[p] = (tot[p] || 0) + (E.res[E.picks[p].g] || 0); }); });
       o.table = c.members.map((m) => ({ pid: m.pid, name: m.name, total: Math.round(tot[m.pid] * 100) / 100 })).sort((a, b) => b.total - a.total || a.name.localeCompare(b.name)); o.table.forEach((r, i, a) => (r.place = i && a[i - 1].total === r.total ? a[i - 1].place : i + 1));
     }
   } else {
     const d = c.day; o.day.teams = d.teams.map((t) => ({ tid: t.tid, name: t.name, slots: t.slots, players: t.players.map((p) => ({ pid: p, name: nameMap(c)[p] || 'Player', hcp: d.hcp[p] == null ? null : d.hcp[p], hi: hinfo(d, p) })), scorer: t.scorer }));
     o.day.hcp = d.hcp; o.day.hsrc = d.hsrc || {}; o.day.hi = {}; c.members.forEach((m) => (o.day.hi[m.pid] = hinfo(d, m.pid))); o.day.hcpLabel = HCP_LABEL; o.day.hcpNote = HCP_NOTE;
-    o.day.flights = d.status === 'setup' ? flightPlan(c) : d.flights || { n: 0 }; o.day.payBy = payBy(d); o.day.wd = d.wd || {}; o.day.reopens = (d.reopens || []).slice(-5).reverse(); o.day.netOn = netOn(d); o.day.strict = hStrict(c); o.day.makeup = {}; c.members.forEach((m) => { const x = (d.odx || {})[m.pid]; if (x && (x.mk || x.why) && me0 && (isBoss(c, me0) || m.pid === me0.pid)) o.day.makeup[m.pid] = { why: x.why || '', made: x.mk || null }; }); o.day.noStats = !!c.noStats;
+    o.day.flights = d.status === 'setup' ? flightPlan(c) : d.flights || { n: 0 }; o.day.payBy = payBy(d); o.day.wd = d.wd || {}; o.day.nso = d.nso || {}; o.day.startAt = d.startAt || null; o.day.accts2 = twoAccounts(c); o.day.reopens = (d.reopens || []).slice(-5).reverse(); o.day.netOn = netOn(d); o.day.strict = hStrict(c); o.day.makeup = {}; c.members.forEach((m) => { const x = (d.odx || {})[m.pid]; if (x && (x.mk || x.why) && me0 && (isBoss(c, me0) || m.pid === me0.pid)) o.day.makeup[m.pid] = { why: x.why || '', made: x.mk || null }; }); o.day.noStats = !!c.noStats;
     o.day.hreq = {}; Object.keys(d.hreq || {}).forEach((p) => (o.day.hreq[p] = { v: d.hreq[p].v, at: d.hreq[p].at })); if (me0) seenPut(c, me0.pid);
-    o.ent = !!c.ent; o.day.lockAt = d.lockAt || null; o.day.hlocked = hLocked(d, now); if (c.ent && isOrg(c, u.mk)) { try { o.day.hlog = (await D.eventLog(c.orgE, EID(c.id))).log.filter((x) => x && (x.field == null || x.field === 'hcp') && x.player && (x.new == null || (Number.isFinite(Number(x.new)) && Math.abs(Number(x.new)) <= 60))).slice(-100).reverse().map((x) => ({ name: x.player, by: x.byName || (!x.by || /^tournament director$/i.test(x.by) ? (c.members.find((m) => m.mk === c.org) || {}).name || 'Tournament director' : x.by), at: x.at, old: x.old, new: x.new, oddable: x.oddable == null ? null : x.oddable, reason: x.reason })); } catch (e) { o.day.hlog = []; } }
+    o.ent = !!c.ent; o.day.lockAt = d.lockAt || null; o.day.hlocked = hLocked(d, now); if (c.ent && isOrg(c, u.mk)) { if (!D.stats()) o.day.hlog = d.audit.filter((x) => x.what === 'handicap').slice(-100).reverse().map((x) => ({ name: mName(c, x.pid), by: x.by, at: x.at, old: x.from, new: x.to, oddable: null, reason: ((d.tset || {})[x.pid] || {}).reason || '' })); /* Golf alone: the log is golf's own */ else try { o.day.hlog = (await D.eventLog(c.orgE, EID(c.id))).log.filter((x) => x && (x.field == null || x.field === 'hcp') && x.player && (x.new == null || (Number.isFinite(Number(x.new)) && Math.abs(Number(x.new)) <= 60))).slice(-100).reverse().map((x) => ({ name: x.player, by: x.byName || (!x.by || /^tournament director$/i.test(x.by) ? (c.members.find((m) => m.mk === c.org) || {}).name || 'Tournament director' : x.by), at: x.at, old: x.old, new: x.new, oddable: x.oddable == null ? null : x.oddable, reason: x.reason })); } catch (e) { o.day.hlog = []; } }
     o.payout = payoutView(c); o.day.unconfirmed = unconfirmed(c, me0); o.day.money = moneyOn(c); o.day.forced = d.forced || null; o.day.solo = !!d.solo; o.day.unassigned = c.members.filter((m) => !d.teams.some((t) => t.players.includes(m.pid))).map((m) => ({ pid: m.pid, name: m.name }));
     o.day.matches = d.matches; o.day.win = d.win;
     o.day.scores = d.scores; o.board = dayBoard(c); o.day.audit = d.audit.slice(-60).reverse();
@@ -573,6 +703,10 @@ async function full(c, u) {
 }
 
 // ---------- saved courses ----------
+const MYC = 'lock:golf:myc';
+async function myCourses(mk) { const r = await D.S.dbGet(MYC), x = ((r && r.data && r.data.by) || {})[mk]; if (!x) return { home: null, recent: [] }; const cr = await D.S.dbGet(CRS), all = (cr && cr.data && cr.data.courses) || {};
+  const row = (id) => { const c = all[id]; return c ? { id, name: c.name, tees: c.tees, holes: c.holes, par: c.par, hcp: c.hcp, yards: c.yards || null, rating: c.rating == null ? null : c.rating, slope: c.slope == null ? null : c.slope, city: c.city || '', src: c.src || 'user' } : null; };
+  return { home: x.home ? row(x.home) : null, recent: (x.recent || []).filter((id) => id !== x.home).map(row).filter(Boolean) }; }
 // Dedupe by name + tees. A user's own entry can be edited until a round uses it. Courses picked from OpenGolfAPI are stored when SELECTED (no bulk copy).
 async function saveCourse(c, by, quiet) {
   // key (review fix): the API course id + tee when it came from OpenGolfAPI, else name + city + state + par + tees (same-name courses in other towns stay apart)
@@ -608,6 +742,7 @@ function hinfo(d, pid) {
 // Set a member's handicap for this game from the stats answer (H1 / E-H): play off `use` (the tournament's value when the director set one, else the
 // confirmed index in a money game / the full index in a casual one). With no usable number the organizer's (or an OK'd) typed number stays.
 function applyIdx(d, pid, h) { d.odx = d.odx || {}; d.hsrc = d.hsrc || {}; d.tset = d.tset || {}; d.odx[pid] = Object.assign({ index: h.index, rounds: h.rounds, confirmedIndex: h.confirmedIndex, confirmedRounds: h.confirmedRounds, text: h.text || '' }, h.why ? { why: h.why } : {}, h.mk ? { mk: h.mk } : {});
+  if (h.setBy !== 'tournament' && d.tset[pid] && d.tset[pid].local && d.hsrc[pid] === 'tournament') return; // Golf alone: the director's number is kept on the game and stays
   if (h.setBy === 'tournament' && h.use != null) { d.hcp[pid] = h.use; d.hsrc[pid] = 'tournament'; d.tset[pid] = { v: h.use, at: h.at || null, reason: h.reason || '' }; if (d.hreq) delete d.hreq[pid]; return; } // shown as "Set by tournament"; the log itself is the stats module's
   delete d.tset[pid];
   if (h.use != null) { d.hcp[pid] = h.use; d.hsrc[pid] = 'oddable'; if (d.hreq) delete d.hreq[pid]; if (d.hby) delete d.hby[pid]; } else if (d.hsrc[pid] === 'typed' && d.hcp[pid] != null) { /* keeps the number that was set */ } else { d.hcp[pid] = 0; d.hsrc[pid] = 'none'; } }
@@ -619,7 +754,7 @@ function askTyped(d, pid, v, now) { d.hreq = d.hreq || {}; d.hreq[pid] = { v: Ma
 // A player's own typed number: asks in a money game, counts at once otherwise. Ignored when the player already has a usable index or a tournament number.
 function selfTyped(c, m, v, now) { const d = c.day; if (v == null || ['oddable', 'tournament'].includes((d.hsrc || {})[m.pid])) return false; if (hStrict(c)) { askTyped(d, m.pid, v, now); return true; } setTyped(d, m.pid, v, m, now); return false; }
 // When a set-up change puts money on a game, numbers players typed for themselves go back to "asked" until someone OKs them.
-function demoteSelfTyped(c, now) { const d = c.day; if (!hStrict(c)) return; Object.keys(d.hsrc || {}).forEach((p) => { const by = (d.hby || {})[p]; if (d.hsrc[p] === 'typed' && by && !by.ok && (by.pid === p || (sidesOf(c, by.pid).length > 0 && acctOthers(c, by.pid).length > 0))) { /* typed by the player, or set alone by someone who plays */ askTyped(d, p, d.hcp[p], now); d.hcp[p] = 0; d.hsrc[p] = 'none'; delete d.hby[p]; } }); }
+function demoteSelfTyped(c, now) { const d = c.day; if (!hStrict(c)) return; Object.keys(d.hsrc || {}).forEach((p) => { const by = (d.hby || {})[p]; if (d.hsrc[p] === 'typed' && by && !by.ok && (by.pid === p || (interested(c, by.pid) && acctOthers(c, by.pid).length > 0))) { /* typed by the player, or set alone by someone who plays */ askTyped(d, p, d.hcp[p], now); d.hcp[p] = 0; d.hsrc[p] = 'none'; delete d.hby[p]; } }); }
 
 // Who has partnered with whom (P1 Rotate / Hot pairs): finished golf days these members played together, from the lifetime index of their games.
 // -> [{players: [pids of THIS game], date, place, of, result}] one per past team holding 2+ of this game's members.
@@ -665,6 +800,7 @@ async function create(u, b, ip) {
       for (let i = 0; i < nT; i++) c.day.teams.push({ tid: 'T' + (i + 1), name: 'Team ' + (i + 1), slots: c.day.teamSize, players: [], scorer: null }); }
     if (!course.id) { const saved = await saveCourse(course, course.src === 'opengolfapi' ? 'ogapi' : u.mk, true); if (saved && saved.id) course.id = saved.id; }
     if (course.id) await mutateRow(CRS, () => ({ courses: {} }), (d) => { const x = d.courses && d.courses[course.id]; if (!x) return { nochange: true }; x.used = (x.used || 0) + 1; return {}; });
+    if (course.id) { try { await mutateRow(MYC, () => ({ by: {} }), (d) => { d.by = d.by || {}; const x = d.by[u.mk] = d.by[u.mk] || { home: null, recent: [] }; x.recent = [course.id].concat((x.recent || []).filter((y) => y !== course.id)).slice(0, 8); return {}; }); } catch (e) { /* the game is still created */ } }
   }
   if (c.day && c.day.course.id) c.courseId = c.day.course.id;
   c.code = await newCodeFor(id, u.mk); c.u = now;
@@ -697,14 +833,17 @@ const same = (x, y) => JSON.stringify([x.g, x.p, x.drive, x.shots, x.putts]) ===
 const audit = (d, o) => { d.audit.push(o); if (d.audit.length > 3000) d.audit.splice(0, d.audit.length - 3000); };
 
 // ---------- one and done ----------
+function oadRes(b) { const res = {}; const posN = {}; b.golfers.forEach((g) => { const p = parseInt(String(g.pos).replace(/^T/, ''), 10); if (p) posN[p] = (posN[p] || 0) + 1; });
+  b.golfers.forEach((g) => { if (b.earnings) res[g.id] = g.st === 'active' ? g.earn || 0 : 0; else { const p = parseInt(String(g.pos).replace(/^T/, ''), 10); res[g.id] = g.st === 'active' && p ? S.finishPoints(p, posN[p]) : 0; } });
+  return { res, by: b.earnings ? 'money' : 'points' }; }
 async function oadSettle(c) { // stores results of finished events once (prize money if the feed has it for every finisher, else finish points)
   const todo = Object.keys(c.pro.oad.events).filter((ev) => !c.pro.oad.events[ev].res); if (!todo.length) return c;
   const done = {}; for (const ev of todo.slice(0, 3)) { let b = null; try { b = await D.feed.board(c.pro.tour, ev); } catch (e) {} if (!b || !b.event.done) continue;
-    const res = {}; const posN = {}; b.golfers.forEach((g) => { const p = parseInt(String(g.pos).replace(/^T/, ''), 10); if (p) posN[p] = (posN[p] || 0) + 1; });
-    b.golfers.forEach((g) => { if (b.earnings) res[g.id] = g.st === 'active' ? g.earn || 0 : 0; else { const p = parseInt(String(g.pos).replace(/^T/, ''), 10); res[g.id] = g.st === 'active' && p ? S.finishPoints(p, posN[p]) : 0; } });
-    done[ev] = { res, by: b.earnings ? 'money' : 'points' }; }
-  if (!Object.keys(done).length) return c;
-  return mutC(c.id, (d) => { Object.keys(done).forEach((ev) => { if (d.pro.oad.events[ev] && !d.pro.oad.events[ev].res) Object.assign(d.pro.oad.events[ev], done[ev]); }); return d; });
+    done[ev] = oadRes(b); }
+  // H6: a "final" reading is kept only after TWO MATCHING reads at least 10 minutes apart (the first one of a just-finished event is often not the last word)
+  const now = D.now(), sigs = {}; Object.keys(done).forEach((ev) => (sigs[ev] = readSig([done[ev].by, done[ev].res]))); if (!Object.keys(done).some((ev) => { const r = c.pro.oad.events[ev].read; return !r || r.sig !== sigs[ev] || now - r.at >= AGAIN; })) return c;
+  return mutC(c.id, (d) => { let ch = false; Object.keys(done).forEach((ev) => { const E = d.pro.oad.events[ev]; if (!E || E.res) return; const r = E.read;
+      if (r && r.sig === sigs[ev] && now - r.at >= AGAIN) { Object.assign(E, done[ev], { resAt: now }); delete E.read; ch = true; } else if (!r || r.sig !== sigs[ev]) { E.read = { sig: sigs[ev], at: now }; ch = true; } }); return ch ? d : { nochange: true, v: d }; });
 }
 
 // Join a golf game (by its code, or from its group): the people cap, the G16 return of a left entry, the team slot and the handicap (asked, never set, where handicaps are strict).
@@ -731,6 +870,21 @@ async function signRoute(c, u, n, ok) {
   if (g.kind === 'day' && g.day.status === 'setup' && casualOf(g) !== was) g = await reIdx(g);
   return { g, out };
 }
+// OK (or turn down) a number a player asked for (route `team` op `hcpok`, and "Sign all handicaps").
+async function hcpOkRoute(c, u, pid, on, now) { let okOut = null;
+  const g = await mutC(c.id, (d) => { const D2 = d.day, me = memberOf(d, u.mk), rq = (D2.hreq || {})[pid], pm = d.members.find((m) => m.pid === pid); if (!me || !pm || !rq) throw bad(404, 'No handicap is waiting for an OK'); if (hLocked(D2, now)) throw bad(409, 'Handicaps are closed: the ' + (d.ent ? 'tournament' : 'round') + ' has started');
+          if (pid === me.pid) { if (!on) { delete D2.hreq[pid]; d.u = now; return d; } throw bad(403, 'Someone else has to OK your handicap.'); } if (d.ent) throw bad(409, 'In a tournament the director sets the handicap, with a reason.');
+          const askerBoss = isBoss(d, pm), mine = signers(d, pid, {}).includes(me.pid);
+          if (!on) { if (!isBoss(d, me) && !(askerBoss && mine)) throw bad(403, 'Only the organizer turns a handicap down'); delete D2.hreq[pid]; audit(D2, { at: now, by: me.name, what: 'handicap turned down', pid, from: rq.v }); d.u = now; return d; }
+          if (askerBoss) { // an organizer's own number: the ask is theirs, and a NEUTRAL signs it
+            if (!mine) throw bad(403, 'A player who is not on the organizer\'s team (and is not an organizer) has to OK the organizer\'s handicap.'); setTyped(D2, pid, rq.v, pm, rq.at, me.name); audit(D2, { at: now, by: pm.name, sig: me.name, what: 'handicap OK', pid, to: rq.v });
+            const text = 'set ' + pm.name + '\'s handicap to ' + rq.v.toFixed(1); plog(d, { at: now, st: 'signed', kind: 'hcp', text, by: pm.name, sig: me.name }); notify(d, 'act', null, pm.name + ', signed by ' + me.name + ': ' + text + '.'); d.u = now; return d; }
+          if (!isBoss(d, me)) throw bad(403, 'Only the organizer OKs handicaps'); const p = { pid, v: rq.v, reason: '', ask: true }; ACT.hcp.chk(d, me, p, now);
+          // the organizer SETS the asked number (the neutral rule). Only when nobody else could sign (a two-team game) does the player's own ask count as the signature.
+          if (gated(d, me, 'hcp', p) && signers(d, me.pid, ACT.hcp.sig(d, me, p)).includes(pid)) { setTyped(D2, pid, rq.v, pm, rq.at, me.name); audit(D2, { at: now, by: me.name, sig: pm.name, what: 'handicap OK', pid, to: rq.v }); const text = 'set ' + pm.name + '\'s handicap to ' + rq.v.toFixed(1); plog(d, { at: now, st: 'signed', kind: 'hcp', text, by: me.name, sig: pm.name }); notify(d, 'act', null, me.name + ', asked for by ' + pm.name + ': ' + text + '.'); }
+          else { okOut = propose(d, me, 'hcp', p, now); if (okOut.pending) { const q2 = d.pend.find((y) => y.n === okOut.pending); if (q2) q2.ask = true; } }
+          d.u = now; return d; });
+          return { g, okOut }; }
 // Money, a money match or flights were switched on or off: the number to play off changes (confirmed index <-> full index), so ask stats again (M3).
 async function reIdx(g) { const fresh = {}, now = D.now(); for (const m of g.members) if (keyOfMember(m)) fresh[m.pid] = await hcpOf(keyOfMember(m), hOpts(g));
   return mutC(g.id, (d) => { if (d.day.status !== 'setup') return { nochange: true, v: d }; Object.keys(fresh).forEach((p) => { if (d.members.some((m) => m.pid === p)) applyIdx(d.day, p, fresh[p]); }); demoteSelfTyped(d, now); d.u = now; return d; }); }
@@ -766,7 +920,14 @@ async function handle(req, res) {
       let api = { ok: false, results: [] }; if (q.length >= 2 || b.state || b.near) api = typeof D.courses.searchSafe === 'function' ? await D.courses.searchSafe(clean(b.q, 60), clean(b.state, 4), clean(b.near, 40), b.offset)
         : await (async () => { try { return { ok: true, results: await D.courses.search(q, clean(b.state, 4), clean(b.near, 40)), attribution: CO.ATTR }; } catch (e) { return { ok: false, down: true, results: [], error: "Couldn't reach the course list. Try again." }; } })();
       let owned = []; try { owned = await coursesOwnedBy(u.e); } catch (e) {} // a golf course / club account sees its own course(s) first
-      send(res, 200, { courses: saved, owned, api }); return true; }
+      send(res, 200, { courses: saved, owned, api, my: await myCourses(u.mk) }); return true; }
+    if (op === 'mycourse') { // MY COURSES (round 4): the courses this account used last and its home course, kept on the server by course id, so a course is not searched for twice
+      rate('write', u.mk, ip); const a = String(b.op || 'use'); let id = b.courseId ? String(b.courseId) : null;
+      if (a === 'use' && !id) { const cc = cleanCourse(b.course), sv = await saveCourse(cc, cc.src === 'opengolfapi' ? 'ogapi' : u.mk, true); id = sv && sv.id; }
+      if (!id) throw bad(400, 'Which course?'); const r = await D.S.dbGet(CRS); if (!(r && r.data && r.data.courses && r.data.courses[id])) throw bad(404, 'Course not found');
+      await mutateRow(MYC, () => ({ by: {} }), (d) => { d.by = d.by || {}; const x = d.by[u.mk] = d.by[u.mk] || { home: null, recent: [] };
+        if (a === 'use') x.recent = [id].concat((x.recent || []).filter((y) => y !== id)).slice(0, 8); else if (a === 'home') x.home = b.on === false ? null : id; else if (a === 'forget') { x.recent = (x.recent || []).filter((y) => y !== id); if (x.home === id) x.home = null; } else throw bad(400, 'Unknown change'); return {}; });
+      send(res, 200, { id, my: await myCourses(u.mk) }); return true; }
     if (op === 'coursedetail') { rate('read', u.mk, ip); let c; try { c = await D.courses.detail(String(b.extId || '')); } catch (e) { throw bad(503, "Couldn't reach the course list. Try again."); } send(res, 200, { course: c }); return true; }
     if (op === 'course') { rate('write', u.mk, ip); const c = cleanCourse(b.course); const out = await saveCourse(c, u.mk, false); send(res, 200, out || {}); return true; }
     if (op === 'mine') { rate('read', u.mk, ip); const r = await D.S.dbGet(IDX), ids = ((r && r.data && r.data.mine) || {})[u.mk] || [], out = []; for (const id of ids.slice(-30).reverse()) { try { const c = await getC(id), m = memberOf(c, u.mk); if (m) out.push(Object.assign(pub(c), { role: isOrg(c, u.mk) ? 'org' : 'member', unseen: unseenOf(c, m) })); } catch (e) {} } send(res, 200, { games: out }); return true; }
@@ -788,9 +949,14 @@ async function handle(req, res) {
     // ----- everything below needs an id and membership -----
     let c = await getC(b.id); const mem = memberOf(c, u.mk), org = isOrg(c, u.mk);
     if (!mem) throw bad(404, 'Golf game not found');
-    if (op === 'get') { rate('read', u.mk, ip); if (c.kind === 'pro' && c.pro.game === 'oad') c = await oadSettle(c); send(res, 200, { game: await full(c, u), now }); return true; }
+    if (op === 'get') { rate('read', u.mk, ip); if (c.kind === 'pro' && c.pro.game === 'oad') c = await oadSettle(c); if (c.kind === 'pro' && c.pro.game === 'six') c = await sixSettle(c); send(res, 200, { game: await full(c, u), now }); return true; }
+    if (op === 'signall') { // "Sign all handicaps": one signer reviews the list and signs every waiting handicap request they can sign, in one action. Each one is still signed, logged and announced by itself.
+      rate('write', u.mk, ip); if (c.kind !== 'day') throw bad(400, 'Not a golf day'); let g = c, n = 0, asked = 0; const skipped = [];
+      if (isBoss(c, mem)) for (const pid of Object.keys(c.day.hreq || {})) { if (pid === mem.pid || (Array.isArray(b.pids) && !b.pids.includes(pid))) continue; try { const r = await hcpOkRoute(g, u, pid, true, now); g = r.g; if (r.okOut && r.okOut.pending) asked++; else n++; } catch (e) { if (!e.status || e.status >= 500) throw e; skipped.push(e.message); } }
+      for (const q of (g.pend || []).filter((y) => y.kind === 'hcp' && y.by !== mem.pid && (!Array.isArray(b.ns) || b.ns.includes(y.n)))) { try { const r = await signRoute(g, u, q.n, true); g = r.g; n++; } catch (e) { if (!e.status || e.status >= 500) throw e; if (e.status !== 403) skipped.push(e.message); } }
+      if (!n && !asked && !skipped.length) throw bad(409, 'No handicap is waiting for your signature.'); send(res, 200, { game: await full(g, u), signed: n, asked, skipped }); return true; }
     if (op === 'seen') { const g = await mutC(c.id, (d) => { const m = memberOf(d, u.mk), last = ((d.notes || []).slice(-1)[0] || {}).n || 0; if (!m) throw bad(404, 'Golf game not found'); if ((m.seen || 0) >= last) return { nochange: true, v: d }; m.seen = last; return d; }); send(res, 200, { game: await full(g, u) }); return true; }
-    if (op === 'leave') { await mutC(c.id, (d) => { if (isOrg(d, u.mk)) throw bad(409, 'The organizer cannot leave'); if (d.kind === 'day' && d.day.status !== 'setup') throw bad(409, 'The round has started'); const m = memberOf(d, u.mk); if (!m) throw bad(404, 'Golf game not found'); const p = m.pid;
+    if (op === 'leave') { await mutC(c.id, (d) => { if (isOrg(d, u.mk)) throw bad(409, 'The organizer cannot leave'); const m = memberOf(d, u.mk); if (!m) throw bad(404, 'Golf game not found'); const p = m.pid; if (d.kind === 'day' && d.day.status !== 'setup' && (teamsOfP(d, p).length || interested(d, p))) throw bad(409, 'The round has started'); /* M2: someone who is on no team and keeps no card can always leave */
         if (d.kind === 'pro') { const O = d.pro.oad, has = !!(d.pro.entries[p] && d.pro.entries[p].picks && d.pro.entries[p].picks.length) || Object.values(O.events).some((E) => E.picks[p]) || (O.used[p] || []).length > 0;
           // G16 (review fix): once a pick exists in group play the entry is tied to the account. Leaving takes the game off the player's list; the picks
           // stay in the pool, locked, the golfers used stay used, and rejoining restores the same entry.
@@ -823,7 +989,7 @@ async function handle(req, res) {
         picks.forEach((id, i) => { if (!tiers[i].includes(id)) throw bad(400, 'Tier ' + (i + 1) + ': that golfer is not in this tier'); });
         const guess = c.pro.tb === 'score' ? num(b.guess, -40, 40) : null; if (c.pro.tb === 'score' && (guess == null || !Number.isInteger(guess))) throw bad(400, 'Tiebreaker: guess the winning score to par (e.g. -15)');
         const g = await mutC(c.id, (d) => { const had = d.pro.entries[mem.pid]; if (had && had.picks && had.picks.length === 6 && g16(d)) throw bad(409, G16MSG); if (d.pro.tiers) picks.forEach((id, i) => { if (!d.pro.tiers[i].includes(id)) throw bad(409, 'The tiers changed while you were picking. Check your picks and save again.', { tiers: true }); });
-          if (!d.pro.tiers) d.pro.tiers = tiers; d.pro.lockAt = minT(d.pro.lockAt, la); d.pro.entries[mem.pid] = { picks, guess, swap: null, at: now, locked: g16(d) }; d.u = now; return d; }); await recPlays(g, 'golf-six', [mem.pid]); send(res, 200, { game: await full(g, u) }); return true;
+          if (!d.pro.tiers) d.pro.tiers = tiers; d.pro.lockAt = minT(d.pro.lockAt, la); d.pro.entries[mem.pid] = { picks, guess, swap: null, at: now, locked: g16(d) }; if ((d.pend || []).length) sweep(d, now); /* L3: a waiting tier change no longer fits once someone has picked */ d.u = now; return d; }); await recPlays(g, 'golf-six', [mem.pid]); send(res, 200, { game: await full(g, u) }); return true;
       }
       if (op === 'swap' && c.pro.game === 'six') { // ONE replacement for a golfer who withdrew before teeing off
         const bd = await boardOf(c); if (!bd) throw bad(503, 'Could not read the leaderboard. Try again in a minute.'); const fm = fieldMap(bd), e = c.pro.entries[mem.pid];
@@ -842,9 +1008,12 @@ async function handle(req, res) {
       if (op === 'oadmoney' && c.pro.game === 'oad') { // Playbook: the organizer can enter the real prize money for a finished tournament instead of Oddable points
         if (!org) throw bad(403, 'Only the organizer enters prize money'); const ev = clean(b.event, 20), E0 = c.pro.oad.events[ev]; if (!E0) throw bad(404, 'No picks for that tournament'); if (!(E0.lockAt && now >= E0.lockAt)) throw bad(409, 'That tournament has not started');
         const ids = [...new Set(Object.values(E0.picks).map((p) => p.g))], money = {}; for (const id of ids) { const v = num((b.money || {})[id], 0, 1e8); if (v == null) throw bad(400, 'Prize money for every golfer picked (0 if they missed the cut)'); money[id] = Math.round(v * 100) / 100; }
-        const g = await mutC(c.id, (d) => { const E = d.pro.oad.events[ev]; E.prev = E.res && E.by !== 'money-manual' ? { res: E.res, by: E.by } : E.prev || null; E.res = money; E.by = 'money-manual'; E.manual = { by: mem.name, at: now }; d.pro.oad.log = (d.pro.oad.log || []).concat({ at: now, by: mem.name, what: 'Prize money entered for ' + E.name, money }).slice(-100); d.u = now; return d; });
-        send(res, 200, { game: await full(g, u) }); return true; }
-      if (op === 'endseason' && c.pro.game === 'oad') { if (!org) throw bad(403, 'Only the organizer ends the season'); const g = await mutC(c.id, (d) => { d.pro.oad.ended = d.pro.oad.ended || now; d.u = now; return d; }); send(res, 200, { game: await full(g, u) }); return true; }
+        const { g, out } = await power(c, u, 'oadmoney', { ev, money }); send(res, out.pending ? 202 : 200, Object.assign({ game: await full(g, u) }, powerAns(out))); return true; } // H2: THE NEUTRAL RULE
+      if (op === 'endseason' && c.pro.game === 'oad') { if (!org) throw bad(403, 'Only the organizer ends the season'); if (c.pro.oad.ended) { send(res, 200, { game: await full(c, u) }); return true; } const { g, out } = await power(c, u, 'endseason', {}); send(res, out.pending ? 202 : 200, Object.assign({ game: await full(g, u) }, powerAns(out))); return true; }
+      if (op === 'oadrefresh' && c.pro.game === 'oad') { // H6: read a stored result again (48 hours), through THE NEUTRAL RULE
+        if (!org) throw bad(403, 'Only the organizer refreshes a result'); const ev = clean(b.event, 20), E0 = c.pro.oad.events[ev]; if (!E0 || !E0.res) throw bad(409, 'That tournament has no stored result yet.'); let bd = null; try { bd = await D.feed.board(c.pro.tour, ev); } catch (e) {}
+        if (!bd || !bd.event.done || !bd.golfers.length) throw bad(503, 'Could not read a final leaderboard for that tournament. Try again in a minute.'); const r = oadRes(bd);
+        const { g, out } = await power(c, u, 'oadrefresh', { ev, res: r.res, by: r.by }); send(res, out.pending ? 202 : 200, Object.assign({ game: await full(g, u) }, powerAns(out))); return true; }
       if (op === 'pick' && c.pro.game === 'oad') {
         const ev = clean(b.event, 20); let bd = null; try { bd = await D.feed.board(c.pro.tour, ev); } catch (e) {} if (!bd) throw bad(503, 'Could not read that tournament. Try again in a minute.');
         const E0 = c.pro.oad.events[ev], la = minT(E0 && E0.lockAt, feedLock(bd)); if (!la || isLocked(la, bd, now)) throw bad(409, 'Picks for this tournament closed at its first tee time');
@@ -863,8 +1032,7 @@ async function handle(req, res) {
       if (!org) throw bad(403, 'Only the organizer changes the setup'); if (d0.status !== 'setup') throw bad(409, 'The round has started; setup is closed');
       const x = cleanDay(Object.assign({}, pub(c).day, b.day || {}), d0), was = casualOf(c), course = b.course ? cleanCourse(b.course) : null;
       // THE NEUTRAL RULE: a change to the format, the strokes, the flights, the side games or which board the money follows is a rule of the game
-      const RULES = [['fmt', 'the format'], ['net', 'net or gross'], ['allow', 'the team allowances'], ['pct', 'the handicap percent'], ['count', 'how many balls count'], ['payBy', 'which board the prize money follows'], ['flights', 'the flights'], ['extras', 'the side games'], ['drives', 'drives per player'], ['drivePen', 'the missing-drive penalty']];
-      const val = (o, k) => JSON.stringify(k === 'flights' ? ((o.flights || {}).n || 0) : o[k] == null ? null : o[k]), touch = RULES.filter(([k]) => val(x, k) !== val(d0, k)).map(([, n]) => n).join(', ') || (course ? 'the course' : '');
+      const touch = ruleDiff(d0, x, course); // M4: every changed rule with its old and new value (also the match settings and the course)
       const c2 = clone(c); Object.assign(c2.day, x); let { g, out } = await power(c, u, 'setup', { x, course, touch, stk: stakes(c2) });
       if (out.done && c.ent && g.day.lockAt && g.day.lockAt !== d0.lockAt) { try { await D.eventSetup(c.orgE, EID(c.id), { title: c.title, sport: 'golf', lockAt: g.day.lockAt }); } catch (e) {} }
       if (out.done && casualOf(g) !== was) g = await reIdx(g); // money or flights were switched on or off: the number to play off changes (confirmed index <-> full index), so ask stats again
@@ -884,12 +1052,13 @@ async function handle(req, res) {
     }
     if (op === 'team') { // organizer: add / rename / remove a team, set slots, assign a player, set the scorer, set a handicap
       rate('write', u.mk, ip); const a = String(b.op || ''); let guest = null, okOut = null; const maxP = a === 'guest' ? await limits.maxPeople(c.orgE, c.id) : 0;
+      if (a === 'kick') { const p = b.tid ? { tid: String(b.tid), reason: clean(b.reason, 120) } : { pid: String(b.pid), reason: clean(b.reason, 120) }; const { g, out } = await power(c, u, 'remove', p); send(res, out.pending ? 202 : 200, Object.assign({ game: await full(g, u) }, powerAns(out))); return true; } // H7 / M2
       if (a === 'withdraw') { const { g, out } = await power(c, u, 'withdraw', { tid: String(b.tid), on: b.on === false ? false : true, reason: clean(b.reason, 120) }); send(res, out.pending ? 202 : 200, Object.assign({ game: await full(g, u) }, powerAns(out))); return true; }
       if (a === 'hcp') { // H1 + E-H + H5: the Oddable Handicap Index is the handicap. Where handicaps are STRICT (Enterprise, flights, net money) nobody sets their own
         // number: it is only asked for. The organizer / director sets numbers through THE NEUTRAL RULE (a director also gives a reason; stats logs it).
         const pid = String(b.pid), pm = c.members.find((m) => m.pid === pid); if (!pm) throw bad(404, 'Not a member'); const h = num(b.hcp, -10, 54); if (h == null) throw bad(400, 'Handicap -10 to 54');
         if (hLocked(d0, now)) throw bad(409, 'Handicaps are closed: the ' + (c.ent ? 'tournament' : 'round') + ' has started'); const v = Math.round(h * 10) / 10, self = pid === mem.pid, strict = hStrict(c), src = (d0.hsrc || {})[pid];
-        if (c.ent ? org : isBoss(c, mem) && !(self && strict)) { if (!c.ent && self && !strict) { /* falls through: a casual game, own number */ } else { const { g, out } = await power(c, u, 'hcp', { pid, v, reason: clean(b.reason, 80) }); send(res, out.pending ? 202 : 200, Object.assign({ game: await full(g, u) }, powerAns(out))); return true; } }
+        if (c.ent ? org : isBoss(c, mem) && !(self && strict)) { if (!c.ent && self && !strict) { /* falls through: a casual game, own number */ } else { const { g, out } = await power(c, u, 'hcp', Object.assign({ pid, v, reason: clean(b.reason, 80) }, !self && (d0.hreq || {})[pid] && d0.hreq[pid].v === v ? { ask: true } : {})); /* the very number the player asked for = the player already agreed */ send(res, out.pending ? 202 : 200, Object.assign({ game: await full(g, u) }, powerAns(out))); return true; } }
         if (!self) throw bad(403, c.ent ? 'The tournament director sets handicaps' : 'Only the organizer sets other players\' handicaps');
         if (src === 'oddable' || src === 'tournament') throw bad(409, src === 'oddable' ? 'This player has an ' + HCP_LABEL + ' from their rounds in the app; it is the handicap. ' + HCP_NOTE : 'The tournament director set this handicap.');
         const g = await mutC(c.id, (d) => { const D2 = d.day, me = memberOf(d, u.mk); if (!me) throw bad(404, 'Golf game not found'); if (hLocked(D2, now)) throw bad(409, 'Handicaps are closed: the ' + (d.ent ? 'tournament' : 'round') + ' has started');
@@ -897,25 +1066,20 @@ async function handle(req, res) {
         const asked = !!((g.day.hreq || {})[pid]); send(res, asked ? 202 : 200, Object.assign({ game: await full(g, u) }, asked ? { pending: true, note: 'Asked. Your handicap counts once ' + (c.ent ? 'the tournament director sets it' : org ? 'a player who is not on your team OKs it' : 'the organizer sets it') + '. Nobody sets their own number in this game.' } : {})); return true; }
       if (a === 'hcpok') { // OK (or turn down) a number a player asked for
         const pid = String(b.pid), q = (c.pend || []).find((y) => y.kind === 'hcp' && y.p.pid === pid); if (q) { const r = await signRoute(c, u, q.n, b.on !== false); send(res, 200, Object.assign({ game: await full(r.g, u) }, r.out)); return true; }
-        const g = await mutC(c.id, (d) => { const D2 = d.day, me = memberOf(d, u.mk), rq = (D2.hreq || {})[pid], pm = d.members.find((m) => m.pid === pid); if (!me || !pm || !rq) throw bad(404, 'No handicap is waiting for an OK'); if (hLocked(D2, now)) throw bad(409, 'Handicaps are closed: the ' + (d.ent ? 'tournament' : 'round') + ' has started');
-          if (pid === me.pid) { if (b.on === false) { delete D2.hreq[pid]; d.u = now; return d; } throw bad(403, 'Someone else has to OK your handicap.'); } if (d.ent) throw bad(409, 'In a tournament the director sets the handicap, with a reason.');
-          const askerBoss = isBoss(d, pm), mine = signers(d, pid, {}).includes(me.pid);
-          if (b.on === false) { if (!isBoss(d, me) && !(askerBoss && mine)) throw bad(403, 'Only the organizer turns a handicap down'); delete D2.hreq[pid]; audit(D2, { at: now, by: me.name, what: 'handicap turned down', pid, from: rq.v }); d.u = now; return d; }
-          if (askerBoss) { // an organizer's own number: the ask is theirs, and a NEUTRAL signs it
-            if (!mine) throw bad(403, 'A player who is not on the organizer\'s team (and is not an organizer) has to OK the organizer\'s handicap.'); setTyped(D2, pid, rq.v, pm, rq.at, me.name); audit(D2, { at: now, by: pm.name, sig: me.name, what: 'handicap OK', pid, to: rq.v });
-            const text = 'set ' + pm.name + '\'s handicap to ' + rq.v.toFixed(1); plog(d, { at: now, st: 'signed', kind: 'hcp', text, by: pm.name, sig: me.name }); notify(d, 'act', null, pm.name + ', signed by ' + me.name + ': ' + text + '.'); d.u = now; return d; }
-          if (!isBoss(d, me)) throw bad(403, 'Only the organizer OKs handicaps'); const p = { pid, v: rq.v, reason: '' }; ACT.hcp.chk(d, me, p, now);
-          // the organizer SETS the asked number (the neutral rule). Only when nobody else could sign (a two-team game) does the player's own ask count as the signature.
-          if (gated(d, me, 'hcp', p) && signers(d, me.pid, ACT.hcp.sig(d, me, p)).includes(pid)) { setTyped(D2, pid, rq.v, pm, rq.at, me.name); audit(D2, { at: now, by: me.name, sig: pm.name, what: 'handicap OK', pid, to: rq.v }); const text = 'set ' + pm.name + '\'s handicap to ' + rq.v.toFixed(1); plog(d, { at: now, st: 'signed', kind: 'hcp', text, by: me.name, sig: pm.name }); notify(d, 'act', null, me.name + ', asked for by ' + pm.name + ': ' + text + '.'); }
-          else { okOut = propose(d, me, 'hcp', p, now); if (okOut.pending) { const q2 = d.pend.find((y) => y.n === okOut.pending); if (q2) q2.ask = true; } }
-          d.u = now; return d; });
-        send(res, okOut && okOut.pending ? 202 : 200, Object.assign({ game: await full(g, u) }, powerAns(okOut))); return true; }
+        const { g, okOut } = await hcpOkRoute(c, u, pid, b.on !== false, now); send(res, okOut && okOut.pending ? 202 : 200, Object.assign({ game: await full(g, u) }, powerAns(okOut))); return true; }
             if (a === 'guest') guest = { gid: rnd(10).toLowerCase(), token: crypto.randomBytes(16).toString('hex') }; // lower case: the stats / Calcutta guest key form 'g:<guest id>' // claim token shown once to the organizer; only its hash is stored
       const g = await mutC(c.id, (d) => { const D2 = d.day; const T = (id) => { const t = D2.teams.find((x) => x.tid === String(id)); if (!t) throw bad(404, 'No such team'); return t; };
         if (a === 'co') { // the organizer names (or removes) a co-organizer: someone who can settle disputes and confirm cards on teams they are not part of
           if (!isOrg(d, u.mk)) throw bad(403, 'Only the organizer names a co-organizer'); if (D2.status === 'final') throw bad(409, 'The round is final'); const p = String(b.pid), pm = d.members.find((m) => m.pid === p); if (!pm || pm.guest || pm.mk === d.org) throw bad(400, 'Pick a player with an Oddable account');
-          d.co = (d.co || []).filter((x) => x !== p); if (b.on !== false) d.co.push(p); audit(D2, { at: now, by: mem.name, what: b.on !== false ? 'co-organizer named' : 'co-organizer removed', pid: p, note: pm.name }); d.u = now; return d; }
-        if (a === 'scorer') { const t = T(b.tid); if (!isOrg(d, u.mk)) throw bad(403, 'Only the organizer picks scorers'); if (D2.status === 'final') throw bad(409, 'The round is final'); if (!t.players.includes(String(b.pid))) throw bad(400, 'The scorer must be on the team'); t.scorer = String(b.pid); d.u = now; return d; }
+          const on = b.on !== false, has = (d.co || []).includes(p); if (on === has) return { nochange: true, v: d };
+          // M5: not while a request of theirs, or one they could sign, is waiting (making or unmaking a co-organizer changes who may sign); logged and announced
+          const d2 = Object.assign({}, d, { co: on ? (d.co || []).concat(p) : (d.co || []).filter((x) => x !== p) }); // the game as it would be after the change
+          const busy = (d.pend || []).some((q) => { if (q.by === p) return true; try { const actor = d.members.find((x) => x.pid === q.by); return !!actor && (signers(d, q.by, ACT[q.kind].sig(d, actor, q.p)).includes(p) || signers(d2, q.by, ACT[q.kind].sig(d2, actor, q.p)).includes(p)); } catch (e) { return false; } });
+          if (busy) throw bad(409, pm.name + ' has a request waiting, or could sign one that is waiting. Answer or take back those requests first; then the co-organizer can be changed.', { pending: true });
+          d.co = (d.co || []).filter((x) => x !== p); if (on) d.co.push(p); const me = memberOf(d, u.mk), text = (on ? 'name ' + pm.name + ' co-organizer' : 'remove ' + pm.name + ' as co-organizer');
+          audit(D2, { at: now, by: mem.name, what: on ? 'co-organizer named' : 'co-organizer removed', pid: p, note: pm.name }); plog(d, { at: now, st: 'alone', kind: 'co', text, by: mem.name }); notify(d, 'act', me, mem.name + ': ' + text + '.'); d.u = now; return d; }
+        if (a === 'scorer') { const t = T(b.tid); if (!isOrg(d, u.mk)) throw bad(403, 'Only the organizer picks scorers'); if (D2.status === 'final') throw bad(409, 'The round is final'); if (!t.players.includes(String(b.pid))) throw bad(400, 'The scorer must be on the team'); if (t.scorer === String(b.pid)) return { nochange: true, v: d }; t.scorer = String(b.pid);
+          if (D2.status !== 'setup') { const me = memberOf(d, u.mk), text = 'make ' + mName(d, t.scorer) + ' the scorer of ' + t.name; audit(D2, { at: now, by: mem.name, tid: t.tid, what: 'scorer changed', note: mName(d, t.scorer) }); plog(d, { at: now, st: 'alone', kind: 'scorer', text, by: mem.name }); notify(d, 'act', me, mem.name + ': ' + text + '.'); } d.u = now; return d; }
         if (!isOrg(d, u.mk)) throw bad(403, 'Only the organizer changes teams'); if (D2.status !== 'setup') throw bad(409, 'Teams are set: the round has started');
         if (a === 'guest') { // a player typed in by name, without an Oddable account (claimable later through the stats module's claim flow)
           if (d.members.length >= maxP) throw bad(409, 'Up to ' + maxP + ' golfers. ' + PRICE); const nm = clean(b.name, 24); if (nm.length < 2) throw bad(400, 'Guest name (2+ characters)');
@@ -973,10 +1137,14 @@ async function handle(req, res) {
       let need = null, started = false, out = null;
       const g = await mutC(c.id, (d) => { const D2 = d.day, me = memberOf(d, u.mk); need = null; started = false; out = null; if (!me) throw bad(404, 'Golf game not found'); // every status check is INSIDE the write
         if (op === 'start') { if (D2.status !== 'setup') return { nochange: true, v: d }; if (!D2.teams.some((t) => t.players.length)) throw bad(409, 'Put players on teams first');
+          // H3: a MONEY game needs two different accounts playing on different teams (somebody else has to be able to see the app and sign). A guests-only
+          // or one-account game is played as a casual game with no money shown: `casual: true` takes every amount off and starts it.
+          if (moneyOn(d) && !D2.solo && !twoAccounts(d)) { if (!b.casual) throw bad(409, 'A money game needs at least two players with their own Oddable account, on different teams, so a second person can confirm cards and sign changes. Have another player join with the code, or play it as a casual game with no money shown.', { needTwo: true });
+            stripMoney(d); audit(D2, { at: now, by: me.name, what: 'money taken off', note: 'casual game: fewer than two accounts on different teams' }); }
           Object.keys(fresh).forEach((p) => { if (d.members.some((m) => m.pid === p)) applyIdx(D2, p, fresh[p]); }); demoteSelfTyped(d, now); // M3: money or a match added since a number was typed: it is asked for again
           // H5 / M3 / M4: where handicaps are strict (Enterprise, flights, net money) the round does not start until EVERY player has a number: never 0 strokes by default
           if (hStrict(d) && (netOn(D2) || (D2.flights || {}).n)) { const miss = D2.teams.flatMap((t) => t.players).filter((p) => (D2.hsrc[p] || 'none') === 'none'); if (miss.length) { need = miss; d.u = now; return d; } } // the fresh numbers are kept; the start is refused below
-          D2.teams.forEach((t) => { if (t.players.length && !t.scorer) t.scorer = t.players[0]; }); D2.status = 'live'; D2.lockAt = minT(D2.lockAt, now); D2.flights = flightPlan(d); d.pend = (d.pend || []).filter((q) => !['hcp', 'setup', 'draw', 'match', 'matchdel'].includes(q.kind)); started = true; /* what was still waiting for a signature at the start is dropped: rules, numbers and bets are set BEFORE play */ audit(D2, { at: now, by: me.name, what: 'start' }); }
+          D2.teams.forEach((t) => { if (t.players.length && !t.scorer) t.scorer = t.players[0]; }); D2.status = 'live'; D2.startAt = now; D2.lockAt = minT(D2.lockAt, now); D2.flights = flightPlan(d); d.pend = (d.pend || []).filter((q) => !['hcp', 'setup', 'draw', 'match', 'matchdel'].includes(q.kind)); started = true; /* what was still waiting for a signature at the start is dropped: rules, numbers and bets are set BEFORE play */ audit(D2, { at: now, by: me.name, what: 'start' }); }
         else if (op === 'final') { if (D2.status === 'final') return { nochange: true, v: d }; if (D2.status !== 'live') throw bad(409, 'The round has not started');
           // Playbook: money on the line and holes nobody confirmed -> no Final, unless it is forced with a reason. A forced finish NEVER covers the forcer's own
           // side, and by a playing organizer it is only ASKED FOR: a neutral signs it (THE NEUTRAL RULE). Only exception: nobody else in the game has an account.
@@ -1002,6 +1170,8 @@ async function handle(req, res) {
           if (same(cur, e)) { if (eid) { D2.eids.push(eid); D2.eids = D2.eids.slice(-800); } return { v: d }; } const pw = propose(d, memberOf(d, u.mk), 'correct', { tid: t.tid, hole, e, rev: cur.rev }, now); if (eid) { D2.eids.push(eid); D2.eids = D2.eids.slice(-800); } d.u = now; return { v: d, pw }; }
         if (cur && cur.st === 'disputed') throw bad(409, 'Hole ' + hole + ' is disputed. It has to be settled first.');
         // stale-write guard: only against SOMEONE ELSE'S newer entry. The same scorer's later correction always wins (two offline corrections of one hole, review fix).
+        // H1: someone else's entry is never overwritten blind. The phone always sends the version it showed (`rev`); without it the write is refused.
+        if (cur && b.rev == null && !same(cur, e) && cur.bp !== mem.pid) throw bad(409, 'Hole ' + hole + ' was entered by ' + (cur.by || 'someone else') + '. Open the card, check it and enter again.', { current: cur, needRev: true });
         if (cur && b.rev != null && Number(b.rev) !== cur.rev && !same(cur, e) && cur.bp !== mem.pid) throw bad(409, 'Hole ' + hole + ' was changed by ' + (cur.by || 'someone') + '. Check it and enter again.', { current: cur });
         if (cur && same(cur, e)) { if (eid) { D2.eids.push(eid); D2.eids = D2.eids.slice(-800); } return { v: d }; }
         sc[hole] = Object.assign(e, { by: mem.name, bp: mem.pid, at: now, rev: ((cur && cur.rev) || 0) + 1, st: 'entered' }); // any change = a new version that needs a fresh confirm
@@ -1025,7 +1195,7 @@ async function handle(req, res) {
           if (op === 'confirm') { if (x.st !== 'entered') continue; if (x.bp === me.pid) { self.push(h); continue; }
             // A confirm is the SECOND SIGNATURE on what the typer entered (the one signer rule): the team's own entry by someone on no side of the typer; a
             // hole typed by an outsider (the organizer keeping a card) by that team's own people, or by a neutral who is not on the typer's team.
-            const typer = d.members.some((m) => m.pid === x.bp) ? x.bp : t.scorer, who = signers(d, typer, teamSide(t, typer) ? {} : { aff: [t.tid] });
+            const typer = d.members.some((m) => m.pid === x.bp) ? x.bp : t.scorer, who = signers(d, typer, t.players.includes(typer) ? {} : { need: acctsOn(d, [t.tid]), nt: [t.tid] }); // H1: an outsider's entry on team X's card is confirmed by X's own account (a neutral third only when X has none)
             if (!who.includes(me.pid)) { (mine && teamSide(t, typer) ? own : no).push(h); continue; }
             if (!seen || Number(seen[h]) !== x.rev || (mine0 && Number(mine0[h]) !== x.rev)) { stale.push(h); continue; }
             x.st = 'confirmed'; x.cf = me.name; x.cfPid = me.pid; x.cfAt = now; }
@@ -1036,8 +1206,8 @@ async function handle(req, res) {
             x.pst = x.st; x.st = 'disputed'; x.note = note; x.df = me.name; x.dfPid = me.pid; }
           n++; }
         if (stale.length) throw bad(409, 'Hole' + (stale.length === 1 ? ' ' : 's ') + stale.join(', ') + (seen ? ' changed since you looked at the card.' : ': open the card first.') + ' Check ' + (stale.length === 1 ? 'it' : 'them') + ' and confirm again. Nothing was confirmed.', Object.assign({ stale }, seen ? {} : { openFirst: true }));
-        if (!n) { if (own.length || (mine && op === 'confirm' && !self.length && !no.length)) throw bad(403, "You can't confirm a card for a team you play on or score for. Another team's scorer confirms it."); if (self.length) throw bad(403, 'You typed ' + (self.length === 1 ? 'that hole' : 'those holes') + ' yourself. Someone else confirms ' + (self.length === 1 ? 'it' : 'them') + '.');
-          if (no.length) throw bad(403, op === 'confirm' ? 'You cannot confirm ' + (no.length === 1 ? 'that hole' : 'those holes') + '. It takes someone with an Oddable account who is not on the team of the person who typed ' + (no.length === 1 ? 'it' : 'them') + ' (and not a fellow organizer): that team\'s own scorer, or a player from another team.' : "Another team's scorer (or the organizer) disputes a hole.");
+        if (!n) { if (own.length || (mine && op === 'confirm' && !self.length && !no.length)) throw bad(403, op === 'confirm' ? "You can't confirm a card for a team you play on or score for. Another team's scorer confirms it." : "You can't dispute a hole on your own team's card. Its scorer enters it again, or asks for a confirmed hole to be changed."); if (self.length) throw bad(403, 'You typed ' + (self.length === 1 ? 'that hole' : 'those holes') + ' yourself. Someone else confirms ' + (self.length === 1 ? 'it' : 'them') + '.');
+          if (no.length) throw bad(403, op === 'confirm' ? 'You cannot confirm ' + (no.length === 1 ? 'that hole' : 'those holes') + '. ' + (no.length === 1 ? 'It was' : 'They were') + ' typed by someone who does not play on ' + t.name + ', so ' + t.name + '\'s own player confirms ' + (no.length === 1 ? 'it' : 'them') + ' (someone from another team only when ' + t.name + ' has no Oddable account).' : "Another team's scorer (or the organizer) disputes a hole.");
           throw bad(409, op === 'confirm' ? 'No entered holes in that range' : b.off ? 'No dispute of yours on that hole' : 'That hole has no score yet'); }
         audit(D2, { at: now, by: me.name, tid: t.tid, hole: from, to, what: op === 'confirm' ? 'confirmed' : b.off ? 'dispute taken back' : 'disputed', note: op === 'dispute' && !b.off ? note : undefined }); d.u = now; return d; });
       send(res, 200, { game: await full(g, u) }); return true;
@@ -1149,7 +1319,7 @@ const shareC = (cents, ids) => { const o = {}; if (!ids.length) return o; const 
 // shows no winnings). -> { skins: {pid: cents}, units: {pid: skins}, inSkins: Set(pid), side: {'ctp3': {pid: cents}} }
 function sideMoney(c, bd) { const d = c.day, elig = (p) => { const m = c.members.find((x) => x.pid === p); return !!m && (!(c.pot.entry > 0) || !!m.paid); }, team = S.FORMATS[d.fmt].ball === 'team', out = { skins: {}, units: {}, inSkins: new Set(), side: {} };
   const ppl = (id) => { const t = d.teams.find((x) => x.tid === id); return t ? t.players : [id]; };
-  if (bd.skins) { d.teams.filter((t) => t.players.length && !(d.wd || {})[t.tid]).forEach((t) => t.players.forEach((p) => out.inSkins.add(p))); const amt = d.extras.skins.amt || 0, ids = Object.keys(bd.skins.wonC || {}); let acc = 0, given = 0;
+  if (bd.skins) { d.teams.filter((t) => t.players.length && (!(d.wd || {})[t.tid] || d.extras.skins.wd !== 'void')).forEach((t) => t.players.forEach((p) => out.inSkins.add(p))); const amt = d.extras.skins.amt || 0, ids = Object.keys(bd.skins.wonC || {}); let acc = 0, given = 0;
     ids.forEach((id) => { acc += bd.skins.wonC[id]; const upto = Math.round(acc * amt), cents = upto - given; given = upto; const all = ppl(id), ps = all.filter(elig), sh = shareC(cents, ps); all.forEach((p) => { out.units[p] = Math.round(bd.skins.wonC[id] / all.length * 10) / 1000; out.skins[p] = sh[p] || 0; }); }); }
   ['ctp', 'ld'].forEach((k) => Object.keys(d.win[k] || {}).forEach((hole) => { const w = d.win[k][hole]; if (w.st !== 'confirmed') return; const all = ppl(w.who), sh = shareC(Math.round(((k === 'ctp' ? d.extras.ctpAmt : d.extras.ldAmt) || 0) * 100), all.filter(elig)); out.side[k + hole] = {}; all.forEach((p) => (out.side[k + hole][p] = sh[p] || 0)); }));
   return out; }
@@ -1214,4 +1384,8 @@ async function statsFor(userKey, opt) {
   return out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 }
 
-module.exports = { calcuttaSource, registerCalcutta, linkCalcutta, handicapFor: (k, o) => D.handicapFor(k, o), pairHistory, HCP_LABEL, HCP_NOTE, handle, attach, attachToGroup, potSummary, golfers, teams, teamsOfRecord, dayPay, statsFor, isGolfBet, limits, coursesOwnedBy, dayBoard, matchState, _deps: D, _mk: mkOf, _reset: () => { RL.clear(); QUEUE.clear(); SEEN.clear(); ATT.clear(); ENTC.at = 0; ENTC.keys = {}; } };
+// THE CALCUTTA ENGINE TELLS GOLF WHO HOLDS A LOT (contract, round 4): setLotHolders(gameId, [accountKey, ...]) after every sale, buy-back or transfer in a
+// Calcutta linked to this golf game. A lot is a stake: its holder is INTERESTED under the neutral rule. Until it has been called for a linked game,
+// every organizer and co-organizer of that game is treated as a holder.
+async function setLotHolders(gameId, accountKeys) { const mks = [...new Set((Array.isArray(accountKeys) ? accountKeys : []).map((k) => mkOf(String(k))))].slice(0, 2000); await mutC(gameId, (d) => { if (JSON.stringify(d.lotMks || null) === JSON.stringify(mks)) return { nochange: true, v: d }; d.lotMks = mks; d.u = D.now(); return d; }); return { ok: true, holders: mks.length }; }
+module.exports = { setLotHolders, ruleDiff, _rule: { signers, interested, sidesOf, gated, ACT }, calcuttaSource, registerCalcutta, linkCalcutta, handicapFor: (k, o) => D.handicapFor(k, o), pairHistory, HCP_LABEL, HCP_NOTE, handle, attach, attachToGroup, potSummary, golfers, teams, teamsOfRecord, dayPay, statsFor, isGolfBet, limits, coursesOwnedBy, dayBoard, matchState, _deps: D, _mk: mkOf, _reset: () => { RL.clear(); QUEUE.clear(); SEEN.clear(); ATT.clear(); ENTC.at = 0; ENTC.keys = {}; } };

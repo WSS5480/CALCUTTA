@@ -910,3 +910,94 @@ START HERE for golf. Read OWNER-DECISIONS.md first, then this section; where it 
 - FLAG (manager): notices are still in-app only. A request that waits for a signature counts in the badge of the people who can sign it.
 - FLAG (manager): a playing organizer of an 8-player net money game needs one signature per handicap he sets. The waiting card has Sign it on every line; a "sign all" button is not built.
 - Not verified: anything live (Supabase, sign-in, ESPN, OpenGolfAPI, push), the real stats / groups / limits modules together with this golf.js (fakes with the same signatures here; the Calcutta suite runs against the real engine file), `SEEN` across two server instances (the phone's reload-and-retry covers a restart).
+
+## Golf v1.4 — review round 4: the neutral rule tightened, course pick fixed, Golf alone (Nov 17 2026, golf coder 4, branch `golf-v1`, NOT pushed, no version bump)
+START HERE for golf. Read OWNER-DECISIONS.md, then this section; where it disagrees with "Golf v1.3" above, this section wins. Base: 584be99. Review: /tmp/revgolf4-report.md (SHIP AFTER FIXES: maths right, rule had holes C1, H1 to H4). Scoring and money maths were not touched except the two asked-for fixes (9-hole rounding, skins on withdrawal).
+- Run (no network): `node odds-api/golf.test.js` (98), `golf.round3.test.js` (19, expectations moved to the tightened rule), `golf.round4.test.js` (18, one per item below; `--list`, or a number), `golf.calcutta.test.js` (5), `golf.stats.test.js` (5). Ten runs each on the final code: 10/10, with `golf.stats.test.js` run against the stats commit it was written for (`STATS=<export of stats-v1 a07ab04>/odds-api`).
+- FLAG (manager, stats coder): the stats branch moved to 250a4b9 ("Player stats v1.3", confirmer age and activity) while this work was being done. Against that HEAD `golf.stats.test.js` fails its third check (two new confirmers no longer count: 3 confirmed rounds, 5 expected). 584be99 fails the same way, so it is the stats change, not this commit. The test's fixtures (and maybe what golf sends in `extra.card`) need a look by whoever merges golf with stats v1.3.
+- Proof: `OLD=584be99 TEST=golf.round4.test.js python3 scripts/golf-proof.py`: all 18 pass here and fail on 584be99 (writes only under /tmp/golf-proof).
+- Screens: /tmp/golf-shots4/<size>_<theme>/ (56 screens x 360, 430, 1280 x navy, violet-light, violet-dark = 504, 0 with a problem), report in /tmp/golf-shots4/report.txt; flow screens in /tmp/golf-shots4/flow/. Two full walks were run. In the second, three size/theme sets stopped on a 6-second click timeout while the test suites were loading the machine (report-run2-full.txt); those three sets were run again alone and were clean. Do not run the suites while a walk is running.
+- Phone checks: `PORT=8862 OUT=/tmp/golf-shots4 node scripts/golf-shots/harness.js &`, `python3 -m http.server 8863` in pics/, then `PORT=8862 WEBPORT=8863 OUT=/tmp/golf-shots4 python3 scripts/golf-shots/walk.py` (every screen, 360 / 430 / 1280, three themes) and `... python3 scripts/golf-shots/course.py` (course pick and no-signal FLOW checks at 360x740 and 430x900; 234 checks). Use your own ports: other people run harnesses on this machine.
+
+### THE NEUTRAL RULE, as tightened (definitions in odds-api/golf.js: `interested`, `sidesOf`, `signers`, `affTeam`, `affPlayer`, `gated`, `propose`, `signAct`; nothing is decided per route)
+1. INTERESTED = plays on a team, keeps or scores ANY card (team scorer, or typed a hole on a card; a typed-in guest's card counts), has a pool entry, or holds a lot in a linked Calcutta. An organizer or co-organizer is NEUTRAL only with no card, no team and no stake.
+2. THE AFFECTED SIDE SIGNS. A change to team X's card, standing, handicap or "not paid" mark by anyone who does not play on X (a neutral organizer too) needs the signature of X's OWN account-holding player. A helper on another team is never enough.
+3. If X has no account (all typed-in guests): a neutral third account signs (or a neutral organizer acts), and the board shows "Changed without the team's sign-off" (`day.nso[tid]`, `board.rows[].nso`).
+4. Someone who plays on X and changes X's own card needs the OTHER side (an account on a team he is not on; not a fellow organizer while a plain player exists).
+5. Money games START only with two different accounts playing on different teams (`twoAccounts`). Otherwise 409 `needTwo`, or `start {casual: true}` takes every amount off and starts a casual game.
+6. A forced Final in a game with something at stake closes the round for good: reopening always needs a signature, and with no eligible signer it is refused ("closed for good"). An interested organizer never reopens alone.
+7. A request belongs to the person who asked (nobody else's request replaces it or pushes it out; 40 per person). The signer sees old → new; a request whose old values moved is dropped and has to be asked for again (`pin`). Requests that no longer fit are swept after every action.
+8. Everything is logged with both names (`plog`) and announced (`notes`). Enterprise with no fee counts as "something at stake" everywhere (`stakes`, `finalBlock`).
+
+### Every state-changing route and what guards it (grep of `op ===` in `handle`)
+| Route | Guard |
+|---|---|
+| `paid` | ACT `paid` (free before the start; after it: NOT PAID = the player's own signature, PAID = another side's) |
+| `sign`, `signall` | `signAct` (signall = one `signAct` per waiting handicap, plus `hcpOkRoute` for an organizer) |
+| `tiers` | ACT `tiers` |
+| `oadmoney`, `endseason`, `oadrefresh` | ACT `oadmoney`, `endseason`, `oadrefresh` (new in round 4; `always`) |
+| `setup` | ACT `setup` (free when no rule changes; text = `ruleDiff` old → new) |
+| `team` op `withdraw` | ACT `withdraw` |
+| `team` op `kick` | ACT `remove` (new; free before the start; `solo` = an account with no hole played 10 minutes in) |
+| `team` op `hcp` | ACT `hcp` for the organizer / director; a player's own number is only asked (`hreq`) |
+| `team` op `hcpok` | ACT `hcp` with `ask: true`, or the signer rule directly for an organizer's own number |
+| `team` op `guest` | set-up only; the guest's number goes through ACT `hcp` |
+| `team` op `co` | organizer only; NOT signed; logged, announced, refused while that person has a request or a signature waiting (M5) |
+| `team` op `scorer` | organizer only; the scorer must play on the team; logged and announced after the start |
+| `team` ops `add`, `rename`, `remove`, `assign` | organizer, set-up only |
+| `match` ops `add`, `remove`, `draw` | ACT `match`, `matchdel`, `draw` |
+| `match` ops `press`, `accept`, `decline` | own rule: only the other side of the bet accepts (uses `signers` with `only`) |
+| `start` | organizer; `twoAccounts` for money; strict handicaps complete |
+| `final` | plain Final after `finalBlock`; with unconfirmed holes ACT `final` |
+| `reopen` | ACT `reopen` (`must` after a forced Final or for an interested organizer) |
+| `score` | the team's scorer or the organizer; someone else's entry needs `rev`; a confirmed hole = ACT `correct` |
+| `confirm`, `dispute` | `signers()` in the route: an outsider's entry on X's card is confirmed by X's own account |
+| `resolve` | ACT `resolve` (a NEUTRAL organizer is the referee and settles alone, flagged on the board) |
+| `extraconfirm` | `signers()` in the route |
+| `extra` | scorer or organizer, live round, unconfirmed winner only |
+| `extrareopen` | ACT `extrareopen` |
+| `create`, `join`, `gjoin`, `leave`, `seen`, `pick`, `swap`, `course`, `mycourse`, `attach` | the caller's own data (or creator / group commissioner checks); no power over other players |
+| `ent` | owner only (owner PIN) |
+| `get` | read; it also stores a finished pool's result after two matching reads (below) |
+
+### What changed, item by item (test name in golf.round4.test.js)
+- C1: `sidesOf` / `interested` (keeps a card, Calcutta lot via `setLotHolders`). H1: `need` in `signers`, `rev` required to overwrite someone else's entry, `nso` flag. H2: three new ACTs. H3: `twoAccounts`, `stripMoney`, `must` on reopen. H4: `finalBlock` uses `stakes`.
+- M2 + H7: `team` op `kick` → ACT `remove` (`removeIn`): player or team; matches, side winners, flights and pending requests follow; pots and payouts are always computed from who is on a team. `leave` after the start is allowed for someone who is on no team and keeps no card.
+- M3 to M5: request key has the author; caps refuse instead of pushing out; `ruleDiff`; `pin`; co-organizer changes logged, announced, refused while pending.
+- Sign all handicaps: `POST /golf/signall {id}` → `{signed, asked, skipped}`; button on the waiting card listing each number.
+- M1 course pick (owner bug): pics/golf.js `courseDetailV`: tees are big buttons, sticky "Use this course", one tee preselected, no tees / missing holes still usable (`parOnly`, one plain question), always "Back to results", "Course set" on the form. My courses: row `lock:golf:myc` `{by: {<mk>: {home, recent[8]}}}`, `courses` answers `my`, `POST /golf/mycourse {op: use|home|forget, courseId | course}`.
+- H4 (other session): the last three opened games and the list are kept on the phone (`golf-g:<id>`, `golf-gl`, `golf-list`); with no signal they show with "Offline — scores will send when you're back"; the score queue is unchanged.
+- H5: pick six stores the final board on the game (`pro.fin.b`) after two matching final reads 10 minutes apart; the first reading is kept as a fallback (`pro.finRead.b`); never from an empty field. `boardOf` reads the stored board first.
+- H6: one and done keeps a result only after two matching reads 10 minutes apart (`E.read`, `E.resAt`); `oadrefresh` within 48 hours, through the rule.
+- 9-hole handicap: `courseHcp` returns the unrounded 18-hole figure on a 9-hole card; `playHcp` / `teamHcp` halve and round once. Tested for every index 0.0 to 54.0 on five ratings.
+- Skins on withdrawal: `extras.skins.wd` = `stand` (default) or `void`; `S.skins` takes `out: true` sides.
+- Golf alone (no stats.js): an Enterprise director's number is kept on the game (`tset[pid].local`), survives Start, and the log is golf's own audit. No 503.
+
+### Decisions (date, decision, why)
+- 2026-11-17 manager: rules 1 to 6 above. Why: review C1, H1 to H4.
+- 2026-11-17 coder: NOT PAID is signed by the player; a late PAID mark by another side. Why: a late paid mark gives that player a share, so his own signature proves nothing.
+- 2026-11-17 coder: a handicap the player ASKED for keeps the round-3 rule (someone not on his team signs; a neutral organizer OKs alone). A number nobody asked for takes the player's own signature. Typing the very number the player asked for counts as asked.
+- 2026-11-17 coder: a neutral Enterprise director still sets tournament numbers alone with a reason (owner rule E-H).
+- 2026-11-17 coder: the first "final" reading of a pool is not kept (two reads). Why: other session's H6.
+
+### OWNER RULE QUESTIONS (built with the default named; say if it should be the other way)
+1. Skins when a team withdraws: default "skins already won stand; unwon skins carry among the remaining teams". Option at set-up: "its skins are void".
+2. A team that walked off and will never tap Sign: after 30 minutes with no hole typed on its card, a neutral third account may sign "did not finish", and the board says the team did not sign it off. Without this the money round could never be finished.
+3. A neutral organizer settles a DISPUTED hole alone (he is the referee), flagged on the board. The alternative (the team must sign) means a dispute against a team can only end the way that team agrees.
+4. Enterprise day with no fee, typed-in guests only, cards kept by the director: it can start; one forced Final alone ("Scores kept by the organizer only"), then closed for good. The two-accounts rule applies only where money is shown.
+5. Handicaps: the organizer and the affected player can still agree a number between them before the start (everyone is told, both names logged). Two accounts of one person cannot be told apart by golf.
+6. "Pick six needs a non-empty field to start" was read as: a final board is never stored from an empty field, and picks need the posted field (as before). Creating the pool before the field is posted is still allowed.
+
+### WHAT TO PORT (since 584be99; for the session that owns main and is porting "Golf alone")
+- Files: `odds-api/golf.js`, `odds-api/golf-score.js` (two small changes: `skins` `out`, `courseHcp` 9-hole), `pics/golf.js`. Tests: `golf.round4.test.js` (new), `golf.test.js`, `golf.round3.test.js`, `golf.stats.test.js` (expectations). Scripts: `scripts/golf-proof.py`, `scripts/golf-shots/{harness.js,walk.py,course.py}`.
+- New routes: `POST /golf/signall`, `/golf/mycourse`, `/golf/oadrefresh`; `team` op `kick`; `start {casual}`; `score` now refuses an overwrite of someone else's entry without `rev` (409 `needRev`; the client always sent it).
+- New rows / fields: row `lock:golf:myc`; game `lotMks`, `day.nso`, `day.startAt`, `extras.skins.wd`, `pro.fin`, `pro.finRead`, `oad.events[ev].read / resAt / refreshed`, `tset[pid].local`. View: `day.nso`, `day.accts2`, `day.startAt`, `board.rows[].nso`, `pending[].v`, `oad.events[].canRefresh`, `courses.my`.
+- Contract for the Calcutta engine: `golf.setLotHolders(gameId, [accountKey])` after every sale, buy-back or transfer in a Calcutta linked to a golf game. Until it is called for a linked game, every organizer and co-organizer of that game counts as a lot holder.
+- Without stats.js: nothing to stub. `golf.fakestats.js` is a test helper only. No new env vars. No dependence on preview-only code.
+- Behaviour that changes for existing games: skins of a withdrawn team now stand (was: dropped); a money game with fewer than two accounts on different teams no longer starts; one-and-done results appear after the second read.
+
+### Not done / not verified
+- Other suites: alert and cfbd pass; groups.test.js is still flaky (not golf code, reviewer's L4).
+- Not verified: anything live (Supabase, sign-in, ESPN, OpenGolfAPI, push, real phones, the service worker serving the app shell with no signal: the no-signal check blocks only the API). `SEEN` across two instances.
+- The reviewer's scripts (copied to /tmp/gc/rev, read-only originals in /tmp/revgolf4/t): qa1, qa3, qa4, q5 run and every attack now answers 202 / 403 / 409. qa2 stops at its first step because a guests-only money game no longer starts (that is H3). Older round-3 set-up scripts (f1, m1, m2) stop at Start because their helper signs handicaps with a third team.
+- Low items left: L2 (stale count in the forced-Final text), L6 (two accounts of one person). L1 and L3 fixed (wording; `sweep`).

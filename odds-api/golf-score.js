@@ -95,7 +95,9 @@ function floridaCheck(shots, strokes) {
 function skins(scores, nHoles, end) {
   const out = { holes: [], won: {}, carry: 0 };
   for (let i = 0; i < nHoles; i++) {
-    const v = scores.map((x) => ({ id: x.id, s: x.s[i] })); if (v.some((x) => x.s == null)) break;
+    // A WITHDRAWN side (x.out) stays in for the holes it played: skins it already won stand. On holes it never played it is simply not there, so the
+    // skins nobody has won yet carry among the remaining sides (owner rule question; the other choice, "void that team's skins", leaves it out entirely).
+    const v = scores.filter((x) => !(x.out && x.s[i] == null)).map((x) => ({ id: x.id, s: x.s[i] })); if (!v.length || v.some((x) => x.s == null)) break;
     const lo = Math.min(...v.map((x) => x.s)), w = v.filter((x) => x.s === lo); out.carry++;
     if (w.length === 1) { out.holes.push({ hole: i + 1, win: w[0].id, skins: out.carry }); out.won[w[0].id] = (out.won[w[0].id] || 0) + out.carry; out.carry = 0; }
     else out.holes.push({ hole: i + 1, win: null, carried: out.carry, tied: w.map((x) => x.id) });
@@ -191,6 +193,9 @@ const RT = require('./ratings');
 function courseHcp(index, course) {
   const i = Number(index) || 0, c = course || {}, par = (c.par || []).reduce((a, x) => a + x, 0), k = (c.par || []).length === 9 ? 2 : 1;
   if (!(Number(c.slope) > 0) || !Number.isFinite(Number(c.rating))) return i;
+  // 9-HOLE CARD: ONE rounding (review round 4). The 18-hole figure is returned UNROUNDED here and playHcp / teamHcp halve it and round once; rounding
+  // it here first and again after halving was off by one for some index values.
+  if (k === 2) { const u = i * (Number(c.slope) / 113) + (Number(c.rating) * 2 - par * 2); return Number.isFinite(u) ? u : i; }
   const v = RT.courseHandicap(i, Number(c.slope), Number(c.rating) * k, par * k); return v == null ? i : v;
 }
 // Index from rounds [{id, date, holes:[gross], pars, si, rating, slope}]: ratings.handicap does all of it (net double bogey, differentials, the table).

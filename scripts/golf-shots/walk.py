@@ -1,11 +1,11 @@
-# Golf phone checks, review round 3. Needs scripts/golf-shots/harness.js on :8842 and `python3 -m http.server 8843` in pics/.
+# Golf phone checks (review rounds 3 and 4). Needs scripts/golf-shots/harness.js on :$PORT (8842) and `python3 -m http.server $WEBPORT` (8843) in pics/.
 # Walks the golf screens as five different people at 360x740, 430x900 and 1280x800 in all three themes (navy, violet light, violet dark).
 # EVERY screenshot is measured: no sideways scroll, tap targets 44 px or more, the My Bets banner covered by the overlay, no page errors, and
 # CONTRAST: every piece of text on the screen against what is really behind it must be 4.5:1 or better (M7).
-# Writes only under /tmp/golf-shots3 (screens in <size>_<theme>/, report.json, report.txt).   Run: python3 scripts/golf-shots/walk.py [size] [theme]
+# Writes only under $OUT (default /tmp/golf-shots4) (screens in <size>_<theme>/, report.json, report.txt).   Run: python3 scripts/golf-shots/walk.py [size] [theme]
 import asyncio, json, sys, os, urllib.request
 from playwright.async_api import async_playwright
-OUT = '/tmp/golf-shots3/'; API = 'http://127.0.0.1:8842'; WEB = 'http://localhost:8843'
+OUT = os.environ.get('OUT', '/tmp/golf-shots4').rstrip('/') + '/'; API = 'http://127.0.0.1:' + os.environ.get('PORT', '8842'); WEB = 'http://localhost:' + os.environ.get('WEBPORT', '8843')
 SEED = json.load(open(OUT + 'seed.json'))
 SIZES = {'360': (360, 740), '430': (430, 900), '1280': (1280, 800)}
 THEMES = {'navy': ('', '1'), 'violet-light': ('violet', '0'), 'violet-dark': ('violet', '1')}
@@ -50,9 +50,15 @@ def flows():
                ('click', '[data-a=final]'), ('shot', 'finish_blocked_disputed'), ('click', '[data-a=payv]'), ('shot', 'organizer_payouts_after_start', ['a change is only asked for']), ('back',), ('click', '[data-a=invite]'), ('shot', 'invite_copy_and_text_it', ['Text it']), ('back',),
                O('fin'), ('shot', 'final_reopen_form_and_waiting'), ('back',), O('cas'), ('click', '[data-a=hcpv]'), ('shot', 'casual_zero_strokes_no_handicap', ['0 strokes: no handicap yet']), ('back',), ('back',),
                O('solo'), ('shot', 'solo_round_two_tabs'), ('tab', 'card'), ('shot', 'solo_scorecard'), ('back',), O('open'), ('shot', 'pool_open_picks'), ('back',),
-               ('click', '[data-a=newday]'), ('shot', 'day_setup_form'), ('back',), ('click', '[data-a=newpro]'), ('shot', 'pro_setup_form'), ('back',)]),
+               O('nso'), ('shot', 'board_changed_without_the_teams_sign_off', ["Changed without the team's sign-off"]), ('back',), O('two'), ('shot', 'money_game_needs_two_accounts', ['A money game needs two players', 'Start as a casual game']), ('back',),
+               ('click', '[data-a=newpro]'), ('shot', 'pro_setup_form'), ('back',), ('click', '[data-a=newday]'), ('shot', 'day_setup_form'),
+               # round 4, M1: the course pick. Tees as big buttons, "Use this course" on the screen, never a dead end, My courses afterwards.
+               ('click', '[data-a=course]'), ('fill', '#oq', 'valley'), ('click', '[data-a=csearch]'), ('shot', 'course_search_results'), ('click', '[data-a=cdir][data-x="og-1"]'), ('shot', 'course_many_tees', ['Pick your tees', 'Use this course', 'Back to results']),
+               ('click', '[data-a=tee][data-i="2"]'), ('click', '[data-a=holes]'), ('shot', 'course_tee_selected_holes_open', ['Selected', 'Use this course · White tees']), ('back',), ('click', '[data-a=cdir][data-x="og-3"]'), ('shot', 'course_no_tees_still_usable', ['No tees are on file', 'Use this course', 'Back to results']), ('back',),
+               ('click', '[data-a=cdir][data-x="og-4"]'), ('click', '[data-a=tee][data-i="0"]'), ('click', '[data-a=holes]'), ('shot', 'course_holes_missing_still_usable', ['of 18 holes are on file', 'not on file', 'Use this course']), ('back',),
+               ('click', '[data-a=cdir][data-x="og-2"]'), ('click', '[data-a=usecourse]'), ('shot', 'course_set_back_on_the_form', ['Course set', 'Palm Valley Golf Club']), ('click', '[data-a=course]'), ('shot', 'my_courses', ['Tap a course to use it']), ('back',), ('back',)]),
       ('kim', [O('ask'), ('shot', 'setup_numbers_waiting_for_signature', ['aiting for a second signature', 'need a handicap', 'nobody sets their own number']), ('click', '[data-a=hcpv]'), ('shot', 'setup_approve_numbers_make_up', ['What this number is made of', 'See the rounds behind it']), ('click', '[data-a=mkv] >> nth=1'), ('shot', 'number_make_up_rounds_drill_down', ['THE ROUNDS', 'confirmed by']), ('back',), ('back',), ('back',)]),
-      ('lou', [('shot', 'home_player_badge'), O('ask'), ('shot', 'setup_player_can_sign_numbers', ['Sign it']), ('back',)]),
+      ('lou', [('shot', 'home_player_badge'), O('ask'), ('shot', 'setup_player_can_sign_numbers', ['Sign it', 'Sign all handicaps (2)', 'the number Max Trevino asked for']), ('click', '[data-a=signall]'), ('shot', 'setup_after_sign_all_handicaps', ['2 handicaps signed', '!Sign all handicaps']), ('back',)]),
       ('pro', [O('ent'), ('shot', 'tournament_setup_director_not_playing', ['Tournament handicaps', 'HANDICAP CHANGES', '!Start set']), ('click', '[data-a=plogv]'), ('shot', 'tournament_director_actions', ['organizer who is not playing']), ('back',), ('back',)]),
       ('eve', [O('ent'), ('shot', 'tournament_player_asks_director', ['Ask the director for this number']), ('back',)]),
     ]
@@ -104,6 +110,7 @@ async def run(size, theme, pw, rep):
                 elif st[0] == 'tab': await click('[data-tab=%s]' % st[1])
                 elif st[0] == 'click': await click(st[1])
                 elif st[0] == 'back': await click('.oback')
+                elif st[0] == 'fill': await pg.fill('#ogolf ' + st[1], st[2]); await pg.wait_for_timeout(200)
                 elif st[0] == 'select': await pg.select_option('#ogolf ' + st[1], st[2]); await pg.wait_for_timeout(450)
         except Exception as e:
             rep.append({'k': size + '/' + theme, 'shot': tok + ' FLOW STOPPED', 'bad': [str(e).split('\n')[0][:200]]})

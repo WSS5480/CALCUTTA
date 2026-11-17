@@ -57,3 +57,10 @@ The owner chose "keep building". Because main moves every few hours, this sessio
 - One r3 check loads /home/claude/calcutta-calc if present (ODD_CALCUTTA); not relevant on your machine.
 
 ## In progress here (same method next): golf (benefit-test round, then onto main behind GOLF switch), calcutta (round 7 fixes, then feat/calcutta-on-main), stats (approval model: organizer approves every money number; authorization fixes), local events / pickleball as a group game (fixes + approval screen). Newest review reports are in reviews/ (revgolf5, revcalc7, revstats5, revstats6, revgroups6).
+
+## Update Nov 17 2026, later: feat/stats @ 54e0b93 (Player stats v1.5 + review-7 fixes)
+- Reviewed seven times; last verdict "safe to hand over after small fixes" (reviews/revstats7-report.md), those fixes are in 54e0b93 (coder-tested, not re-reviewed).
+- Model: the Oddable index/rating is always computed and shown with its make-up; in any money game, flight or tournament the ORGANIZER approves every number before the start (one tap "Use everyone's Oddable index"); nobody approves his own number without a co-sign code from another real, established account; numbers freeze at `eventStart`. Contract for engines: its HANDOFF "Player stats (v1.5) — contract for golf and events".
+- This is a SIDE branch (built on old c9a9e93-era code), not cut from main: main has its own `gstats.js`. Port file by file: odds-api/stats.js, ratings.js, stats-courses.js, backfill-acctsince.js, fixtures/courses-fallback.json, pics/stats.js, pics/voicelog.js + their tests; do NOT take its groups.js, index.html or sync.js wholesale (sync.js adds `dbIdsPage` only; acct.js adds the sign-up stamp `since`/`sinceSet`).
+- Deploy order: run `node odds-api/backfill-acctsince.js --launch=<Oddable launch date>` (dry run), then `--write`, right after the deploy. Needs from main-line: Oddable's launch date; `acct.createdAt(accountId)` for My Apps email accounts.
+- Course pick fix (owner bug "once I pick a course no way to select or save it") is in pics/stats.js: tees as buttons, sticky "Use this course", "Course set", My courses at /stats/mycourses.

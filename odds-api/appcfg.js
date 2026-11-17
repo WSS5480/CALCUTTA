@@ -23,6 +23,7 @@ async function handle(req, res) {
   let c; try { c = await cfg(); } catch (e) { c = { ok: true, card_theme: 'oddable' }; }
   const out = { ok: true, card_theme: c.card_theme }; // rebuilt here too: only ok, card_theme and the five announce fields can leave
   if (D.env('BETPUSH_ENABLED') === '1') out.betpush = true; // v266: tells the page the bet alerts are switched on, so it asks /betpush/status only then (field absent = off: the answer is unchanged)
+  if (D.env('CFB_TEAM_ENABLED') === '1') out.cfbteam = true; // CFB-TEAM: switches on the college team page (tap a college team). Field absent = off: the answer is unchanged
   if (c.announce) out.announce = { id: String(c.announce.id), title: String(c.announce.title), body: String(c.announce.body), link: String(c.announce.link), at: String(c.announce.at) };
   send(res, 200, out);
   return true;

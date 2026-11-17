@@ -44,6 +44,10 @@ const get = (path, method) => new Promise((done, fail) => { const r = http.reque
     // 9. v266: `betpush:true` is added ONLY when BETPUSH_ENABLED is exactly '1' (it tells the page the bet alerts are on); otherwise the answer is unchanged
     for (const v of [undefined, '', '0', 'true', 'yes']) { start(); env = { BETPUSH_ENABLED: v }; r = await get(); assert.deepStrictEqual(r.j, { ok: true, card_theme: 'oddable' }, 'off: ' + v); }
     start(); env = { BETPUSH_ENABLED: '1' }; myapps = ok({ card_theme: 'black', google_places_key: KEY, betpush: 'x' }); r = await get(); assert.deepStrictEqual(r.j, { ok: true, card_theme: 'black', betpush: true }); assert(!r.text.includes(KEY));
+    // 9b. CFB-TEAM: `cfbteam:true` ONLY when CFB_TEAM_ENABLED is exactly '1' (switches on the college team page); otherwise the answer is unchanged, and a My Apps field of that name is never copied
+    for (const v of [undefined, '', '0', 'true', 'yes', ' 1']) { start(); env = { CFB_TEAM_ENABLED: v }; myapps = ok({ card_theme: 'oddable', cfbteam: true }); r = await get(); assert.deepStrictEqual(r.j, { ok: true, card_theme: 'oddable' }, 'cfbteam off: ' + v); }
+    start(); env = { CFB_TEAM_ENABLED: '1' }; r = await get(); assert.deepStrictEqual(r.j, { ok: true, card_theme: 'oddable', cfbteam: true });
+    start(); env = { CFB_TEAM_ENABLED: '1', BETPUSH_ENABLED: '1' }; r = await get(); assert.deepStrictEqual(r.j, { ok: true, card_theme: 'oddable', betpush: true, cfbteam: true });
     // ---- v267: announce (the latest "Everyone" message). 10. a valid one comes back with exactly five fields; the key still never leaves
     const AT = '2026-11-16T15:00:00.000Z', ANN = { id: 'b_17', title: 'Thursday night picks are up', body: 'Open Oddable and look at the Alert.', link: '/?open=bets', at: AT };
     start(); myapps = ok({ card_theme: 'black', google_places_key: KEY }, Object.assign({ secret: 'zzz-secret', audience: 'all', sent: 9, people: 4, by: KEY, html: '<b>x</b>' }, ANN)); r = await get();

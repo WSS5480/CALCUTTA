@@ -333,7 +333,7 @@ const NYHM = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', ho
 const midnightET = (ms) => { const p = NYHM.format(new Date(ms)); return p === '00:00' || p === '24:00'; };
 function tbdTime(e, c, st, t) { if ((st.state || 'pre') !== 'pre' || st.completed) return false; return !t || e.timeValid === false || c.timeValid === false || /\bTBD\b/i.test(String(st.detail || '') + ' ' + String(st.shortDetail || '')) || midnightET(t); }
 function parseGames(j) {
-  return (j.events || []).map((e) => { const c = (e.competitions || [])[0] || {}, st = ((e.status || c.status || {}).type || {}); const t = Date.parse(e.date) || 0; return { id: String(e.id), t, tbd: tbdTime(e, c, st, t), state: st.state || (st.completed ? 'post' : 'pre'), done: !!st.completed || st.state === 'post', off: /POSTPON|CANCEL/i.test(String(st.name || '')), st: Number((e.season || {}).type || 0), week: Number((e.week || {}).number || 0), head: String(((c.notes || [])[0] || {}).headline || ''),
+  return (j.events || []).map((e) => { const c = (e.competitions || [])[0] || {}, st = ((e.status || c.status || {}).type || {}); const t = Date.parse(e.date) || 0; return { id: String(e.id), t, tbd: tbdTime(e, c, st, t), state: st.state || (st.completed ? 'post' : 'pre'), done: !!st.completed || st.state === 'post', off: /POSTPON|CANCEL/i.test(String(st.name || '')), sn: String(st.name || ''), st: Number((e.season || {}).type || 0), week: Number((e.week || {}).number || 0), head: String(((c.notes || [])[0] || {}).headline || ''),
     teams: (c.competitors || []).map((x) => ({ id: String((x.team || {}).id || x.id || ''), score: Number(x.score && x.score.value != null ? x.score.value : x.score) || 0, winner: !!x.winner })),
     series: c.series && Array.isArray(c.series.competitors) ? { done: !!c.series.completed, wins: Object.fromEntries(c.series.competitors.map((s) => [String(s.id), Number(s.wins) || 0])) } : null }; });
 }
@@ -412,7 +412,7 @@ async function readFeed(c, force) {
     if (typeof S.startTime === 'function') { const v = await S.startTime(c); if (v != null) { t0 = Number(v instanceof Date ? v.getTime() : v); if (!Number.isFinite(t0) || t0 <= 0) throw new Error('bad startTime'); } }
     // ROUND 5 #4: the scheduled end comes ONLY from the source's own endTime(). A source without it has no scheduled end (and so no correction, ever).
     const hasEnd = typeof S.endTime === 'function'; let end = null; if (hasEnd) { try { const v = await S.endTime(c); if (v != null) { const n = Number(v instanceof Date ? v.getTime() : v); if (Number.isFinite(n) && n > 0) end = n; } } catch (e) {} }
-    const gm = { sig, at: D.now(), G: [], D: [], O: [], S: { t0, end, hasEnd } }; GAMESOF.set(c.id, gm); if (GAMESOF.size > 3000) GAMESOF.delete(GAMESOF.keys().next().value);
+    const gm = { sig, at: D.now(), G: [], D: [], O: [], S: { t0, end, hasEnd } }; keepMissing(c, gm, gm.at); GAMESOF.set(c.id, gm); if (GAMESOF.size > 3000) GAMESOF.delete(GAMESOF.keys().next().value);
     setKick(c.id, sig, t0, on || anyResult(R), 60e3); return { R, gm }; }
   const today = chiDay(D.now()), games = []; const urls = urlsFor(c);
   if (force) (await Promise.all(urls.map((u) => getGames(u, today, true)))).forEach((g) => games.push(...g));
@@ -425,19 +425,37 @@ async function readFeed(c, force) {
   const now = D.now(), tbd = rel.filter((g) => g.tbd && !g.done && g.state !== 'in'), tb = tbd.length ? Math.min(...tbd.map((g) => g.t || now)) : null;
   // G = the games still WITHOUT a result (oldest first; round = the event's round of that game, null for a play-in), D = finished, O = postponed / cancelled
   const open = rel.filter((g) => !g.done).sort((a, b) => a.t - b.t || a.id.localeCompare(b.id)), dn = rel.filter((g) => g.done).map((g) => g.id);
-  const gm = { sig, at: now, G: open.filter((g, i) => i < 120 || keep.has(g.id)).map((g) => ({ id: g.id, t: g.t, tbd: !!g.tbd, teams: g.teams.map((t) => t.id), round: ev.roundOf ? ev.roundOf(g) : 0, live: g.state === 'in' })),
+  const gm = { sig, at: now, G: open.filter((g, i) => i < 120 || keep.has(g.id)).map((g) => Object.assign({ id: g.id, t: g.t, tbd: !!g.tbd, teams: g.teams.map((t) => t.id), round: ev.roundOf ? ev.roundOf(g) : 0, live: g.state === 'in' }, notSched(g) ? { nc: true } : {})),
     D: dn.slice(-400).concat(dn.slice(0, -400).filter((id) => keep.has(id))), O: mine.filter((g) => g.off).map((g) => g.id).slice(-200), S: null };
+  keepMissing(c, gm, now); if (gm.miss) urls.forEach((u) => { const h = GC.get(u); if (h) { h.final = false; h.ttl = Math.min(h.ttl, 3e4); } }); // a game went missing: no page of this event is kept "for good" or for 5 minutes until that is settled
   GAMESOF.set(c.id, gm); if (GAMESOF.size > 3000) GAMESOF.delete(GAMESOF.keys().next().value);
   setKick(c.id, sig, ts.length ? Math.min(...ts) : null, rel.some((g) => g.done || g.state === 'in'), tb == null ? HORIZON : Math.max(60e3, Math.min(HORIZON, tb - now)));
   return { R: teamResults(ev, uniq, ids), gm };
 }
+// ROUND 6 (B1): only a game the feed still lists as SCHEDULED can be corrected. In progress, suspended, delayed, halftime ... = the feed is on it.
+const notSched = (g) => g.state !== 'pre' || (!!g.sn && !/SCHEDULED/i.test(g.sn));
+// ROUND 6 (M-4): ONE empty or partial answer never makes a game "no longer listed" (or a source's scheduled end "gone"). A game the last list had
+// and this one does not is kept as it was until a later read, at least 60 s after the first one that missed it, still does not have it (two reads
+// in a row). After a restart the last list is the one kept on the Calcutta row.
+const MISS_MS = 60e3;
+function keepMissing(c, gm, now) { const prev = gamesOf(c); if (!prev) return; const pm = prev.miss || {}, miss = {};
+  if (gm.S) { if (gm.S.hasEnd && gm.S.end == null && prev.S && prev.S.end != null) { const t0 = pm.S || now; if (now - t0 < MISS_MS && now >= t0) { gm.S.end = prev.S.end; miss.S = t0; } } }
+  else { const have = new Set(gm.G.map((x) => x.id).concat(gm.D, gm.O)); const held = (id) => { if (have.has(id)) return false; const t0 = pm[id] || now; if (now - t0 >= MISS_MS || now < t0) return false; miss[id] = t0; have.add(id); return true; };
+    (prev.G || []).forEach((x) => { if (held(x.id)) gm.G.push(Object.assign({}, x, { held: true })); }); /* held = not in this read: it keeps a standing correction alive, it never opens a new one */ (prev.D || []).forEach((id) => { if (held(id)) gm.D.push(id); }); (prev.O || []).forEach((id) => { if (held(id)) gm.O.push(id); }); gm.G.sort((a, b) => a.t - b.t || a.id.localeCompare(b.id)); }
+  if (Object.keys(miss).length) gm.miss = miss; }
+// ROUND 6 (M-4): a read that holds FEWER results than the last good one (a team lost a win, the champion or its place: an empty or partial page) is a
+// failed read until a second read, at least 60 s later, says exactly the same. Winnings never drop to $0 on one bad answer.
+const SHR = new Map(); // calc id -> { at, s }
+function suspect(c, R) { const k = feedR(c), now = D.now(); const less = !!k && !!k.R && Object.keys(k.R).some((id) => { const a = k.R[id], b = (R || {})[id] || {}; return !!a && ((a.wins || 0) > (b.wins || 0) || (!!a.champ && !b.champ) || (!!a.place && !b.place)); });
+  if (!less) { SHR.delete(c.id); return false; } const s = JSON.stringify(R || {}), p = SHR.get(c.id); if (p && p.s === s && now - p.at >= MISS_MS) { SHR.delete(c.id); return false; }
+  if (!p || p.s !== s || now < p.at) { SHR.set(c.id, { at: now, s }); if (SHR.size > 2000) SHR.delete(SHR.keys().next().value); } return true; }
 // REVIEW FIX 1 + ROUND 2 D1-D3: who owns what is final once the event has started. `c.startedAt` is written on the Calcutta row the first time
 // the start is seen (sticky: never cleared, survives restarts) and every ownership change checks startState() INSIDE its transaction.
 const FEEDONLY = 'Results for this event come from the score feed only. A commissioner correction opens only when the feed still has no result 24 hours after the game\'s scheduled end.', GRPCOMM = 'Only that group\'s commissioner can attach a Calcutta, and it has to be a Calcutta he runs';
 const FROZEN = 'The event has started: who owns what is final now.', FEEDQ = 'The score feed cannot be read right now and the event may have started, so ownership is locked. Try again in a minute.';
 // Notices: each has a number `n` (c.nseq). ROUND 5 #5: a CORRECTION notice is pinned (`pin`): it stays on the row, and is sent to every member, until that
 // member has marked it seen (member.seenN = the highest notice number seen; POST /calcutta/seen). Later trivial notices never push it out.
-function notice(c, by, what, raw, pin) { c.notices = c.notices || []; c.nseq = (c.nseq || 0) + 1; c.notices.push(Object.assign({ n: c.nseq, at: D.now(), by: cleanName(by, 24), what: cleanName(raw ? what : what + ' (after the auction closed)', pin ? 300 : 180) }, pin ? { pin: true } : {}));
+function notice(c, by, what, raw, pin) { c.notices = c.notices || []; if (pin) { const txt = cleanName(raw ? what : what + ' (after the auction closed)', 300), lastPin = c.notices.filter((x) => x.pin).slice(-1)[0]; if (lastPin && lastPin.what === txt) return; } /* ROUND 6 (M-4): the same pinned notice is never sent twice in a row */ c.nseq = (c.nseq || 0) + 1; c.notices.push(Object.assign({ n: c.nseq, at: D.now(), by: cleanName(by, 24), what: cleanName(raw ? what : what + ' (after the auction closed)', pin ? 300 : 180) }, pin ? { pin: true } : {}));
   if (c.notices.length > 50) { const low = Math.min(...c.members.map((m) => m.seenN || 0)), open = (x) => !!x.pin && (x.n || 0) > low; c.notices = c.notices.filter(open).slice(-80).concat(c.notices.filter((x) => !open(x)).slice(-50)).sort((a, b) => (a.n || 0) - (b.n || 0)); } }
 function noticesFor(c, m) { const seen = (m && m.seenN) || 0, all = c.notices || [], un = all.filter((x) => (x.n || 0) > seen), pins = un.filter((x) => x.pin), pick = new Set(pins.concat(un.slice(-30), all.slice(-5)));
   const out = all.filter((x) => pick.has(x)).reverse().map((x) => Object.assign({ n: x.n || 0, at: x.at, by: x.by, what: x.what, unread: (x.n || 0) > seen }, x.pin ? { pin: true } : {}));
@@ -461,7 +479,7 @@ function refresh(c) { // one feed read per Calcutta at a time, in the background
   const sig = sigOf(c), x0 = RES.get(c.id) || {}, x = x0.sig === sig ? x0 : {}; if (x.busy) return x.busy; const id = c.id;
   const mine = () => { const h = RES.get(id); return h && h.sig === sig ? h : null; }; // an edit of the event in between: this read belongs to the old event and is dropped
   const p = Promise.race([feedResults(c), sleep(FEED_MS).then(() => { throw new Error('timeout'); })])
-    .then((R) => { if (!mine()) return { ok: false, R: {} }; RES.set(id, { sig, at: D.now(), tryAt: D.now(), R }); return { ok: true, R, saved: afterFeed(id) }; })
+    .then((R) => { if (!mine()) return { ok: false, R: {} }; if (suspect(c, R)) throw new Error('fewer results than the last read: waiting for a second matching read'); RES.set(id, { sig, at: D.now(), tryAt: D.now(), R }); return { ok: true, R, saved: afterFeed(id) }; })
     .catch((e) => { console.error('calcutta feed:', e.message); const h = mine(); if (!h) return { ok: false, R: {} }; RES.set(id, { sig, at: h.at || 0, R: h.R || null, err: true, tryAt: D.now() }); return { ok: false, R: h.R || {} }; });
   RES.set(id, Object.assign({}, x, { sig, busy: p })); if (RES.size > 4000) RES.delete(RES.keys().next().value); return p;
 }
@@ -480,7 +498,7 @@ async function afterFeed(id) { // after a good read: keep `c.kick` on the row (r
     if (k.sig !== sigOf(row.data)) return; const h = RES.get(id), gm = GAMESOF.get(id), R = h && h.sig === k.sig && !h.err && h.R ? h.R : null, G = gm && gm.sig === k.sig ? { G: gm.G, S: gm.S } : null, frS = R ? JSON.stringify([R, G]) : null;
     // the row's copy of the kickoff is rewritten when it changed, when the event's clock has passed it (so a restart knows it was confirmed), or when it is getting old
     const stale = (p) => !p || p.sig !== k.sig || p.t0 !== k.t0 || !!p.live !== !!k.live || (k.t0 != null && k.at >= k.t0 && p.at < k.t0) || p.thru - now < Math.min(HORIZON / 2, (k.thru - k.at) / 2) && !EVENTS[row.data.ev].plug;
-    const newR = (c) => !!frS && (!c.fr || c.fr.sig !== k.sig || JSON.stringify([c.fr.R, c.fr.G ? { G: c.fr.G, S: c.fr.S } : null]) !== frS);
+    const newR = (c) => !!frS && (!c.fr || c.fr.sig !== k.sig || JSON.stringify([c.fr.R, c.fr.G ? { G: c.fr.G, S: c.fr.S } : null]) !== frS || (!!c.win && !!c.win.to && !!h && chiDay(h.at) > c.win.to && !(chiDay(c.fr.at) > c.win.to))); // ROUND 6 (B2): the first read after a window event's last day is kept on the row (it is what says the event is over)
     const go = (c) => !c.startedAt && startState(c, now) === 'started', w0 = worth(row.data, now); watchAdd(row.data); if (!stale(row.data.kick) && !go(row.data) && !newR(row.data) && !voided(row.data).length && !deadCorr(row.data).length) return; let st = false;
     const c = await mutCalc(id, (c) => { if (sigOf(c) !== k.sig) return { nochange: true, v: c }; let ch = false; if (stale(c.kick)) { if (!c.kick || c.kick.t0 !== k.t0) c.rev++; c.kick = { at: k.at, sig: k.sig, t0: k.t0, live: k.live, thru: k.thru }; ch = true; }
       if (newR(c)) { c.fr = Object.assign({ at: h.at, sig: k.sig, R }, G || {}); c.rev++; ch = true; } // ROUND 4 #1: the last good results stay on the row, so stats and boards never wait on the feed (also after a restart)
@@ -519,6 +537,8 @@ const feedBacked = (c) => !EVENTS[c.ev].manualOnly;
 // only when that game is the event's final. A correction is made only against a brand-new, successful feed read in the same request (the route), never
 // writes the permanent start, and is re-checked against every later read (afterFeed -> deadCorr): corrState() says whether it still stands.
 const CORR_MAX = 40, NOW0 = D.now;
+// ROUND 6 (M-3): a typed score has to be a possible score for the sport (most points by one team, biggest margin)
+const SCORE = { nfl: { name: 'NFL', max: 80, margin: 75 }, cfb: { name: 'college football', max: 110, margin: 100 }, nba: { name: 'NBA', max: 200, margin: 80 }, ncaab: { name: 'college basketball', max: 200, margin: 100 }, nhl: { name: 'NHL', max: 20, margin: 15 }, mlb: { name: 'MLB', max: 35, margin: 30 }, other: { name: 'game', max: 300, margin: 300 } };
 const ONEGAME = 'A correction records one late game only: which team won it (and the score when the table pays the biggest win, or the finishing place for a golf day or local event). Wins, rounds and the champion are worked out from it.';
 const NOEND = 'Results for this event come from its own scoring only. It has no scheduled end, so there is no commissioner correction.';
 const NOSERIES = 'Results for this event come from the score feed only. A playoff series is decided by the feed\'s own series record, so there is no commissioner correction.';
@@ -526,20 +546,48 @@ const FEEDNOW = 'The score feed could not be read just now, so a correction cann
 function corrState(c, x, g, R) { // null = the correction stands | 'result' | 'off' | 'moved' | 'gone'   (g = what the feed last listed; nothing known = stands)
   if (!x) return 'gone'; if (!g) return null;
   if (x.game == null) { if (R && R[x.team] && anyResult({ x: R[x.team] })) return 'result'; if (!g.S || !g.S.hasEnd || g.S.end == null) return 'gone'; return g.S.end !== x.end ? 'moved' : null; }
-  const o = (g.G || []).find((y) => y.id === x.game); if (o) return o.t !== x.t || o.tbd ? 'moved' : null;
+  const o = (g.G || []).find((y) => y.id === x.game); if (o) return o.t !== x.t || o.tbd ? 'moved' : o.live || o.nc ? 'live' : null;
   if ((g.D || []).includes(x.game)) return 'result'; if ((g.O || []).includes(x.game)) return 'off'; return 'gone';
 }
 const voided = (c) => (feedBacked(c) ? Object.keys(c.manual || {}) : []); // a hand-typed team line on a feed-backed event (the round-4 format) is never used
 const deadCorr = (c) => { if (!feedBacked(c)) return []; const g = GAMESOF.get(c.id); if (!g || g.sig !== sigOf(c)) return []; const f = feedR(c); return Object.keys(c.corr || {}).map((k) => [k, corrState(c, c.corr[k], g, f && f.R)]).filter((x) => x[1]); }; // only against a list read by THIS process
-const corrWhat = (x) => (x.game == null ? (x.tn || 'A team') + ' finished ' + ord(x.place) : (x.wn || 'A team') + ' beat ' + (x.ln || 'its opponent') + (x.m != null ? ' by ' + x.m : ''));
+const corrWhat = (x) => (x.game == null ? (x.tn || 'A team') + ' finished ' + ord(x.place) : (x.wn || 'A team') + ' beat ' + (x.ln || 'its opponent') + (x.sc ? ' ' + x.sc[0] + '-' + x.sc[1] : '') + (x.m != null ? (x.sc ? ' (by ' + x.m + ')' : ' by ' + x.m) : ''));
 const voidText = (c, x, why) => (why === 'result' ? 'The score feed reported ' + (x.game == null ? x.tn || 'a team' : (x.wn || 'a team') + ' v ' + (x.ln || 'its opponent')) + ': the commissioner correction is replaced by the feed'
-  : 'The commissioner correction "' + corrWhat(x) + '" was removed: ' + (why === 'off' ? 'the score feed now lists that game as postponed or cancelled' : why === 'moved' ? (x.game == null ? 'the scheduled end of the event was moved' : 'the score feed moved that game to a new time') : (x.game == null ? 'the event no longer has a scheduled end' : 'the score feed no longer lists that game')));
-function applyCorr(c, R, R0) { // the engine's own derivation: one corrected game = one win for its winner (never a whole team line)
+  : 'The commissioner correction "' + corrWhat(x) + '" was removed: ' + (why === 'off' ? 'the score feed now lists that game as postponed or cancelled' : why === 'live' ? 'the score feed now shows that game in progress, suspended or delayed' : why === 'moved' ? (x.game == null ? 'the scheduled end of the event was moved' : 'the score feed moved that game to a new time') : (x.game == null ? 'the event no longer has a scheduled end' : 'the score feed no longer lists that game')));
+// ---------- ROUND 6 (B1): a correction that decides the money waits for another member ----------
+// A correction that MAKES A CHAMPION (its game is the final), PLACES A TEAM 1st, DECIDES THE BIGGEST-WIN ROW or ENDS THE EVENT is only PROPOSED: it pays
+// nothing and changes nothing until ANOTHER member confirms it (x.ok = { by, at }; POST /calcutta/corrok). The commissioner cannot confirm; nobody who
+// owns the lot it benefits can; and when the commissioner himself (or the member who shares that lot with him) owns that lot, the confirmer must own a
+// different lot. Every member can OBJECT to any correction (x.obj = [{ mk, name, at }]; POST /calcutta/object): an objection keeps a proposed one from
+// being confirmed, and marks one that already counts as "disputed by N members" on the board until the feed reports or the commissioner withdraws it.
+// "Ends the event" is judged on every read (corrPlan), not only when the correction is typed.
+const champRof = (ev) => ev.champRound || ev.final;
+function critOf(c, x, R0) { const ev = EVENTS[c.ev]; if (x.game == null) return x.place === 1 ? 'first' : null;
+  if ((x.round || 0) > 0 && x.round === champRof(ev)) return 'champion';
+  if (x.m != null) { const cur = Object.keys(R0 || {}).find((id) => R0[id] && R0[id].big); if (!cur || !(R0[cur].bigM >= x.m)) return 'big'; } return null; }
+const WHYTXT = { champion: 'it makes a champion', first: 'it places a team 1st', big: 'it decides the biggest-win row', ends: 'it ends the event' };
+function corrPlan(c, R0) { // -> { on: [keys that count], pend: { key: why } }
+  const g = gamesOf(c), keys = Object.keys(c.corr || {}).filter((k) => !corrState(c, c.corr[k], g, R0)), pend = {}, on = [];
+  // oldest first: a confirmed correction counts; an unconfirmed one counts unless it is critical by itself, or adding it to the ones before it ends the event
+  const ord2 = keys.map((k, i) => [k, i]).sort((a, b) => (c.corr[a[0]].at || 0) - (c.corr[b[0]].at || 0) || a[1] - b[1]).map((x) => x[0]);
+  const overWith = (list) => { const R = clone(R0 || {}); applyCorr(c, R, R0, list); return money(c, R).over; }; let ov = null;
+  ord2.forEach((k) => { const x = c.corr[k]; if (x.ok) { on.push(k); ov = null; return; } const why = critOf(c, x, R0); if (why) { pend[k] = why; return; }
+    if (ov == null) ov = overWith(on); if (!ov && overWith(on.concat(k))) { pend[k] = 'ends'; return; } on.push(k); if (!ov) ov = null; });
+  return { on, pend }; }
+// who may confirm a proposed correction: null = this member may, else why not
+function confirmBar(c, x, mk) { const m = memberOf(c, mk); if (!m) return 'Members only'; if (isComm(c, mk)) return 'Another member has to confirm this, not the commissioner';
+  const tid = x.game == null ? x.team : x.w, lot = c.lots.find((l) => l.teams.some((t) => t.id === tid)), owns = (l) => { const s = c.sold[l.id]; return !!s && (s.pid === m.pid || (!!s.bb && (s.bb.pid === m.pid || s.bb.k === mk))); };
+  if (!lot || !c.sold[lot.id]) return null; if (owns(lot)) return 'You own the lot this correction pays, so another member has to confirm it';
+  const s = c.sold[lot.id], cm = c.members.find((y) => y.mk === c.comm), commOwns = !!cm && (s.pid === cm.pid || (!!s.bb && (s.bb.pid === cm.pid || s.bb.k === c.comm)));
+  if (commOwns && !c.lots.some((l) => l.id !== lot.id && owns(l))) return 'The commissioner owns the lot this correction pays, so it has to be confirmed by a member who owns a different lot';
+  return null; }
+function applyCorr(c, R, R0, only) { // the engine's own derivation: one corrected game = one win for its winner (never a whole team line). only = the keys that count (corrPlan)
   const ev = EVENTS[c.ev], g = gamesOf(c), champR = ev.champRound || ev.final, T = (id) => (R[id] = R[id] || { wins: 0, winT: [], reached: 0, reachT: {}, champ: false, out: false });
-  const tag = (r, x, txt) => { r.manual = true; r.corr = true; r.reason = x.reason || ''; r.cnote = txt; };
-  Object.values(c.corr || {}).filter((x) => !corrState(c, x, g, R0)).sort((a, b) => (a.t || 0) - (b.t || 0) || (a.at || 0) - (b.at || 0)).forEach((x) => {
+  const tag = (r, x, txt) => { r.manual = true; r.corr = true; r.reason = x.reason || ''; r.cnote = txt; if ((x.obj || []).length) r.disp = Math.max(r.disp || 0, x.obj.length); };
+  const cg = new Set(); Object.defineProperty(R, '_cg', { value: cg, enumerable: false, configurable: true }); // the games a counting correction stands in for
+  Object.keys(c.corr || {}).filter((k) => !only || only.includes(k)).map((k) => c.corr[k]).filter((x) => !corrState(c, x, g, R0)).sort((a, b) => (a.t || 0) - (b.t || 0) || (a.at || 0) - (b.at || 0)).forEach((x) => {
     if (x.game == null) { const r = T(x.team); r.place = x.place; if (x.place === 1 && ev.kinds.includes('champ')) r.champ = true; tag(r, x, 'finished ' + ord(x.place)); return; }
-    if (ev.series) return; const w = T(x.w), l = T(x.l), rd = x.round || 0;
+    if (ev.series) return; cg.add(x.game); const w = T(x.w), l = T(x.l), rd = x.round || 0;
     [w, l].forEach((r) => { if (rd > r.reached) r.reached = rd; if (rd > 0 && r.reachT[rd] == null) r.reachT[rd] = x.t; }); // both played in that round
     if (ev.season && rd !== 0) { if (rd === champR) w.champ = true; } // season events: the title game makes the champion, it is not a regular-season win
     else { w.wins++; w.winT.push(x.t); w.winT.sort((a, b) => a - b);
@@ -553,42 +601,45 @@ function applyCorr(c, R, R0) { // the engine's own derivation: one corrected gam
 function fixable(c, tid, now, g0, R0) {
   const ev = EVENTS[c.ev], g = g0 || gamesOf(c); if (ev.manualOnly || ev.series || !g) return null;
   if (ev.plug) { const R = R0 || (feedR(c) || {}).R; if (!g.S || !g.S.hasEnd || g.S.end == null || now < g.S.end + DAY || (R && R[tid] && anyResult({ x: R[tid] }))) return null; return { games: [], end: g.S.end, place: true }; }
-  const dur = DUR[ev.sport] || 4 * 36e5, late = (g.G || []).filter((x) => x.teams.length === 2 && x.teams.includes(tid) && x.round != null && x.t > 0 && !x.tbd && now >= x.t + dur + DAY); if (!late.length) return null;
+  const dur = DUR[ev.sport] || 4 * 36e5, late = (g.G || []).filter((x) => x.teams.length === 2 && x.teams.includes(tid) && x.round != null && x.t > 0 && !x.tbd && !x.live && !x.nc && !x.held && now >= x.t + dur + DAY); /* ROUND 6: never a game the feed shows in progress, suspended or delayed, or one this read did not list */ if (!late.length) return null;
   return { games: late.map((x) => x.id), end: Math.min(...late.map((x) => x.t)) + dur, list: late, score: c.rules.rows.some((r) => r.k === 'big') };
 }
 const teamName = (c, tid) => { const t = teamOf(c, tid); if (t) return t.name; const ev = EVENTS[c.ev], h = ev.path ? TEAMS.get(ev.path + (ev.tq || '')) : null, k = h && h.list.find((x) => x.id === tid); return k ? k.name : ''; };
 // POST /calcutta/result on a feed-backed event. Order: commissioner -> a brand-new successful read (else 409 feed) -> a late game (else 409 feedonly) ->
 // reason -> only the one game's fields (else 400 onegame).
 async function correction(id, u, b, ip) {
-  const r0 = await loadRow(id, true); if (!r0 || r0.data.deleted || !memberOf(r0.data, u.mk)) throw bad(404, 'Calcutta not found'); const c0 = r0.data, ev = EVENTS[c0.ev], tid = String(b.team || '');
+  const r0 = await loadRow(id, true); if (!r0 || r0.data.deleted || !memberOf(r0.data, u.mk)) throw bad(404, 'Calcutta not found'); const c0 = r0.data, ev = EVENTS[c0.ev], tid = typeof b.team === 'string' || typeof b.team === 'number' ? String(b.team) : '';
   if (!isComm(c0, u.mk)) throw bad(403, 'Only the commissioner can do that'); const byName = mName(c0, memberOf(c0, u.mk).pid);
   if (b.clear) { const gk = b.game != null ? 'e:' + String(b.game) : null; return mutCalc(id, (c) => { if (!isComm(c, u.mk)) throw bad(403, 'Only the commissioner can do that'); const ks = Object.keys(c.corr || {}).filter((k) => (gk ? k === gk : c.corr[k].team === tid || c.corr[k].w === tid || c.corr[k].l === tid)); if (!ks.length) return { nochange: true, v: c };
-      ks.forEach((k) => { const txt = 'Correction removed by the commissioner (back to the score feed): ' + corrWhat(c.corr[k]); delete c.corr[k]; audit(c, byName, txt); notice(c, byName, txt, true, true); }); c.rev++; return c; }, u.mk); }
+      ks.forEach((k) => { const txt = 'Correction removed by the commissioner (back to the score feed): ' + corrWhat(c.corr[k]); delete c.corr[k]; audit(c, byName, txt); notice(c, byName, txt, true, true); }); c.rev++; return c; }, u.mk).then(async (c) => { await syncIdx(c); return c; }); }
   if (!teamOf(c0, tid)) throw bad(404, 'No such team');
   if (ev.series) throw bad(409, NOSERIES, { code: 'feedonly' });
   if (ev.plug && typeof (SOURCES[ev.plug] || {}).endTime !== 'function') throw bad(409, NOEND, { code: 'feedonly' }); // #4
   rate('corr', u.mk, ip);
   // #2: a SUCCESSFUL brand-new read, made in this request. Slow, down or timed out = 409 feed. The list of an earlier read is never used.
   let o = null; try { o = await Promise.race([readFeed(c0, true), sleep(D.corrMs, null)]); } catch (e) { o = null; }
-  if (!o || !o.gm || o.gm.sig !== sigOf(c0)) throw bad(409, FEEDNOW, { code: 'feed' });
+  if (!o || !o.gm || o.gm.sig !== sigOf(c0) || suspect(c0, o.R)) throw bad(409, FEEDNOW, { code: 'feed' });
   { const h = RES.get(id), sig = sigOf(c0); RES.set(id, Object.assign(h && h.sig === sig && h.busy ? { busy: h.busy } : {}, { sig, at: D.now(), tryAt: D.now(), R: o.R })); await afterFeed(id); } // what this read says (kickoff, start, results, void corrections) is kept exactly like any other read
-  const now = D.now(), fx = fixable(c0, tid, now, o.gm, o.R); if (!fx) throw bad(409, FEEDONLY, { code: 'feedonly' });
-  const reason = cleanName(b.reason, 100); if (reason.length < 5) throw bad(400, 'Say why you are correcting the score feed (5+ characters). Every member will see it.', { code: 'reason' });
+  const now = D.now(); if (!ev.plug && !ev.kinds.includes('champ') && c0.win && c0.win.to && chiDay(now) > addDay(c0.win.to, WIN_GRACE)) throw bad(409, 'This event closed ' + WIN_GRACE + ' days after its last day: its money is settled, so there is no correction any more.', { code: 'over' }); // ROUND 6 (B2)
+  const fx = fixable(c0, tid, now, o.gm, o.R); if (!fx) throw bad(409, FEEDONLY, { code: 'feedonly' });
+  const reason = typeof b.reason === 'string' ? cleanName(b.reason, 100) : ''; if (reason.length < 5) throw bad(400, 'Say why you are correcting the score feed (5+ characters). Every member will see it.', { code: 'reason' });
   if (['wins', 'reached', 'champ', 'out', 'big'].concat(fx.place ? ['winner', 'game', 'score'] : ['place']).some((k) => b[k] != null)) throw bad(400, ONEGAME, { code: 'onegame' }); // #1: never a whole team line
-  let rec, key;
+  let rec, key, score = null;
   if (fx.place) { const pl = Number(b.place); if (!(Number.isInteger(pl) && pl >= 1 && pl <= 200)) throw bad(400, 'Enter the finishing place of this team (1 to 200)', { code: 'onegame' }); rec = { team: tid, tn: teamName(c0, tid), place: pl, end: fx.end }; key = 's:' + tid; }
   else { const g = b.game != null ? fx.list.find((x) => x.id === String(b.game)) : fx.list.length === 1 ? fx.list[0] : null;
     if (!g) { if (b.game != null) throw bad(409, FEEDONLY, { code: 'feedonly' }); throw bad(400, 'This team has more than one late game. Pick the game you are correcting.', { code: 'whichgame' }); }
     const w = b.winner != null ? String(b.winner) : tid; if (!g.teams.includes(w)) throw bad(400, 'The winner has to be one of the two teams in that game', { code: 'onegame' }); const l = g.teams.find((x) => x !== w); let m = null;
-    if (fx.score) { const sc = Array.isArray(b.score) && b.score.length === 2 ? b.score.map(Number) : null; if (!sc || !sc.every((v) => Number.isInteger(v) && v >= 0 && v <= 300) || !(sc[0] > sc[1])) throw bad(400, 'This table pays the biggest win margin: enter that game\'s final score, winner first', { code: 'score' }); m = sc[0] - sc[1]; }
+    if (fx.score) { const sc = Array.isArray(b.score) && b.score.length === 2 ? b.score.map(Number) : null; if (!sc || !sc.every((v) => Number.isInteger(v) && v >= 0 && v <= 300) || !(sc[0] > sc[1])) throw bad(400, 'This table pays the biggest win margin: enter that game\'s final score, winner first', { code: 'score' }); m = sc[0] - sc[1];
+      const lim = SCORE[ev.sport] || SCORE.other; if (sc[0] > lim.max || m > lim.margin) throw bad(400, 'That score is not a real ' + lim.name + ' score (at most ' + lim.max + ' points, a margin of at most ' + lim.margin + '). Check it and type it again.', { code: 'scorebounds' }); score = sc; } // ROUND 6 (M-3)
     else if (b.score != null) throw bad(400, ONEGAME, { code: 'onegame' });
-    rec = { game: g.id, w, l, wn: teamName(c0, w), ln: teamName(c0, l), m, t: g.t, round: g.round }; key = 'e:' + g.id; }
+    rec = Object.assign({ game: g.id, w, l, wn: teamName(c0, w), ln: teamName(c0, l), m, t: g.t, round: g.round }, score ? { sc: score } : {}); key = 'e:' + g.id; }
   return mutCalc(id, (c) => { if (!isComm(c, u.mk)) throw bad(403, 'Only the commissioner can do that'); if (sigOf(c) !== o.gm.sig) throw bad(409, FEEDNOW, { code: 'feed' });
     if (startState(c, D.now()) !== 'started') throw bad(409, FEEDONLY, { code: 'feedonly' }); // a correction NEVER starts the event: the start is only ever written from the feed (afterFeed above)
     c.corr = c.corr || {}; const was = c.corr[key]; if (!was && Object.keys(c.corr).length >= CORR_MAX) throw bad(409, 'There are already ' + CORR_MAX + ' corrections on this Calcutta');
-    c.corr[key] = Object.assign(rec, { reason, by: byName, at: D.now() });
-    const txt = 'Entered by commissioner (correction) for ' + (teamName(c, tid) || 'a team') + ': ' + corrWhat(rec) + (rec.game != null ? ', game of ' + dayTxt(rec.t) : '') + (was ? ' (was: ' + corrWhat(was) + ')' : '') + '. Reason: ' + reason;
-    audit(c, byName, txt + '. The score feed replaces it the moment it reports.'); notice(c, byName, txt, true, true); c.rev++; return c; }, u.mk);
+    c.corr[key] = Object.assign(rec, { reason, by: byName, at: D.now() }); // a changed correction starts again: no confirm, no objections carried over
+    const why = corrPlan(c, o.R).pend[key];
+    const txt = (why ? 'PROPOSED by commissioner (correction, does NOT count until another member confirms it, because ' + WHYTXT[why] + ') for ' : 'Entered by commissioner (correction) for ') + (teamName(c, tid) || 'a team') + ': ' + corrWhat(rec) + (rec.game != null ? ', game of ' + dayTxt(rec.t) : '') + (was ? ' (was: ' + corrWhat(was) + ')' : '') + '. Reason: ' + reason;
+    audit(c, byName, txt + '. The score feed replaces it the moment it reports.'); notice(c, byName, txt, true, true); c.rev++; return c; }, u.mk).then(async (c) => { await syncIdx(c); return c; }); // ROUND 6 (M-5): the index flag `w` is written at once, so a restart re-reads it
 }
 // ---------- ROUND 5 #3: the background watch ----------
 // After an event has started, the feed is re-read WITHOUT anyone opening the board for as long as a correction stands or a game is unfinished, so "the
@@ -605,19 +656,21 @@ async function watchTick(force) { // force: run even under a test clock (tests d
   if (TICKING || (!force && D.now !== NOW0)) return 0; /* under a replaced clock (tests) the timer does nothing: tests call watchTick(true) */ TICKING = true; let n = 0;
   try { const now = D.now();
     if (now - WBOOT > 6e5 || now < WBOOT) { WBOOT = now; try { const all = await idx(); Object.keys(all).forEach((id) => { if (all[id].w && !WATCH.has(id)) WATCH.set(id, { last: 0, hot: true }); }); } catch (e) {} }
-    const due = [...WATCH.keys()].filter((id) => { const w = WATCH.get(id); return w.hot || now - w.last >= 5 * 6e4 || now < w.last; }).slice(0, 100);
+    const due = [...WATCH.keys()].filter((id) => { const w = WATCH.get(id); return w.hot || now - w.last >= 5 * 6e4 || now < w.last; }).sort((a, b) => WATCH.get(a).last - WATCH.get(b).last).slice(0, 100); // ROUND 6 (low): the ones read longest ago first, so more than 100 all get a turn
     for (let i = 0; i < due.length; i += 4) await Promise.all(due.slice(i, i + 4).map(async (id) => { try { const row = await loadRow(id), c = row && row.data;
       if (!worth(c, now)) { WATCH.delete(id); if (c && !c.deleted) { const e = (await idx())[id]; if (e && e.w) await syncIdx(c); } return; }
       WATCH.set(id, { last: now, hot: hot(c, now) }); const o = await refresh(c); if (o && o.saved) await o.saved; n++; } catch (e) { console.error('calcutta watch:', e.message); } }));
   } finally { TICKING = false; } return n;
 }
 function watch() { if (WT) return; WT = setInterval(() => { watchTick().catch(() => {}); }, WATCH_MS); if (WT.unref) WT.unref(); }
+const ENDW = new Map(); // calc id -> when a page last waited for the read after the window (at most one wait a minute per Calcutta: a hanging feed never slows every poll)
+const endUnread = (c, now) => { const ev = EVENTS[c.ev]; if (ev.manualOnly || ev.plug || ev.kinds.includes('champ') || !c.win || !c.win.to || !(chiDay(now) > c.win.to)) return false; const g = gamesOf(c); if (g && chiDay(g.at) > c.win.to) return false; const w = ENDW.get(c.id); if (w != null && now - w < 60e3 && now >= w) return false; ENDW.set(c.id, now); if (ENDW.size > 2000) ENDW.delete(ENDW.keys().next().value); return true; };
 // mode: true = wait for the feed (<= 4 s), false = a page (waits <= 2.5 s only when nothing at all is known), 'cache' = NEVER waits (stats, pot summaries)
 async function results(c, wait) { // feed results cached 5 min per Calcutta (1 min after a failure); a page never waits long on ESPN
   const h0 = RES.get(c.id), h = h0 && h0.sig === sigOf(c) ? h0 : null, now = D.now(), fresh = h && (h.err ? now - h.tryAt < 6e4 && now >= h.tryAt : h.R && now - h.at < 5 * 6e4 && now >= h.at);
   const kept = feedR(c); let R = kept && kept.R; const done = wait === 'cache' && kept && now - kept.at < DAY && now >= kept.at && Object.values(kept.R).some((x) => x && x.champ); // a finished event is not re-read for every stats page
-  if (!fresh && feedBacked(c) && !done && !(wait === 'cache' && h && h.busy)) { const p = refresh(c).then((o) => (o.ok ? o.R : R || {})); if (wait !== 'cache' && (wait || !kept)) /* ROUND 5: a page waits only when NOTHING is known (memory or row) */ R = await Promise.race([p, sleep(wait ? WAIT_MS : 2500, R || {})]); }
-  const R0 = R || {}; R = clone(R0); if (feedBacked(c)) { applyCorr(c, R, R0); return R; } // ROUND 5: a feed-backed event = the feed + the standing one-game corrections, nothing typed
+  if (!fresh && feedBacked(c) && !done && !(wait === 'cache' && h && h.busy)) { const p = refresh(c).then((o) => (o.ok ? o.R : R || {})); if (wait !== 'cache' && (wait || !kept || endUnread(c, now))) /* ROUND 5: a page waits only when NOTHING is known (memory or row); ROUND 6 (B2): or when a window event's days have passed and the feed was not read since */ R = await Promise.race([p, sleep(wait ? WAIT_MS : 2500, R || {})]); }
+  const R0 = R || {}; R = clone(R0); if (feedBacked(c)) { const plan = corrPlan(c, R0); applyCorr(c, R, R0, plan.on); Object.defineProperty(R, '_plan', { value: plan, enumerable: false }); return R; } // ROUND 5: a feed-backed event = the feed + the standing one-game corrections, nothing typed
   Object.keys(c.manual || {}).forEach((id) => { const m = c.manual[id]; const x = R[id] = R[id] || { wins: 0, winT: [], reached: 0, reachT: {}, champ: false, out: false };
     if (m.wins != null) { const n = m.wins; while (x.winT.length < n) x.winT.push(9e15 + (m.at || 0)); /* hand-added wins are paid after the feed wins (slot order) */ x.winT = x.winT.slice(0, n); x.wins = n; }
     if (m.reached != null) { x.reached = m.reached; for (let r = 1; r <= m.reached; r++) if (x.reachT[r] == null) x.reachT[r] = 9e15 + (m.at || 0); }
@@ -633,7 +686,7 @@ function slotAmounts(rows, poolC) { // every row pays n slots of pool*bp/10000; 
   for (let k = 0; left > 0 && k < ord.length; k++, left--) ord[k].c++;
   return rows.map((r, i) => sl.filter((x) => x.i === i).map((x) => x.c));
 }
-function money(c, R) {
+function money(c, R, ctx) { // ctx (optional, tests): { now, g } = the clock and the last game list, for the end of a window event
   const ev = EVENTS[c.ev], rules = c.rules, potC = Object.values(c.sold).reduce((a, x) => a + Math.round(x.amt * 100), 0);
   const takeC = rules.take.kind === 'pct' ? Math.round(potC * rules.take.v / 100) : rules.take.kind === 'flat' ? Math.min(Math.round(rules.take.v * 100), potC) : 0, poolC = potC - takeC;
   const amts = slotAmounts(rules.rows, poolC), teamLot = {}; c.lots.forEach((l) => l.teams.forEach((t) => { teamLot[t.id] = l.id; }));
@@ -642,13 +695,17 @@ function money(c, R) {
   // 1st share 1st + 2nd; the next team is 3rd, whether it was entered as 2nd or 3rd). The group's money = everything the table pays for the places it
   // covers, split evenly; leftover cents go one each to the first teams in lot order. Only teams in a lot hold a place.
   const order = {}; let oi = 0; c.lots.forEach((l) => l.teams.forEach((t) => { order[t.id] = oi++; }));
-  const placed = Object.keys(R).filter((id) => teamLot[id] && Number.isInteger(R[id].place) && R[id].place > 0).sort((a, b) => R[a].place - R[b].place || order[a] - order[b]);
-  const groups = [], posOf = {}; { let end = 0; for (let i = 0; i < placed.length;) { let j = i; while (j < placed.length && R[placed[j]].place === R[placed[i]].place) j++; const ids = placed.slice(i, j), from = Math.max(R[ids[0]].place, end + 1); end = from + ids.length - 1; groups.push({ ids, from, to: end }); ids.forEach((id) => { posOf[id] = { pos: from, tie: ids.length > 1, of: ids.length }; }); i = j; } }
+  // ROUND 6 (M-1): on a table with a Champion row THE CHAMPION IS 1st PLACE. The Champion row is the money for 1st (with a "Winner" row when the table has
+  // both), so teams tied for 1st share Champion + the next places evenly, to the cent, like every other tie. A ticked champion with no place typed is 1st,
+  // and a team typed 1st is paid the Champion row.
+  const hasPl = rules.rows.some((r) => r.k === 'champ'), eff = (id) => { const x = R[id]; if (!x) return 0; if (hasPl && x.champ) return 1; return Number.isInteger(x.place) && x.place > 0 ? x.place : 0; };
+  const placed = Object.keys(R).filter((id) => teamLot[id] && eff(id) > 0).sort((a, b) => eff(a) - eff(b) || order[a] - order[b]);
+  const groups = [], posOf = {}; { let end = 0; for (let i = 0; i < placed.length;) { let j = i; while (j < placed.length && eff(placed[j]) === eff(placed[i])) j++; const ids = placed.slice(i, j), from = Math.max(eff(ids[0]), end + 1); end = from + ids.length - 1; groups.push({ ids, from, to: end }); ids.forEach((id) => { posOf[id] = { pos: from, tie: ids.length > 1, of: ids.length }; }); i = j; } }
   const covered = (p) => groups.some((g) => p >= g.from && p <= g.to), placeHit = {};
-  groups.forEach((g) => { let potG = 0; rules.rows.forEach((r, i) => { if (r.k === 'place' && r.r >= g.from && r.r <= g.to) { potG += amts[i].reduce((s, v) => s + v, 0); placeHit[i] = g.ids.length; } });
+  groups.forEach((g) => { let potG = 0; rules.rows.forEach((r, i) => { if ((r.k === 'place' && r.r >= g.from && r.r <= g.to) || (r.k === 'champ' && hasPl && g.from === 1)) { potG += amts[i].reduce((s, v) => s + v, 0); placeHit[i] = g.ids.length; } });
     const each = Math.floor(potG / g.ids.length); let left = potG - each * g.ids.length; g.ids.forEach((id) => { add(id, each + (left > 0 ? 1 : 0)); if (left > 0) left--; }); });
   rules.rows.forEach((r, i) => {
-    if (r.k === 'place') { const a = amts[i], tot = a.reduce((s, v) => s + v, 0), hit = placeHit[i] || 0; rowsOut.push({ k: r.k, r: r.r, n: r.n, pct: r.bp / 100, label: r.label, each: a.length ? a[0] / 100 : 0, total: tot / 100, hits: hit, paid: hit ? tot / 100 : 0, over: false, tie: hit > 1 }); return; }
+    if (r.k === 'place' || (r.k === 'champ' && hasPl)) { const a = amts[i], tot = a.reduce((s, v) => s + v, 0), hit = placeHit[i] || 0; rowsOut.push({ k: r.k, r: r.r || null, n: r.n, pct: r.bp / 100, label: r.label, each: a.length ? a[0] / 100 : 0, total: tot / 100, hits: hit, paid: hit ? tot / 100 : 0, over: false, tie: hit > 1 }); return; }
     let evs = []; Object.keys(R).forEach((id) => { if (!teamLot[id]) return; const x = R[id];
       if (r.k === 'win') x.winT.forEach((t) => evs.push({ id, t }));
       else if (r.k === 'round' && x.reached >= r.r) evs.push({ id, t: x.reachT[r.r] || 0 });
@@ -658,9 +715,26 @@ function money(c, R) {
     const a = amts[i]; let paid = 0; evs.forEach((e, k) => { const v = k < a.length ? a[k] : 0; add(e.id, v); paid += v; });
     rowsOut.push({ k: r.k, r: r.r || null, n: r.n, pct: r.bp / 100, label: r.label, each: a.length ? a[0] / 100 : 0, total: a.reduce((s, v) => s + v, 0) / 100, hits: evs.length, paid: paid / 100, over: evs.length > r.n });
   });
-  const over = (() => { if (ev.manualOnly || ev.plug) { const pl = rules.rows.filter((r) => r.k === 'place'), champK = Object.values(R).some((x) => x.champ); const allDone = c.lots.every((l) => l.teams.every((t) => { const x = R[t.id]; return !!x && ((Number.isInteger(x.place) && x.place > 0) || !!x.out); })); /* ROUND 5 #6: a team that dropped out (marked out) no longer keeps the event open */ return pl.length ? (pl.every((r) => covered(r.r)) || placed.length === oi || allDone) && (champK || !rules.rows.some((r) => r.k === 'champ')) : champK; } /* ROUND 4 B2: a tie covers the places it takes (1st, 1st, 3rd is over); so is an event where every team has its place */ /* over = champion known, or every paid place filled (was: over from the start when the table had no champion row) */ return Object.values(R).some((x) => x.champ); })();
+  // WHEN IS THE EVENT OVER? (then nothing stays "in play": what the table did not pay goes by the unsold-lot rule)
+  //  hand-entered / plugged events (ROUND 4 B2, ROUND 5 #6, ROUND 6 M-2 + B2):
+  //   - the commissioner marked the event finished (c.fin, Custom only), or EVERY team is done (has its place, is the champion, or is marked Out); or
+  //   - place rows: every paid place is covered (a tie covers the places it takes) and, with a Champion row, somebody is 1st; or
+  //   - a Champion row and no place rows: the champion is known; or
+  //   - NO champion and no place rows: every slot of every row has been paid (nothing left to win).
+  //  feed events: the champion is known. Events that have no champion (ROUND 6 B2: "this weekend"): the window has passed, the feed was read after it,
+  //  and every listed game of a lot team is final, off (postponed / cancelled) or stands corrected; a game still open 7 days after the window counts as off.
+  const over = (() => { const champK = Object.values(R).some((x) => x && x.champ);
+    if (ev.manualOnly || ev.plug) { const pl = rules.rows.filter((r) => r.k === 'place'), champRow = rules.rows.some((r) => r.k === 'champ');
+      const allDone = c.lots.every((l) => l.teams.every((t) => { const x = R[t.id]; return !!x && (eff(t.id) > 0 || !!x.out || !!x.champ); }));
+      if ((ev.manualOnly && c.fin) || allDone) return true;
+      if (pl.length) return (pl.every((r) => covered(r.r)) || placed.length === oi) && (!champRow || covered(1) || champK);
+      if (champRow || champK) return champK || (champRow && covered(1));
+      return rowsOut.every((x) => x.hits >= x.n); }
+    if (champK) return true; if (ev.kinds.includes('champ') || !c.win || !c.win.to) return false;
+    const now = ctx && ctx.now != null ? ctx.now : D.now(), g = ctx && ctx.g !== undefined ? ctx.g : gamesOf(c); if (!(chiDay(now) > c.win.to)) return false; if (chiDay(now) > addDay(c.win.to, WIN_GRACE)) return true;
+    if (!g || !(chiDay(g.at) > c.win.to)) return false; const cg = R._cg || new Set(); return !(g.G || []).some((x) => !cg.has(x.id)); })();
   const lots = c.lots.map((l) => { const e = l.teams.reduce((s, t) => s + (earnT[t.id] || 0), 0), s = c.sold[l.id];
-    const alive = !over && l.teams.some((t) => !(R[t.id] && R[t.id].out)); const out = { id: l.id, name: l.name, field: !!l.field, earnedC: e, alive, teams: l.teams.map((t) => ({ id: t.id, name: t.name, abbr: t.abbr, r: R[t.id] ? { wins: R[t.id].wins, reached: R[t.id].reached, champ: !!R[t.id].champ, out: !!R[t.id].out, big: !!R[t.id].big, place: R[t.id].place || null, pos: posOf[t.id] ? posOf[t.id].pos : null, tie: !!(posOf[t.id] && posOf[t.id].tie), manual: !!R[t.id].manual, corr: !!R[t.id].corr, reason: R[t.id].corr ? R[t.id].reason || '' : undefined, note: R[t.id].corr ? R[t.id].cnote || '' : undefined } : null, earned: (earnT[t.id] || 0) / 100 })) };
+    const alive = !over && l.teams.some((t) => !(R[t.id] && R[t.id].out)); const out = { id: l.id, name: l.name, field: !!l.field, earnedC: e, alive, teams: l.teams.map((t) => ({ id: t.id, name: t.name, abbr: t.abbr, r: R[t.id] ? { wins: R[t.id].wins, reached: R[t.id].reached, champ: !!R[t.id].champ, out: !!R[t.id].out, big: !!R[t.id].big, place: R[t.id].place || null, pos: posOf[t.id] ? posOf[t.id].pos : null, tie: !!(posOf[t.id] && posOf[t.id].tie), manual: !!R[t.id].manual, corr: !!R[t.id].corr, disputed: R[t.id].disp || 0, reason: R[t.id].corr ? R[t.id].reason || '' : undefined, note: R[t.id].corr ? R[t.id].cnote || '' : undefined } : null, earned: (earnT[t.id] || 0) / 100 })) };
     if (s) { out.sold = { amt: s.amt, how: s.how, at: s.at }; out.holder = s.pid ? { pid: s.pid, name: mName(c, s.pid) } : { pid: null, name: s.name }; out._hk = hKey(c, s); if (s.bb) { const w = bbWho(c, s.bb); out.bb = { pid: w.pid, name: w.name }; out._bk = hKey(c, s.bb); } }
     return out; });
   // Playbook play 10: winnings of lots nobody bought. 'roll' (default): shared among the sold lots pro rata to what each has earned so far
@@ -691,6 +765,7 @@ function money(c, R) {
   lots.forEach((l) => { l.earned = l.earnedC / 100; l.rolled = (l.rollC || 0) / 100; l.pendingRoll = (l.pendC || 0) / 100; delete l.earnedC; delete l.rollC; delete l.pendC; delete l.shC; delete l._hk; delete l._bk; });
   return { pot: potC / 100, take: takeC / 100, takeKind: rules.take.kind, takeV: rules.take.v, pool: poolC / 100, paidOut: paidC / 100, unclaimed: waitC / 100, rolled: rolledC / 100, pendingRoll: pendC / 100, rollBy, leftover: leftC / 100, carry: unsoldRule === 'carry' ? unsoldC / 100 : 0, carryTo: unsoldRule === 'carry' ? carryTo(c) : null, unsoldRule, inPlay: (poolC - paidC - waitC) / 100, over, rows: rowsOut, lots, owners, main: rules.main };
 }
+const WIN_GRACE = 7; // days after a window event's last day when a game still without a result stops holding the money
 const acctK = (k) => !!k && !/^n:/.test(k); // a member key or a guest id (not a typed name)
 const bbWho = (c, h) => { if (h.pid) return { pid: h.pid, name: mName(c, h.pid) }; const m = acctK(h.k) ? c.members.find((x) => x.mk === h.k) : null; return m ? { pid: m.pid, name: m.name } : { pid: null, name: h.name || 'Player' }; }; // a co-owner who joined later is that member
 const hKey = (c, h) => { const w = bbWho(c, h); return w.pid ? 'p:' + w.pid : acctK(h.k) ? 'k:' + h.k : 'n:' + String(h.name || '').toLowerCase(); };
@@ -712,7 +787,7 @@ function full(c, mk, now) {
   o.sold = c.a.order.filter((id) => c.sold[id]).map((id) => { const s = c.sold[id]; return { lot: id, name: lotOf(c, id).name, holder: s.pid ? { pid: s.pid, name: mName(c, s.pid) } : { pid: null, name: s.name }, amt: s.amt, at: s.at, how: s.how, bb: s.bb ? (s.bb.pid ? { pid: s.bb.pid, name: mName(c, s.bb.pid) } : { pid: null, name: s.bb.name }) : null }; }).sort((x, y) => y.at - x.at);
   const st = startState(c, now), k = kickOf(c); o.started = st === 'started'; o.feedLock = st === 'unknown'; o.kick = !o.started && k && k.t0 ? k.t0 : null; /* the moment ownership locks, when known */ o.unsold = c.lots.filter((l) => !c.sold[l.id]).length; { const nf = noticesFor(c, memberOf(c, mk)); o.notices = nf.list; o.unread = nf.unread; o.pinned = nf.pinned; o.noticeTop = nf.top; }
   o.claims = Object.keys(c.guests || {}).filter((g) => c.guests[g].want && !c.guests[g].claimed).map((g) => ({ ref: gRef(c, g), guest: c.guests[g].name, by: c.guests[g].want.name, mine: c.guests[g].want.mk === mk })); /* ROUND 5 #8: claims waiting for another member */ if (comm) o.guests = Object.keys(c.guests || {}).map((g) => ({ guest: g, name: c.guests[g].name, claimed: !!c.guests[g].claimed })); o.a.undo = a.cur && (c.bids[a.cur] || []).length ? { k: 'bid' } : a.just && c.sold[a.just] && c.sold[a.just].how === 'auction' ? { k: 'sale', name: lotOf(c, a.just).name } : null;
-  o.potSoFar = Object.values(c.sold).reduce((s, x) => s + x.amt, 0); o.now = now; o.rev = c.rev || 0; return o;
+  o.fin = c.fin ? { by: c.fin.by, at: c.fin.at } : null; o.canFinish = comm && !!EVENTS[c.ev].manualOnly && st === 'started'; /* ROUND 6 (B2) */ o.potSoFar = Object.values(c.sold).reduce((s, x) => s + x.amt, 0); o.now = now; o.rev = c.rev || 0; return o;
 }
 const canSee = (c, mk) => !!memberOf(c, mk);
 
@@ -752,7 +827,7 @@ async function handle(req, res) {
       send(res, 200, { teams: list.map((t) => ({ id: t.id, name: t.name, abbr: t.abbr, players: (t.players || []).length })) }); return true; }
     if (op === 'claim') { // ROUND 4 #7: a guest who signed up opens the claim link the commissioner sent: the guest's teams and buy-backs in THAT Calcutta move to the account
       if (codeBlocked('g|a|' + u.mk) || codeBlocked('g|i|' + ip)) throw bad(429, 'Too many wrong links. Wait 15 minutes.'); rate('claim', u.mk, ip);
-      try { const o = await claimGuest(b.token, u.e, { name: await nameOf(u.e) }); if (o.pending) send(res, 202, { ok: false, pending: true, id: o.id, name: o.name, error: 'You recorded this guest\'s buy-back yourself, so another member of the Calcutta has to confirm before the guest becomes your account. They have been told.' }); else send(res, 200, { ok: true, id: o.id, name: o.name }); } catch (e) { if (e.status === 404) { codeFail('g|a|' + u.mk); codeFail('g|i|' + ip); } throw e; } return true; }
+      try { const o = await claimGuest(b.token, u.e, { name: await nameOf(u.e) }); if (o.pending) send(res, 202, { ok: false, pending: true, id: o.id, name: o.name, error: 'You run this Calcutta, so another member has to confirm before this guest becomes your account. Every member has been told.' }); else send(res, 200, { ok: true, id: o.id, name: o.name }); } catch (e) { if (e.status === 404) { codeFail('g|a|' + u.mk); codeFail('g|i|' + ip); } throw e; } return true; }
     if (op === 'mine') { const all = await idx(), out = []; Object.keys(all).forEach((id) => { const x = all[id]; if ((x.mks || []).includes(u.mk)) out.push({ id, name: x.name, ev: x.ev, evLabel: (EVENTS[x.ev] || {}).label || '', status: x.status, comm: x.comm === u.mk, created: x.created, group: x.group }); }); out.sort((a, b2) => b2.created - a.created); send(res, 200, { calcs: out.slice(0, 50), max: await maxFor(akOf(u.e), ''), capText: PRICE }); return true; }
     if (op === 'create') { rate('create', u.mk, ip); // { groupId } (OddJoin.openGame('calcutta', '', { groupId, create: true })): created FOR a group by that group's commissioner, and added to it
       const gid = b.groupId != null && b.groupId !== '' ? String(b.groupId) : ''; if (gid && (!/^[\w:-]{1,40}$/.test(gid) || (await groupRole(gid, u.mk)) !== 'comm')) throw bad(403, GRPCOMM, { code: 'groupcomm' });
@@ -787,7 +862,9 @@ async function handle(req, res) {
       if (!row.data.startedAt && startState(row.data, D.now()) === 'started') { await markStarted(id); row = await loadRow(id, true); } // ROUND 2 D1: persist the start (ROUND 3: never from games that are only scheduled)
       const c = row.data, m = money(c, R);
       m.owners.forEach((o) => { o.me = o.pid === (memberOf(c, u.mk) || {}).pid; delete o.key; }); m.lots.forEach((l) => { l.por = porOut(c, lotOf(c, l.id), u.mk); l.porLocked = porLocked(c, lotOf(c, l.id)); if (isComm(c, u.mk) && feedBacked(c)) l.teams.forEach((t) => { const fx = fixable(c, t.id, now); if (fx) t.fix = { end: fx.end, place: !!fx.place, score: !!fx.score, games: (fx.list || []).map((x) => ({ id: x.id, t: x.t, teams: x.teams.map((tid) => ({ id: tid, name: teamName(c, tid) || 'Opponent' })) })) }; }); }); /* which one-game corrections look open, from the last list known (a hint: the route re-reads the feed) */ const r = RES.get(c.id);
-      { const g = gamesOf(c), f = feedR(c); m.corrections = Object.values(c.corr || {}).filter((x) => !corrState(c, x, g, f && f.R)).sort((a, b2) => b2.at - a.at).map((x) => ({ what: corrWhat(x), game: x.game || null, team: x.game == null ? x.team : x.w, day: x.game != null ? chiDay(x.t) : null, reason: x.reason, by: x.by, at: x.at })); } // every member sees every standing correction
+      { const g = gamesOf(c), f = feedR(c), plan = R._plan || corrPlan(c, (f && f.R) || {}); m.corrections = Object.keys(c.corr || {}).filter((k) => !corrState(c, c.corr[k], g, f && f.R)).sort((a, b2) => c.corr[b2].at - c.corr[a].at).map((k) => { const x = c.corr[k], why = plan.pend[k] || null, nobj = (x.obj || []).length, bar = why ? confirmBar(c, x, u.mk) : null;
+        return Object.assign({ ref: k, what: corrWhat(x), game: x.game || null, team: x.game == null ? x.team : x.w, lost: x.game == null ? null : x.l, day: x.game != null ? chiDay(x.t) : null, reason: x.reason, by: x.by, at: x.at, pending: !!why, objections: nobj, objected: (x.obj || []).some((o) => o.mk === u.mk), disputed: why ? 0 : nobj },
+          why ? { why, whyText: WHYTXT[why], canConfirm: !bar && !nobj, bar: bar || (nobj ? 'A member objects: it cannot be confirmed while an objection stands' : null) } : {}, x.ok ? { confirmedBy: x.ok.by } : {}); }); } // ROUND 6 (B1): proposed / counts / disputed, for every member // every member sees every standing correction
       send(res, 200, { calc: full(c, u.mk, now), board: m, audit: (c.audit || []).slice(-120).reverse(), feedAt: r && r.at ? r.at : null, manual: Object.keys(c.manual || {}).length }); return true; }
     if (op === 'bid') {
       rate('bid', u.mk, ip); const amt = Number(b.amt), lot = String(b.lot || ''); const fz = await freezeCheck(id, false); // ROUND 3 #4: never waits on the feed
@@ -838,11 +915,30 @@ async function handle(req, res) {
     if (op === 'seen') { // ROUND 5 #5: this member has seen the notices up to number n (their own unread marker; nobody else's changes)
       rate('write', u.mk, ip); const c = await mutCalc(id, (c) => { const m = memberOf(c, u.mk), top = c.nseq || 0, n = b.n == null ? top : Math.min(Math.floor(Number(b.n)) || 0, top); if (!(n > (m.seenN || 0))) return { nochange: true, v: c }; m.seenN = n; return c; }, u.mk);
       send(res, 200, { calc: full(c, u.mk, now) }); return true; }
+    if (op === 'corrok' || op === 'object') { // ROUND 6 (B1): ANOTHER member confirms a proposed correction; ANY member objects to (or withdraws an objection to) any correction
+      rate('write', u.mk, ip); const key = typeof b.ref === 'string' ? b.ref : '';
+      const c = await mutCalc(id, (c) => { const m = memberOf(c, u.mk), x = Object.prototype.hasOwnProperty.call(c.corr || {}, key) ? c.corr[key] : null, f = feedR(c), R0 = (f && f.R) || {};
+        if (!x || corrState(c, x, gamesOf(c), R0)) throw bad(404, 'That correction is no longer there');
+        if (op === 'object') { if (isComm(c, u.mk)) throw bad(403, 'The commissioner removes his own correction instead of objecting to it', { code: 'confirm' }); x.obj = x.obj || []; const i = x.obj.findIndex((o) => o.mk === u.mk);
+          if (b.off) { if (i < 0) return { nochange: true, v: c }; x.obj.splice(i, 1); if (!x.obj.length) delete x.obj; const txt = m.name + ' withdrew the objection to the correction "' + corrWhat(x) + '"'; audit(c, m.name, txt); notice(c, m.name, txt, true, true); }
+          else { if (i >= 0) return { nochange: true, v: c }; x.obj.push({ mk: u.mk, name: m.name, at: D.now() }); const pend = !!corrPlan(c, R0).pend[key];
+            const txt = m.name + ' OBJECTS to the commissioner correction "' + corrWhat(x) + '" (' + x.obj.length + ' member' + (x.obj.length === 1 ? '' : 's') + ' object' + (x.obj.length === 1 ? 's' : '') + '). ' + (pend ? 'It cannot be confirmed while an objection stands.' : 'It still counts, marked as disputed, until the score feed reports or the commissioner withdraws it.'); audit(c, m.name, txt); notice(c, m.name, txt, true, true); }
+          c.rev++; return c; }
+        const why = corrPlan(c, R0).pend[key]; if (!why) return { nochange: true, v: c }; const bar = confirmBar(c, x, u.mk); if (bar) throw bad(403, bar, { code: 'confirm' });
+        if ((x.obj || []).length) throw bad(409, 'A member objects to this correction: it cannot be confirmed while an objection stands', { code: 'disputed' });
+        x.ok = { by: m.name, at: D.now() }; const txt = m.name + ' confirmed the commissioner correction "' + corrWhat(x) + '": it counts now (the score feed still replaces it the moment it reports)'; audit(c, m.name, txt); notice(c, m.name, txt, true, true); c.rev++; return c; }, u.mk);
+      await syncIdx(c); send(res, 200, { calc: full(c, u.mk, now) }); return true; }
+    if (op === 'finish') { // ROUND 6 (B2): a hand-entered (Custom) event has no feed to say it is over: the commissioner marks it finished (or opens it again), with a pinned notice to all
+      rate('write', u.mk, ip); const c = await mutCalc(id, (c) => { if (!isComm(c, u.mk)) throw bad(403, 'Only the commissioner can do that'); if (!EVENTS[c.ev].manualOnly) throw bad(409, 'This event ends by its own results', { code: 'feedonly' }); const by = mName(c, memberOf(c, u.mk).pid);
+        if (b.off) { if (!c.fin) return { nochange: true, v: c }; delete c.fin; const txt = 'The commissioner opened the event again: it is not finished'; audit(c, by, txt); notice(c, by, txt, true, true); c.rev++; return c; }
+        if (c.fin) return { nochange: true, v: c }; if (startState(c, D.now()) !== 'started') throw bad(409, 'Enter the first result before marking the event finished', { code: 'notstarted' });
+        c.fin = { by, at: D.now() }; const txt = 'The commissioner marked the event FINISHED. Money the table did not pay is ' + (c.rules.unsold === 'carry' ? 'carried to ' + carryTo(c) : 'rolled into the payouts of the sold lots, pro rata') + '.'; audit(c, by, txt); notice(c, by, txt, true, true); c.rev++; return c; }, u.mk);
+      send(res, 200, { calc: full(c, u.mk, now) }); return true; }
     if (op === 'claimok') { // ROUND 5 #8: ANOTHER member confirms (or turns down) the commissioner's claim of a guest whose buy-back he recorded himself
       rate('write', u.mk, ip); const c = await mutCalc(id, (c) => { const m = memberOf(c, u.mk); if (isComm(c, u.mk)) throw bad(403, 'Another member has to confirm this, not the commissioner', { code: 'confirm' });
         const gid = Object.keys(c.guests || {}).find((g) => c.guests[g].want && !c.guests[g].claimed && gRef(c, g) === String(b.ref || '')); if (!gid) throw bad(404, 'Nothing to confirm'); const g = c.guests[gid];
         if (b.ok === false) { const txt = m.name + ' did not confirm the claim of guest ' + g.name + ' by the commissioner: it stays with the guest'; delete g.want; audit(c, m.name, txt); notice(c, m.name, txt, true, true); }
-        else { const w = g.want; finishClaim(c, gid, w.mk, w.name, m.name); notice(c, m.name, m.name + ' confirmed: guest ' + g.name + ' is now the account of ' + w.name + ' (the commissioner)', true, true); } c.rev++; return c; }, u.mk);
+        else { const w = g.want; finishClaim(c, gid, w.mk, w.name, m.name); } c.rev++; return c; }, u.mk);
       await syncIdx(c); send(res, 200, { calc: full(c, u.mk, now) }); return true; }
     if (op === 'buyback' || op === 'por') { // OWNER DECISION Nov 16 2026: classic golf Calcutta buy-back (see HANDOFF Decisions)
       rate('write', u.mk, ip); const lot = String(b.lot || ''); let fz = false, links = []; fz = await freezeCheck(id, true);
@@ -859,7 +955,7 @@ async function handle(req, res) {
         const s = c.sold[lot]; if (!s) throw bad(409, 'That lot is not sold yet');
         if (!(l.por || []).length) throw bad(409, 'Only the lot\'s own player(s) can buy it back, and this lot has none in the group');
         const mine = isPor(l, u.mk);
-        if (b.clear) { if (!s.bb) return { nochange: true, v: c }; if (!comm && !(s.bb.k && s.bb.k === u.mk)) throw bad(403, 'Only the commissioner or the player who bought back can remove it'); audit(c, by, 'Removed the buy-back on ' + l.name); if (wasClosed) notice(c, by, 'Removed the buy-back on ' + l.name); s.bb = null; c.rev++; return c; }
+        if (b.clear) { if (!s.bb) return { nochange: true, v: c }; if (!comm && !(s.bb.k && s.bb.k === u.mk)) throw bad(403, 'Only the commissioner or the player who bought back can remove it'); { const txt = 'Buy-back removed on ' + l.name + ': ' + buyerOf(c, s) + ' (the buyer, $' + s.amt + ') owns all of it again'; audit(c, by, txt); notice(c, by, txt, true, true); } s.bb = null; c.rev++; return c; }
         if (s.bb) throw bad(409, 'Half of this lot is already bought back');
         let e; // which player of record buys back
         if (!comm || b.self) { if (!mine) throw bad(403, 'Only the lot\'s own player(s) can buy back half'); e = l.por.find((x) => x.k === u.mk); }
@@ -868,7 +964,7 @@ async function handle(req, res) {
         if (!m && /^[0-9a-f]{24}$/.test(e.k)) throw bad(409, 'That player has to join this Calcutta before a buy-back can be recorded for them', { code: 'notjoined' }); // ROUND 4 #5/#6: no money on the dashboard of an account that never joined
         if ((w.pid && w.pid === s.pid) || (!w.pid && !s.pid && w.name.toLowerCase() === s.name.toLowerCase())) throw bad(400, 'The buyer cannot buy back from themselves');
         s.bb = { pid: w.pid, name: w.name, k: e.k, at: D.now() }; if (holders(c).size > maxOf(c)) throw bad(409, capMsg(c, 'Too many people'), { code: 'cap' });
-        audit(c, by, (w.pid ? mName(c, w.pid) : w.name) + ' bought back half of ' + l.name + ' for $' + (Math.floor(s.amt * 100 / 2) / 100) + (comm && !mine ? ' (recorded by the commissioner)' : '')); if (wasClosed) notice(c, by, (w.pid ? mName(c, w.pid) : w.name) + ' bought back half of ' + l.name); c.rev++; return c;
+        { const txt = (w.pid ? mName(c, w.pid) : w.name) + ' bought back half of ' + l.name + ' for $' + (Math.floor(s.amt * 100 / 2) / 100) + ' from its buyer ' + buyerOf(c, s) + ' (who paid $' + s.amt + ')' + (comm && !mine ? ', recorded by the commissioner' : ''); audit(c, by, txt); notice(c, by, txt, true, true); } /* ROUND 6 (B3): every buy-back is a pinned notice to all, the buyer named */ void wasClosed; c.rev++; return c;
       }, u.mk);
       if (op === 'por') await syncIdx(c); /* S-ALL: the index knows each lot's players */ send(res, 200, Object.assign({ calc: full(c, u.mk, now) }, links.length ? { guestLinks: links } : {})); return true;
     }
@@ -995,21 +1091,23 @@ async function setPlayersOfRecord(id, lotId, players) { const c = await mutCalc(
 // proved a guest's identity its own way (a lot source's claim link) asks for a fresh token with reissueGuestToken(calcId, guestId) and passes it on.
 // ROUND 5 #8: the history says WHO claimed. A commissioner cannot quietly become a guest he created after recording that guest's buy-back himself: his
 // claim waits (c.guests[id].want) until ANOTHER member confirms it (POST /calcutta/claimok); until then the guest stays in the owner list as the guest.
+const buyerOf = (c, s) => (s.pid ? mName(c, s.pid) : s.name || 'Player');
+const guestLots = (c, gid) => { const gk = 'g:' + gid, out = []; c.lots.forEach((l) => { const s = c.sold[l.id]; if (isPor(l, gk) || (s && s.bb && s.bb.k === gk)) out.push(l.name + (s ? ' (bought by ' + buyerOf(c, s) + ' for $' + s.amt + (s.bb && s.bb.k === gk ? ', half bought back by this guest' : '') + ')' : ' (not sold)')); }); return out.length ? out.join('; ') : 'no lot'; };
 const gRef = (c, gid) => crypto.createHash('sha256').update(c.id + '|guest|' + gid).digest('hex').slice(0, 10); // what members get instead of the guest id
-function finishClaim(c, gid, mk, by, okBy) { const gk = 'g:' + gid, m = memberOf(c, mk), g = c.guests[gid];
+function finishClaim(c, gid, mk, by, okBy) { const gk = 'g:' + gid, m = memberOf(c, mk), g = c.guests[gid], lotsTxt = guestLots(c, gid);
   c.lots.forEach((l) => { if (isPor(l, gk)) { const had = isPor(l, mk); l.por = l.por.filter((p) => p.k !== gk || !had); l.por.forEach((p) => { if (p.k === gk) { p.k = mk; p.was = gk; delete p.pend; if (m) p.name = m.name; } }); } const s = c.sold[l.id]; if (s && s.bb && s.bb.k === gk) { s.bb.k = mk; s.bb.was = gk; if (m) { s.bb.pid = m.pid; s.bb.name = ''; } } });
   g.th = null; g.claimed = D.now(); g.by = by; delete g.want; // single use
-  audit(c, 'Oddable', 'Guest ' + g.name + ' was claimed by ' + by + (okBy ? ' (confirmed by ' + okBy + ')' : '') + ': the team and buy-backs of that guest now belong to that account'); }
+  { const txt = 'Guest ' + g.name + ' was claimed by ' + by + (okBy ? ' (confirmed by ' + okBy + ')' : '') + ': the team and buy-backs of that guest now belong to that account'; audit(c, 'Oddable', txt); notice(c, 'Oddable', txt + '. Lot: ' + lotsTxt, true, true); } } // ROUND 6 (B3): every claim is a pinned notice to all, with the lot and its buyer
 async function claimGuest(token, userKey, opt) {
   const tk = String(token || ''), NO = 'That claim link is not valid or was already used'; if (!/^[A-Z2-9]{10}-[A-Z2-9]{20}$/.test(tk) || !userKey) throw bad(404, NO); const id = tk.slice(0, 10), th = tokHash(tk), mk = /^[0-9a-f]{24}$/.test(String(userKey)) ? String(userKey) : mkOf(String(userKey)); let name = '', pending = false;
   let c; try { c = await mutCalc(id, (c) => { const gid = Object.keys(c.guests || {}).find((g) => c.guests[g].th && !c.guests[g].claimed && sameCode(c.guests[g].th, th)); if (!gid) throw bad(404, NO); const gk = 'g:' + gid, m = memberOf(c, mk), g = c.guests[gid]; name = g.name;
       const by = m ? m.name : cleanName(opt && opt.name, 24) || 'Player ' + mk.slice(0, 4).toUpperCase();
-      if (mk === c.comm && Object.values(c.sold).some((s) => s.bb && s.bb.k === gk)) { pending = true; if (g.want && g.want.mk === mk) return { nochange: true, v: c }; // a guest has no account, so its buy-back was recorded by the commissioner
-        g.want = { mk, name: by, at: D.now() }; const txt = 'The commissioner (' + by + ') asked to claim guest ' + name + ' as his own account. He recorded the buy-back of that guest himself, so another member has to confirm before it moves.'; audit(c, by, txt); notice(c, by, txt, true, true); c.rev++; return c; }
+      if (mk === c.comm) { pending = true; /* ROUND 6 (B3): ANY claim by the commissioner of a guest of his own Calcutta waits for another member, buy-back or not, in whatever order */ if (g.want && g.want.mk === mk) return { nochange: true, v: c }; // a guest has no account, so its buy-back was recorded by the commissioner
+        g.want = { mk, name: by, at: D.now() }; const txt = 'The commissioner (' + by + ') asked to claim guest ' + name + ' as his own account. Another member has to confirm before it moves. Lot: ' + guestLots(c, gid) + '.'; audit(c, by, txt); notice(c, by, txt, true, true); c.rev++; return c; }
       finishClaim(c, gid, mk, by, null); c.rev++; return c; }); } catch (e) { if (e.status === 404) throw bad(404, NO); throw e; }
   if (pending) return { calcs: 0, pending: true, id: c.id, name };
   await syncIdx(c); return { calcs: 1, id: c.id, name };
 }
 async function reissueGuestToken(calcId, guestId) { let token = null; await mutCalc(String(calcId), (c) => { const gid = String(guestId || '').replace(/^g:/, ''), g = c.guests && Object.prototype.hasOwnProperty.call(c.guests, gid) ? c.guests[gid] : null; if (!g || g.claimed) throw bad(404, 'No such unclaimed guest in this Calcutta'); token = c.id + '-' + rnd(20); g.th = tokHash(token); return c; }); return token; }
 const hooks = {}; // reserved for the manager (e.g. hooks.groupMember(groupId, mk) when membership moves into the group)
-module.exports = { handle, createCalc, attachToGroup, joinFromGroup, wireGroups, groupRole, setPlayersOfRecord, claimGuest, reissueGuestToken, evLocal, potSummary, fixable, seasonFor, statsFor, watch, watchTick, corrState, readFeed, registerSource, capText: PRICE, startState, hooks, EVENTS, cleanRows, slotAmounts, money, teamResults, parseGames, settle, mkOf, _deps: D, _reset: () => { RL.clear(); RC.clear(); RES.clear(); GC.clear(); GF.clear(); GI.clear(); KICK.clear(); GAMESOF.clear(); WATCH.clear(); WBOOT = -1e15; PLAYED.clear(); MAXC.clear(); TEAMS.clear(); IDS.map = null; IDXC.at = 0; NAMES = { at: 0, v: {} }; writes = 0; }, _writes: () => writes };
+module.exports = { corrPlan, confirmBar, handle, createCalc, attachToGroup, joinFromGroup, wireGroups, groupRole, setPlayersOfRecord, claimGuest, reissueGuestToken, evLocal, potSummary, fixable, seasonFor, statsFor, watch, watchTick, corrState, readFeed, registerSource, capText: PRICE, startState, hooks, EVENTS, cleanRows, slotAmounts, money, teamResults, parseGames, settle, mkOf, _deps: D, _reset: () => { RL.clear(); RC.clear(); RES.clear(); GC.clear(); GF.clear(); GI.clear(); KICK.clear(); GAMESOF.clear(); SHR.clear(); ENDW.clear(); WATCH.clear(); WBOOT = -1e15; PLAYED.clear(); MAXC.clear(); TEAMS.clear(); IDS.map = null; IDXC.at = 0; NAMES = { at: 0, v: {} }; writes = 0; }, _writes: () => writes };

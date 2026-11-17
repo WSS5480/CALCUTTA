@@ -91,6 +91,10 @@ async function send(acct, msg, now) {
   if (r.status === 404 || r.status === 405 || r.status === 503) { M.down = now; D.log('betpush: My Apps cannot send (/api/v1/push/send HTTP ' + r.status + (r.j && r.j.error ? ' ' + String(r.j.error).slice(0, 20) : '') + '); alerts paused for 10 minutes'); return { ok: false, off: true, status: r.status }; }
   const ok = !!r.ok && !(r.j && r.j.ok === false); return { ok, sent: ok ? Number(r.j && r.j.sent) || 0 : 0, status: r.status };
 }
+// v268: no bet alert goes to an account whose time has ended (acct.js expired(): My Apps says so, cached 2 minutes; unknown or My Apps down = not expired).
+// The player's setting and bets row are left exactly as they are, so the alerts start again by themselves the moment he pays.
+async function lapsed(acct) { try { const A = D.A(); return typeof A.expired === 'function' ? !!(await A.expired(acct)) : false; } catch (e) { return false; } }
+const LAPSED_MSG = 'Your time has ended. Pay to get alerts for your bets again.';
 const subscribed = () => Object.keys(M.p || {}).filter((k) => { const p = M.p[k]; return p && p.on && p.mode !== 'off' && p.dev && p.rid; });
 
 // ---- one pass. Returns the wait before the next one. ----
@@ -127,6 +131,7 @@ async function tick() {
     n[acct] = (n[acct] || 0) + 1; M.dirty = true; jobs.push({ acct, msg: { title: m.title, body: m.body, tag: ('bet-' + g.id).replace(/[^A-Za-z0-9:_-]/g, '').slice(0, 64), url: APP_URL() } });
   }));
   for (let i = 0; i < jobs.length; i += 5) await Promise.all(jobs.slice(i, i + 5).map(async (j) => {
+    if (await lapsed(j.acct)) { n[j.acct] = Math.max(0, (n[j.acct] || 1) - 1); M.stats.skipped++; return; } // v268: time ended = no alert (nothing about the player is changed)
     M.stats.sends++; const r = await send(j.acct, j.msg, now);
     if (r.ok && r.sent > 0) M.stats.sent++;
     else { n[j.acct] = Math.max(0, (n[j.acct] || 1) - 1); if (r.ok && r.sent === 0) { try { await savePlayer(j.acct, (p) => (p ? Object.assign(p, { dev: 0 }) : null)); } catch (e) {} } } // My Apps has no phone for him any more: stop until he turns it on again
@@ -167,6 +172,7 @@ async function handle(req, res) {
     let b; try { b = await readBody(req); } catch (e) { sendJ(res, 400, { error: 'bad request' }); return true; }
     if (path === '/betpush/test') {
       const p = P[acct]; if (!p || !p.dev) { sendJ(res, 400, { error: 'Turn alerts on for this phone first' }); return true; }
+      if (await lapsed(acct)) { sendJ(res, 403, { ok: false, expired: true, error: LAPSED_MSG }); return true; } // v268
       if (M.testAt[acct] && now - M.testAt[acct] < 30e3) { sendJ(res, 429, { error: 'Wait half a minute between tests' }); return true; } M.testAt[acct] = now; if (Object.keys(M.testAt).length > 5000) M.testAt = {};
       M.down = 0; const r = await send(acct, { title: 'Oddable test alert', body: 'Alerts for your bets are working on this phone.', tag: 'oddable-test', url: APP_URL() }, now);
       if (r.off) { sendJ(res, 503, { ok: false, error: 'Alerts are not switched on at My Apps yet' }); return true; }
@@ -178,6 +184,7 @@ async function handle(req, res) {
     const mode = b.mode === 'off' || b.on === false ? 'off' : b.mode === 'final' ? 'final' : b.mode === 'bets' || b.on === true ? 'bets' : null;
     if (!mode) { sendJ(res, 400, { error: 'bad request' }); return true; }
     let rid = P[acct] && P[acct].rid, dev = null;
+    if (mode !== 'off' && (await lapsed(acct))) { sendJ(res, 403, { ok: false, expired: true, error: LAPSED_MSG }); return true; } // v268: turning alerts ON needs a paid-up account; turning them off always works
     if (mode !== 'off') {
       if (!rid) rid = /@phone\.oddable$/.test(acct) ? await rowOf(acct, now) : null;
       if (!rid) { sendJ(res, 400, { error: 'Sign in with your cell number and PIN to get alerts for your bets' }); return true; }

@@ -732,6 +732,12 @@ function allowed(e) { // e = the account id inside a valid sign-in token, or nul
   if (!ENABLED()) return false; if (!OWNER_ONLY()) return true; if (!e) return false;
   try { return e === 'owner' || !!D.acct().isOwnerPhone(e) || TESTERS().includes(LIM.keyOf(e)); } catch (er) { return false; }
 }
+// v268 (owner, Nov 16 2026: "as guest until they pay. All of their My Bets, my group games, all is locked until paid."). A SIGNED-IN account whose time has ended
+// is not allowed into Groups. Asked only AFTER allowed() said yes, so with Groups off (GROUPS_ENABLED unset) nothing here runs and My Apps is never asked. acct.js
+// expired() answers true only when My Apps says the time has ended (2-minute cache); unknown, My Apps down or gate off = not expired. Nothing of the player's is
+// deleted or changed: the same calls work again once he has paid. A signed-out caller (the public invite preview) is not affected.
+async function lapsed(e) { if (!e) return false; try { const A = D.acct(); return typeof A.expired === 'function' ? !!(await A.expired(e)) : false; } catch (er) { return false; } }
+const LAPSED_MSG = 'Your time has ended. Pay to use Groups again.';
 const OFF_MSG = 'Groups is not open for this account yet.', AK = 'lock:gaccess';
 const sendOn = (res, on) => { res.statusCode = 200; res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json'); res.setHeader('Cache-Control', 'private, max-age=300'); res.setHeader('Vary', 'x-token'); res.end(JSON.stringify({ on: !!on })); };
 async function blockedAnswer(req, res, op, e) {
@@ -767,7 +773,8 @@ async function handle(req, res) {
   const path = req.url.split('?')[0]; if (path !== '/groups' && !path.startsWith('/groups/')) return false; // only /groups and /groups/...
   const op = path.slice(8);
   // THE ONE EARLY CHECK (Phase 1): is Groups on, and on for this caller? Nothing below runs for a blocked caller.
-  const who0 = signedIn(req), ok0 = allowed(who0);
+  const who0 = signedIn(req), okSw = allowed(who0), gone = okSw && (await lapsed(who0)), ok0 = okSw && !gone; // v268: gone = the switches say yes but this account's time has ended
+  if (gone && op !== 'on' && op !== 'bet/status') { req.resume(); send(res, 403, { error: LAPSED_MSG, expired: true }); return true; } // bet/status keeps its safe "not in a group" answer below
   if (op === 'on') { req.resume(); sendOn(res, ok0); return true; } // "is Groups on for me?" GET or POST, with the sign-in token when there is one. The phone shows Groups only when on is true.
   if (!ok0) { await blockedAnswer(req, res, op, who0); return true; }
   if (req.method !== 'POST') { send(res, 405, { error: 'POST only' }); return true; }

@@ -8,6 +8,14 @@ const URL_ = () => (process.env.MYAPPS_URL || '').trim().replace(/\/$/, '');
 const SECRET = () => (process.env.MYAPPS_SECRET || '').trim();
 const KEY = () => process.env.GATE_KEY || crypto.createHash('sha256').update('oddable-gate|' + SECRET()).digest('hex');
 const on = () => !!(URL_() && SECRET()) && process.env.GATE_OFF !== '1';
+// ---- v268 guest mode ----
+// GUEST_MODE (Render env on the odds server): unset / anything else = ON, visitors with no account browse scores, standings, PGA, Golf GPS and Pickleball and are asked to
+// sign up for picks, My Bets and Groups. GUEST_MODE=0 (or false / off / no) = the full sign-in wall before anything, exactly as before v268. The phone reads it from /acct/status.
+const guestMode = () => !/^(0|false|off|no)$/i.test(String(process.env.GUEST_MODE == null ? '' : process.env.GUEST_MODE).trim());
+// A sharing code the phone remembered from "?ref=<code>" and sends with the sign-up. Letters, digits, - and _, at most 24; anything else is dropped. Passed on to My Apps
+// `register`, which ignores fields it does not know (store.register destructures slug / secret / email / password / name / code), so it does nothing until My Apps reads it.
+const cleanRef = (r) => (typeof r === 'string' && /^[A-Za-z0-9_-]{1,24}$/.test(r) ? r : '');
+// ---- end v268 ----
 const TOK_DAYS = 30;
 const b64 = (s) => Buffer.from(s).toString('base64url');
 const sig = (p) => crypto.createHmac('sha256', KEY()).update(p).digest('base64url');
@@ -61,10 +69,14 @@ async function check(req) {
   if (e === 'owner') return !!OWNER_PIN();
   try { return !!allowed(await entitlement(e, false)); } catch (er) { return false; }
 }
+// v268 (owner, Nov 16 2026: an account whose time has ended is "as guest until they pay"). true ONLY when My Apps answers with the account and its time has ended.
+// Gate off, the owner, no account id, an account My Apps does not know, or My Apps not answering = false (never lock somebody out, or drop an alert, on a guess).
+// Uses the 2-minute entitlement cache above, so betwatch.js and groups.js can ask on every pass. An account with no end date (everything is free for now) is never expired.
+async function expired(e) { if (!on() || !e || e === 'owner') return false; try { const a = await entitlement(e, false); return !!a && !allowed(a); } catch (er) { return false; } }
 async function handle(req, res) {
   if (req.method === 'OPTIONS') return false;
   const path = req.url.split('?')[0];
-  if (path === '/acct/status') { send(res, 200, { gate: on() }); return true; }
+  if (path === '/acct/status') { send(res, 200, { gate: on(), guest: guestMode() }); return true; } // v268: guest = visitors with no account may browse scores (see guestMode)
   if (req.method !== 'POST' && !(req.method === 'GET' && path === '/acct/time/status')) return false; // v263: the time status may also be read with GET (x-token header)
   if (!on()) { send(res, 200, { gate: false }); return true; }
   const ip = require('./ip').clientIp(req); // third from the end of X-Forwarded-For (see ip.js)
@@ -85,7 +97,8 @@ async function handle(req, res) {
       const nm0 = cleanName(b.name); if (b.create && nm0.length < 2) { send(res, 400, { error: 'Enter a name or handle to create your account' }); return true; }
       let v; try { v = await syncMod.verifyLogin(b.phone, b.pin, ip, !!b.create); } catch (er) { send(res, er.status || 500, { error: er.message }); return true; }
       const pe = phoneEmail(v.id), pw = crypto.createHmac('sha256', KEY()).update('phone|' + v.id).digest('hex').slice(0, 32);
-      let r = await ma('/api/v1/auth/register', { email: pe, password: pw, name: b.create && nm0 ? nm0 : 'Phone ' + v.id.slice(0, 4) });
+      const rf = b.create ? cleanRef(b.ref) : ''; // v268: the sharing code goes along only when an account is being created
+      let r = await ma('/api/v1/auth/register', Object.assign({ email: pe, password: pw, name: b.create && nm0 ? nm0 : 'Phone ' + v.id.slice(0, 4) }, rf ? { ref: rf } : {}));
       if (b.create && nm0) { try { await namesSet(String(v.id).slice(0, 8), nm0); } catch (er) {} }
       if (!r.ok && r.status === 409) r = await ma('/api/v1/auth/login', { email: pe, password: pw });
       if (!r.ok) { send(res, 502, { error: r.j.error || 'Could not open your account' }); return true; }
@@ -96,7 +109,8 @@ async function handle(req, res) {
       if (path === '/acct/register' && cleanName(b.name).length < 2) { send(res, 400, { error: 'Enter a name or handle to create your account' }); return true; }
       if (/@phone\.oddable$/.test(email)) { send(res, 400, { error: 'Use your cell number and PIN to sign in' }); return true; }
       if (throttled(ip + '|' + email)) { send(res, 429, { error: 'Too many tries, wait a few minutes' }); return true; }
-      const r = await ma(path === '/acct/login' ? '/api/v1/auth/login' : '/api/v1/auth/register', { email, password: b.password, name: cleanName(b.name) });
+      const rf = path === '/acct/register' ? cleanRef(b.ref) : ''; // v268: sharing code, sign-up only
+      const r = await ma(path === '/acct/login' ? '/api/v1/auth/login' : '/api/v1/auth/register', Object.assign({ email, password: b.password, name: cleanName(b.name) }, rf ? { ref: rf } : {}));
       if (!r.ok) { send(res, r.status === 401 || r.status === 409 || r.status === 400 ? r.status : 502, { error: r.j.error || 'Could not sign in' }); return true; }
       CACHE.delete(email);
       const me = await shape(email, true);
@@ -194,4 +208,4 @@ const phoneEmail = (id) => crypto.createHmac('sha256', KEY()).update('phoneid|' 
 function ownerOk(req) { const e = verify(req.headers['x-token']); return !!e && dashOk(e, req); }
 // Groups (groups.js): who is signed in (the account id inside a valid token, or null). Never sent to other players.
 function who(req) { if (!on()) return null; const e = verify(req.headers['x-token']); if (!e) return null; if (e === 'owner' && !OWNER_PIN()) return null; return e; }
-module.exports = { handle, check, on, phoneEmail, ownerOk, ma, maReady: () => !!(URL_() && SECRET()), who, isOwnerPhone, namesGet, ownerName: OWNER_NAME }; // ma / maReady: courts.js reads the app settings from My Apps; who / isOwnerPhone / namesGet / ownerName: groups.js
+module.exports = { guestMode, expired, handle, check, on, phoneEmail, ownerOk, ma, maReady: () => !!(URL_() && SECRET()), who, isOwnerPhone, namesGet, ownerName: OWNER_NAME }; // ma / maReady: courts.js reads the app settings from My Apps; who / isOwnerPhone / namesGet / ownerName: groups.js

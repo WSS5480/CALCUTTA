@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<!-- Pickleball v269 (part of Oddable; local-only, points only) -->
+<!-- Pickleball v270 (part of Oddable; local-only, points only) -->
 <script>try{if(localStorage.getItem('pics-theme')!=='violet')document.documentElement.classList.add('cb')}catch(e){document.documentElement.classList.add('cb')}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Pickleball · Oddable</title>
@@ -120,8 +120,10 @@ header{padding-left:max(16px,calc((100% - 1328px)/2));padding-right:max(16px,cal
   <div class="sub">Pools, brackets and side games for your group. Points only, no money.</div>
 </header>
 <main id="main"></main>
-<div class="foot">Oddable v269 · Pickleball · events saved on this device only</div>
+<div class="foot">Oddable v270 · Pickleball · events saved on this device only</div>
 <script>try{if(localStorage.getItem('pics-dark')!=='0')document.body.classList.add('dark')}catch(e){document.body.classList.add('dark')}</script>
-<script src="pickleball.js?v=269"></script>
+<script src="pickleball.js?v=270"></script>
+<!-- v268 guest mode: this page never had the sign-in wall and still has none (ODD_OPEN_PAGE). gate.js is here only for the "Sign up free" / "Sign in" buttons a visitor with no account sees; for a phone with an account it does nothing and makes no request. -->
+<script>window.ODD_OPEN_PAGE=true</script><script src="gate.js?v=270"></script>
 </body>
 </html>

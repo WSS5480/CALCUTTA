@@ -38,7 +38,7 @@
   const editing = () => { const a = document.activeElement; return a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName); };
   let LASTHASH = '';
   async function syncNow(o) {
-    o = o || {}; const c = creds(); if (!c || BUSY) return; BUSY = true;
+    o = o || {}; const c = creds(); if (!c || BUSY) return; if (window.__oddLock === 'expired') return; /* v268: time has ended = no push and no pull, so the saved bets on this phone and the row on the server both stay exactly as they are until the account is paid */ BUSY = true;
     try {
       const local = gather(), lh = hashOf(local);
       const j = await call('/push', { ...c, data: local });

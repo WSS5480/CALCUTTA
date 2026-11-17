@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<!-- Golf GPS v269 (part of Oddable; your own round: live position on a satellite picture, yards to the pin, flag colour sets the pin. No picks, no bets.) -->
+<!-- Golf GPS v270 (part of Oddable; your own round: live position on a satellite picture, yards to the pin, flag colour sets the pin. No picks, no bets.) -->
 <script>try{if(localStorage.getItem('pics-theme')!=='violet')document.documentElement.classList.add('cb')}catch(e){document.documentElement.classList.add('cb')}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Golf GPS · Oddable</title>
@@ -10,7 +10,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="icon-192.png">
 <meta name="theme-color" content="#041e42">
-<link rel="stylesheet" href="leaflet/leaflet.css?v=269">
+<link rel="stylesheet" href="leaflet/leaflet.css?v=270">
 <style>
 :root{--bg:#f6f4fb;--panel:#fff;--panel2:#ece6fb;--line:#d9d0ee;--ink:#2b2b2b;--muted:#5d5873;--blue:#7c3aed;--green:#16915a;--red:#d93a2e;--gold:#b7791f}
 body.dark{--bg:#0a0c10;--panel:#13161d;--panel2:#1b1f29;--line:#272c38;--ink:#eef0f4;--muted:#8b93a3;--blue:#a78bfa;--green:#4fd18b;--red:#ff5a4d;--gold:#f5c542}
@@ -147,16 +147,23 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
 </main>
 <div class="sheet" id="sheet" hidden><div class="in" id="sheetin"></div></div>
 <div id="toast" hidden role="status"></div>
-<div class="foot">Oddable v269 · Golf GPS · course map © OpenStreetMap contributors · not a rangefinder · no picks, no bets</div>
+<div class="foot">Oddable v270 · Golf GPS · course map © OpenStreetMap contributors · not a rangefinder · no picks, no bets</div>
 <script>try{if(localStorage.getItem('pics-dark')!=='0')document.body.classList.add('dark')}catch(e){document.body.classList.add('dark')}</script>
-<script src="leaflet/leaflet.js?v=269"></script>
-<script src="golfgps.js?v=269"></script>
+<script src="leaflet/leaflet.js?v=270"></script>
+<script src="golfgps.js?v=270"></script>
 <script>
 (function () {
   'use strict';
   const G = window.GolfGPS, $ = (s) => document.querySelector(s);
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const lsg = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, lss = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+  // v268 guest mode. Viewing and distances are open to everyone. Sharing a mark with the course, locking the course's flag colours and reporting a change need an
+  // account (the server already refuses them without one): where the page used to say "Not signed in…" a guest now gets the locked card that opens the sign-up
+  // sheet (gate.js: .glk + [data-gt]); an account whose time has ended gets the pay wording. A mark or colour set by a guest still works on this phone, as before.
+  const lockNow = () => window.__oddLock || '';
+  const gkGolf = (line) => (lockNow() === 'expired' ? '<div class="glk" data-gt="golf"><span aria-hidden="true">🔒</span><span class="glt">' + (window.ODD_ENDED || 'Your time has ended. Pay now to unlock your picks, bets and groups.') + '</span><span class="glb"><button type="button" data-gp="pay">' + (window.ODD_PAY || 'Pay now') + '</button><button type="button" class="alt" data-gp="time">Request free time</button></span></div>'
+    : '<div class="glk" data-gt="golf"><span aria-hidden="true">🔒</span><span class="glt">' + line + '</span><span class="glb"><button type="button">' + (window.ODD_CTA || 'Sign up free') + '</button></span></div>');
+  window.oddGuestChanged = function () { try { if (C) drawMore(); } catch (e) {} }; // signed in / paid / time ended: the cards on this page follow at once
   const FLAGHEX = { red: '#d93a2e', white: '#ffffff', blue: '#2563eb', yellow: '#f5c542' };
   let C = null, N = 1, R = null;                 // course, hole number, today's round
   let FIX = null, GERR = '', WATCH = null, WANT = false; // GPS: last fix {lat,lon,acc,t}, error word, watch id, the player asked for GPS
@@ -238,7 +245,7 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
     $('#gps').innerHTML = '<div class="gps ' + (s.kind === 'ok' ? 'ok' : 'bad') + '"><div><span class="dot"></span><span id="gpst">' + esc(!WANT && !FIX && !GERR ? 'GPS is off. Distances are from the tee.' : s.text) + '</span></div>' + (need && GERR !== 'unsupported' ? '<button class="btn" type="button" id="gpson">Turn on GPS</button>' : '') + '</div>';
   }
   function drawMore() {
-    const h = hole(), fm = G.flagMap(C), g = h.green, signed = G.signedIn();
+    const h = hole(), fm = G.flagMap(C), g = h.green, signed = G.signedIn() && lockNow() !== 'expired' /* v268: time ended = treated as not signed in, the server refuses it too */;
     let o = '<div class="card"><div class="opt"><label for="allday">Same colour all day<small style="display:block;font-weight:500;color:var(--muted)">Off = each hole remembers its own colour today</small></label><input type="checkbox" id="allday"' + (R.allDay ? ' checked' : '') + '></div>';
     o += '<div class="row2"><button class="btn" type="button" id="placepin"' + (g ? '' : ' disabled') + '>Tap the green to place the pin</button></div></div>';
     // what the colours mean at this course
@@ -246,7 +253,7 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
     if (fm.review) o += '<div class="card warn" id="review" style="margin:8px 0 0"><b>Proposed change from ' + esc(fm.review.from) + ':</b> ' + esc(G.mapText(fm.review.map)) + (fm.review.note ? '<div class="note">"' + esc(fm.review.note) + '"</div>' : '') + '<div class="row2"><button class="btn pri" type="button" id="rvacc">Accept</button><button class="btn" type="button" id="rvdis">Dismiss</button></div></div>';
     else if (fm.pending) o += '<div class="note" id="pend">Change reported, waiting for review.</div>';
     o += '<div class="row2">' + (!fm.locked || fm.canChange ? '<button class="btn" type="button" id="fset">' + (fm.locked ? 'Change' : 'This course\'s flag colours') + '</button>' : signed ? '<button class="btn" type="button" id="frep">Report a change</button>' : '') + '</div>';
-    if (fm.locked && !fm.canChange) o += '<div class="note">' + (signed ? 'Has the course changed its colours? Report it and the organizer will review it.' : 'Ask the organizer to change it. Sign in to Oddable to report a change yourself.') + '</div>';
+    if (fm.locked && !fm.canChange) o += '<div class="note">' + (signed ? 'Has the course changed its colours? Report it and the organizer will review it.' : 'Ask the organizer to change it.') + '</div>' + (signed || !lockNow() ? (signed ? '' : '<div class="note">Sign in to Oddable to report a change yourself.</div>') : gkGolf('Sign up free to report a change to this course’s flag colours'));
     o += '</div>';
     // marking
     const needG = !g || g.approx, needT = !h.tee;
@@ -255,7 +262,7 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
       '<div class="row2"><button class="btn" type="button" data-mark="green">Mark green: I\'m standing on it</button><button class="btn" type="button" data-tapmark="green">Tap the map to mark the green</button></div>' +
       '<div class="row2"><button class="btn" type="button" data-mark="tee">Mark tee: I\'m standing on it</button><button class="btn" type="button" data-tapmark="tee">Tap the map to mark the tee</button></div>' +
       (needT ? '<div class="note">This hole has no tee on the map, so there is no "from the tee" distance until you mark one or GPS locks on.</div>' : '') +
-      '<div class="note">' + (signed ? 'Marks are shared with everyone who plays this course.' : 'Not signed in: marks stay on this phone only.') + '</div></div>';
+      (signed || !lockNow() ? '<div class="note">' + (signed ? 'Marks are shared with everyone who plays this course.' : 'Not signed in: marks stay on this phone only.') + '</div>' : '<div class="note">Your marks stay on this phone only.</div>' + gkGolf('Sign up free to share your marks with everyone who plays this course')) + '</div>';
     // screen + honesty
     const wl = 'wakeLock' in navigator;
     o += '<div class="card"><div class="opt"><label for="wake">Keep the screen on<small style="display:block;font-weight:500;color:var(--muted)" id="waket">' + (wl ? (WAKE ? 'On while this page is open.' : 'Off.') : 'This browser cannot keep the screen on. Set your phone\'s auto-lock to a longer time.') + '</small></label><input type="checkbox" id="wake"' + (lsg('ggps-wake') !== '0' && wl ? ' checked' : '') + (wl ? '' : ' disabled') + '></div>' +
@@ -323,7 +330,7 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
   function openSheet(kind) {
     const fm = G.flagMap(C), rep = kind === 'report', def = G.defColor(C.id);
     let h = '<button class="bk" type="button" id="shback">‹ Back</button><h2 style="margin:4px 0">' + (rep ? 'What do the flags mean at this course now?' : 'This course\'s flag colours') + '</h2><div class="note">' + esc(C.name) + '</div>' +
-      '<div class="note">' + (rep ? 'Now: ' + esc(G.mapText(fm.map)) + '. Set what they mean today and send it. The organizer reviews it before it changes for everyone.' : 'Short = pin at the front of the green, Long = at the back.' + (G.signedIn() ? ' Once saved, this is locked for the course and everyone playing here gets it.' : ' Not signed in: saved on this phone only.')) + '</div><div class="sgrid">';
+      '<div class="note">' + (rep ? 'Now: ' + esc(G.mapText(fm.map)) + '. Set what they mean today and send it. The organizer reviews it before it changes for everyone.' : 'Short = pin at the front of the green, Long = at the back.' + (G.signedIn() && lockNow() !== 'expired' ? ' Once saved, this is locked for the course and everyone playing here gets it.' : lockNow() ? ' Saved on this phone only.' : ' Not signed in: saved on this phone only.')) + '</div>' + (!rep && lockNow() ? gkGolf('Sign up free to set the flag colours for everyone who plays this course') : '') + '<div class="sgrid">';
     G.COLORS.forEach((c) => { h += '<label class="f"><span class="sw" style="background:' + FLAGHEX[c] + '"></span>' + G.CNAME[c] + ' flag means<select data-fc="' + c + '">' + G.PLACES.map((p) => '<option value="' + p + '"' + (fm.map[c] === p ? ' selected' : '') + '>' + G.LABEL[p] + '</option>').join('') + '</select></label>'; });
     h += '</div>';
     if (rep) h += '<label class="f">Note (optional)<input id="fnote" type="text" maxlength="100" placeholder="e.g. new flags since the spring" autocomplete="off"></label>';
@@ -433,6 +440,6 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
   route();
 })();
 </script>
-<script src="gate.js?v=269"></script>
+<script src="gate.js?v=270"></script>
 </body>
 </html>

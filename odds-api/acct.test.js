@@ -1,5 +1,5 @@
 // Run: node odds-api/acct.test.js   (no network: My Apps is a fake behind acct.js ma(), which is the only thing that calls fetch here)
-// Covers v263: /acct/time/request, /acct/time/status, the cashtag on /acct/pay and in /acct/me.
+// Covers v263: /acct/time/request, /acct/time/status, the cashtag on /acct/pay and in /acct/me. v268: the `guest` flag on /acct/status (env GUEST_MODE) and the sharing code `ref` on sign-up.
 process.env.MYAPPS_URL = 'https://myapps.test'; process.env.MYAPPS_SECRET = 'sek-ret-XYZ'; process.env.GATE_KEY = 'test-gate-key'; process.env.OWNER_PIN = '4321'; delete process.env.GATE_OFF;
 const assert = require('assert'), http = require('http'), crypto = require('crypto'), A = require('./acct');
 const tok = (e, ms) => { const p = Buffer.from(JSON.stringify({ e, x: Date.now() + (ms || 864e5) })).toString('base64url'); return p + '.' + crypto.createHmac('sha256', 'test-gate-key').update(p).digest('base64url'); };
@@ -103,8 +103,33 @@ let n = 0; const t = (name) => { n++; process.stdout.write('  ok ' + n + ' ' + n
     // ---- gate off: nothing is forwarded (fail-open stays as it was)
     process.env.GATE_OFF = '1'; start();
     for (const p of ['/acct/time/request', '/acct/time/status', '/acct/pay']) { r = await hit(p, { note: 'x', cashtag: '$a' }); assert.strictEqual(r.status, 200); assert.deepStrictEqual(r.j, { gate: false }, p); }
-    r = await hit('/acct/time/status', null, { method: 'GET' }); assert.deepStrictEqual(r.j, { gate: false }); r = await hit('/acct/status', null, { method: 'GET', token: null }); assert.deepStrictEqual(r.j, { gate: false }); assert.strictEqual(calls.length, 0); delete process.env.GATE_OFF;
-    r = await hit('/acct/status', null, { method: 'GET', token: null }); assert.deepStrictEqual(r.j, { gate: true }); t('gate off: every route answers {gate:false} and My Apps is never called');
+    r = await hit('/acct/time/status', null, { method: 'GET' }); assert.deepStrictEqual(r.j, { gate: false }); r = await hit('/acct/status', null, { method: 'GET', token: null }); assert.deepStrictEqual(r.j, { gate: false, guest: true }); assert.strictEqual(calls.length, 0); delete process.env.GATE_OFF;
+    r = await hit('/acct/status', null, { method: 'GET', token: null }); assert.deepStrictEqual(r.j, { gate: true, guest: true }); t('gate off: every route answers {gate:false} and My Apps is never called');
+
+    // ---- v268 guest mode: the `guest` flag on /acct/status follows env GUEST_MODE (default on; 0 / false / off / no = the full sign-in wall)
+    const st = async (o) => (await hit('/acct/status', null, Object.assign({ method: 'GET', token: null }, o || {})));
+    delete process.env.GUEST_MODE; start(); r = await st(); assert.strictEqual(r.status, 200); assert.deepStrictEqual(r.j, { gate: true, guest: true }); assert.strictEqual(r.headers['access-control-allow-origin'], '*'); assert.strictEqual(calls.length, 0); t('/acct/status: guest is true when GUEST_MODE is not set (no My Apps call, CORS header kept)');
+    for (const v of ['0', 'false', 'off', 'no', ' 0 ', 'OFF', 'False']) { process.env.GUEST_MODE = v; r = await st(); assert.deepStrictEqual(r.j, { gate: true, guest: false }, JSON.stringify(v)); } t('/acct/status: GUEST_MODE=0 (also false / off / no, any case, spaces) turns guest off');
+    for (const v of ['1', 'true', 'on', 'yes', '', 'anything', '00']) { process.env.GUEST_MODE = v; r = await st(); assert.deepStrictEqual(r.j, { gate: true, guest: true }, JSON.stringify(v)); } t('/acct/status: any other GUEST_MODE value leaves guest on');
+    process.env.GUEST_MODE = '0'; process.env.GATE_OFF = '1'; r = await st(); assert.deepStrictEqual(r.j, { gate: false, guest: false }); delete process.env.GATE_OFF; delete process.env.GUEST_MODE; r = await st(); assert.deepStrictEqual(r.j, { gate: true, guest: true }); t('/acct/status: gate and guest are independent switches; both read on every request');
+    r = await st({ method: 'POST', token: tok('x@x.test') }); assert.deepStrictEqual(r.j, { gate: true, guest: true }); r = await hit('/acct/status?x=1', null, { method: 'GET', token: null }); assert.deepStrictEqual(r.j, { gate: true, guest: true }); assert.strictEqual(A.guestMode(), true); t('/acct/status: same answer with or without a token, POST or GET, with a query string');
+    process.env.GUEST_MODE = '0'; start(); r = await hit('/acct/me', {}, { token: ownerTok() }); assert.strictEqual(r.status, 200); assert.strictEqual(r.j.me.role, 'owner'); r = await hit('/acct/me', {}, { token: null }); assert.strictEqual(r.status, 401); delete process.env.GUEST_MODE; r = await hit('/acct/me', {}, { token: null }); assert.strictEqual(r.status, 401); t('GUEST_MODE changes nothing else: account routes still need a token either way');
+
+    // ---- v268 sharing code (`ref`) on sign-up: cleaned, passed to My Apps register only, never on sign-in
+    const reg = (path, data) => path === '/api/v1/auth/register' || path === '/api/v1/auth/login' ? { status: 200, j: { ok: true } } : path === '/api/v1/account' ? { status: 200, j: { email: data.email, role: 'user', plan: 'pro', expires_on: null, source: 'trial' } } : { status: 200, j: {} };
+    const regCall = () => calls.find((c) => c.path === '/api/v1/auth/register' || c.path === '/api/v1/auth/login');
+    start(reg); r = await hit('/acct/register', { email: 'New1@x.test', password: 'pw123456', name: 'Newbie', ref: 'steve-01_A' }, { token: null }); assert.strictEqual(r.status, 200); assert(r.j.token); assert.strictEqual(r.j.me.allowed, true);
+    assert.deepStrictEqual(regCall(), { path: '/api/v1/auth/register', data: { slug: 'oddable', secret: 'sek-ret-XYZ', email: 'new1@x.test', password: 'pw123456', name: 'Newbie', ref: 'steve-01_A' } }); t('register passes a clean ref on to My Apps');
+    for (const bad of [undefined, null, '', 7, {}, ['a'], 'has space', 'a'.repeat(25), '<b>', 'a/b', 'é', 'a.b', '../x']) { start(reg); r = await hit('/acct/register', { email: 'n' + Math.random() + '@x.test', password: 'pw123456', name: 'Newbie', ref: bad }, { token: null }); assert.strictEqual(r.status, 200, JSON.stringify(bad)); assert(!('ref' in regCall().data), JSON.stringify(bad)); } t('a missing or junk ref is dropped and the sign-up still works');
+    start(reg); r = await hit('/acct/register', { email: 'n24@x.test', password: 'pw123456', name: 'Newbie', ref: 'a'.repeat(24) }, { token: null }); assert.strictEqual(regCall().data.ref, 'a'.repeat(24)); t('a 24-character ref is kept');
+    start(reg); r = await hit('/acct/login', { email: 'old@x.test', password: 'pw123456', ref: 'steve' }, { token: null }); assert.strictEqual(r.status, 200); assert.deepStrictEqual(regCall(), { path: '/api/v1/auth/login', data: { slug: 'oddable', secret: 'sek-ret-XYZ', email: 'old@x.test', password: 'pw123456', name: '' } }); t('sign-in never sends a ref');
+    { const S = require('./sync'), was = S.verifyLogin; S.verifyLogin = async (phone, pin, ip, create) => ({ id: 'abcd1234ef567890abcd1234ef567890abcd1234ef567890abcd1234ef567890', create }); const wasDb = [S.dbGet, S.dbPut, S.dbPatchIf]; S.dbGet = async () => null; S.dbPut = async () => {}; S.dbPatchIf = async () => true; // the phone path: sync.js checks the number + PIN (faked here), then acct.js registers the hidden phone account at My Apps
+      try {
+        start(reg); r = await hit('/acct/phone', { phone: '9565551234', pin: '123456', create: true, name: 'Phone Pat', ref: 'Buddy_7' }, { token: null }); assert.strictEqual(r.status, 200); assert(r.j.token); assert.strictEqual(regCall().path, '/api/v1/auth/register'); assert.strictEqual(regCall().data.ref, 'Buddy_7'); assert.strictEqual(regCall().data.name, 'Phone Pat'); assert(/@phone\.oddable$/.test(regCall().data.email)); t('phone sign-up (create) passes the ref to My Apps register');
+        start(reg); r = await hit('/acct/phone', { phone: '9565551234', pin: '123456', ref: 'Buddy_7' }, { token: null }); assert.strictEqual(r.status, 200); assert(!('ref' in regCall().data)); t('phone sign-in (no create) sends no ref');
+        start(reg); r = await hit('/acct/phone', { phone: '9565551234', pin: '123456', create: true, name: 'Phone Pat', ref: 'bad ref!' }, { token: null }); assert.strictEqual(r.status, 200); assert(!('ref' in regCall().data)); t('phone sign-up with a junk ref: dropped, account still made');
+      } finally { S.verifyLogin = was; [S.dbGet, S.dbPut, S.dbPatchIf] = wasDb; }
+    }
 
     console.log('acct.test.js: ' + n + ' tests passed');
   } catch (e) { console.error('FAILED after ' + n + ' tests:', e); process.exitCode = 1; }

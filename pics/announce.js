@@ -109,7 +109,7 @@
   window.oddDays = days; // gate.js calls it each time the account is read
   try { document.addEventListener('visibilitychange', () => { if (!document.hidden) days(); }); } catch (e) {} // a phone left open over midnight
   function targeted() {
-    if (asked) return; asked = true; const tok = g('odd-tok'); if (!tok) return; // signed out (or no accounts yet): no call at all
+    if (asked) return; const tok = g('odd-tok'); if (!tok) return; asked = true; // signed out (or no accounts yet): no call at all. v270: a guest who signs up or in without a reload (guest mode) is asked once then (index.html runs bcLoad again after a sign-in)
     let ctl = null, to = null; try { ctl = new AbortController(); to = setTimeout(() => ctl.abort(), 8000); } catch (e) {}
     fetch(API, { headers: { 'x-token': tok }, cache: 'no-store', signal: ctl ? ctl.signal : undefined }).then((r) => (r.ok ? r.json() : null)).then((j) => { clearTimeout(to); if (g('odd-tok') !== tok || !j || j.ok !== true) return; let a = valid(j.announce, true); prune(a, true); if (a && CUR[0] && CUR[0].id === a.id) a = null; /* the same message everyone got */ CUR[1] = a; if (a) remember(a); paint(); }).catch(() => { clearTimeout(to); });
   }

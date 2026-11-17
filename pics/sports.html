@@ -461,7 +461,7 @@ async function load() {
 setInterval(() => { if (!document.hidden && OFF === 0 && !OPEN && (GAMES.some((g) => g.state === 'in') || Date.now() - LASTAT > 120000)) load(); }, 30000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !OPEN) load(); });
 </script>
-<script src="gate.js?v=264"></script><script src="ai.js"></script><script src="live.js"></script>
+<script src="gate.js?v=265"></script><script src="ai.js"></script><script src="live.js"></script>
 <script>
 function aiCtx(gid) {
   const pc = (v) => Math.round((v || 0) * 100) + '%';

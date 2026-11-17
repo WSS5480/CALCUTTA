@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<!-- Pickleball v264 (part of Oddable; local-only, points only) -->
+<!-- Pickleball v265 (part of Oddable; local-only, points only) -->
 <script>try{if(localStorage.getItem('pics-theme')!=='violet')document.documentElement.classList.add('cb')}catch(e){document.documentElement.classList.add('cb')}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Pickleball · Oddable</title>
@@ -80,7 +80,37 @@ details.inf>summary::-webkit-details-marker{display:none}details.inf p{margin:4p
 .ctm{margin-top:10px}.src a{color:var(--blue)}
 #cf label{display:block}#cf .btns{margin:14px 0 2px}.pill:disabled{opacity:.5;cursor:default}
 .foot{color:var(--muted);font-size:12px;margin:24px 0 8px;text-align:center}
-@media(min-width:900px){main{max-width:760px}.sums{grid-template-columns:repeat(3,1fr)}}
+/* v265: tablet / desktop widths follow index.html (688px column below 900; from 900 the page fills up to 1168px, 1328px from 1500; 16px side padding). Phones are untouched: every rule sits in a min-width:900px query.
+   --rail: index.html keeps a 104px tab rail on the left from 900px. This page has no rail, so it is 0; set it to 104px to line both edges up with index.html pixel for pixel.
+   Lists of cards (events, courts, games, standings, players, bids, picks) flow in columns; everything else spans the full row. */
+:root{--rail:0px}
+@media(min-width:900px){
+body{padding-left:var(--rail)}
+main{max-width:1200px}
+header{padding-left:max(16px,calc((100% - 1168px)/2));padding-right:max(16px,calc((100% - 1168px)/2))}
+.sums{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+#main,#cres,details.inf[open]{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));column-gap:14px;align-items:start}
+details.inf[open]::details-content{display:contents}
+#main>*,#cres>*,details.inf>*{grid-column:1/-1;min-width:0}
+#main>a.card.ev,#cres>.card.ct,#main>.gm,details.inf>.gm,#main>.card.st,#main>.card.lrow,#main>.card.bid,#main>.card.pk{grid-column:auto;margin:0 0 14px}
+#main>.gh,#cres>.gh,details.inf>.gh{margin-bottom:8px}
+#main>.gm.open,details.inf>.gm.open,#main>.gm:has(+ .lnk){grid-column:1/-1;margin-bottom:8px}
+#main>a.card.ev,#cres>.card.ct{align-self:stretch}
+.pill.wide{max-width:420px}
+p.note,div.note:not(.card),details.inf p{max-width:860px}
+#main>.card.frm:not(#nf):not(#cf),#main>label.frm,#main>.ged,#main>.gm:has(+ .lnk){max-width:640px}#main>.lnk{justify-self:start}
+/* Find local courts: place, distance and the two buttons on one line */
+#cf{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) auto;column-gap:14px;align-items:end}
+#cf>label[for=cq]{grid-area:1/1}#cf>#cq{grid-area:2/1}#cf>label[for=cr]{grid-area:1/2}#cf>#cr{grid-area:2/2}#cf>.btns{grid-area:2/3;margin:0}#cf>label{margin-top:0}
+/* New event: name / date / courts on one line, the six formats and the add-ons three across */
+#nf{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));column-gap:14px;align-items:start}
+#nf>*{grid-column:1/-1;min-width:0}#nf>label:first-child{grid-column:1/3}#nf>label:first-child+.two{grid-column:3}
+#nf>.fmts{grid-template-columns:repeat(3,minmax(0,1fr));column-gap:14px;align-items:start}#nf>.fopt{grid-column:auto}
+}
+@media(min-width:1500px){
+main{max-width:1360px}
+header{padding-left:max(16px,calc((100% - 1328px)/2));padding-right:max(16px,calc((100% - 1328px)/2))}
+}
 </style>
 </head>
 <body>
@@ -90,8 +120,8 @@ details.inf>summary::-webkit-details-marker{display:none}details.inf p{margin:4p
   <div class="sub">Pools, brackets and side games for your group. Points only, no money.</div>
 </header>
 <main id="main"></main>
-<div class="foot">Oddable v264 · Pickleball · events saved on this device only</div>
+<div class="foot">Oddable v265 · Pickleball · events saved on this device only</div>
 <script>try{if(localStorage.getItem('pics-dark')!=='0')document.body.classList.add('dark')}catch(e){document.body.classList.add('dark')}</script>
-<script src="pickleball.js?v=264"></script>
+<script src="pickleball.js?v=265"></script>
 </body>
 </html>

@@ -24,7 +24,11 @@ const D = {
   now: () => Date.now(),
   ip: (req) => require('./ip').clientIp(req),
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+  ev: () => require('./events'),
 };
+// Activity events for the owner (events.js -> My Apps). Called AFTER a write succeeded; never throws, never waits. `e` = the account id from the sign-in token
+// (an email for a phone or email account; the owner-PIN sign-in has none, so no account is sent for it).
+const tell = (type, e, o) => { try { D.ev().emit(type, Object.assign({ account: /@/.test(String(e || '')) ? String(e) : undefined }, o)); } catch (er) {} };
 GR._deps.fetch = (...a) => D.fetch(...a); GR._deps.now = () => D.now();
 ['S', 'acct', 'now', 'sleep'].forEach((k) => Object.defineProperty(LIM._deps, k, { get: () => D[k], configurable: true })); // limits.js shares this file's database, clock and sign-in
 const BK = (mk) => 'lock:gb:' + mk, GK = (id) => 'lock:grp:' + id, LK = (id, cid) => 'lock:gl:' + id + ':' + cid, MK = (mk) => 'lock:gm:' + mk, IDX = 'lock:gidx';
@@ -834,7 +838,7 @@ async function handle(req, res) {
       g.members.push({ pid: newPid(g), mk: u.mk, sid, name: nm, joined: now, paid: false, fixedName: fixed(u.e, sid) });
       await D.S.dbPut({ id: GK(id), salt: 'x', pinhash: 'x', data: g, updated: now }, true);
       await memIdx(u.mk, (y) => { y.g.push(id); y.own[id] = gEnd(g); }); await idxPut(g);
-      send(res, 200, { group: full(g, u.mk, now) }); return true;
+      send(res, 200, { group: full(g, u.mk, now) }); tell('group_new', u.e, { title: 'New group: ' + g.name, detail: 'Started by ' + nm + '. Up to ' + g.join.max + ' people.', key: 'group_new|' + id }); return true;
     }
     if (op === 'edit') { // group-level: name, joining, main-pot take and split
       const g0 = await gread(b.id), CAPNOW = g0 ? await LIM.maxPeople(g0.owner, g0.id) : 8;
@@ -891,7 +895,7 @@ async function handle(req, res) {
       let g = await gread(gid); if (!g || (g.code !== code && g.mcode !== code)) throw fail();
       // Round 3 (owner: commissioner approval applies to invite codes too). A code makes a join REQUEST. It joins straight away only with the
       // COMMISSIONER's own code while "anyone with the link joins without approval" is on (set before the start). The members' link always asks.
-      const direct = !!g.join.auto && g.code === code;
+      const direct = !!g.join.auto && g.code === code; let joined = false;
       if (op === 'preview' && !canSee(g, u.mk) && (ended(g, now) || now >= joinOpenUntil(g))) throw bad(404, 'This invite link is not valid or has expired.');
       if (op === 'preview') { const o = canSee(g, u.mk) ? full(g, u.mk, now) : pub(g, now); if (!canSee(g, u.mk)) { o.role = (g.reqs || []).some((q) => q.mk === u.mk) ? 'pending' : 'none'; o.needsOk = !direct; o.closed = !direct && !g.join.requests; o.denied = (g.denied || []).includes(u.mk); } send(res, 200, { group: o }); return true; }
       const sid = await sidOf(u.e, true), nm = await nameOf(u.e, sid, b.myName), cap = await capOf(g); let asked = false, ver = false;
@@ -900,14 +904,14 @@ async function handle(req, res) {
         if ((g.denied || []).includes(u.mk)) throw bad(409, 'The commissioner said no to this group');
         if (ended(g, now) || now >= joinOpenUntil(g)) throw bad(409, g.join.late === '2w' ? 'Joining closed 2 weeks after the start' : 'Joining closed at the first kickoff');
         if (g.members.length >= cap) throw bad(409, fullMsg(cap));
-        if (direct) { g.members.push({ pid: newPid(g), mk: u.mk, sid, name: nm, joined: now, paid: false, fixedName: fixed(u.e, sid) }); g.reqs = (g.reqs || []).filter((q) => q.mk !== u.mk); g.engaged = true; g.u = now; return g; }
+        if (direct) { g.members.push({ pid: newPid(g), mk: u.mk, sid, name: nm, joined: now, paid: false, fixedName: fixed(u.e, sid) }); g.reqs = (g.reqs || []).filter((q) => q.mk !== u.mk); g.engaged = true; g.u = now; joined = true; return g; }
         if (!g.join.requests) throw bad(409, 'This group is not taking new people right now. Ask the commissioner to open it.');
         asked = true; if ((g.reqs || []).some((q) => q.mk === u.mk)) return { nochange: true, v: g };
         if ((g.reqs || []).length >= 100) throw bad(409, 'Too many requests waiting');
         g.reqs = g.reqs || []; g.reqs.push({ pid: newPid(g), mk: u.mk, sid, name: nm, at: now, ver, fixedName: fixed(u.e, sid) }); g.engaged = true; g.u = now; return g; });
       if (asked) { await memIdx(u.mk, (y) => { y.q.push(g.id); }); const o = pub(g, now); o.role = 'pending'; send(res, 200, { ok: true, pending: true, text: 'Request sent. The commissioner approves who joins.', group: o }); return true; }
       await memIdx(u.mk, (y) => { y.g.push(g.id); y.q = y.q.filter((i) => i !== g.id); });
-      send(res, 200, { group: full(g, u.mk, now) }); return true;
+      send(res, 200, { group: full(g, u.mk, now) }); if (joined) tell('group_join', u.e, { title: 'Joined group: ' + g.name, detail: nm + ' joined with the invite link. ' + g.members.length + ' in the group.', key: 'group_join|' + g.id + '|' + u.mk }); return true;
     }
     if (op === 'request') {
       rate('join', u.mk, ip, 'g' + String(b.id || '').slice(0, 12)); const sid = await sidOf(u.e, true), nm = await nameOf(u.e, sid, b.myName); let ver = false;
@@ -929,12 +933,12 @@ async function handle(req, res) {
       const gd = await gread(b.id), cap = gd ? await capOf(gd) : 8;
       let who = null; const g = await gmut(String(b.id || ''), (g) => { if (!isComm(g, u.mk)) throw bad(403, 'Only the commissioner can approve or deny');
         const q = (g.reqs || []).find((x) => x.pid === String(b.pid || '')); if (!q) throw bad(404, 'That request is gone');
-        g.reqs = g.reqs.filter((x) => x !== q); who = { mk: q.mk, ok: !!b.ok };
+        g.reqs = g.reqs.filter((x) => x !== q); who = { mk: q.mk, ok: !!b.ok, name: q.name };
         if (b.ok) { if (ended(g, now) || now >= joinOpenUntil(g)) throw bad(409, 'Joining is closed'); if (g.members.length >= cap) throw bad(409, fullMsg(cap)); g.members.push({ pid: q.pid, mk: q.mk, sid: q.sid, name: q.name, joined: now, paid: false, fixedName: !!q.fixedName }); }
         else { g.denied = (g.denied || []).concat(q.mk).slice(-500); }
         g.u = now; return g; });
       if (who) await memIdx(who.mk, (y) => { y.q = y.q.filter((i) => i !== g.id); if (who.ok) y.g.push(g.id); });
-      send(res, 200, { group: full(g, u.mk, now) }); return true;
+      send(res, 200, { group: full(g, u.mk, now) }); if (who && who.ok) tell('group_join', null, { title: 'Joined group: ' + g.name, detail: who.name + ' was approved by the commissioner. ' + g.members.length + ' in the group.', key: 'group_join|' + g.id + '|' + who.mk }); return true;
     }
     if (op === 'requests') {
       const g = await gmut(String(b.id || ''), (g) => { if (!isComm(g, u.mk)) throw bad(403, 'Only the commissioner can change this'); if (started(g, now)) throw bad(409, 'Rules are locked. The group has started.'); g.join.requests = !!b.on; g.u = now; return g; });
@@ -975,7 +979,14 @@ async function handle(req, res) {
 }
 // Light server tick (fix 2): during game windows (a game in progress or starting within 2 hours, any league a running contest uses) every 5 minutes,
 // otherwise every 30 minutes, the server reads members' synced bets so it sees new bets before their kickoff. Called by server.js every 5 minutes.
-const TK = { last: new Map(), busy: false };
+const TK = { last: new Map(), busy: false, told: new Set() };
+// Activity event: a picks contest reached its start. Told once per contest by this process (TK.told), only inside the 12 hours after the start (so a restart
+// weeks into a contest does not announce it again), and My Apps drops a repeat of the same key.
+const START_TELL = 12 * 3600e3;
+function startedEvent(g, c, k, now) {
+  try { if (TK.told.has(k) || !(now >= c.start)) return; TK.told.add(k); if (TK.told.size > 5000) TK.told.clear();
+    if (now - c.start < START_TELL) tell('contest_start', null, { title: 'Contest started: ' + (c.name || 'Picks'), detail: 'Group: ' + g.name + '. ' + g.members.length + ' in the group.', key: 'contest_start|' + k }); } catch (e) {}
+}
 async function tick(opt) { // opt.force: read every running contest now (no 5 / 30 minute spacing)
   if (!ENABLED()) return { off: true }; // Phase 1 master switch: the tick reads and writes nothing while Groups is off
   if (TK.busy) return { skipped: true }; TK.busy = true; let n = 0; const force = !!(opt && opt.force);
@@ -985,7 +996,8 @@ async function tick(opt) { // opt.force: read every running contest now (no 5 / 
     await pmap(ids, 4, async (id) => {
       const g = await gread(id).catch(() => null); if (!g) return;
       for (const c of g.contests.filter((c) => c.kind === 'picks' && !cEnded(c, now) && c.start < now + 7 * DAY)) {
-        const k = g.id + ':' + c.cid, last = TK.last.get(k) || 0, win = await GR.windowOpen(leaguesOf(c.sport), ctx).catch(() => false);
+        const k = g.id + ':' + c.cid; startedEvent(g, c, k, now);
+        const last = TK.last.get(k) || 0, win = await GR.windowOpen(leaguesOf(c.sport), ctx).catch(() => false);
         if (!force && now >= last && now - last < (win ? 4.5 * 6e4 : 29 * 6e4)) continue;
         TK.last.set(k, now); CACHE.delete(k); try { await contestBets(g, c, ctx); n++; } catch (e) { console.error('groups tick:', e.message); }
       }
@@ -1087,4 +1099,4 @@ function wire(M) {
   if (ST && fnc(ST.register)) { try { ST.register('groups', statsFor); done.push('stats'); } catch (e) {} }
   return done;
 }
-module.exports = { handle, tick, statsFor, memberStats, memberCheck, canAttach, wire, betVoid, voidable, addCheck, cleanBet, memberRules, registerGame, partners, betAdd, LOCKED_MSG, STARTED_MSG, registerInvite, attachGame, cleanCalc, limits: LIM, cleanContest, cleanTake, pots, prizes, rank, score, judge, applyObs, weekOf, chiDay, chiStart, snap, _deps: D, _reset: () => { RL.clear(); QUEUE.clear(); EXTC.clear(); CACHE.clear(); IDS.map = null; IDF.clear(); NAMES = { at: 0, v: {} }; TK.last.clear(); USEM.clear(); GR._reset(); } };
+module.exports = { handle, tick, statsFor, memberStats, memberCheck, canAttach, wire, betVoid, voidable, addCheck, cleanBet, memberRules, registerGame, partners, betAdd, LOCKED_MSG, STARTED_MSG, registerInvite, attachGame, cleanCalc, limits: LIM, cleanContest, cleanTake, pots, prizes, rank, score, judge, applyObs, weekOf, chiDay, chiStart, snap, _deps: D, _reset: () => { RL.clear(); QUEUE.clear(); EXTC.clear(); CACHE.clear(); IDS.map = null; IDF.clear(); NAMES = { at: 0, v: {} }; TK.last.clear(); TK.told.clear(); USEM.clear(); GR._reset(); } };

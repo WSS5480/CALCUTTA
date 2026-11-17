@@ -141,7 +141,7 @@ async function handle(req, res) {
       let cur = row;
       for (let i = 0; i < 4; i++) { // never overwrite a write that landed since we read: patch only if `updated` is unchanged, else re-read and merge again
         const upd = Math.max(Date.now(), Number(cur.updated || 0) + 1), data = merge(cur.data || {}, b.data || {}, upd, Number(cur.updated) || 0);
-        if (await dbPatchIf(id, cur.updated, data, upd)) { send(res, 200, { ok: true, data, updated: upd }); return true; }
+        if (await dbPatchIf(id, cur.updated, data, upd)) { send(res, 200, { ok: true, data, updated: upd }); betEvents(id, cur.data, data); return true; }
         cur = await dbGet(id) || cur;
       }
       send(res, 409, { error: 'Busy, try again' }); return true;
@@ -149,6 +149,9 @@ async function handle(req, res) {
     send(res, 404, { error: 'not found' }); return true;
   } catch (e) { send(res, e.status || 500, { error: e.status ? e.message : 'Sync error: ' + e.message }); return true; }
 }
+// Activity events (events.js): AFTER a push is stored and answered, My Apps is told when it added new bets. Runs later (setImmediate), only reads the two
+// objects, can never throw into the request, and does nothing at all with EVENTS_ENABLED=0 or when My Apps is not set up.
+function betEvents(id, before, after) { setImmediate(() => { try { const EV = require('./events'); if (EV.enabled()) EV.betsPushed(require('./acct').phoneEmail(id), before || {}, after); } catch (e) {} }); }
 async function adminUsers(emailOf) {
   const { url, key } = cfg();
   // Groups Phase 1: once Groups is ON (many shared 'lock:' rows), ask the database to leave those rows out, so they can never use up the 2,000-row limit.

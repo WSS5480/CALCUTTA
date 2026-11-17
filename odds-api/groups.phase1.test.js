@@ -44,7 +44,9 @@ D.fetch = async (u) => {
   return { ok: true, status: 200, json: async () => ({ events: evs }) };
 };
 let NOW = START - 3 * DAY; D.now = () => NOW;
-const fresh = (env) => { X.db = {}; WHO.forEach((w) => { X.db[SID[w]] = { id: SID[w], salt: 's', pinhash: 'h', data: { bets: [] }, updated: 1 }; }); Object.assign(X, { NOREAD: false, failKey: '', failN: 0, espn: 'ok', reads: 0, writes: 0, fetches: 0 }); G._reset(); LIM._reset(); NOW = START - 3 * DAY; ENV(env === undefined ? { GROUPS_ENABLED: '1' } : env); };
+// activity events (events.js): every emit groups.js makes is recorded here instead of going anywhere
+const EVS = [], EVFAKE = { emit: (type, o) => { EVS.push(Object.assign({ type }, o)); return true; } }; D.ev = () => EVFAKE;
+const fresh = (env) => { EVS.length = 0; D.ev = () => EVFAKE; X.db = {}; WHO.forEach((w) => { X.db[SID[w]] = { id: SID[w], salt: 's', pinhash: 'h', data: { bets: [] }, updated: 1 }; }); Object.assign(X, { NOREAD: false, failKey: '', failN: 0, espn: 'ok', reads: 0, writes: 0, fetches: 0 }); G._reset(); LIM._reset(); NOW = START - 3 * DAY; ENV(env === undefined ? { GROUPS_ENABLED: '1' } : env); };
 const srv = http.createServer(async (req, res) => { if (!(await G.handle(req, res))) { res.statusCode = 404; res.end('{}'); } }); let P;
 const call = async (who, op, b, o) => { o = o || {}; const r = await fetch('http://127.0.0.1:' + P + '/groups/' + op, { method: o.method || 'POST', headers: Object.assign({ 'content-type': 'application/json', 'x-ip': '9.9.9.' + (WHO.indexOf(who) + 1) }, who ? { 'x-token': 't-' + who } : {}, o.headers || {}), body: o.method === 'GET' ? undefined : JSON.stringify(b || {}) }); let j = null; try { j = await r.json(); } catch (e) {} return { s: r.status, j, h: r.headers }; };
 const CDEF = { cname: 'Picks', sport: 'nfl', fmt: 'standings', start: START - H, runs: 'w4', kalshi: false, honor: false, types: { sp: true, ml: true, ou: true, prop: true, parlay: true }, legs: 4, metric: 'win', minBets: 0, minPaid: 0, cap: 0, entry: 25, split: '100' };
@@ -221,6 +223,59 @@ test('D2 if every try fails, opening Groups (and the bet status before that) reb
   r = await call('bob', 'mine', {}); assert.strictEqual(r.s, 200); assert.deepStrictEqual(r.j.groups.map((x) => x.id), [g.id], 'opening Groups shows the group'); assert.deepStrictEqual(r.j.pending, []); assert.strictEqual(r.j.betLock, 1);
   const ix = X.db[X.failKey].data; assert.ok(ix.g.includes(g.id) && !ix.q.includes(g.id), 'and the index entry is back');
   X.failKey = 'lock:gm:' + MKOF(E('cat')); X.failN = 99; r = await call('cat', 'mine', {}); assert.strictEqual(r.s, 200, 'a failing index never breaks opening Groups'); assert.deepStrictEqual(r.j.groups, []);
+});
+
+// =============================== V. activity events to My Apps (events.js), Nov 16 2026 ===============================
+const evs = (type) => EVS.filter((x) => x.type === type);
+test('V1 a group is created: ONE group_new event, after the write, with the creator\'s account; a refused create makes none', async () => {
+  fresh(); let r = await call('ann', 'create', { name: 'x', join: {}, contest: CDEF }); assert.strictEqual(r.s, 400); assert.strictEqual(EVS.length, 0, 'a refused create tells nobody');
+  const g = await mk('ann'); assert.strictEqual(EVS.length, 1, JSON.stringify(EVS)); const e = EVS[0];
+  assert.strictEqual(e.type, 'group_new'); assert.strictEqual(e.title, 'New group: ' + g.name); assert.strictEqual(e.account, E('ann')); assert.strictEqual(e.key, 'group_new|' + g.id); assert.match(e.detail, /^Started by ANNname\. Up to 8 people\.$/);
+  assert.ok(X.db['lock:grp:' + g.id], 'the group row was written before the event');
+  EVS.length = 0; await mk('owner'); assert.strictEqual(EVS.length, 1); assert.strictEqual(EVS[0].account, undefined, 'the owner-PIN sign-in has no account email: none is sent');
+});
+test('V2 joining: ONE group_join per person who really joins (direct link, or approved by the commissioner); a request, a denial, a repeat join and a refused join make none', async () => {
+  fresh(); const g = await mk('ann'); EVS.length = 0;
+  let r = await call('bob', 'join', { code: g.code }); assert.strictEqual(r.s, 200); assert.strictEqual(EVS.length, 1, JSON.stringify(EVS));
+  assert.deepStrictEqual(EVS[0], { type: 'group_join', account: E('bob'), title: 'Joined group: ' + g.name, detail: 'BOBname joined with the invite link. 2 in the group.', key: 'group_join|' + g.id + '|' + MKOF(E('bob')) });
+  r = await call('bob', 'join', { code: g.code }); assert.strictEqual(r.s, 200); assert.strictEqual(EVS.length, 1, 'already a member: joining again is not a join');
+  r = await call('cat', 'join', { code: 'ZZZZ-ZZZZ' }); assert.strictEqual(r.s, 404); assert.strictEqual(EVS.length, 1, 'a wrong code tells nobody');
+  // the members' link asks first: no event for the request, one when the commissioner approves, none for a denial
+  r = await call('cat', 'join', { code: g.link }); assert.strictEqual(r.s, 200); assert.strictEqual(r.j.pending, true); assert.strictEqual(EVS.length, 1, 'a request is not a join');
+  r = await call('dan', 'request', { id: g.id }); assert.strictEqual(r.s, 200); assert.strictEqual(EVS.length, 1);
+  const reqs = (await call('ann', 'get', { id: g.id })).j.group.reqs, pidOf = (n) => reqs.find((q) => q.name === n).pid;
+  r = await call('bob', 'decide', { id: g.id, pid: pidOf('CATname'), ok: true }); assert.strictEqual(r.s, 403); assert.strictEqual(EVS.length, 1, 'only the commissioner approves');
+  r = await call('ann', 'decide', { id: g.id, pid: pidOf('CATname'), ok: true }); assert.strictEqual(r.s, 200); assert.strictEqual(EVS.length, 2, JSON.stringify(EVS));
+  assert.deepStrictEqual(EVS[1], { type: 'group_join', account: undefined, title: 'Joined group: ' + g.name, detail: 'CATname was approved by the commissioner. 3 in the group.', key: 'group_join|' + g.id + '|' + MKOF(E('cat')) });
+  r = await call('ann', 'decide', { id: g.id, pid: pidOf('DANname'), ok: false }); assert.strictEqual(r.s, 200); assert.strictEqual(EVS.length, 2, 'a denial is not a join');
+  assert.strictEqual(evs('group_new').length, 0); assert.strictEqual(evs('contest_start').length, 0);
+});
+test('V3 a contest reaching its start: the tick tells it ONCE (not before the start, not again on later ticks, not for a contest that started more than 12 hours ago)', async () => {
+  fresh(); const g = await mk('ann', { start: START }); await joinAll(g, ['bob']); EVS.length = 0; const k = 'contest_start|' + g.id + ':' + g.contests[0].cid;
+  NOW = START - 10 * 60e3; await G.tick({ force: true }); assert.strictEqual(EVS.length, 0, 'not before the start');
+  NOW = START + 60e3; await G.tick({ force: true }); assert.strictEqual(EVS.length, 1, JSON.stringify(EVS));
+  assert.deepStrictEqual(EVS[0], { type: 'contest_start', account: undefined, title: 'Contest started: Picks', detail: 'Group: ' + g.name + '. 2 in the group.', key: k });
+  NOW += 5 * 60e3; await G.tick({ force: true }); await G.tick(); NOW += H; await G.tick({ force: true }); assert.strictEqual(EVS.length, 1, 'later ticks say nothing more');
+  G._reset(); NOW = START + 2 * H; await G.tick({ force: true }); assert.strictEqual(EVS.length, 2, 'after a restart inside 12 hours it is sent again with the SAME key (My Apps drops the repeat)'); assert.strictEqual(EVS[1].key, k);
+  G._reset(); NOW = START + 13 * H; await G.tick({ force: true }); assert.strictEqual(EVS.length, 2, 'a restart later than 12 hours after the start announces nothing');
+});
+test('V4 Groups OFF (dark): no event from any route or from the tick, for any caller; and an events module that throws can never break a Groups answer', async () => {
+  fresh({}); for (const w of [null, 'owner', 'steve', 'ann']) for (const op of OPS.concat(['on', 'bet/status', 'invite', 'preview'])) await call(w, op, { name: 'Dark group', id: 'ABCDEFGHJK', code: 'ABCD-EFGH', join: {}, contest: CDEF });
+  NOW = START + 60e3; assert.deepStrictEqual(await G.tick({ force: true }), { off: true }); assert.strictEqual(EVS.length, 0, 'dark = no events: ' + JSON.stringify(EVS)); assert.strictEqual(X.reads + X.writes + X.fetches, 0, 'and no database or outside call');
+  fresh(); D.ev = () => { throw new Error('events module broken'); }; const g = await mk('ann'); assert.ok(g.id, 'create still answers'); assert.strictEqual((await call('bob', 'join', { code: g.code })).s, 200);
+  D.ev = () => ({ emit: () => { throw new Error('emit broken'); } }); assert.strictEqual((await call('cat', 'join', { code: g.code })).s, 200); NOW = START + 60e3; assert.ok((await G.tick({ force: true })).observed >= 0, 'the tick still runs');
+});
+test('V5 with the REAL events.js: a group name is user text, so what reaches My Apps is cut to length and holds no email and no long number; nothing is sent when My Apps is not set up', async () => {
+  const EV = require('./events'), sent = [], keep = Object.assign({}, EV._deps), gap = EV._cfg.gap; EV._reset(); EV._cfg.gap = 1; delete process.env.EVENTS_ENABLED;
+  try {
+    fresh(); D.ev = () => EV; EV._deps.maReady = () => false; EV._deps.ma = async (p, d) => { sent.push([p, d]); return { ok: true, status: 200, j: { ok: true } }; };
+    await mk('ann'); await new Promise((r) => setTimeout(r, 40)); assert.strictEqual(sent.length, 0, 'My Apps not set up: nothing is sent');
+    EV._deps.maReady = () => true;
+    let r = await call('ann', 'create', { name: 'Call 9565551234 x@y.com now', take: { kind: 'none', v: 0 }, join: { requests: true, auto: true, max: 8, late: 'no' }, contest: CDEF }); assert.strictEqual(r.s, 200, JSON.stringify(r.j));
+    for (let i = 0; i < 100 && sent.length < 1; i++) await new Promise((r) => setTimeout(r, 10));
+    assert.strictEqual(sent.length, 1); const [p, d] = sent[0]; assert.strictEqual(p, '/api/v1/event'); assert.strictEqual(d.type, 'group_new'); assert.strictEqual(d.account, E('ann'));
+    for (const t of [d.title, d.detail]) { assert.ok(!/\d{7,}/.test(t) && !/@/.test(t), 'clean text: ' + t); } assert.ok(d.title.length <= 80 && d.detail.length <= 160); assert.match(d.title, /^New group: Call/);
+  } finally { Object.assign(EV._deps, keep); EV._cfg.gap = gap; EV._reset(); }
 });
 
 // =============================== E. decide before public launch (NOT changed in Phase 1) ===============================

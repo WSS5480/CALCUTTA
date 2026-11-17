@@ -12,7 +12,7 @@
 //       as `personal: true` and is kept as a personal bet with the server's own sentence.
 (function () {
   if (window.OddGroups) return;
-  const API = 'https://calcutta-odds.onrender.com/groups/';
+  const ROOT = 'https://calcutta-odds.onrender.com', API = ROOT + '/groups/';
   const g = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const ss = (k, v) => { try { if (v === undefined) return sessionStorage.getItem(k); if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch (e) {} return null; };
   const esc = (x) => String(x == null ? '' : x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -34,7 +34,7 @@
   // ---------- server ----------
   const within = (p, ms) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error('Failed to fetch')), ms))]);
   async function post(op, b) {
-    const r = await fetch(API + op, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': g('odd-tok') || '' }, body: JSON.stringify(Object.assign({ myName: g('odd-name') || '' }, b || {})) });
+    const r = await fetch(op.charAt(0) === '/' ? ROOT + op : API + op, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': g('odd-tok') || '' }, body: JSON.stringify(Object.assign({ myName: g('odd-name') || '' }, b || {})) });
     const j = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(j.error || 'Server said ' + r.status), { status: r.status, expired: !!j.expired, off: !!j.off }); return j;
   }
   const errText = (e) => (e && /Failed to fetch|NetworkError|Load failed/i.test(e.message) ? 'Could not reach the server. It may be waking up: try again in a few seconds.' : e && e.status === 401 ? 'Sign in to use Groups.' : (e && e.message) || 'Something went wrong');
@@ -82,7 +82,8 @@
     let s = '<div class="ogrow"><h1>' + esc(gr.name) + '</h1>' + (comm ? '<span class="ogbadge">Commissioner</span>' : '') + '</div><p class="ogsub">' + esc(whenTxt(gr)) + (gr.commName && !comm ? ' · run by ' + esc(gr.commName) : '') + '</p>';
     s += '<div class="og3">' + tile('Members', gr.count + ' of ' + gr.join.max, 'data-a="members"', comm && gr.reqCount ? gr.reqCount + ' asking to join' : '')
       + (c ? tile(gr.started ? 'Standings' : 'Contest', esc(c.name), 'data-a="contest" data-cid="' + att(c.cid) + '"', esc(SPORT[c.sport] || c.sportName || '')) : '')
-      + (c ? tile('Rules', esc(RUN[c.runs] || 'Dates'), 'data-a="rules" data-cid="' + att(c.cid) + '"', esc(fmtDay(c.startDay) + ' to ' + fmtDay(c.endDay))) : '') + '</div>';
+      + (c ? tile('Rules', esc(RUN[c.runs] || 'Dates'), 'data-a="rules" data-cid="' + att(c.cid) + '"', esc(fmtDay(c.startDay) + ' to ' + fmtDay(c.endDay))) : '')
+      + tile('Golf day', '⛳ Golf', 'data-a="golf"', comm ? 'Start one, scores, leaderboard' : 'Join, log my score, leaderboard') + '</div>'; // v273
     s += '<div class="oggrid">';
     if (!gr.ended && Date.now() < gr.joinUntil) s += '<div class="ogcard"><b>Invite people</b><div class="ogmeta">' + (comm ? (gr.join.auto ? 'Anyone who opens your link joins straight away.' : 'People who open your link ask to join. You approve each one.') : 'People who open your link ask to join. The commissioner approves each one.') + ' Joining closes when the contest starts.</div><button type="button" class="ogpri" data-a="invite">Invite</button><div id="ginv"></div></div>';
     else s += '<div class="ogcard ogmut">Joining is closed: the contest has started.</div>';
@@ -181,15 +182,27 @@
   // ---------- paint ----------
   function paint() {
     const e = el(); if (!e) return; const s = cur();
-    const body = expired() ? '<h1>Groups</h1>' + lockCard() : s.t === 'hub' ? hub() : s.t === 'members' ? members() : s.t === 'contest' ? contest() : s.t === 'rules' ? rules() : s.t === 'create' ? create() : s.t === 'join' ? join() : home();
+    const body = expired() ? '<h1>Groups</h1>' + lockCard() : s.t === 'hub' ? hub() : s.t === 'members' ? members() : s.t === 'contest' ? contest() : s.t === 'rules' ? rules() : s.t === 'create' ? create() : s.t === 'join' ? join() : s.t === 'golf' ? (window.OddGolfDay ? window.OddGolfDay.view(s, GDX) : '<h1>Golf day</h1><div class="ogcard ogmut">Loading…</div>') : home();
     e.querySelector('.ogin0').innerHTML = top(stack.length > 1 && !expired()) + (err && !expired() ? '<div class="ogerr" role="alert">' + esc(err) + '</div>' : '') + '<div class="ogbody">' + body + '</div>';
   }
   function paintBusy(on) { const e = el(); if (!e) return; e.classList.toggle('ogbusy', !!on); e.querySelectorAll('button[data-a]').forEach((b) => { if (!/^(back|close)$/.test(b.getAttribute('data-a'))) b.disabled = !!on; }); }
-  function back() { err = ''; if (cur().t === 'create') readDraft(); if (stack.length > 1) stack.pop(); if (cur().t === 'home' && !H) loadHome(); paint(); el().scrollTop = 0; }
+  function back() { err = ''; if (cur().t === 'create') readDraft(); if (cur().t === 'golf' && window.OddGolfDay) { try { window.OddGolfDay.leave(cur(), GDX); } catch (e) {} } if (stack.length > 1) stack.pop(); if (cur().t === 'home' && !H) loadHome(); if (cur().t === 'golf' && window.OddGolfDay) { try { window.OddGolfDay.back(cur(), GDX); } catch (e) {} } paint(); el().scrollTop = 0; }
   function push(v) { err = ''; stack.push(v); paint(); el().scrollTop = 0; }
+  // v273 Golf days (a group game): the screens live in pics/golfday.js, fetched the first time a member opens the Golf day tile. It draws inside this
+  // overlay and uses the same stack (Back), the same one-call-at-a-time `act` (so an ended account gets the same lock card) and the same classes.
+  let GDL = null; const GDV = '273';
+  const GDX = { esc, att, fmtDay, chiDay, addDays, push, back: () => back(), paint: () => paint(), cur, el, act, post, errText, tile, sel, busy: () => busy, setErr: (m) => { err = m || ''; }, me: () => g('odd-name') || '' };
+  function gdOpen(gr) {
+    push({ t: 'golf', v: 'home', gr });
+    const go = () => { const s = cur(); if (s.t === 'golf' && s.v === 'home') window.OddGolfDay.open(s, GDX); };
+    if (window.OddGolfDay) return go();
+    if (!GDL) GDL = new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = 'golfday.js?v=' + GDV; sc.onload = ok; sc.onerror = () => { GDL = null; sc.remove(); no(); }; document.head.appendChild(sc); });
+    GDL.then(go, () => { err = 'Could not load Golf days. Check your signal and try again.'; paint(); });
+  }
   function click(ev) {
     const b = ev.target.closest && ev.target.closest('button[data-a]'); if (!b || b.disabled) return; const a = b.getAttribute('data-a'), id = b.getAttribute('data-id'), gr = curGroup();
     if (a === 'close') return close(); if (a === 'back') return back(); if (busy) return;
+    if (a.slice(0, 2) === 'gd') { if (cur().t === 'golf' && window.OddGolfDay && !expired()) window.OddGolfDay.click(a, b, cur(), GDX); return; } // v273: every Golf day button
     if (a === 'home') { stack = [{ t: 'home' }]; err = ''; paint(); return loadHome(); }
     if (a === 'create') { DR = DR || draft(); return push({ t: 'create' }); }
     if (a === 'docreate') return doCreate();
@@ -203,6 +216,7 @@
     if (a === 'members') { push({ t: 'members', gr }); return act('get', { id: gr.id }, async (j) => { setGroup(j.group); paint(); }); }
     if (a === 'rules') return push({ t: 'rules', gr, cid: b.getAttribute('data-cid') });
     if (a === 'contest') { const cid = b.getAttribute('data-cid'), c = cof(gr, cid); push({ t: 'contest', gr, cid }); if (c && c.started) act('standings', { id: gr.id, cid }, async (j) => { const s = cur(); if (s.t === 'contest') { s.rows = j.rows || []; if (j.group) setGroup(j.group); } paint(); }); return; }
+    if (a === 'golf') return gdOpen(gr);
     if (a === 'invite') return invite();
     if (a === 'decide') return act('decide', { id: gr.id, pid: b.getAttribute('data-pid'), ok: b.getAttribute('data-ok') === '1' }, async (j) => { setGroup(j.group); paint(); });
     if (a === 'leave') { if (!confirm('Leave "' + gr.name + '"? You can ask to join again before it starts.')) return; return act('leave', { id: gr.id }, async () => { stack = [{ t: 'home' }]; H = null; paint(); loadHome(); blStatus(); }); }
@@ -238,7 +252,7 @@
     fit(); try { if (window.navRender) window.navRender(); } catch (x) {} fit();
     if (keep) return; stack = [{ t: 'home' }]; err = ''; paint(); if (!expired()) loadHome();
   }
-  function close() { const e = el(); if (!e) return; e.remove(); window.removeEventListener('resize', fit); busy = false; try { if (window.navRender) window.navRender(); } catch (x) {} }
+  function close() { const e = el(); if (!e) return; if (window.OddGolfDay) { try { window.OddGolfDay.stop(); } catch (x) {} } e.remove(); window.removeEventListener('resize', fit); busy = false; try { if (window.navRender) window.navRender(); } catch (x) {} }
   // gate.js tells the page when the lock changes (paid, signed out, time ended): the open screen follows without a reload.
   function lockChanged() { if (!el()) return; if (!g('odd-tok') || g('odd-grp') !== '1') return close(); err = ''; paint(); if (!expired()) { if (cur().t === 'join' && cur().code && !cur().pv) lookup(cur().code); else if (!H) loadHome(); } }
 

@@ -1089,7 +1089,7 @@ async function attachGame(groupId, e, x) {
 // ---------- for the other engines (Calcutta, golf, events) ----------
 // memberCheck(groupId, accountId) -> { member, comm, pid, name } | null: a game attached to a group lets that group's MEMBERS in (and nobody else).
 // canAttach(groupId, accountId) -> true only for that group's commissioner: an engine must ask this before it ties a game to a group id it was handed.
-async function memberCheck(groupId, e) { const g = await gread(groupId).catch(() => null); if (!g) return null; const mk = mkOf(e), m = memberOf(g, mk); return m ? { member: true, comm: isComm(g, mk), pid: m.pid, name: m.name } : null; }
+async function memberCheck(groupId, e) { const g = await gread(groupId).catch(() => null); if (!g) return null; const mk = mkOf(e), m = memberOf(g, mk); return m ? { member: true, comm: isComm(g, mk), pid: m.pid, name: m.name, group: g.name } : null; } // v273: + the group's name (golfday.js names the group in the owner's Activity event)
 async function canAttach(groupId, e) { const g = await gread(groupId).catch(() => null); return !!g && isComm(g, mkOf(e)); }
 // wire(): called once by server.js. Connects whichever engines are in this build (none of it is needed for picks contests):
 //   pots        registerGame('calc' | 'golf' | 'event', { potSummary, attachToGroup })  (a Main Calcutta's bids show in the group's main pot)

@@ -35,3 +35,15 @@ Each branch's HANDOFF.md has its own sections with rules, decisions and contract
 
 ## What this session will do next
 Finish the cut-off reviews of the heads above and add the reports to reviews/ on this branch. It will not touch main. If the main-line manager wants something different, write it in main's HANDOFF under "NOTE FOR THE PREVIEW / INTEGRATION SESSION"; this session reads it at each start.
+
+## Update Nov 17 2026, ~3 AM CT: the four cut-off reviews are finished (reports in reviews/)
+| Branch / head | Verdict | Blocks real-money use |
+|---|---|---|
+| feat/golf 584be99 (reviews/revgolf4-report.md) | SHIP AFTER FIXES | C1 an organizer who plays as a typed-in GUEST counts as "not playing" and acts alone; H1 organizer + one helper on another team rewrite a third team's card (the affected team must sign); H2 one-and-done `oadmoney`/`endseason` bypass the signature functions; H3 guests-only money game finished/reopened alone; H4 (Enterprise) playing director finishes a no-fee tournament alone; M1 COURSE DEAD END the owner reported: with 2+ tees only "Show holes" shows and "Play the White tees" is below the fold (y=1326) at 360/430. Against main HANDOFF's list: fixed B1, B2 (partner case), H1, H2, H3, "Busy", Side-games overflow. NOT fixed: H4 offline card, H5 pick-six final stored, H6 one-and-done first final, H7 remove a player, 9-hole double rounding, skins on withdrawal. Works the same without stats.js. Recommend a "Sign all handicaps" button |
+| feat/stats a07ab04 (reviews/revstats4-report.md) | SHIP AFTER FIXES | H1 three throwaway accounts set any money-game handicap in minutes (guard: confirmers 30+ days old, under 8 confirmed rounds = provisional + organizer approval, show when confirmers joined); H2 a course with NO tee data is a dead end in pics/stats.js `csList`/`cpick` (the owner's "no way to select or save it"); H3 rejected filler entries beat the per-confirmer limits |
+| feat/groups 322d2a0 (reviews/revgroups5-report.md) | SHIP AFTER FIXES | H1 scoreboard cached 10 min while bets are taken to kickoff: late-news bet paid at the old price, and accepted with ESPN unreadable; H2 honor-system contests accept a "prop" after the final, self-marked won; H3 "Just for me" still on the confirm step (owner decided: remove); M3 parlay cap is per leg (x1296 on 4 legs); head-to-head, bankroll, survivor, weekly prize are hidden (not built) |
+| feat/calcutta ccf62a7 (reviews/revcalc6-report.md) | SHIP AFTER FIXES | B1 commissioner alone can crown his own team via a correction of the FINAL (needs a second member's confirm + "I object"); B2 "this weekend" events never finish (no champion row); B3 guest-claim confirm bypassed by claiming first then buying back |
+| feat/local-events 76ee6fa | not yet reviewed | — |
+| feat/server-picks-parlays a29edea | SHIP (reviews/rev253i-report.md) | none; conflicts with main need a careful port |
+
+No coder has been hired for these findings: waiting for the owner to say whether this session keeps building, becomes the review desk, or stands down.

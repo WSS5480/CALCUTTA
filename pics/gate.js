@@ -20,6 +20,7 @@
   // ownerSwitch(id) wipes it when a DIFFERENT person signs in on this phone, so nobody ever sees the previous user's data or uploads it into their own account.
   window.oddWipe = function () {
     try { const ks = []; for (let i = 0; i < localStorage.length; i++) ks.push(localStorage.key(i)); ks.forEach((k) => { if (/^(bets26|betlog26|logat26|pinsat26|pinned26|kdel26|plbhtml26|surv26|sync-ids|sync-tomb|sync-last|sync-err|sync-rl|odd-ok|odd-exp|odd-dash|odd-dt|odd-push|odd-me|odd-treq|odd-stok|odd-eml|odd-myref|odd-grp|odd-gbl|kal-id|kal-pem)$/.test(k) || /^(lk26-|splk-)/.test(k)) localStorage.removeItem(k); }); } catch (e) {}
+    try { localStorage.removeItem('odd-lev'); localStorage.removeItem('oevt-gwait'); } catch (e) {} // pickleball group game: its per-account flag (and an event waiting on a group request) go with the person's data
   };
   // v271: `acct` (optional) = the account id the server answered with. The same person can now sign in two ways on one phone (cell number + PIN, or email +
   // password: two different `id`s, one account), so the sign-in is the same person when EITHER the id or the account matches the last one. Called with one
@@ -506,6 +507,7 @@
     try { const gv = m.groups === true ? '1' : null; if (g('odd-grp') !== gv) s('odd-grp', gv); if (window.oddGroupsChanged) setTimeout(() => { try { window.oddGroupsChanged(); } catch (e) {} }, 0); } catch (e) {} setTimeout(() => { try { if (window.oddDays) window.oddDays(); } catch (e) {} }, 0);
     // Calcutta (feature session, Nov 17 2026): the server says, on the same `me`, whether Calcutta is on for THIS account (odds-api/acct.js cFlag). Not said = no menu item, no file, no call.
     try { const cv = m.calcutta === true ? '1' : null, ch = g('odd-calc') !== cv; if (ch) s('odd-calc', cv); if (window.oddCalcChanged) setTimeout(() => { try { window.oddCalcChanged(ch); } catch (e) {} }, 0); } catch (e) {}
+    try { const lv = m.levents === true ? '1' : null; if (g('odd-lev') !== lv) s('odd-lev', lv); } catch (e) {} // pickleball group game: on for this account (localevents.js); oddGroupsChanged runs after this (setTimeout above)
     // v267 /?pay=1 (a renewal reminder): straight to the ONE pay screen. v270: time left = the early screen; time ended in guest mode = the pay sheet (it is not up by itself any more); GUEST_MODE=0 and ended = the subscribe wall is already up.
     if (wantPay) { wantPay = false; try { history.replaceState(null, '', location.pathname); } catch (e) {} if (m.role !== 'owner' && (m.allowed ? !!m.expires_on : gmode)) setTimeout(() => { try { window.oddPay(); } catch (e) {} }, 0); }
     setTimeout(() => timeCheck(m), 0); try { const dg = document.getElementById('odiag'); if (dg) dg.textContent = (m.ownerDash || (m.role === 'owner' && m.source === 'owner')) ? ' · acct ' + (m.role || '?') + (m.ownerDash ? '+dash' : '') + ' ' + String(m.email || '').slice(-8) : ''; s('odd-dash', (m.role === 'owner' && m.source === 'owner') || m.ownerDash ? '1' : null); if (window.navRender) setTimeout(window.navRender, 0); } catch (e) {}
@@ -620,6 +622,7 @@
   async function status() { // -> true / false = is the gate on; throws when the server cannot be reached
     const r = await fetch(API + '/status', { cache: 'no-store', signal: AbortSignal.timeout(12000) }), j = await r.json(); const on = j.gate === true; s('odd-gate', on ? '1' : '0');
     if (typeof j.guest === 'boolean') { gmode = j.guest; s('odd-guest', gmode ? '1' : '0'); } else { gmode = GUEST_MODE; s('odd-guest', null); } // an older server does not say: the constant decides
+    if (j.levents === true) s('odd-lsw', '1'); else if (g('odd-lsw')) { s('odd-lsw', null); s('odd-lev', null); } // pickleball group game exists (LOCALEVENTS_ENABLED=1): its ?join=e.<code> links are kept (set before oddGroupsSw runs on the next line)
     if (j.groups === true) { s('odd-gsw', '1'); try { if (window.oddGroupsSw) window.oddGroupsSw(); } catch (e) {} } else if (g('odd-gsw')) { s('odd-gsw', null); s('odd-grp', null); } // v272: Groups exists on the server at all (GROUPS_ENABLED=1). Not said = dark: nothing Groups-related is kept or run
     if (j.calcutta === true) { s('odd-csw', '1'); try { if (window.oddCalcSw) window.oddCalcSw(); } catch (e) {} } else if (g('odd-csw')) s('odd-csw', null); // Calcutta (feature session): Calcutta exists on the server (CALCUTTA_ENABLED=1); not said = nothing kept or run
     return on;

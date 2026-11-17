@@ -110,7 +110,8 @@ async function expired(e) { if (!on() || !e || e === 'owner') return false; try 
 // GROUPS_ENABLED=1 and only for an account the switches let in (GROUPS_OWNER_ONLY: the owner-PIN sign-in, the OWNER_PHONE accounts, GROUPS_TESTERS). Everyone
 // else, and everyone while the variable is unset, gets exactly the `me` of v271: no field, no extra read, no new route. A copy is returned: OWNER_ME and the
 // entitlement cache are never changed.
-function gFlag(me, e) { return cFlag(gFlag0(me, e), e); }
+function gFlag(me, e) { return cFlag(lFlag(gFlag0(me, e)), e); } // both features (pre-merged branch, review D2): Groups, then `levents` (pickleball), then `calcutta`; each only while its own switch is 1
+function lFlag(me) { return me && me.groups === true && process.env.LOCALEVENTS_ENABLED === '1' ? Object.assign({}, me, { levents: true }) : me; } // pickleball group game (localevents.js): `levents` ONLY while LOCALEVENTS_ENABLED=1 too, for the same accounts Groups is on for; otherwise the very same object
 function gFlag0(me, e) { if (!me || process.env.GROUPS_ENABLED !== '1') return me; try { return require('./groups').onFor(e) ? Object.assign({}, me, { groups: true }) : me; } catch (er) { return me; } }
 // Calcutta (feature session, Nov 17 2026): the same idea for Calcutta. `calcutta: true` is added ONLY while CALCUTTA_ENABLED=1 and only for an account the
 // Calcutta switches let in (calcutta.js onFor: CALCUTTA_OWNER_ONLY / CALCUTTA_TESTERS). Unset = the `me` of v274, the same object, nothing required.
@@ -118,7 +119,7 @@ function cFlag(me, e) { if (!me || process.env.CALCUTTA_ENABLED !== '1') return 
 async function handle(req, res) {
   if (req.method === 'OPTIONS') return false;
   const path = req.url.split('?')[0];
-  if (path === '/acct/status' && process.env.CALCUTTA_ENABLED === '1') { send(res, 200, Object.assign({ gate: on(), guest: guestMode() }, process.env.GROUPS_ENABLED === '1' ? { groups: true } : {}, { calcutta: true })); return true; } // Calcutta (feature session): `calcutta` only while CALCUTTA_ENABLED=1 (unset = the line below, unchanged)
+  if (path === '/acct/status' && (process.env.CALCUTTA_ENABLED === '1' || process.env.LOCALEVENTS_ENABLED === '1')) { send(res, 200, Object.assign({ gate: on(), guest: guestMode() }, process.env.GROUPS_ENABLED === '1' ? Object.assign({ groups: true }, process.env.LOCALEVENTS_ENABLED === '1' ? { levents: true } : {}) : {}, process.env.CALCUTTA_ENABLED === '1' ? { calcutta: true } : {})); return true; } // Calcutta + pickleball (pre-merged branch, review D2): ONE early line; `levents` only while LOCALEVENTS_ENABLED=1 and GROUPS_ENABLED=1, `calcutta` only while CALCUTTA_ENABLED=1 (both unset = the line below, unchanged)
   if (path === '/acct/status') { send(res, 200, Object.assign({ gate: on(), guest: guestMode() }, process.env.GROUPS_ENABLED === '1' ? { groups: true } : {})); return true; } // v272: `groups` is there ONLY while GROUPS_ENABLED=1 (unset = the answer of v271, byte for byte); it says nothing about any one account // v268: guest = visitors with no account may browse scores (see guestMode)
   if (req.method !== 'POST' && !(req.method === 'GET' && path === '/acct/time/status')) return false; // v263: the time status may also be read with GET (x-token header)
   if (!on()) { send(res, 200, { gate: false }); return true; }

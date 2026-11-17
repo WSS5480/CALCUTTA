@@ -3601,19 +3601,23 @@ if ('serviceWorker' in navigator) {
   const go = (href) => () => { try { location.href = href; } catch (e) {} };
   const groupsOn = () => { try { return grpOn(); } catch (e) { return false; } };
   const openGroups = () => { try { if (grpOn()) navGo('groups'); } catch (e) {} }; // the Groups tab: grpLoad + OddGroups.open (it has its own Close / ‹ Back)
+  // v275: Golf days and group pickleball live in the v274 Games catalog (group page > Games). openGames = Groups straight at the Games screen when the
+  // person is in one group, else My groups (pick a group, then Games). Falls back to the Groups tab if groups.js has no openGames.
+  const openGames = () => { try { if (!grpOn()) return; if (document.getElementById('bnmore')) navMore(false); grpLoad(() => { if (!grpOn()) return; const G = window.OddGroups; if (G.openGames) G.openGames(); else G.open(); }); } catch (e) {} };
+  const hasGame = (k) => { try { return !!window.OddGroups && typeof window.OddGroups.games === 'function' && window.OddGroups.games().some((x) => x.key === k); } catch (e) { return false; } }; // registered in the Games catalog
   // THE LIST. One entry per thing to announce: {id, icon, title, line, isLive(), open()}. Only live items this device has not been shown are listed, in this order.
   const ITEMS = [
     { id: 'pga', icon: '⛳', title: 'PGA Tour', line: 'Live PGA Tour leaderboard for this week’s tournament.', isLive: () => true, open: go('pga.html') },
     { id: 'golfgps', icon: '📍', title: 'Golf GPS', line: 'Yards to the pin on a satellite map of your course, hole by hole.', isLive: () => true, open: go('golfgps.html') },
     { id: 'pickleball', icon: '🏓', title: 'Pickleball', line: 'Round robin, King of the Court and more, with points-only Calcutta, skins and pick’em.', isLive: () => true, open: go('pickleball.html') },
     { id: 'groups', icon: '👥', title: 'Groups', line: 'Make a group, invite your friends and see who comes out on top.', isLive: groupsOn, open: openGroups },
-    { id: 'golfdays', icon: '🏌️', title: 'Golf days', line: 'Inside a group, tap Golf day: start a round, log your score, watch the leaderboard.', isLive: groupsOn, open: openGroups },
+    { id: 'golfdays', icon: '🏌️', title: 'Golf days', line: 'Inside a group, tap Games, then Golf day: start a round, log your score, watch the leaderboard.', isLive: groupsOn, open: openGames },
     // TODO wire when the Calcutta auction ships: isLive: () => true (or the switch it ships behind) and open: the Calcutta screen.
     { id: 'calcutta', icon: '🏆', title: 'Calcuttas', line: 'Main, side and weekly Calcuttas, plus golf tournament and season Calcuttas.', isLive: () => false, open: () => {} },
     // TODO wire when the Calcutta auction ships (football): isLive and open as above.
     { id: 'calcutta-fb', icon: '🏈', title: 'Football Calcuttas', line: 'Main, side and weekly Calcuttas for football.', isLive: () => false, open: () => {} },
-    // TODO wire when group pickleball games ship: isLive and open as above.
-    { id: 'group-pickleball', icon: '🏓', title: 'Group pickleball games', line: 'Pickleball games with your group.', isLive: () => false, open: () => {} },
+    // v275: live where Groups is on AND groups.js registered the 'pickleball' game (pics/groups.js addGame); opens the Games catalog like Golf days.
+    { id: 'group-pickleball', icon: '🏓', title: 'Group pickleball games', line: 'Inside a group, tap Games, then Pickleball: round robin, brackets, ladder, scores on court.', isLive: () => groupsOn() && hasGame('pickleball'), open: openGames },
   ];
   const isLive = (it) => { try { return !!it.isLive(); } catch (e) { return false; } };
   const seen = () => {
@@ -3627,7 +3631,7 @@ if ('serviceWorker' in navigator) {
   const vis = (id) => { const x = el(id); return !!x && !x.hidden; };
   const busy = () => {
     if (document.hidden) return true;
-    if (el('gate') || el('gnm') || el('oddwarn') || el('kcom') || el('oglock') || el('ogrp') || el('odash') || el('bnmore')) return true; // sign-in / pay / trial, name picker, sport warning, cash-out, Groups lock, Groups, dashboard, More
+    if (el('gate') || el('gnm') || el('oddwarn') || el('kcom') || el('oglock') || el('ogrp') || el('oevt') || el('odash') || el('bnmore')) return true; // sign-in / pay / trial, name picker, sport warning, cash-out, Groups lock, Groups (its Games catalog, stats and Golf day screens draw inside #ogrp), group Pickleball (#oevt, v275), dashboard, More
     if (['infosheet', 'teampage', 'mv', 'lvov', 'syncsheet', 'aisheet', 'spop'].some(vis)) return true; // info sheet, team page, game view, live overlay, sync, Ask AI, score pop-up (z 400)
     try { if (grpPend()) return true; } catch (e) {} // a group invite in progress
     try { if (typeof BF !== 'undefined' && BF && BF.step) return true; } catch (e) {} // the Add bet / prop / parlay form is open
@@ -3638,7 +3642,7 @@ if ('serviceWorker' in navigator) {
   };
   // Signed in: wait for the account check (gate.js -> oddGroupsChanged / oddMe), at most 10 s, so the Groups items are known before the first card.
   const T0 = Date.now(); let meSeen = false;
-  const ready = () => { if (!lg('odd-tok') || meSeen || Date.now() - T0 > 10000) return true; try { return !!(window.oddMe && window.oddMe()); } catch (e) { return false; } };
+  const ready = () => { if (Date.now() - T0 > 10000) return true; if (groupsOn() && !window.OddGroups) return false; /* v275: a Groups account waits for groups.js (its Games registry says whether group pickleball is live) */ if (!lg('odd-tok') || meSeen) return true; try { return !!(window.oddMe && window.oddMe()); } catch (e) { return false; } };
   function css() {
     if (el('oddnewcss')) return; const st = document.createElement('style'); st.id = 'oddnewcss';
     st.textContent = '#oddnew{position:fixed;inset:0;z-index:150;background:rgba(5,8,16,.62);display:flex;align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));box-sizing:border-box}'

@@ -77,7 +77,12 @@
     if (H.pending.length) s += '<h3 class="ogh">Waiting for an answer</h3><div class="oggrid">' + H.pending.map((p) => '<div class="ogcard"><b class="ogname">' + esc(p.name) + '</b><div class="ogmeta">Request sent. The commissioner approves who joins.</div><button type="button" class="ogsec" data-a="cancel" data-id="' + att(p.id) + '">Cancel my request</button></div>').join('') + '</div>';
     return s;
   }
-  function loadHome() { act('mine', {}, async (j) => { H = { groups: j.groups || [], pending: j.pending || [] }; blSet(j.betLock); const s = cur(); if (s.t === 'hub' && s.gr) { const n = H.groups.find((x) => x.id === s.gr.id); if (n) s.gr = n; } paint(); }); }
+  function loadHome() { act('mine', {}, async (j) => { H = { groups: j.groups || [], pending: j.pending || [] }; blSet(j.betLock); const s = cur(); if (s.t === 'hub' && s.gr) { const n = H.groups.find((x) => x.id === s.gr.id); if (n) s.gr = n; } paint(); if (WANTG) gamesGo(); }); }
+  // v275: the what's-new pop-up's "Golf days" / "Group pickleball" items open the Games catalog: straight to a group's Games screen when the person is in
+  // exactly ONE group, else My groups (pick a group, then Games). WANTG is cleared by any other way into Groups (open() without keep, a join link).
+  let WANTG = false;
+  function gamesGo() { WANTG = false; const s = cur(); if (expired() || !H || s.t !== 'home' || stack.length !== 1 || H.groups.length !== 1) return; const gr = H.groups[0]; stack.push({ t: 'hub', gr }); gamesOpen(gr); }
+  function openGames() { open(); if (expired()) return; WANTG = true; if (H && !busy) gamesGo(); }
 
   // ---------- group page ----------
   function hub() {
@@ -167,7 +172,7 @@
   function lookup(code) { const c = normCode(code); cur().code = String(code || ''); if (!c) { err = 'That code is not complete. It has 8 letters and numbers.'; return paint(); } act('preview', { code: c }, async (j) => { const s = cur(); s.code = c; s.pv = j.group; paint(); }); }
   function doJoin() { const s = cur(); act('join', { code: s.code }, async (j) => { s.done = j.pending ? { pending: true, text: j.text || 'Request sent. The commissioner approves who joins.' } : { pending: false, text: 'You joined ' + (j.group ? j.group.name : 'the group') + '.' }; s.gr = j.pending ? null : j.group; H = null; paint(); blStatus(); }); }
   // An invite link (?join=g.<code>) lands here once the person is signed in (index.html grpJoinRun, also through gate.js afterSignIn('group:g:<code>')).
-  function openJoin(code) { WANT = String(code || ''); open(true); stack = [{ t: 'home' }, { t: 'join', code: WANT }]; err = ''; paint(); if (expired()) return; WANT = ''; lookup(cur().code); }
+  function openJoin(code) { WANT = String(code || ''); WANTG = false; open(true); if (window.OddLocal) { try { window.OddLocal.close(); } catch (x) {} } stack = [{ t: 'home' }, { t: 'join', code: WANT }]; err = ''; paint(); if (expired()) return; WANT = ''; lookup(cur().code); }
 
   // ---------- invite ----------
   async function invite() {
@@ -188,7 +193,7 @@
     e.querySelector('.ogin0').innerHTML = top(stack.length > 1 && !expired()) + (err && !expired() ? '<div class="ogerr" role="alert">' + esc(err) + '</div>' : '') + '<div class="ogbody">' + body + '</div>';
   }
   function paintBusy(on) { const e = el(); if (!e) return; e.classList.toggle('ogbusy', !!on); e.querySelectorAll('button[data-a]').forEach((b) => { if (!/^(back|close)$/.test(b.getAttribute('data-a'))) b.disabled = !!on; }); }
-  function back() { err = ''; if (cur().t === 'create') readDraft(); if (cur().t === 'golf' && window.OddGolfDay) { try { window.OddGolfDay.leave(cur(), GDX); } catch (e) {} } if (stack.length > 1) stack.pop(); if (cur().t === 'home' && !H) loadHome(); if (cur().t === 'golf' && window.OddGolfDay) { try { window.OddGolfDay.back(cur(), GDX); } catch (e) {} } paint(); el().scrollTop = 0; }
+  function back() { err = ''; if (cur().t === 'create') readDraft(); if (cur().t === 'golf' && window.OddGolfDay) { try { window.OddGolfDay.leave(cur(), GDX); } catch (e) {} } if (stack.length > 1) stack.pop(); if (cur().t === 'home' && !H) loadHome(); if (cur().t === 'games' && !expired()) return gamesState(cur()), (el().scrollTop = 0); /* v275: back on the Games screen = its states asked again */ if (cur().t === 'golf' && window.OddGolfDay) { try { window.OddGolfDay.back(cur(), GDX); } catch (e) {} } paint(); el().scrollTop = 0; }
   function push(v) { err = ''; stack.push(v); paint(); el().scrollTop = 0; }
   // v273 Golf days (a group game): the screens live in pics/golfday.js, fetched the first time a member opens the Golf day tile. It draws inside this
   // overlay and uses the same stack (Back), the same one-call-at-a-time `act` (so an ended account gets the same lock card) and the same classes.
@@ -201,13 +206,25 @@
     if (!GDL) GDL = new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = 'golfday.js?v=' + GDV; sc.onload = ok; sc.onerror = () => { GDL = null; sc.remove(); no(); }; document.head.appendChild(sc); });
     GDL.then(go, () => { err = 'Could not load Golf days. Check your signal and try again.'; paint(); });
   }
+  // Pickleball (branch pb-group; v275 integration: a Games catalog entry, key 'pickleball', registered below with addGame): the screens live in pics/local.js,
+  // fetched the first time a member taps the Pickleball card on the Games screen (same tag as Golf days: GDV = the app version). It draws its own screen
+  // (#oevt) exactly over this one, one z-index above, so the tab bar stays visible; its Back on the first screen returns here (the Games screen).
+  let PBL = null;
+  function pbOpen(gr) {
+    const from = cur(); // the screen the card was tapped on: if the member moved on while local.js loads, nothing opens over the new screen
+    const go = () => { if (el() && cur() === from && !expired()) window.OddLocal.open({ id: gr.id, name: gr.name, role: gr.role }); };
+    if (window.OddLocal) return go();
+    if (!PBL) PBL = new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = 'local.js?v=' + GDV; sc.onload = ok; sc.onerror = () => { PBL = null; sc.remove(); no(); }; document.head.appendChild(sc); });
+    busy = true; paintBusy(true); PBL.then(() => { busy = false; paintBusy(false); go(); }, () => { busy = false; paintBusy(false); err = 'Could not load Pickleball. Check your signal and try again.'; paint(); });
+  }
+
   // ---------- v274: the games catalog. A REGISTRY: one entry per game a group can play. Another module adds a game with ONE call:
   //   window.OddGroups.addGame({ key, title, blurb, open(gr), state(gr) })
   //     key    a-z / 0-9, 1 to 16 characters, unique (the same key again replaces the entry)
   //     title  the card's name; blurb: one line saying what the game is
   //     open   called with the group (the object the group page holds) when the card is tapped: push your own screen (GDX.push / push) so Back works
   //     state  optional: (gr) -> {k: 'none' | 'open' | 'finished', text} or a Promise of it. Shown on the card ('None yet' / 'Open' / 'Finished').
-  // Only games that exist on main are registered here: the Picks contest (v272) and Golf days (v273).
+  // Only games that exist on main are registered here: the Picks contest (v272), Golf days (v273) and, since the v275 integration, group Pickleball (pics/local.js).
   const GAMES = [];
   function addGame(x) { if (!x || !/^[a-z][a-z0-9]{0,15}$/.test(String(x.key || '')) || !x.title || typeof x.open !== 'function') return false; const i = GAMES.findIndex((y) => y.key === x.key); if (i >= 0) GAMES[i] = x; else GAMES.push(x); return true; }
   const span = (c) => esc(SPORT[c.sport] || c.sportName || '') + ' · ' + esc(fmtDay(c.startDay) + ' to ' + fmtDay(c.endDay));
@@ -217,19 +234,32 @@
   addGame({ key: 'golf', title: 'Golf day', blurb: 'A round at one course: each player logs his own score hole by hole, live leaderboard, Golf GPS for the course.',
     state: (gr) => within(post('/golfday/list', { g: gr.id }), 12000).then((j) => (j.open ? { k: 'open', text: 'Open · ' + esc(j.open.name) + ' · ' + esc(fmtDay(j.open.date)) } : (j.past || []).length ? { k: 'finished', text: 'Last one · ' + esc(j.past[0].name) + ' · ' + esc(fmtDay(j.past[0].date)) } : { k: 'none', text: 'No Golf day yet' + (j.comm ? ': start one' : '') })),
     open: (gr) => gdOpen(gr) });
-  const STN = { none: 'None yet', open: 'Open', finished: 'Finished' };
+  // v275 (integration): group pickleball (pics/local.js, server odds-api/local.js) as a catalog entry. State: ONE POST /local/list for the group (the call
+  // its own home screen makes; local.js is NOT fetched for it): Open (a game not finished: under way, or its start) / Finished (the last one) / None yet.
+  const pbDay = (ms) => esc(new Date(ms).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }));
+  addGame({ key: 'pickleball', title: 'Pickleball', blurb: 'Round robin, brackets, ladder and heads-up games: scores entered on court, live standings. Bragging rights only.',
+    state: (gr) => within(post('/local/list', { g: gr.id }), 12000).then((j) => { const E = Array.isArray(j.events) ? j.events : [], o = E.filter((x) => !x.fin), f = E.filter((x) => x.fin).sort((a, b) => (b.fin || 0) - (a.fin || 0));
+      return o.length ? { k: 'open', text: 'Open · ' + esc(o[0].title) + ' · ' + (o[0].started ? 'under way' : 'starts ' + pbDay(o[0].start)) + (o.length > 1 ? ' · ' + o.length + ' games' : '') } : f.length ? { k: 'finished', text: 'Last one · ' + esc(f[0].title) + ' · ' + pbDay(f[0].start) } : { k: 'none', text: 'No pickleball game yet' + (gr.role === 'comm' ? ': start one' : '') }; }),
+    open: (gr) => pbOpen(gr) });
+  const STN ={ none: 'None yet', open: 'Open', finished: 'Finished' };
   function games() {
     const s = cur(), gr = s.gr, st = s.st || {};
     return '<h1>Games</h1><p class="ogsub">' + esc(gr.name) + ' · the games this group can play. Tap one to open it.</p><div class="oggrid ogfit">' + GAMES.map((x) => { const v = st[x.key];
       return '<button type="button" class="ogcard ogbtn" data-a="game" data-k="' + att(x.key) + '"><span class="ogrow"><b class="ogname">' + esc(x.title) + '</b><span class="ogbadge' + (v && v.k === 'open' ? ' ogy' : '') + '">' + esc(v ? STN[v.k] || '–' : 'Checking…') + '</span></span><span class="ogmeta">' + esc(x.blurb || '') + '</span>'
         + '<span class="ogmeta">' + (v ? v.text : 'Checking…') + '</span><span class="oggo">Open ›</span></button>'; }).join('') + '</div>';
   }
-  function gamesOpen(gr) {
-    const s = { t: 'games', gr, st: {} }; push(s);
-    GAMES.forEach((x) => { let v; try { v = x.state ? x.state(gr) : null; } catch (e) { v = null; } const set = (r) => { s.st[x.key] = r && STN[r.k] ? r : { k: '', text: 'Could not check right now' }; if (cur() === s && !busy) paint(); };
+  function gamesOpen(gr) { const s = { t: 'games', gr, st: {} }; push(s); gamesState(s); }
+  // v275: the states are asked again when the person comes BACK to the Games screen (from a game's screens: Back in groups.js, or Back on the first
+  // Pickleball screen through OddGroups.refresh()), so a game started meanwhile shows Open. The last answer stays on the card until the new one arrives.
+  function gamesState(s) {
+    const gr = s.gr, n = (s.n = (s.n || 0) + 1);
+    GAMES.forEach((x) => { let v; try { v = x.state ? x.state(gr) : null; } catch (e) { v = null; } const set = (r) => { if (s.n !== n) return; s.st[x.key] = r && STN[r.k] ? r : { k: '', text: 'Could not check right now' }; if (cur() === s && !busy) paint(); };
       if (v && typeof v.then === 'function') v.then(set, () => set(null)); else s.st[x.key] = v && STN[v.k] ? v : { k: '', text: '' }; });
     paint();
   }
+  function refresh() { const s = cur(); if (el() && s && s.t === 'games' && !expired()) gamesState(s); }
+  // v275: open a registered game for the group the Groups screen is on (pics/local.js's "Open the group contest" / "Open Golf day" buttons). false = nothing opened.
+  function openGame(k) { const gr = curGroup(), x = GAMES.find((y) => y.key === k); if (!el() || !gr || !x || busy || expired()) return false; try { x.open(gr); return true; } catch (e) { err = 'Could not open that game.'; paint(); return false; } }
   function openContest(gr, cid) { const c = cof(gr, cid); push({ t: 'contest', gr, cid }); if (c && c.started) act('standings', { id: gr.id, cid }, async (j) => { const s = cur(); if (s.t === 'contest') { s.rows = j.rows || []; if (j.group) setGroup(j.group); } paint(); }); }
 
   // ---------- v274: lifetime stats (a member's group record). Server: POST /groups/stats (odds-api/gstats.js). ----------
@@ -324,12 +354,12 @@
   }
   function open(keep) {
     css(); let e = el(); if (!e) { e = document.createElement('div'); e.id = 'ogrp'; e.setAttribute('role', 'dialog'); e.setAttribute('aria-label', 'Groups'); e.innerHTML = '<div class="ogin0"></div>'; document.body.appendChild(e); e.addEventListener('click', click); window.addEventListener('resize', fit); }
-    fit(); try { if (window.navRender) window.navRender(); } catch (x) {} fit();
-    if (keep) return; stack = [{ t: 'home' }]; err = ''; paint(); if (!expired()) loadHome();
+    fit(); try { if (window.navRender) window.navRender(); } catch (x) {} fit(); if (window.OddLocal) { try { window.OddLocal.fit(); } catch (x) {} }
+    if (keep) return; WANTG = false; if (window.OddLocal) { try { window.OddLocal.close(); } catch (x) {} } stack = [{ t: 'home' }]; err = ''; paint(); if (!expired()) loadHome(); // the Groups tab again = my groups, Pickleball closed
   }
-  function close() { const e = el(); if (!e) return; if (window.OddGolfDay) { try { window.OddGolfDay.stop(); } catch (x) {} } e.remove(); window.removeEventListener('resize', fit); busy = false; try { if (window.navRender) window.navRender(); } catch (x) {} }
+  function close() { const e = el(); if (!e) return; if (window.OddGolfDay) { try { window.OddGolfDay.stop(); } catch (x) {} } if (window.OddLocal) { try { window.OddLocal.close(); } catch (x) {} } e.remove(); window.removeEventListener('resize', fit); busy = false; try { if (window.navRender) window.navRender(); } catch (x) {} }
   // gate.js tells the page when the lock changes (paid, signed out, time ended): the open screen follows without a reload.
-  function lockChanged() { if (!el()) return; if (!g('odd-tok') || g('odd-grp') !== '1') return close(); err = ''; paint(); if (!expired()) { if (cur().t === 'join' && cur().code && !cur().pv) lookup(cur().code); else if (!H) loadHome(); } }
+  function lockChanged() { if (!el()) return; if (!g('odd-tok') || g('odd-grp') !== '1') return close(); if (window.OddLocal) { try { window.OddLocal.close(); } catch (x) {} } err = ''; paint(); if (!expired()) { if (cur().t === 'join' && cur().code && !cur().pv) lookup(cur().code); else if (!H) loadHome(); } }
 
   // ---------- group bets: a NEW bet of a group member is saved on the server first, then it is locked ----------
   const TK = () => (g('odd-tok') || '').slice(-12);
@@ -379,7 +409,7 @@
     if (r.personal) { try { alert(r.text); } catch (e) {} return true; }
     bet.gl = r.gl; bet.sa = r.sa; if (r.text) { try { alert(r.text); } catch (e) {} } return true;
   }
-  window.OddGroups = { open, close, join: openJoin, gate, poke, lockChanged, isOpen: () => !!el(), active: () => BL.n > 0 && !!g('odd-tok') && !expired(), locked: (b) => !!(b && Number(b.gl) > 0), LOCKNOTE, addGame, games: () => GAMES.map((x) => ({ key: x.key, title: x.title, blurb: x.blurb })) }; // v274: addGame = the games catalog registry
+  window.OddGroups = { open, close, join: openJoin, gate, poke, lockChanged, isOpen: () => !!el(), active: () => BL.n > 0 && !!g('odd-tok') && !expired(), locked: (b) => !!(b && Number(b.gl) > 0), LOCKNOTE, addGame, games: () => GAMES.map((x) => ({ key: x.key, title: x.title, blurb: x.blurb })), openGame, openGames, refresh }; // v274: addGame = the games catalog registry; v275: openGame(key) opens a registered game for the group on screen (pics/local.js's games list uses it), openGames() = Groups at the Games catalog (the what's-new pop-up), refresh() = the Games screen asks its states again (pics/local.js Back)
   window.oddGroups = () => open();
   if (g('odd-tok')) setTimeout(poke, 3000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden && g('odd-tok')) poke(); });

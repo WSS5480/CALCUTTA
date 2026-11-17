@@ -47,3 +47,13 @@ Finish the cut-off reviews of the heads above and add the reports to reviews/ on
 | feat/server-picks-parlays a29edea | SHIP (reviews/rev253i-report.md) | none; conflicts with main need a careful port |
 
 No coder has been hired for these findings: waiting for the owner to say whether this session keeps building, becomes the review desk, or stands down.
+
+## Update Nov 17 2026, afternoon: READY TO MERGE — feat/groups-rules-on-main (ff9f321)
+The owner chose "keep building". Because main moves every few hours, this session now delivers each piece as a branch cut FROM main with only the reviewed rules added, instead of a side version plus notes.
+- **feat/groups-rules-on-main @ ff9f321** = main 8af1f79 (v274) + the reviewed Groups betting rules. Server files only (odds-api/groups.js, grade.js, limits.js, pairing.js + tests + HANDOFF section "Groups rules on main (from the feature session)"). No phone file changed, no version or cache bump. Independent review (reviews/revgroupsmain-report.md, on 342da87): with all Groups switches off, 23 sample requests answer byte-identical to main; 32 suites x10 pass incl. all of main's; main's phone flows work against it at 360/430/1280; every earlier attack still fails. ff9f321 adds the review's follow-ups: unpriced / last-2-minutes / already-started bets are kept as `personal:true` with a clear sentence; grading falls back to ESPN summary pregame lines if the 5-minute check missed the last 30 minutes (so a sleeping server doesn't void bets). NOT yet verified against real ESPN: that `pickcenter` keeps pregame numbers on a finished game.
+- Before opening Groups to everyone: put the ODDABLE odds server on a Render plan that doesn't sleep.
+- Phone to-do for main (exact lines in that HANDOFF section): six "lock" wordings; no phone screens yet for head-to-head, weekly prize, honor-prop results (server supports them; main's phone can't create them, so nothing is exposed).
+- Owner questions raised: unassigned prize money when nobody qualifies (suggest: best-placed qualifying member); unpaid members winning places (suggest: paid only).
+- One r3 check loads /home/claude/calcutta-calc if present (ODD_CALCUTTA); not relevant on your machine.
+
+## In progress here (same method next): golf (benefit-test round, then onto main behind GOLF switch), calcutta (round 7 fixes, then feat/calcutta-on-main), stats (approval model: organizer approves every money number; authorization fixes), local events / pickleball as a group game (fixes + approval screen). Newest review reports are in reviews/ (revgolf5, revcalc7, revstats5, revstats6, revgroups6).

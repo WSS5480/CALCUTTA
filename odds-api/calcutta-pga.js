@@ -6,7 +6,8 @@
 //                   the scoreboard has moved on to next week's event (scoreboard?dates=<yyyymmdd>, the same read PGA.loadEvent makes).
 //   started(c)   -> true once ESPN shows the event in progress, suspended or final; false before; THROWS when the feed cannot be read (fail closed)
 //   startTime(c) -> F5: the first tee time once ESPN lists it; until then the event's start date (midnight Eastern, ESPN's placeholder: the
-//                   engine locks then at the latest). The engine also locks the moment started() is true.
+//                   engine locks then at the latest). The engine also locks the moment started() is true. Round 2: when a round-1 tee time is
+//                   listed but cannot be read safely (pga.js teeBad: an unknown zone, an ISO time without a zone), 15 h before that start date.
 //   endTime(c)   -> the event's end date
 //   final(c)     -> F2: true once ESPN shows the event final (the engine then treats the Calcutta as over: paid places no lotted golfer took follow
 //                   the unsold rule, and no commissioner correction opens)
@@ -17,7 +18,7 @@
 // NOT VERIFIED against the live feed on a tournament week: the field before Thursday, a round in progress, a playoff, the dated read (see pga.js).
 // Nothing here touches money, accounts or messages.
 const PGA = require('../pics/pga.js');
-const CACHE = new Map(), TTL = 60e3;
+const CACHE = new Map(), TTL = 60e3, EARLY = 15 * 36e5; // EARLY: ESPN's start date is midnight Eastern; the earliest first tee anywhere the Tour plays (Japan, UTC+9) is about 14 h before it
 let F = null; // fetch, handed in by register() (the engine's own, so the tests' fake ESPN answers)
 async function board(url, eventId) {
   const key = url + '|' + (eventId || ''), h = CACHE.get(key); if (h && Date.now() - h.at < TTL) return h.p;
@@ -45,7 +46,9 @@ const source = {
     return p.players.filter((x) => x.status !== 'wd' && x.status !== 'dq' && safe(x.id)).map((x) => ({ id: pre + safe(x.id), name: x.name, abbr: '' }));
   },
   async started(c) { const ev = (await eventBoard(c)).event; return ev.status === 'in' || ev.status === 'suspended' || ev.status === 'final'; },
-  async startTime(c) { const ev = (await eventBoard(c)).event; return Number.isFinite(ev.firstTee) && ev.firstTee > 0 ? ev.firstTee : Number.isFinite(ev.dates.start) && ev.dates.start > 0 ? ev.dates.start : null; },
+  async startTime(c) { const ev = (await eventBoard(c)).event, d0 = Number.isFinite(ev.dates.start) && ev.dates.start > 0 ? ev.dates.start : null;
+    if (ev.teeBad) return d0 != null ? d0 - EARLY : null; // round 2: a tee time is listed but cannot be read safely: the conservative lock (see EARLY)
+    return Number.isFinite(ev.firstTee) && ev.firstTee > 0 ? ev.firstTee : d0; },
   async final(c) { return (await eventBoard(c)).event.status === 'final'; },
   async endTime(c) { const ev = (await eventBoard(c)).event; return ev.dates.end || null; },
   async results(c) {
@@ -53,6 +56,9 @@ const source = {
     p.players.forEach((x) => { const id = pre + safe(x.id); if (x.status !== 'active') { if (fin || x.statusSrc === 'feed') R[id] = { out: true }; return; }
       if (fin) { const m = /\d+/.exec(x.pos || ''); if (m) R[id] = { place: +m[0] }; else R[id] = { out: true }; } });
     if (fin) ((c && c.lots) || []).forEach((l) => (l.teams || []).forEach((t) => { if (!R[t.id]) R[t.id] = { out: true }; })); // F3: not on the final board = did not finish
+    if (((c && c.lots) || []).some((l) => l.rest)) { const inLot = new Set(); c.lots.forEach((l) => (l.teams || []).forEach((t) => inLot.add(t.id))); // F2 round 2: a golfer added to the
+      p.players.forEach((x) => { const id = pre + safe(x.id); if (R[id] && !inLot.has(id)) R[id].nm = x.name; }); } // field later is named for the "Rest of the field" lot
+    Object.defineProperty(R, '_final', { value: fin }); // round 2: the engine takes 'final' from this same board read (never from a second read that may differ)
     return R;
   },
 };

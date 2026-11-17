@@ -32,7 +32,7 @@ const PGAS = require('./calcutta-pga'); PGAS.register(C);
 let n = 0, CLOCK = 0; const t = (name) => { n++; console.log('  PASS ' + n + ' ' + name); };
 C._deps.now = () => Date.now() + CLOCK; const at = (iso) => { CLOCK = Date.parse(iso) - Date.now(); };
 // H1: My Apps can be made slow for the "has this account's time ended?" check only (acct.expired answers false when My Apps fails, as in acct.js)
-let SLOW = 0; const A0 = C._deps.acct; C._deps.acct = () => Object.assign({}, A0(), { expired: async (e) => { if (SLOW) { await new Promise((ok) => setTimeout(ok, SLOW)); return false; } return A0().expired(e); } });
+let SLOW = 0; const A0 = C._deps.acct; C._deps.acct = () => Object.assign({}, A0(), { expiredState: async (e) => { if (SLOW) { await new Promise((ok) => setTimeout(ok, SLOW)); return 'unknown'; } return A0().expiredState(e); } }); // My Apps hanging then failing = 'unknown' (acct.expiredState)
 const srv = http.createServer(async (req, res) => {
   if (req.url.startsWith('/acct')) { if (await ACCT.handle(req, res)) return; }
   if (req.url.startsWith('/sync')) { if (await SYNC.handle(req, res)) return; }
@@ -198,15 +198,17 @@ srv.listen(0, '127.0.0.1', async () => {
     r = await post('/calcutta/get', { id: idO }, H(tess.token)); assert.strictEqual(r.s, 200); r = await post('/calcutta/board', { id: idO }, H(steve.token)); assert.strictEqual(r.s, 200);
     t('F8: after its group is deleted a Calcutta is still listed in "mine" (with the old group id, so the phone can show it) and opens for its members');
 
-    // ---- 13. F12: closed Calcuttas leave the index; the index is bounded ----
-    const now = Date.now() + CLOCK, ix = DB['lock:calcs'].data.calcs, e1 = (st, ev, ago) => ({ name: 'x', comm: 'c', mks: ['a', 'b'], code: 'C', status: st, ev, created: now - ago, act: now - ago, group: { groupId: 'G' }, pn: 0, pks: [], gks: [] });
-    Object.assign(ix, { OLDCLOSED01: e1('closed', 'nfl_po', 200 * 864e5), NEWCLOSED01: e1('closed', 'nfl_po', 20 * 864e5), SEASONOLD01: e1('closed', 'nfl_season', 200 * 864e5), SEASONGONE1: e1('closed', 'nfl_season', 420 * 864e5), OLDLIVE0001: e1('live', 'nfl_po', 300 * 864e5) });
+    // ---- 13. F12 (round 2): nothing leaves by age; above 3000 full entries the oldest closed are made slim (still listed, still counted) ----
+    const now = Date.now() + CLOCK, ix = DB['lock:calcs'].data.calcs, e1 = (st, ev, ago) => ({ name: 'x', comm: 'c', mks: ['a', 'b'], code: 'C', status: st, ev, created: now - ago, act: now - ago, group: { groupId: 'G', name: 'Gx' }, pn: 0, pks: [], gks: [] });
+    Object.assign(ix, { OLDCLOSED01: e1('closed', 'nfl_po', 200 * 864e5), NEWCLOSED01: e1('closed', 'nfl_po', 20 * 864e5), SEASONGONE1: e1('closed', 'nfl_season', 420 * 864e5), OLDLIVE0001: e1('live', 'nfl_po', 300 * 864e5) });
     C._reset(); r = await post('/calcutta/create', calcBody({ g: gA.id, name: 'Prune' }), H(steve.token)); assert.strictEqual(r.s, 200); let keys = Object.keys(DB['lock:calcs'].data.calcs);
-    assert.deepStrictEqual(['OLDCLOSED01', 'NEWCLOSED01', 'SEASONOLD01', 'SEASONGONE1', 'OLDLIVE0001'].map((k) => keys.includes(k)), [false, true, true, false, true], 'closed 180+ days (400 for a season) leave the index; anything not closed stays');
+    assert.deepStrictEqual(['OLDCLOSED01', 'NEWCLOSED01', 'SEASONGONE1', 'OLDLIVE0001'].map((k) => keys.includes(k) && !DB['lock:calcs'].data.calcs[k].slim), [true, true, true, true], 'no entry leaves (or is slimmed) by age');
     for (let i = 0; i < 3005; i++) DB['lock:calcs'].data.calcs['FILL' + String(i).padStart(6, '0')] = e1('closed', 'nfl_po', (30 + i / 1000) * 864e5);
-    C._reset(); r = await post('/calcutta/create', calcBody({ g: gA.id, name: 'Bound' }), H(steve.token)); assert.strictEqual(r.s, 200); keys = Object.keys(DB['lock:calcs'].data.calcs);
-    assert.ok(keys.length <= 3000, 'bounded: ' + keys.length); assert.ok(keys.includes(r.j.calc.id) && keys.includes(idO) && keys.includes('OLDLIVE0001'), 'the newest and every open one stay'); assert.ok(!keys.includes('FILL003004') && keys.includes('FILL000000'), 'the oldest closed go first');
-    t('F12: a closed Calcutta leaves lock:calcs 180 days after its last change (400 for a season); the index holds at most 3000 (oldest closed first); open ones and their rows are never touched');
+    C._reset(); r = await post('/calcutta/create', calcBody({ g: gA.id, name: 'Bound' }), H(steve.token)); assert.strictEqual(r.s, 200); const IX = DB['lock:calcs'].data.calcs; keys = Object.keys(IX);
+    const fullN = keys.filter((k) => !IX[k].slim).length; assert.ok(fullN <= 3000, 'at most 3000 full entries: ' + fullN); assert.ok(!IX[r.j.calc.id].slim && !IX[idO].slim && !IX.OLDLIVE0001.slim, 'the newest and every open one stay full');
+    assert.ok(IX.SEASONGONE1.slim && IX.OLDCLOSED01.slim && !IX.FILL000000.slim, 'the oldest closed are made slim first'); assert.ok(!('code' in IX.SEASONGONE1) && IX.SEASONGONE1.mks.length === 2 && IX.SEASONGONE1.group.groupId === 'G', 'a slim entry keeps what mine, list and stats read');
+    assert.ok(['FILL000000', 'FILL003004', 'OLDCLOSED01', 'SEASONGONE1'].every((k) => keys.includes(k)), 'nothing is deleted below the hard cap of 20000');
+    t('F12 round 2: no Calcutta leaves My Calcuttas / list / stats by age; above 3000 full entries the oldest closed become slim entries (still listed and counted); open ones and the rows are never touched');
 
     console.log('\nPASS ' + n + ' calcutta fix checks');
   } catch (e) { console.error('FAIL', e); process.exitCode = 1; }

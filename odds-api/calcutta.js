@@ -91,7 +91,7 @@ const EVENTS = {
   golf: { label: 'PGA Tour event (this week)', sport: 'golf', kinds: ['place'], rounds: [], plug: 'golf', rows: [{ k: 'place', r: 1, n: 1, bp: 5000, label: 'Winner' }, { k: 'place', r: 2, n: 1, bp: 2000 }, { k: 'place', r: 3, n: 1, bp: 1000 }, { k: 'place', r: 4, n: 1, bp: 1000 }, { k: 'place', r: 5, n: 1, bp: 1000 }] },
   // MAIN (calc-live): a whole PGA season. Its plug 'pga-season' is never registered, so it shows "coming soon" (the scoreboard has no season standings
   // to settle it from, and how a season Calcutta pays is an owner question). Listed so the commissioner sees it is planned.
-  pga_season: { label: 'PGA Tour season', sport: 'golf', kinds: ['place'], rounds: [], plug: 'pga-season', rows: [{ k: 'place', r: 1, n: 1, bp: 6000, label: 'Season winner' }, { k: 'place', r: 2, n: 1, bp: 2500 }, { k: 'place', r: 3, n: 1, bp: 1500 }] },
+  pga_season: { label: 'PGA Tour season', sport: 'golf', kinds: ['place'], rounds: [], plug: 'pga-season', season: true, rows: [{ k: 'place', r: 1, n: 1, bp: 6000, label: 'Season winner' }, { k: 'place', r: 2, n: 1, bp: 2500 }, { k: 'place', r: 3, n: 1, bp: 1500 }] },
   // GOLF DAY (golf coder, golf-v1): the teams of ONE golf day are the lots; which day = the Calcutta's source reference `c.golf = { gameId }`
   'golf-day': { label: 'Golf day (the teams of a golf day)', sport: 'golf', kinds: ['place', 'champ'], rounds: [], plug: 'golf-day', needsRef: 'gameId', rows: [{ k: 'place', r: 1, n: 1, bp: 6000, label: 'Winner' }, { k: 'place', r: 2, n: 1, bp: 3000 }, { k: 'place', r: 3, n: 1, bp: 1000 }] },
   // LOCAL EVENT / PICKLEBALL (events coder, local-v1): the pairs / teams of ONE local event are the lots; which event = `c.evtId` (one source 'events' serves every event)
@@ -186,12 +186,15 @@ function cleanLots(ev, lots, known, local, members) {
   const seen = new Set(); let x = 0;
   // F2: a golf field lot holds up to 200 golfers (a Tour field is 120 to 156); a team event's field lot up to 70 teams. { rest: true } (golf, or any
   // event with a team list) = "Rest of the field": every team of the event that no other lot names, filled in here from the source's own list.
+  // Round 2: the rest lot has no 70-team cap (golf: 200; a team event: its whole list, e.g. every college team), it is kept as `rest: true`, and it
+  // FOLLOWS THE FIELD: at results time every team / golfer with a result that no named lot holds belongs to it (money(): withRest), so a golfer
+  // added to the field after the Calcutta was made is in it.
   const FMAX = ev.sport === 'golf' ? 200 : 70, rests = lots.filter((l) => l && l.rest === true);
   if (rests.length > 1) throw bad(400, 'Only one "Rest of the field" lot'); if (rests.length && (!known || ev.manualOnly)) throw bad(400, '"Rest of the field" needs an event with a team list');
   if (rests.length) { const named = new Set(); lots.forEach((l) => { if (l && l.rest !== true && Array.isArray(l.teams)) l.teams.forEach((t) => named.add(String(t && t.id || ''))); });
     rests[0].teams = Object.keys(known).filter((id) => !named.has(id)).map((id) => ({ id, name: known[id].name, abbr: known[id].abbr })); if (!rests[0].teams.length) throw bad(400, 'Every team is already in a lot: nothing is left for "Rest of the field"'); rests[0].name = cleanName(rests[0].name, 40) || 'Rest of the field'; }
   return lots.map((l, i) => {
-    const ts = Array.isArray(l && l.teams) ? l.teams : []; if (!ts.length) throw bad(400, 'Each lot needs at least one team'); if (ts.length > FMAX) throw bad(400, 'A lot holds up to ' + FMAX + (ev.sport === 'golf' ? ' golfers' : ' teams') + ' (this one has ' + ts.length + ')');
+    const ts = Array.isArray(l && l.teams) ? l.teams : []; if (!ts.length) throw bad(400, 'Each lot needs at least one team'); if (ts.length > (l.rest === true && ev.sport !== 'golf' ? 400 : FMAX)) throw bad(400, 'A lot holds up to ' + (l.rest === true && ev.sport !== 'golf' ? 400 : FMAX) + (ev.sport === 'golf' ? ' golfers' : ' teams') + ' (this one has ' + ts.length + ')');
     const teams = ts.map((t) => {
       let id = String(t && t.id || ''); const name = cleanName(t && t.name, 40); if (!name) throw bad(400, 'Every team needs a name');
       if (ev.manualOnly) id = 'x' + (++x); else if (!(ev.plug ? /^[\w:.-]{1,60}$/ : /^[\w-]{1,24}$/).test(id)) throw bad(400, 'Unknown team');
@@ -203,7 +206,7 @@ function cleanLots(ev, lots, known, local, members) {
     const src = []; if (known) ts.forEach((t) => { const k = known[String(t && t.id || '')]; if (k && Array.isArray(k.players)) src.push(...k.players.map(srcPlayer)); }); // the lot source's own players
     const given = l.playersOfRecord != null ? l.playersOfRecord : null; if (!local && ((given && given.length) || src.length)) throw bad(400, 'Players of record are only for local events (pro teams and golfers have none)');
     let por = []; if (local) { por = cleanPor(src, members, true); cleanPor(given || [], members, false).forEach((e) => { if (!por.some((x) => x.k === e.k)) por.push(e); }); if (por.length > 8) throw bad(400, 'Up to 8 players of record per lot'); }
-    return { id: 'L' + (i + 1), name: nm, teams, field: teams.length > 1, por };
+    return Object.assign({ id: 'L' + (i + 1), name: nm, teams, field: teams.length > 1, por }, l.rest === true ? { rest: true, field: true } : {});
   });
 }
 // ROUND 4 #5: a plugged source is asked on behalf of the CALLER (teams(calc, { viewer, viewerKey })), has 4 s to answer, and a Calcutta on a golf
@@ -300,12 +303,17 @@ function recordPlayers(c) { try { const L = D.limits(); if (!L || typeof L.recor
   keys.forEach((k) => { const key = c.id + '|' + k; if (PLAYED.has(key)) return; PLAYED.add(key); if (PLAYED.size > 60000) PLAYED.clear(); Promise.resolve().then(() => L.recordPlay(c.ak, 'calcutta', c.id, k)).catch(() => { PLAYED.delete(key); }); }); } catch (e) {} }
 const idxEntry = (c) => ({ name: c.name, comm: c.comm, mks: c.members.map((m) => m.mk), code: c.code, status: c.a.status, ev: c.ev, created: c.created, act: D.now(), group: c.group || null, pn: c.lots.reduce((a, l) => a + (l.por || []).length, 0), pks: [...new Set([].concat(...c.lots.map((l) => (l.por || []).filter((e) => !e.pend).map((e) => e.k).filter((k) => /^[0-9a-f]{24}$/.test(k)))))], gks: [...new Set([].concat(...c.lots.map((l) => (l.por || []).map((e) => e.k).concat(c.sold[l.id] && c.sold[l.id].bb && c.sold[l.id].bb.k ? [c.sold[l.id].bb.k] : []).filter((k) => /^g:/.test(k)))))] }); // S-ALL: players of record (account keys) find their Calcuttas too
 // REVIEW FIX 8: index cached 1 s, abandoned set-ups (never started, 90+ days) pruned, failed updates retried on the next request
-const IDXC = { at: 0, v: null }, PENDING = new Set(), ABANDON = 90 * DAY, CLOSED_KEEP = 180 * DAY, CLOSED_SEASON = 400 * DAY, IDX_MAX = 3000;
+const IDXC = { at: 0, v: null }, PENDING = new Set(), ABANDON = 90 * DAY, IDX_MAX = 3000, IDX_HARD = 20000;
+// F12 (round 2): no Calcutta leaves My Calcuttas, a group's list or the stats by AGE. Only above IDX_MAX full entries are the oldest CLOSED ones made slim
+// (the code, the group's name and the players-of-record count go; everything mine / list / statsFor read stays), and only above IDX_HARD entries in all
+// do the oldest slim ones leave the index (their rows always stay).
+const slimOf = (x) => ({ slim: 1, name: x.name, comm: x.comm, mks: x.mks, pks: x.pks, gks: x.gks, status: x.status, ev: x.ev, created: x.created, act: x.act, group: x.group ? { groupId: x.group.groupId } : null });
 async function syncIdx(c) {
   for (let k = 0; k < 3; k++) { try { await mutRow(IDX, { calcs: {} }, (d) => { d.calcs = d.calcs || {}; const e = idxEntry(c), now = D.now(); const strip = (x) => JSON.stringify(Object.assign({}, x, { act: 0 })); let ch = !d.calcs[c.id] || strip(d.calcs[c.id]) !== strip(e) || now - (d.calcs[c.id].act || 0) >= DAY; d.calcs[c.id] = e;
       Object.keys(d.calcs).forEach((id) => { const x = d.calcs[id]; if (id !== c.id && x.status === 'setup' && !x.group && !(x.pks || []).length && !(x.gks || []).length && !x.pn /* ROUND 4 LOWER: typed-name players count too */ && (x.mks || []).length <= 1 && now - (x.act || x.created || 0) > ABANDON) /* ROUND 2 D5 + ROUND 3 #7: commissioner alone, never in a group, no team players, no activity (his own views count) */ { delete d.calcs[id]; ch = true; }
-        else if (id !== c.id && x.status === 'closed' && now - (x.act || x.created || 0) > ((EVENTS[x.ev] || {}).season ? CLOSED_SEASON : CLOSED_KEEP)) { delete d.calcs[id]; ch = true; } }); // F12: a closed Calcutta leaves the index (its row stays) 180 days after its last change (a season-long one 400 days)
-      const ids = Object.keys(d.calcs); if (ids.length > IDX_MAX) { ids.filter((id) => id !== c.id && d.calcs[id].status === 'closed').sort((a, b2) => (d.calcs[a].act || 0) - (d.calcs[b2].act || 0)).slice(0, ids.length - IDX_MAX).forEach((id) => { delete d.calcs[id]; }); ch = true; } // F12: and the index never holds more than IDX_MAX (oldest closed first)
+        }); const old = (a, b2) => (d.calcs[a].act || d.calcs[a].created || 0) - (d.calcs[b2].act || d.calcs[b2].created || 0);
+      const full = Object.keys(d.calcs).filter((id) => !d.calcs[id].slim); if (full.length > IDX_MAX) { full.filter((id) => id !== c.id && d.calcs[id].status === 'closed').sort(old).slice(0, full.length - IDX_MAX).forEach((id) => { d.calcs[id] = slimOf(d.calcs[id]); ch = true; }); } // F12: oldest closed made slim first
+      const all = Object.keys(d.calcs); if (all.length > IDX_HARD) { all.filter((id) => id !== c.id && d.calcs[id].slim).sort(old).slice(0, all.length - IDX_HARD).forEach((id) => { delete d.calcs[id]; ch = true; }); }
       if (!ch) return { nochange: true }; return {}; }, (row) => { IDXC.at = D.now(); IDXC.v = row.data.calcs; }); PENDING.delete(c.id); IDXC.at = 0; return; } catch (e) { if (k === 2) { console.error('calcutta index:', e.message); PENDING.add(c.id); } } }
 }
 async function repairIdx() { if (!PENDING.size) return; for (const id of [...PENDING].slice(0, 5)) { PENDING.delete(id); const r = await D.S.dbGet(ROW(id)); if (r && r.data && !r.data.deleted) await syncIdx(r.data); } }
@@ -418,7 +426,7 @@ function teamResults(ev, games, inEvent) {
 // startState() is PURE (row + cache + clock): bids and controls never wait on the feed; the feed is re-read in the background (touch -> refresh).
 const RES = new Map(); // calc id -> { at, R, err, tryAt, busy }  the last results read
 const KICK = new Map(); // calc id -> { at, t0, live, thru }
-const HORIZON = 12 * 36e5, FEED_MS = 15000, WAIT_MS = 4000, PLUG_AHEAD = 36e5;
+const HORIZON = 12 * 36e5, FEED_MS = 15000, WAIT_MS = 4000, PLUG_FAR = 12 * 36e5, PLUG_FRESH = 10 * 6e4; // F4 round 2: a source's start 12 h+ away, or a good read in the last 10 min
 const anyResult = (R) => Object.values(R || {}).some((x) => x && (x.wins || x.reached || x.champ || x.out || x.big || x.place));
 const sleep = (ms, v) => new Promise((ok) => { const t = setTimeout(() => ok(v), ms); if (t.unref) t.unref(); });
 // ROUND 4 B4: everything cached about the start carries the SIGNATURE of the event it was read for (event key + edit count). Editing the event bumps
@@ -439,7 +447,7 @@ async function feedResults(c) {
     if (typeof S.startTime === 'function') { const v = await S.startTime(c); if (v != null) { t0 = Number(v instanceof Date ? v.getTime() : v); if (!Number.isFinite(t0) || t0 <= 0) throw new Error('bad startTime'); } }
     let end = null; if (typeof S.endTime === 'function') { try { const v = await S.endTime(c); if (v != null) { const n = Number(v instanceof Date ? v.getTime() : v); if (Number.isFinite(n) && n > 0) end = n; } } catch (e) {} }
     if (end == null && t0 != null) end = t0 + (ev.span || 1) * DAY; // no endTime(): the scheduled end is taken as one day (ev.span days) after the start
-    let final = false; if (typeof S.final === 'function') { try { final = (await S.final(c)) === true; } catch (e) { final = false; } } // F2: the source says the event is over (true only)
+    let final = false; if (typeof R._final === 'boolean') final = R._final; /* round 2: the flag from the SAME board read as these results */ else if (typeof S.final === 'function') { try { final = (await S.final(c)) === true; } catch (e) { final = false; } } // F2: the source says the event is over (true only)
     GAMESOF.set(c.id, { sig, at: D.now(), G: [], S: { t0, end, final } }); if (GAMESOF.size > 3000) GAMESOF.delete(GAMESOF.keys().next().value);
     setKick(c.id, sig, t0, on || anyResult(R), 60e3); return R; }
   const today = chiDay(D.now()), games = []; const urls = urlsFor(c);
@@ -450,9 +458,22 @@ async function feedResults(c) {
   // a game still "time TBD": "nothing has started" is trusted only until its placeholder day begins (then for a minute at a time, re-read while anyone is in)
   const now = D.now(), tbd = rel.filter((g) => g.tbd && !g.done && g.state !== 'in'), tb = tbd.length ? Math.min(...tbd.map((g) => g.t || now)) : null;
   // F1: a weekend event (Thu-Mon) is OVER once its window has passed (read on a later day, Central time) and every game of a lot team in it is final.
-  // Postponed / cancelled games do not count (they are out of the event). Until then the "win" slots nobody filled stay in play.
-  const fin = !!(ev.weekend && c.win && today > c.win.to && rel.every((g) => g.done));
-  GAMESOF.set(c.id, { sig, at: now, G: rel.filter((g) => !g.done).slice(0, 120).map((g) => ({ id: g.id, t: g.t, tbd: !!g.tbd, teams: g.teams.map((t) => t.id) })), D: rel.filter((g) => g.done).map((g) => g.id).slice(-400), S: null, fin }); if (GAMESOF.size > 3000) GAMESOF.delete(GAMESOF.keys().next().value);
+  // Round 2: a lot team's game that is postponed, or moved off the weekend pages (to Tuesday, say), HOLDS the weekend open until it is final; it is
+  // watched by its id on the pages after the window (W, kept on the row) and its result counts. The wait ends at the following Thursday 12 AM Central
+  // (capDay): then whatever it did not win goes unused and follows the roll / carry rule. Until then the "win" slots nobody filled stay in play.
+  let W = []; const capDay = c.win ? addDay(c.win.to, 3) : null, watched = new Set();
+  if (ev.weekend && c.win) { const prev = gamesOf(c), inRel = new Set(rel.map((g) => g.id)), m = new Map(); ((prev && prev.W) || []).forEach((w) => m.set(w.id, { id: w.id, teams: w.teams }));
+    ((prev && prev.G) || []).forEach((g) => { if (!inRel.has(g.id) && !m.has(g.id)) m.set(g.id, { id: g.id, teams: (g.teams || []).filter((t) => ids.has(t)) }); }); // seen on the weekend pages before, gone from them now (moved)
+    uniq.filter((g) => g.off && g.teams.some((t) => ids.has(t.id))).forEach((g) => m.set(g.id, { id: g.id, teams: g.teams.map((t) => t.id).filter((t) => ids.has(t)) })); // postponed / cancelled on the weekend pages
+    // the weekend's ESPN week (season type + week number of its games): a lot team's game on a later page with the SAME week is a moved game, even
+    // one never seen on the weekend pages (next week's games carry the next week number, so they are never taken)
+    const wc = {}; rel.forEach((g) => { if (g.week > 0) { const k = g.st + ':' + g.week; wc[k] = (wc[k] || 0) + 1; } }); const wk = Object.keys(wc).sort((x, y) => wc[y] - wc[x])[0] || '';
+    if ((m.size || wk) && today > c.win.to) { const xs = []; for (let d = addDay(c.win.to, 1); d < capDay && d <= today; d = addDay(d, 1)) xs.push(E + ev.path + '/scoreboard?dates=' + d.replace(/-/g, '') + (ev.dq || ''));
+      (await Promise.all(xs.map((u) => getGames(u, today)))).forEach((gs) => gs.forEach((g) => { if (!m.has(g.id) && wk && g.st + ':' + g.week === wk && g.teams.some((t) => ids.has(t.id))) m.set(g.id, { id: g.id, teams: g.teams.map((t) => t.id).filter((t) => ids.has(t)) });
+        if (!m.has(g.id) || g.off || rel.some((x) => x.id === g.id)) return; const k = uniq.findIndex((x) => x.id === g.id); if (k >= 0) uniq[k] = g; else uniq.push(g); seen.add(g.id); rel.push(g); })); } // only the watched ids (never next week's games); a postponed entry on the weekend page is replaced by the game as played
+    m.forEach((w, id) => { watched.add(id); const g = rel.find((x) => x.id === id && !x.off); W.push({ id, teams: w.teams.slice(0, 4), done: !!(g && g.done) }); }); W = W.slice(0, 40); }
+  const fin = !!(ev.weekend && c.win && today > c.win.to && rel.every((g) => g.done || (today >= capDay && watched.has(g.id))) && (W.every((w) => w.done) || today >= capDay)); // past the cap a watched game still not final no longer holds it
+  GAMESOF.set(c.id, { sig, at: now, G: rel.filter((g) => !g.done).slice(0, 120).map((g) => ({ id: g.id, t: g.t, tbd: !!g.tbd, teams: g.teams.map((t) => t.id) })), D: rel.filter((g) => g.done).map((g) => g.id).slice(-400), S: null, fin, W }); if (GAMESOF.size > 3000) GAMESOF.delete(GAMESOF.keys().next().value);
   setKick(c.id, sig, ts.length ? Math.min(...ts) : null, rel.some((g) => g.done || g.state === 'in'), tb == null ? HORIZON : Math.max(60e3, Math.min(HORIZON, tb - now)));
   return teamResults(ev, uniq, ids);
 }
@@ -473,7 +494,7 @@ function startState(c, now) { // 'started' | 'open' | 'unknown' (unknown = fail 
     // ROUND 4 #2: the clock passing a CACHED kickoff starts the event only when that time was (re)confirmed: read at/after the kickoff itself, or within the
     // last refresh interval. An older time may have been moved (weather, flex): locked for now ('unknown' -> 409 feed, not sticky) until it is re-read.
     if (k.t0 != null && now >= k.t0) return k.at >= k.t0 || (now - k.at <= IVL(ev) && now >= k.at) ? 'started' : 'unknown';
-    if (now < k.thru || (k.t0 != null && (!ev.plug || k.t0 - now > PLUG_AHEAD))) return 'open'; } // a known kickoff still ahead: open, however old the read (F4: a source's start more than an hour away too, so a slow source never locks a Calcutta days before its event)
+    if (now < k.thru || (k.t0 != null && (!ev.plug || k.t0 - now >= PLUG_FAR || (now >= k.at && now - k.at <= PLUG_FRESH)))) return 'open'; } // a known kickoff still ahead: open, however old the read (F4: a source's start 12 h+ away, or one it confirmed in the last 10 minutes, too, so a slow source never locks a Calcutta days before its event)
   const s0 = startOf(c); return !s0 || chiDay(now) >= s0 ? 'unknown' : 'open';
 }
 function refresh(c) { // one feed read per Calcutta at a time, in the background; never throws; resolves { ok, R }
@@ -496,10 +517,10 @@ function startNow(c) { // inside a transaction: mark started; an auction not fin
 async function markStarted(id) { try { const c = await mutCalc(id, (c) => { if (c.startedAt) return { nochange: true, v: c }; startNow(c); c.rev++; return c; }); syncIdx(c); } catch (e) { console.error('calcutta start:', e.message); } }
 async function afterFeed(id) { // after a good read: keep `c.kick` on the row (restart-proof) and persist the start the moment it is seen
   try { const k = KICK.get(id); if (!k) return; const row = await loadRow(id); if (!row || row.data.deleted) return; const now = D.now();
-    if (k.sig !== sigOf(row.data)) return; const h = RES.get(id), gm = GAMESOF.get(id), R = h && h.sig === k.sig && !h.err && h.R ? h.R : null, G = gm && gm.sig === k.sig ? { G: gm.G, S: gm.S, fin: !!gm.fin } : null, frS = R ? JSON.stringify([R, G]) : null;
+    if (k.sig !== sigOf(row.data)) return; const h = RES.get(id), gm = GAMESOF.get(id), R = h && h.sig === k.sig && !h.err && h.R ? h.R : null, G = gm && gm.sig === k.sig ? { G: gm.G, S: gm.S, fin: !!gm.fin, W: gm.W || [] } : null, frS = R ? JSON.stringify([R, G]) : null;
     // the row's copy of the kickoff is rewritten when it changed, when the event's clock has passed it (so a restart knows it was confirmed), or when it is getting old
     const stale = (p) => !p || p.sig !== k.sig || p.t0 !== k.t0 || !!p.live !== !!k.live || (k.t0 != null && k.at >= k.t0 && p.at < k.t0) || p.thru - now < Math.min(HORIZON / 2, (k.thru - k.at) / 2) && !EVENTS[row.data.ev].plug;
-    const newR = (c) => !!frS && (!c.fr || c.fr.sig !== k.sig || JSON.stringify([c.fr.R, c.fr.G ? { G: c.fr.G, S: c.fr.S, fin: !!c.fr.fin } : null]) !== frS);
+    const newR = (c) => !!frS && (!c.fr || c.fr.sig !== k.sig || JSON.stringify([c.fr.R, c.fr.G ? { G: c.fr.G, S: c.fr.S, fin: !!c.fr.fin, W: c.fr.W || [] } : null]) !== frS);
     const go = (c) => !c.startedAt && startState(c, now) === 'started'; if (!stale(row.data.kick) && !go(row.data) && !newR(row.data) && !voided(row.data).length) return; let st = false;
     const c = await mutCalc(id, (c) => { if (sigOf(c) !== k.sig) return { nochange: true, v: c }; let ch = false; if (stale(c.kick)) { if (!c.kick || c.kick.t0 !== k.t0) c.rev++; c.kick = { at: k.at, sig: k.sig, t0: k.t0, live: k.live, thru: k.thru }; ch = true; }
       if (newR(c)) { c.fr = Object.assign({ at: h.at, sig: k.sig, R }, G || {}); c.rev++; ch = true; } // ROUND 4 #1: the last good results stay on the row, so stats and boards never wait on the feed (also after a restart)
@@ -513,9 +534,9 @@ async function afterFeed(id) { // after a good read: keep `c.kick` on the row (r
 // Returns 'started' (persisted), 'unknown' (fail closed) or false.
 async function freezeCheck(id, wait) {
   const row = await loadRow(id, !!wait); if (!row) return false; const c = row.data, now = D.now(), ev = EVENTS[c.ev]; let st = startState(c, now);
-  const k0 = kickOf(c), far = !!ev.plug && st === 'open' && !!k0 && !k0.live && k0.t0 != null && k0.t0 - now > PLUG_AHEAD; // F4: a source's known start is more than an hour away
+  const k0 = kickOf(c), far = !!ev.plug && st === 'open' && !!k0 && !k0.live && k0.t0 != null && (k0.t0 - now >= PLUG_FAR || (now >= k0.at && now - k0.at <= PLUG_FRESH)); // F4 round 2: a source's known start is 12 h+ away, or it answered in the last 10 minutes
   if (st !== 'started' && !ev.manualOnly && near(c, now)) {
-    if (wait) { const x = RES.get(id) || {}, age = now - (x.at || 0); if (ev.plug || x.err || !x.at || age > 6e4 || age < 0) { const o = await Promise.race([refresh(c), sleep(WAIT_MS, { ok: false })]); if (!o.ok && ev.plug && !far) return 'unknown'; /* F4: a source that cannot answer while its known start is over an hour away does not lock (it is still asked first, so a start it reports counts); otherwise: a source that cannot answer: locked */ } }
+    if (wait) { const x = RES.get(id) || {}, age = now - (x.at || 0); if (ev.plug || x.err || !x.at || age > 6e4 || age < 0) { const o = await Promise.race([refresh(c), sleep(WAIT_MS, { ok: false })]); if (!o.ok && ev.plug && !far) return 'unknown'; /* F4: a source that cannot answer while its known start is 12 h+ away (or it answered in the last 10 min) does not lock (it is still asked first, so a start it reports counts); otherwise: a source that cannot answer: locked */ } }
     else { touch(c, now); if (st === 'unknown') await Promise.race([refresh(c), sleep(300)]); }
     st = startState(c, D.now());
   }
@@ -524,7 +545,10 @@ async function freezeCheck(id, wait) {
 }
 const frozenIf = (c, fz) => { const st = startState(c, D.now()); if (st === 'started' || fz === 'started') throw bad(409, FROZEN, { code: 'frozen' }); if (st === 'unknown' || fz === 'unknown') throw bad(409, FEEDQ, { code: 'feed' }); }; // inside the transaction
 const teamOf = (c, tid) => { let t = null; c.lots.forEach((l) => l.teams.forEach((x) => { if (x.id === tid) t = x; })); return t; };
-const gamesOf = (c) => { const m = GAMESOF.get(c.id); if (m && m.sig === sigOf(c)) return m; return c.fr && c.fr.sig === sigOf(c) && (c.fr.G || c.fr.S) ? { at: c.fr.at, G: c.fr.G || [], D: [], S: c.fr.S || null, fin: !!c.fr.fin } : null; };
+const gamesOf = (c) => { const m = GAMESOF.get(c.id); if (m && m.sig === sigOf(c)) return m; return c.fr && c.fr.sig === sigOf(c) && (c.fr.G || c.fr.S) ? { at: c.fr.at, G: c.fr.G || [], D: [], S: c.fr.S || null, fin: !!c.fr.fin, W: c.fr.W || [] } : null; };
+// F1 round 2: the team names of the lot games a finished weekend still waits on (postponed / moved), until the following Thursday 12 AM Central
+function waitingOn(c, now) { const ev = EVENTS[c.ev], g = gamesOf(c); if (!ev.weekend || !c.win || !g || g.fin || !(g.W || []).length) return []; const td = chiDay(now); if (td <= c.win.to || td >= addDay(c.win.to, 3)) return [];
+  return [...new Set([].concat(...g.W.filter((w) => !w.done).map((w) => w.teams)))].map((tid) => { const tm = teamOf(c, tid); return tm ? tm.name : null; }).filter(Boolean).slice(0, 10); }
 const finOf = (c) => { const g = gamesOf(c); return !!g && (g.fin === true || !!(g.S && g.S.final === true)); }; // F1 / F2: the feed or the source says the event is over
 const feedR = (c) => { const h = RES.get(c.id); if (h && h.sig === sigOf(c) && h.R) return { R: h.R, at: h.at }; return c.fr && c.fr.sig === sigOf(c) && c.fr.R ? { R: c.fr.R, at: c.fr.at } : null; }; // the last good feed results: memory, else the row
 // ROUND 4 B1: on a feed-backed event the feed is the only source of results. The one exception is a commissioner CORRECTION (c.manual[team] with corr:true),
@@ -545,7 +569,7 @@ function fixable(c, tid, now) {
 // mode: true = wait for the feed (<= 4 s), false = a page (waits <= 2.5 s only when nothing at all is known), 'cache' = NEVER waits (stats, pot summaries)
 async function results(c, wait) { // feed results cached 5 min per Calcutta (1 min after a failure); a page never waits long on ESPN
   const h0 = RES.get(c.id), h = h0 && h0.sig === sigOf(c) ? h0 : null, now = D.now(), fresh = h && (h.err ? now - h.tryAt < 6e4 && now >= h.tryAt : h.R && now - h.at < 5 * 6e4 && now >= h.at);
-  const kept = feedR(c); let R = kept && kept.R; const done = wait === 'cache' && kept && now - kept.at < DAY && now >= kept.at && (Object.values(kept.R).some((x) => x && x.champ) || finOf(c)); // a finished event is not re-read for every stats page
+  const kept = feedR(c); let R = kept && kept.R; const g0 = gamesOf(c), done = wait === 'cache' && kept && now - kept.at < DAY && now >= kept.at && (Object.values(kept.R).some((x) => x && x.champ) || (finOf(c) && g0 && kept.at >= g0.at)); /* round 2: 'over' counts only when these results come from the read that said so; results kept from before the event turned final are read again */ // a finished event is not re-read for every stats page
   if (!fresh && feedBacked(c) && !done && !(wait === 'cache' && h && h.busy)) { const p = refresh(c).then((o) => (o.ok ? o.R : R || {})); if (wait !== 'cache' && (wait || !h || !h.R)) R = await Promise.race([p, sleep(wait ? WAIT_MS : 2500, R || {})]); }
   const R0 = R || {}; R = clone(R0); Object.keys(c.manual || {}).forEach((id) => { const m = c.manual[id]; if (feedBacked(c) && (!m.corr || corrVoid(c, id, m, R0))) return; const x = R[id] = R[id] || { wins: 0, winT: [], reached: 0, reachT: {}, champ: false, out: false };
     if (m.wins != null) { const n = m.wins; while (x.winT.length < n) x.winT.push(9e15 + (m.at || 0)); /* hand-added wins are paid after the feed wins (slot order) */ x.winT = x.winT.slice(0, n); x.wins = n; }
@@ -563,15 +587,19 @@ function slotAmounts(rows, poolC) { // every row pays n slots of pool*bp/10000; 
   for (let k = 0; left > 0 && k < ord.length; k++, left--) ord[k].c++;
   return rows.map((r, i) => sl.filter((x) => x.i === i).map((x) => x.c));
 }
+// F2 round 2: the "Rest of the field" lot follows the field: every id with a result that no lot names joins it (named from the source when it says)
+function withRest(c, R) { const rest = c.lots.find((l) => l.rest); if (!rest || !R) return c.lots; const inLot = new Set(); c.lots.forEach((l) => l.teams.forEach((t) => inLot.add(t.id))); const ok = EVENTS[c.ev].plug ? /^[\w:.-]{1,60}$/ : /^[\w-]{1,24}$/;
+  const extra = Object.keys(R).filter((id) => !inLot.has(id) && R[id] && ok.test(id)).slice(0, 400).map((id) => ({ id, name: cleanName(R[id].nm, 40) || 'Added to the field', abbr: '', added: true }));
+  return extra.length ? c.lots.map((l) => (l === rest ? Object.assign({}, l, { teams: l.teams.concat(extra), field: true }) : l)) : c.lots; }
 function money(c, R) {
-  const ev = EVENTS[c.ev], rules = c.rules, potC = Object.values(c.sold).reduce((a, x) => a + Math.round(x.amt * 100), 0);
+  const LOTS = withRest(c, R), ev = EVENTS[c.ev], rules = c.rules, potC = Object.values(c.sold).reduce((a, x) => a + Math.round(x.amt * 100), 0);
   const takeC = rules.take.kind === 'pct' ? Math.round(potC * rules.take.v / 100) : rules.take.kind === 'flat' ? Math.min(Math.round(rules.take.v * 100), potC) : 0, poolC = potC - takeC;
-  const amts = slotAmounts(rules.rows, poolC), teamLot = {}; c.lots.forEach((l) => l.teams.forEach((t) => { teamLot[t.id] = l.id; }));
+  const amts = slotAmounts(rules.rows, poolC), teamLot = {}; LOTS.forEach((l) => l.teams.forEach((t) => { teamLot[t.id] = l.id; }));
   const earnT = {}, rowsOut = [], add = (id, v) => { earnT[id] = (earnT[id] || 0) + v; };
   // ROUND 4 B2: TIES FOR A PAID PLACE split the combined places to the cent. Teams that share a place take the next places with them (two tied for
   // 1st share 1st + 2nd; the next team is 3rd, whether it was entered as 2nd or 3rd). The group's money = everything the table pays for the places it
   // covers, split evenly; leftover cents go one each to the first teams in lot order. Only teams in a lot hold a place.
-  const order = {}; let oi = 0; c.lots.forEach((l) => l.teams.forEach((t) => { order[t.id] = oi++; }));
+  const order = {}; let oi = 0; LOTS.forEach((l) => l.teams.forEach((t) => { order[t.id] = oi++; }));
   const placed = Object.keys(R).filter((id) => teamLot[id] && Number.isInteger(R[id].place) && R[id].place > 0).sort((a, b) => R[a].place - R[b].place || order[a] - order[b]);
   const groups = [], posOf = {}; { let end = 0; for (let i = 0; i < placed.length;) { let j = i; while (j < placed.length && R[placed[j]].place === R[placed[i]].place) j++; const ids = placed.slice(i, j), from = Math.max(R[ids[0]].place, end + 1); end = from + ids.length - 1; groups.push({ ids, from, to: end }); ids.forEach((id) => { posOf[id] = { pos: from, tie: ids.length > 1, of: ids.length }; }); i = j; } }
   const covered = (p) => groups.some((g) => p >= g.from && p <= g.to), placeHit = {};
@@ -593,7 +621,7 @@ function money(c, R) {
   // F1 / F2 (OWNER CAN CHANGE, see HANDOFF): once the event is over, a payout slot nobody filled (a bye week, a tie, a game between teams in no lot, a paid
   // place no lotted golfer took) goes the way of unsold-lot money: rolled into the sold lots (roll) or carried (carry). Until then it is "in play".
   let unusedC = 0, unusedN = 0; if (over) rowsOut.forEach((ro, i) => { const a = amts[i], h = ro.k === 'place' ? (ro.hits ? a.length : 0) : Math.min(ro.hits, a.length), cts = a.slice(h).reduce((x, v) => x + v, 0); ro.unused = a.length - h; if (ro.unused) { unusedC += cts; unusedN += ro.unused; } });
-  const lots = c.lots.map((l) => { const e = l.teams.reduce((s, t) => s + (earnT[t.id] || 0), 0), s = c.sold[l.id];
+  const lots = LOTS.map((l) => { const e = l.teams.reduce((s, t) => s + (earnT[t.id] || 0), 0), s = c.sold[l.id];
     const alive = !over && l.teams.some((t) => !(R[t.id] && R[t.id].out)); const out = { id: l.id, name: l.name, field: !!l.field, earnedC: e, alive, teams: l.teams.map((t) => ({ id: t.id, name: t.name, abbr: t.abbr, r: R[t.id] ? { wins: R[t.id].wins, reached: R[t.id].reached, champ: !!R[t.id].champ, out: !!R[t.id].out, big: !!R[t.id].big, place: R[t.id].place || null, pos: posOf[t.id] ? posOf[t.id].pos : null, tie: !!(posOf[t.id] && posOf[t.id].tie), manual: !!R[t.id].manual, corr: !!R[t.id].corr, reason: R[t.id].corr ? R[t.id].reason || '' : undefined } : null, earned: (earnT[t.id] || 0) / 100 })) };
     if (s) { out.sold = { amt: s.amt, how: s.how, at: s.at }; out.holder = s.pid ? { pid: s.pid, name: mName(c, s.pid) } : { pid: null, name: s.name }; out._hk = hKey(c, s); if (s.bb) { const w = bbWho(c, s.bb); out.bb = { pid: w.pid, name: w.name }; out._bk = hKey(c, s.bb); } }
     return out; });
@@ -635,7 +663,7 @@ const isPorOk = (l, k) => (l.por || []).some((e) => e.k === k && !e.pend); // #5
 function pub(c) { const ev = EVENTS[c.ev]; return { id: c.id, kind: 'calcutta', name: c.name, ev: c.ev, evLabel: ev.label, sport: ev.sport, rounds: ev.rounds || [], rules: c.rules, takeText: takeText(c.rules), unsoldText: unsoldText(c.rules, c), lots: c.lots.map((l) => ({ id: l.id, name: l.name, field: !!l.field, teams: l.teams, por: porOut(c, l, null).map((p) => ({ name: p.name })) })), local: evLocal(c.ev), feedBacked: feedBacked(c), golf: c.golf || null, evtId: c.evtId || null, count: c.members.length, max: maxOf(c), commName: mName(c, (c.members.find((m) => m.mk === c.comm) || {}).pid), status: c.a.status, locked: !!c.locked, group: c.group ? { groupId: c.group.groupId, contestId: c.group.contestId } : null }; }
 function full(c, mk, now) {
   const o = pub(c), comm = isComm(c, mk); o.role = comm ? 'comm' : memberOf(c, mk) ? 'member' : 'none'; if (o.role === 'none') return o;
-  o.lots = c.lots.map((l) => ({ id: l.id, name: l.name, field: !!l.field, teams: l.teams, por: porOut(c, l, mk), porLocked: porLocked(c, l) }));
+  o.lots = c.lots.map((l) => ({ id: l.id, name: l.name, field: !!l.field, rest: !!l.rest, teams: l.teams, por: porOut(c, l, mk), porLocked: porLocked(c, l) }));
   o.me = memberOf(c, mk).pid; o.code = c.code; o.members = c.members.map((m) => ({ pid: m.pid, name: m.name, comm: m.mk === c.comm }));
   const a = c.a; o.a = { status: a.status, order: a.order, cur: a.cur, endsAt: a.endsAt, paused: !!a.paused, left: a.left, nextAt: a.nextAt, nextLeft: a.nextLeft || null, just: a.just, timer: c.rules.timer };
   const hb = a.cur ? high(c, a.cur) : null; o.a.high = hb ? { pid: hb.pid, name: mName(c, hb.pid), amt: hb.amt } : null; o.a.minNext = a.cur ? (hb ? hb.amt + c.rules.inc : c.rules.minBid) : null;
@@ -669,19 +697,26 @@ async function joinCalc(id, u, nm, viaGroup, now) {
 const OFF_MSG = 'Groups is not open for this account yet.', LAPSED_MSG = 'Your time has ended. Pay to use Groups again.', GID = /^[A-Z2-9]{10}$/;
 const signedIn = (req) => { try { return D.acct().who(req) || null; } catch (e) { return null; } };
 const allowed = (e) => { try { return !!D.grp().onFor(e); } catch (er) { return false; } };
-// H1 (review of fc5a111): "has this account's time ended?" asks My Apps (acct.expired -> entitlement, a 25 s timeout, a failure never cached there), and
-// every /calcutta call asks it, so a slow or asleep My Apps froze a live auction. Here the answer is kept per account: a known answer is served AT ONCE
-// and re-asked in the background once it is 2 minutes old; an account never asked waits at most 1.2 s (then: not ended, and the answer lands for the
-// next call). acct.expired() itself answers false when My Apps fails, so a failure keeps the account open for those 2 minutes (it never locks anyone
-// out on a guess). acct.js is unchanged. /groups and /golfday still ask the old way (HANDOFF).
-const LAPSE = new Map(), LAPSE_MS = 120e3, LAPSE_WAIT = 1200;
+// H1 (reviews of fc5a111 and cd6965a): "has this account's time ended?" asks My Apps (entitlement: a 25 s timeout, a failure never cached there), and
+// every /calcutta call asks it, so a slow or asleep My Apps froze a live auction. Here the answer is kept per account and served AT ONCE:
+// - a KNOWN answer (My Apps said ended / not ended) is good for 2 minutes, then re-asked in the background while the last answer is still served;
+// - My Apps not answering ('unknown', from acct.expiredState) never changes a known answer: an ended account stays out for the whole outage, an open
+//   one stays in; it is asked again on the next call 30 s later;
+// - an account never answered for waits at most 1.2 s, then is let in PROVISIONALLY and asked again on the next call 30 s later (never 2 minutes).
+// acct.expired() (true / false, false on failure) is unchanged for its other callers; expiredState() is a pure addition. /groups and /golfday still ask
+// the old way (HANDOFF).
+const LAPSE = new Map(), LAPSE_MS = 120e3, LAPSE_RETRY = 30e3, LAPSE_WAIT = 1200;
+async function lapseAsk(e) { // -> 'ended' | 'ok' | 'unknown'
+  try { const A = D.acct(); if (typeof A.expiredState === 'function') { const v = await A.expiredState(e); return v === 'ended' || v === 'ok' ? v : 'unknown'; }
+    return typeof A.expired === 'function' ? ((await A.expired(e)) ? 'ended' : 'ok') : 'ok'; } catch (er) { return 'unknown'; } }
 function lapsed(e) { if (!e) return Promise.resolve(false); const h = LAPSE.get(e), now = D.now();
-  if (h && h.at && now - h.at < LAPSE_MS && now >= h.at) return Promise.resolve(h.v);
-  let p = h && h.busy; if (!p) { p = (async () => { try { const A = D.acct(); return typeof A.expired === 'function' ? !!(await A.expired(e)) : false; } catch (er) { return h ? !!h.v : false; } })()
-      .then((v) => { LAPSE.set(e, { at: D.now(), v }); if (LAPSE.size > 5000) LAPSE.delete(LAPSE.keys().next().value); return v; });
-    LAPSE.set(e, { at: h ? h.at : 0, v: h ? h.v : false, busy: p }); }
-  if (h && h.at) return Promise.resolve(h.v); // known before: the last answer now, the new one for the next call
-  return Promise.race([p, sleep(LAPSE_WAIT, null)]).then((v) => { if (v !== null) return v; const x = LAPSE.get(e); if (x && x.busy === p && !x.at) LAPSE.set(e, { at: D.now(), v: false, busy: p }); return false; }); } // no answer in time: let in, and serve that until My Apps answers
+  if (h && h.at && now >= h.at && now - h.at < h.ttl) return Promise.resolve(h.v);
+  let p = h && h.busy; if (!p) { p = lapseAsk(e).then((a) => { const x = LAPSE.get(e) || {}, known = a !== 'unknown';
+        const v = known ? a === 'ended' : (x.known ? x.v : false); // 'unknown': keep what was last KNOWN (or let in, provisionally, if nothing was)
+        LAPSE.set(e, { at: D.now(), v, known: known || !!x.known, ttl: known ? LAPSE_MS : LAPSE_RETRY }); if (LAPSE.size > 5000) LAPSE.delete(LAPSE.keys().next().value); return v; });
+    LAPSE.set(e, Object.assign({}, h || { at: 0, v: false, known: false, ttl: LAPSE_RETRY }, { busy: p })); }
+  if (h && h.at) return Promise.resolve(h.v); // answered before: that answer now, the new one for the next call
+  return Promise.race([p, sleep(LAPSE_WAIT, null)]).then((v) => { if (v !== null) return v; const x = LAPSE.get(e); if (x && x.busy === p && !x.at) LAPSE.set(e, { at: D.now(), v: false, known: false, ttl: LAPSE_RETRY, busy: p }); return false; }); } // no answer in time: let in for now, ask again 30 s later
 async function groupOf(gid, e) { // MAIN: a member of that group -> { comm, pid, name, group } (groups.js memberCheck), else 403 / 404
   if (!GID.test(String(gid || ''))) throw bad(404, 'Group not found'); let m = null; try { m = await D.grp().memberCheck(String(gid), e); } catch (er) { m = null; }
   if (!m) throw bad(403, 'Calcuttas are for members of this group', { code: 'group' }); return m; }
@@ -720,7 +755,8 @@ async function handle(req, res) {
     if (op === 'create') { rate('create', u.mk, ip); const c = await createCalc(u.e, b); send(res, 200, Object.assign({ calc: full(c, u.mk, now) }, glinks(c._links))); return true; }
     if (op === 'gjoin') { // ROUND 4 B3: a Calcutta attached to a group is joined FROM ITS GROUP: any member of that group, by the Calcutta's id (the group screen has it). { preview: true } = look first.
       rate('join', u.mk, ip); const gid = String(b.id || ''); if (!/^[A-Z2-9]{10}$/.test(gid)) throw bad(404, 'Calcutta not found'); const r0 = await loadRow(gid); if (!r0 || r0.data.deleted || !r0.data.group) throw bad(404, 'Calcutta not found');
-      if (!memberOf(r0.data, u.mk) && !(await groupRole(r0.data.group.groupId, u.mk))) throw bad(404, 'Calcutta not found'); // F10: another group's Calcutta does not exist for you await capLoad(r0.data);
+      if (!memberOf(r0.data, u.mk) && !(await groupRole(r0.data.group.groupId, u.mk))) throw bad(404, 'Calcutta not found'); // F10: another group's Calcutta does not exist for you
+      await capLoad(r0.data); // the seat cap (extra seats) is read before preview or join answer
       if (b.preview) { send(res, 200, { calc: full(r0.data, u.mk, now) }); return true; }
       let gm = null; try { gm = await D.grp().memberCheck(r0.data.group.groupId, u.e); } catch (er) { gm = null; } // MAIN: the name the group shows (falls back to the engine's own)
       const c = await joinCalc(gid, u, gm && gm.name ? cleanName(gm.name, 24) || 'Player' : await nameOf(u.e, b.myName), true, now); send(res, 200, { calc: full(c, u.mk, now) }); return true; }
@@ -749,7 +785,7 @@ async function handle(req, res) {
     if (op === 'board') { let row = await loadRow(id); if (!row || !canSee(row.data, u.mk)) throw bad(404, 'Calcutta not found'); let R = await results(row.data, false);
       if (!row.data.startedAt && startState(row.data, D.now()) === 'started') { await markStarted(id); row = await loadRow(id, true); } // ROUND 2 D1: persist the start (ROUND 3: never from games that are only scheduled)
       const c = row.data, m = money(c, R);
-      m.owners.forEach((o) => { o.me = o.pid === (memberOf(c, u.mk) || {}).pid; delete o.key; }); m.lots.forEach((l) => { l.por = porOut(c, lotOf(c, l.id), u.mk); l.porLocked = porLocked(c, lotOf(c, l.id)); if (isComm(c, u.mk) && feedBacked(c)) l.teams.forEach((t) => { const fx = fixable(c, t.id, now); if (fx) t.fix = { end: fx.end }; }); }); /* ROUND 4 B1: which teams the commissioner may correct right now */ const r = RES.get(c.id);
+      m.owners.forEach((o) => { o.me = o.pid === (memberOf(c, u.mk) || {}).pid; delete o.key; }); m.lots.forEach((l) => { l.por = porOut(c, lotOf(c, l.id), u.mk); l.porLocked = porLocked(c, lotOf(c, l.id)); if (isComm(c, u.mk) && feedBacked(c)) l.teams.forEach((t) => { const fx = fixable(c, t.id, now); if (fx) t.fix = { end: fx.end }; }); }); /* ROUND 4 B1: which teams the commissioner may correct right now */ const r = RES.get(c.id); m.waiting = waitingOn(c, now);
       send(res, 200, { calc: full(c, u.mk, now), board: m, audit: (c.audit || []).slice(-120).reverse(), feedAt: r && r.at ? r.at : null, manual: Object.keys(c.manual || {}).length }); return true; }
     if (op === 'bid') {
       rate('bid', u.mk, ip); const amt = Number(b.amt), lot = String(b.lot || ''); const fz = await freezeCheck(id, false); // ROUND 3 #4: never waits on the feed

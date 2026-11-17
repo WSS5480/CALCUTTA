@@ -165,6 +165,35 @@ srv.listen(0, '127.0.0.1', async () => {
     assert.strictEqual(C.EVENTS.pga_season.season, true, 'pga_season is marked season: true');
     t('item 10: no Calcutta answer carries "Contact us" (Calcutta keeps its own pricing line; limits.js ENTERPRISE_TEXT unchanged); pga_season season: true');
 
+    // ---- 8. round 3: week matching is regular season only; a new id stands in for a postponed one; the rest lot takes only the event's own teams ----
+    const gg = (id, date, a, b, state, sa, sb, st, wkn, name) => ({ id, date, season: { type: st }, week: { number: wkn }, status: { type: { state, completed: state === 'post', name: name || (state === 'post' ? 'STATUS_FINAL' : 'STATUS_SCHEDULED') } }, competitions: [{ competitors: [{ team: { id: String(a) }, score: String(sa), winner: state === 'post' && sa > sb }, { team: { id: String(b) }, score: String(sb), winner: state === 'post' && sb > sa }] }] });
+    const rows4 = [{ k: 'win', n: 4, pct: 20 }, { k: 'big', n: 1, pct: 20 }], ids4 = cf.slice(0, 4).map((x) => x.id);
+    // (a) bowl season: CFP first round Sat Dec 19 and a Tuesday bowl share season type 3 week 1; the bowl is never waited on or paid
+    C._reset(); at('2026-12-15T18:00:00Z'); NFL.pages = { '20261219': [gg('cfp1', '2026-12-19T20:00Z', ids4[0], ids4[1], 'pre', 0, 0, 3, 1)] };
+    r = await post('/calcutta/create', calcBody({ g: g.id, name: 'Bowls', ev: 'cfb_wk', mode: 'manual', lots: cf.slice(0, 4).map((x) => ({ teams: [x] })), rows: rows4 }), H(steve.token)); assert.strictEqual(r.s, 200, J(r.j)); const idBw = r.j.calc.id;
+    for (let i = 1; i <= 4; i++) await post('/calcutta/enter', { id: idBw, lot: 'L' + i, amt: 25, name: 'Buyer ' + i }, H(steve.token));
+    NFL.pages = { '20261219': [gg('cfp1', '2026-12-19T20:00Z', ids4[0], ids4[1], 'post', 30, 20, 3, 1)], '20261222': [gg('bowl1', '2026-12-23T00:00Z', ids4[2], ids4[3], 'pre', 0, 0, 3, 1)] };
+    at('2026-12-22T15:00:00Z'); B = await brd(idBw); assert.deepStrictEqual([B.over, B.waiting], [true, []], 'Tuesday of bowl week: the Tuesday bowl (type 3 week 1 too) does not hold the CFP weekend');
+    NFL.pages['20261222'] = [gg('bowl1', '2026-12-23T00:00Z', ids4[2], ids4[3], 'post', 41, 3, 3, 1)]; at('2026-12-23T15:00:00Z'); B = await brd(idBw);
+    assert.strictEqual(C2(B.lots.find((l) => l.id === 'L3').earned), 0, 'and the bowl win is not paid on the CFP weekend');
+    // (b) regular season: ESPN gives the rescheduled game a NEW id; the old postponed id stops holding once the new game is final
+    C._reset(); at('2026-11-17T18:00:00Z'); NFL.pages = { '20261122': [gg('s1', '2026-11-22T18:00Z', 1, 2, 'pre', 0, 0, 2, 12), gg('p1', '2026-11-22T21:00Z', 3, 4, 'pre', 0, 0, 2, 12)] };
+    r = await post('/calcutta/create', calcBody({ g: g.id, name: 'New id', ev: 'nfl_wk', mode: 'manual', lots: [1, 2, 3, 4].map((k) => ({ teams: [team(k)] })), rows: rows4 }), H(steve.token)); assert.strictEqual(r.s, 200, J(r.j)); const idNi = r.j.calc.id;
+    for (let i = 1; i <= 4; i++) await post('/calcutta/enter', { id: idNi, lot: 'L' + i, amt: 25, name: 'Buyer ' + i }, H(steve.token));
+    NFL.pages = { '20261122': [gg('s1', '2026-11-22T18:00Z', 1, 2, 'post', 30, 20, 2, 12), gg('p1', '2026-11-22T21:00Z', 3, 4, 'pre', 0, 0, 2, 12, 'STATUS_POSTPONED')], '20261124': [gg('p1new', '2026-11-24T23:00Z', 3, 4, 'pre', 0, 0, 2, 12)] };
+    at('2026-11-24T18:00:00Z'); B = await brd(idNi); assert.deepStrictEqual([B.over, B.waiting.sort()], [false, ['Team 3', 'Team 4']], 'postponed, replacement (new id) not played yet: waiting');
+    NFL.pages['20261124'] = [gg('p1new', '2026-11-24T23:00Z', 3, 4, 'post', 27, 3, 2, 12)]; at('2026-11-25T15:00:00Z'); B = await brd(idNi);
+    assert.deepStrictEqual([B.over, B.waiting, B.unused.slots], [true, [], 2], 'the new-id game is final: the old postponed id no longer holds it (2 win slots nobody filled)');
+    assert.ok(C2(B.lots.find((l) => l.id === 'L3').earned) > 0, 'and Team 3\'s win in the replacement game is paid');
+    // (c) a lot team loses to an FCS team outside the event's own list: that team never joins "Rest of the field"
+    for (const warm of [false, true]) { C._reset(); at('2026-11-17T18:00:00Z'); NFL.pages = {};
+      r = await post('/calcutta/create', calcBody({ g: g.id, name: 'FCS', ev: 'cfb_wk', mode: 'manual', lots: [{ teams: [cf[0]] }, { teams: [cf[1]] }, { rest: true }], rows: rows4 }), H(steve.token)); assert.strictEqual(r.s, 200, J(r.j)); const idFc = r.j.calc.id;
+      for (let i = 1; i <= 3; i++) await post('/calcutta/enter', { id: idFc, lot: 'L' + i, amt: 25, name: 'Buyer ' + i }, H(steve.token));
+      NFL.pages = { '20261121': [gg('f1', '2026-11-21T18:00Z', cf[0].id, '900', 'post', 10, 31, 2, 12), gg('f2', '2026-11-21T22:00Z', cf[1].id, cf[2].id, 'post', 20, 17, 2, 12)] };
+      at('2026-11-24T15:00:00Z'); C._reset(); if (warm) await post('/calcutta/teams', { ev: 'cfb_wk' }, H(steve.token)); await post('/calcutta/board', { id: idFc }, H(steve.token)); await sleep(300); B = (await post('/calcutta/board', { id: idFc }, H(steve.token))).j.board;
+      const rl3 = B.lots.find((l) => l.id === 'L3'); assert.ok(!rl3.teams.some((x) => x.id === '900'), 'the FCS team is not in the rest lot (' + (warm ? 'team list cached' : 'after a restart') + ')'); assert.strictEqual(C2(rl3.earned), 0, 'and its win does not pay the rest lot'); }
+    t('round 3 F1 / F2: in bowl season (type 3 week 1 for weeks) only watched ids count, so a Tuesday bowl is neither waited on nor paid; a rescheduled game with a NEW id stands in for the postponed one; an FCS opponent outside the team list never joins "Rest of the field"');
+
     console.log('\nPASS ' + n + ' calcutta fix-round-2 checks');
   } catch (e) { console.error('FAIL', e); process.exitCode = 1; }
   srv.close(); process.exit(process.exitCode || 0);

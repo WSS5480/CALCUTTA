@@ -465,13 +465,20 @@ async function feedResults(c) {
   if (ev.weekend && c.win) { const prev = gamesOf(c), inRel = new Set(rel.map((g) => g.id)), m = new Map(); ((prev && prev.W) || []).forEach((w) => m.set(w.id, { id: w.id, teams: w.teams }));
     ((prev && prev.G) || []).forEach((g) => { if (!inRel.has(g.id) && !m.has(g.id)) m.set(g.id, { id: g.id, teams: (g.teams || []).filter((t) => ids.has(t)) }); }); // seen on the weekend pages before, gone from them now (moved)
     uniq.filter((g) => g.off && g.teams.some((t) => ids.has(t.id))).forEach((g) => m.set(g.id, { id: g.id, teams: g.teams.map((t) => t.id).filter((t) => ids.has(t)) })); // postponed / cancelled on the weekend pages
-    // the weekend's ESPN week (season type + week number of its games): a lot team's game on a later page with the SAME week is a moved game, even
-    // one never seen on the weekend pages (next week's games carry the next week number, so they are never taken)
-    const wc = {}; rel.forEach((g) => { if (g.week > 0) { const k = g.st + ':' + g.week; wc[k] = (wc[k] || 0) + 1; } }); const wk = Object.keys(wc).sort((x, y) => wc[y] - wc[x])[0] || '';
+    // the weekend's ESPN week (season type + week number of its games). REGULAR SEASON ONLY (type 2): a lot team with NO game on the weekend pages
+    // (none, or only a postponed one) whose game on a later page has the SAME week is a moved game, even one never seen on the weekend pages (next
+    // week's games carry the next week number, so they are never taken). In the postseason (bowls and the CFP share type 3 week 1 for weeks) only
+    // the watched game ids count.
+    const wc = {}; rel.forEach((g) => { if (g.week > 0) { const k = g.st + ':' + g.week; wc[k] = (wc[k] || 0) + 1; } }); const wk0 = Object.keys(wc).sort((x, y) => wc[y] - wc[x])[0] || '', wk = /^2:/.test(wk0) ? wk0 : '';
+    const onWk = new Set(); rel.forEach((g) => g.teams.forEach((t) => onWk.add(t.id))); const rep = new Set(); // rep: week-matched games (they can stand in for a postponed id)
     if ((m.size || wk) && today > c.win.to) { const xs = []; for (let d = addDay(c.win.to, 1); d < capDay && d <= today; d = addDay(d, 1)) xs.push(E + ev.path + '/scoreboard?dates=' + d.replace(/-/g, '') + (ev.dq || ''));
-      (await Promise.all(xs.map((u) => getGames(u, today)))).forEach((gs) => gs.forEach((g) => { if (!m.has(g.id) && wk && g.st + ':' + g.week === wk && g.teams.some((t) => ids.has(t.id))) m.set(g.id, { id: g.id, teams: g.teams.map((t) => t.id).filter((t) => ids.has(t)) });
+      (await Promise.all(xs.map((u) => getGames(u, today)))).forEach((gs) => gs.forEach((g) => { if (!m.has(g.id) && wk && !g.off && g.st + ':' + g.week === wk && g.teams.some((t) => ids.has(t.id) && !onWk.has(t.id))) { m.set(g.id, { id: g.id, teams: g.teams.map((t) => t.id).filter((t) => ids.has(t)) }); rep.add(g.id); }
         if (!m.has(g.id) || g.off || rel.some((x) => x.id === g.id)) return; const k = uniq.findIndex((x) => x.id === g.id); if (k >= 0) uniq[k] = g; else uniq.push(g); seen.add(g.id); rel.push(g); })); } // only the watched ids (never next week's games); a postponed entry on the weekend page is replaced by the game as played
-    m.forEach((w, id) => { watched.add(id); const g = rel.find((x) => x.id === id && !x.off); W.push({ id, teams: w.teams.slice(0, 4), done: !!(g && g.done) }); }); W = W.slice(0, 40); }
+    ((prev && prev.W) || []).forEach((w) => { if (w.r) rep.add(w.id); });
+    m.forEach((w, id) => { watched.add(id); const g = rel.find((x) => x.id === id && !x.off); W.push(Object.assign({ id, teams: w.teams.slice(0, 4), done: !!(g && g.done) }, rep.has(id) ? { r: 1 } : {})); });
+    // ESPN may give a rescheduled game a NEW id: a watched id stops holding the weekend once each of its lot teams has a final week-matched game
+    W.forEach((w) => { if (!w.done && !w.r && w.teams.length && w.teams.every((t) => W.some((o) => o !== w && o.r && o.done && o.teams.includes(t)))) { w.done = true; w.rep = 1; const x = rel.findIndex((g) => g.id === w.id); if (x >= 0 && !rel[x].done) rel.splice(x, 1); } });
+    W = W.slice(0, 40); }
   const fin = !!(ev.weekend && c.win && today > c.win.to && rel.every((g) => g.done || (today >= capDay && watched.has(g.id))) && (W.every((w) => w.done) || today >= capDay)); // past the cap a watched game still not final no longer holds it
   GAMESOF.set(c.id, { sig, at: now, G: rel.filter((g) => !g.done).slice(0, 120).map((g) => ({ id: g.id, t: g.t, tbd: !!g.tbd, teams: g.teams.map((t) => t.id) })), D: rel.filter((g) => g.done).map((g) => g.id).slice(-400), S: null, fin, W }); if (GAMESOF.size > 3000) GAMESOF.delete(GAMESOF.keys().next().value);
   setKick(c.id, sig, ts.length ? Math.min(...ts) : null, rel.some((g) => g.done || g.state === 'in'), tb == null ? HORIZON : Math.max(60e3, Math.min(HORIZON, tb - now)));
@@ -588,8 +595,10 @@ function slotAmounts(rows, poolC) { // every row pays n slots of pool*bp/10000; 
   return rows.map((r, i) => sl.filter((x) => x.i === i).map((x) => x.c));
 }
 // F2 round 2: the "Rest of the field" lot follows the field: every id with a result that no lot names joins it (named from the source when it says)
-function withRest(c, R) { const rest = c.lots.find((l) => l.rest); if (!rest || !R) return c.lots; const inLot = new Set(); c.lots.forEach((l) => l.teams.forEach((t) => inLot.add(t.id))); const ok = EVENTS[c.ev].plug ? /^[\w:.-]{1,60}$/ : /^[\w-]{1,24}$/;
-  const extra = Object.keys(R).filter((id) => !inLot.has(id) && R[id] && ok.test(id)).slice(0, 400).map((id) => ({ id, name: cleanName(R[id].nm, 40) || 'Added to the field', abbr: '', added: true }));
+// A team event's rest lot takes only ids from the event's OWN team list (an FCS opponent outside it never joins); golf follows the field.
+function withRest(c, R) { const rest = c.lots.find((l) => l.rest); if (!rest || !R) return c.lots; const ev = EVENTS[c.ev], inLot = new Set(); c.lots.forEach((l) => l.teams.forEach((t) => inLot.add(t.id))); const ok = ev.plug ? /^[\w:.-]{1,60}$/ : /^[\w-]{1,24}$/;
+  const tl = ev.plug ? null : TEAMS.get(ev.path + (ev.tq || '')), known = tl ? new Map(tl.list.map((t) => [t.id, t.name])) : null; if (!ev.plug && !known) return c.lots; // no list at hand: the rest lot as made (it already held the whole list)
+  const extra = Object.keys(R).filter((id) => !inLot.has(id) && R[id] && ok.test(id) && (!known || known.has(id))).slice(0, 400).map((id) => ({ id, name: cleanName(known ? known.get(id) : R[id].nm, 40) || 'Added to the field', abbr: '', added: true }));
   return extra.length ? c.lots.map((l) => (l === rest ? Object.assign({}, l, { teams: l.teams.concat(extra), field: true }) : l)) : c.lots; }
 function money(c, R) {
   const LOTS = withRest(c, R), ev = EVENTS[c.ev], rules = c.rules, potC = Object.values(c.sold).reduce((a, x) => a + Math.round(x.amt * 100), 0);

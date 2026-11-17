@@ -18,6 +18,7 @@ Start here if you are a new AI session picking up this repo. Update this file in
 - After each build, remind him (as a to-do) to upgrade The Odds API plan (~$30/mo) once Oddable sells. Until then stay under the free 500 credits/month.
 - Values to copy (keys, tokens) go in their own copy box with no stray spaces.
 - When a session gets long, hand off to a fresh session using this file.
+- **Every agent on Opus 5.5 (Steve, Nov 17 2026):** every manager, coder and reviewer session runs on Opus 5.5; a manager starts each coder and reviewer with the opus model, never haiku, sonnet or fable.
 
 - **Session rotation (Steve, 2026-11-13):** when a session is close to handing off, it stops coding and becomes **reviewer**; before leaving it becomes the **second reviewer**. It only leaves once the new coder has become the **first reviewer** and the old first reviewer has taken its place. Each session trains the next by these rules. Reviewers stay read-only; check afterwards that they changed nothing.
 - **Test like a real user (2026-11-13):** the sign-up/"Failed to fetch" bug (missing CORS preflight) lived since v112 because tests ran in scripts that don't enforce CORS. Always test cross-origin calls from the real page in the user's Chrome, and try a real sign-up/sign-in flow before saying it works.
@@ -31,6 +32,7 @@ Start here if you are a new AI session picking up this repo. Update this file in
 - Local check: serve `pics/` with `python3 -m http.server`, set `localStorage['pics-lg']='cfb'`, open `index.html?mirror=1`. ESPN must be mocked if outbound access is blocked.
 
 ## Change log
+- What's new pop-up (2026-11-17, branch `whats-new`, version TBD) — a "Look what's new" card on index.html, once per device per release key (`WHATSNEW`), items from one list (`ITEMS`: Golf = PGA Tour + Golf GPS, Pickleball, Groups + Golf days for Groups accounts; Calcuttas, football Calcuttas and group pickleball listed but off until they ship). Read "## What's new pop-up" at the end.
 - v194 (2026-11-14) — Kalshi CASH OUT (real sale) with confirm screen. Button 'Cash out…' appears on open Kalshi bets only where a sale can work (market active, a bid >= 1c, at least 1 whole contract). Tap -> modal with live price (re-quoted every 4 s), contracts, proceeds, cost, result; 'Confirm sale' re-quotes first and refuses if the price fell below what was shown. Order = limit, immediate_or_cancel, reduce_only SELL of floor(contracts) at the bid, sent signed from the phone through the new stateless POST /kalshi/order in kalshi-sync/server.js (validates: sell only, integer count, price 0.01-0.99 dollars string, IOC, reduce_only, client_order_id; forwards a cleaned body; refuses everything else). Needs a Kalshi key with TRADING permission (read-only key -> Kalshi 401/403 -> message + `kco-ro` flag). Whole contracts only (Kalshi count is an integer), so fractional leftovers stay open. Sales are logged locally in `kco-log`. Sync now reads SELL fills: when a position is fully sold the bet gets `cash` (proceeds after fee) and `soldN`; betGradeLive/betPL use it (won/lost/push by cash vs stake, P&L = cash - stake). Cash-out value on open Kalshi bets refreshes every 10 s while My Bets is open (cache 8 s). NOT tested against real Kalshi orders (no trade was placed by Claude): first real sale must be tried by Steve on a small position. Server needs a calcutta-odds redeploy for /kalshi/order. Open: combo (MVE) markets may reject normal sell orders; partial sells show only a note; My Apps dashboard grading of cashed bets may differ from the app.
 - v193 (2026-11-14) — Kalshi status light in the header (next to the version pill, every page): green flashing = Kalshi key on this device and synced in the last 20 min; orange = syncing/waiting/stale; red = key rejected or cannot connect; hidden when no key. Tap it to open My Bets; hover/aria text shows the sync line. `kdotPaint()` runs every 3 s and after each sync; `KLAST` stamps the last good sync; reduced-motion users get a steady green. Cash-out button NOT built (still preview only, needs trade-enabled key + confirm screen + signed POST; see v177 note).
 - v192 (2026-11-14) — Kalshi combo synced but was easy to miss: the real $89.97 5-leg Kalshi combo DID sync (fills API) with correct legs, but (1) it was filed on Sun 11/15 (the combo market's expiry) instead of Sat 11/14 (its games), so it was not on today's My Bets; (2) its stake was 84.66 not 89.97 because Kalshi's fee_cost was left out. Fix: combos use the day of their first leg; stake = fills cost + fee_cost for combos and single Kalshi bets (matches Kalshi's ticket cost; multiplier now 9.135x for that combo); parlay re-sync now also updates a changed day. Existing synced bets are corrected on the next Kalshi sync. Open: bets edited by hand get overwritten by the next sync only when day/stake differ from Kalshi (pre-existing behaviour).
@@ -1565,3 +1567,57 @@ index.html (comment, header pill, footer, `trophy.js`, `alert-frozen.json`, `gro
 5. Want "Log my score" on the Golf GPS hole screen (no trip back to Groups each hole), and scores kept on the phone when there is no signal?
 6. Commissioner changing course flag colours on a Golf day (rule 13): still waiting for his answer.
 7. To-do (unchanged): upgrade The Odds API plan (about $30/month) if the app sells. Golf days spend no Odds API credits.
+
+## What's new pop-up (Nov 17 2026, branch whats-new, version TBD)
+
+Coder agent on branch `whats-new` (from 30b1509 = v273). Committed locally, NOT pushed, **version NOT bumped** (the manager picks a free number at ship time; this build adds no new file, so the bump list at the top is unchanged). Owner's ask: "pop-ups built for all the current users with a, hey, look what's new": golfing, pickleball, the different Calcuttas, and the Calcuttas for football. No server change, no network call, no push notification.
+
+### What it does
+- A "Look what's new" card over the page (a centered card with a dim backdrop, `#oddnew`, z-index 150), shown **once per device per release key** the next time someone opens `index.html`. Everyone who opens the app gets it, guests included.
+- Close it with **Close** (top right), **Got it**, a tap outside the card, or Escape. Tapping an item closes it and opens that feature. Every way of closing counts as seen.
+- Never in `?mirror=1`; not on `sports.html`, `classic.html`, `pga.html`, `golfgps.html`, `pickleball.html` (the code is only in index.html).
+- **Waits** (checks every 1.5 s, first look 2.5 s after load) while anything else is up: the sign-in / pay / trial screens (`#gate`), the name picker (`#gnm`), the sport warning (`#oddwarn`), the Kalshi cash-out (`#kcom`), the Groups lock (`#oglock`), Groups (`#ogrp`), the owner dashboard (`#odash`), the More sheet (`#bnmore`), the sync sheet, an info sheet, a team page, a game view, a live overlay, a score pop-up (`#spop`, z-index 400, would sit on the card's buttons), a group invite in progress (`grpPend()`), or the app in the background. If the sign-in screen comes up AFTER the card (slow account check), it opens above the card (z 200+); the card is still there when it closes.
+- While the card is open the score pop-up does not place itself (`spPlace` returns false, it retries as it does for a dialog) and the score-alert invitation waits (its `overlay()` list).
+- The floating My Bets banner (z 40) is under the backdrop, so it can never cover the card or its buttons. The card is removed on close, so the tab bar is free again.
+- Phone: one column of wrapped item cards, Got it full width; a short phone scrolls inside the card (Close stays at the top). From 768 px: a card up to 880 px wide with the items in columns (2 at 768/820, 3 at 1180/1280/1440). Colours are the page's own variables (`--panel`, `--panel2`, `--line`, `--ink`, `--muted`, `--blue`, `--bg`), so it follows all three themes (Cowboys, violet light, violet dark). Tap targets 44 px and up.
+
+### Where the code is
+- `pics/index.html`, one `<script>` block right after the `document.write` line at the end, marked `WHAT'S NEW POP-UP`. Two one-line hooks elsewhere in index.html: `spPlace()` (score pop-up waits) and the score-alert invitation's `overlay()` list.
+- **The list** is `ITEMS` in that block. Each item: `{ id, icon, title, line, isLive(), open() }`. Shown in list order, only where `isLive()` is true; if no item is live (and unseen) the card does not show at all.
+
+| id | Shown when (`isLive`) | Opens |
+|---|---|---|
+| `pga` | always | `pga.html` (back: "‹ Oddable") |
+| `golfgps` | always | `golfgps.html` (back: "‹ Oddable") |
+| `pickleball` | always | `pickleball.html` (back: "‹ Oddable") |
+| `groups` | `grpOn()` (Groups is on for this signed-in account: owner / testers today) | the Groups tab (`navGo('groups')` = `grpLoad` + `OddGroups.open`, Close on it) |
+| `golfdays` | `grpOn()` | the Groups tab too: there is no way to open one group's Golf day without a group, so the line says "Inside a group, tap Golf day" |
+| `calcutta` | `false` — `// TODO wire when the Calcutta auction ships` | nothing yet |
+| `calcutta-fb` | `false` — same TODO | nothing yet |
+| `group-pickleball` | `false` — same TODO | nothing yet |
+
+### Release key and "seen"
+- `WHATSNEW = '2026-11-17a'`. Closing the card stores localStorage `odd-new-2026-11-17a` (a time) and adds the ids it showed to `odd-new-seen` (a list, last 60).
+- A later key shows **only items this device has not been shown before**. Example: Groups opens to everyone, or the Calcutta auction ships -> switch its `isLive` on and change `WHATSNEW` to a new key (e.g. `'2026-11-24a'`); people who already closed this card see only the new items, nobody sees golf again.
+- Same key, item turns live later (e.g. Groups switched on for an account that already closed the card): not shown until the key changes.
+- All storage reads and writes are in try/catch; with storage blocked the card shows on each open (nothing can be remembered).
+- **Not synced across devices**: `pics/sync.js` only syncs bets, pins, logs and locks (fixed fields the server merges); a settings field would need a server change, so it was left out. A person with a phone and a computer sees the card once on each.
+
+### How to add or turn on an item
+1. Add (or edit) an entry in `ITEMS`: short title, one plain sentence, no emoji in the text (the icon is the only emoji).
+2. `isLive`: the same check the feature itself uses (a switch, `grpOn()`, `() => true`). `open`: the existing navigation (`location.href = '<page>.html'`, `navGo('<tab>')`, `setView('<view>')`); the screen it opens must have a ‹ Back / Close.
+3. Change `WHATSNEW` to a new key so the people who closed the last card see it.
+4. For testing: `oddWhatsNew.show()` in the console shows the card now (ignores the key, still skips seen items); `localStorage.removeItem('odd-new-seen')` + removing the key shows everything again.
+
+### Tests (Playwright, headless Chromium, ESPN and the odds server faked, service workers blocked; scripts in the session scratch folder `/tmp/claude-0/new-scratch/` `t.js`, `small.js`; NOT in the repo). Served from a copy built like the deploy (`public/data`, `public/model.js` + `cp pics/*`).
+- **316 checks, all pass**, at 390x844, 1280x800, 820x1180, 768x1024, 1180x820, 1440x900: shows once; Close / Got it / tap outside / Escape close it and store the key; no return on reload; each item opens its page and that page shows "‹ Oddable"; tab bar usable after close; no sideways scroll; tap targets; one column on a phone, 2–3 on wide screens; with a bet for today (My Bets banner up) the banner's box overlaps no button of the card and every button is the top element at its centre; no console errors.
+- Groups account (390, 1280): five items; Golf days opens the Groups view (Close there). Guest: sees the card. Sign-in wall (guest mode off, no account): no card while the wall is up, card comes once it is gone. Score pop-up up: card waits; card up: score pop-up refuses to place; card closed: the score pop-up places normally again. `?mirror=1` and `sports.html`: no card. Everything seen: no card; new key with Groups on: only Groups + Golf days. Three themes at 390 and 1280: card on the theme's own `--panel`.
+- 320x568 and 375x667 with five items: card scrolls inside, no sideways scroll, Got it reachable.
+- Build: `rm -rf /tmp/claude-0/newdist && mkdir -p /tmp/claude-0/newdist && cp pics/* /tmp/claude-0/newdist/` exit 0 (no folder in `pics/`). Inline scripts of index.html pass `node --check`.
+- **NOT tested**: a real phone (iOS Safari, the installed app), real ESPN / odds server, the service-worker update from v273 to this build, the sign-in wall appearing after the card on a slow account check (by reasoning: the wall is above the card).
+
+### Decisions the owner may want to change
+1. Shown to guests too (feature announcement), and on a phone and a computer separately (no server sync).
+2. "Golf" = the PGA Tour live leaderboard + Golf GPS (there is no PGA pool yet; the PGA item says "leaderboard", not "pools").
+3. Golf days opens Groups (My groups), not a Golf day directly.
+4. A new key shows only items not shown before on that device.

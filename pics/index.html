@@ -3168,7 +3168,7 @@ function spBlock(e) { // the highest thing the card would cover, or null
   return hits.length ? hits.reduce((a, b) => (b.top < a.top ? b : a)) : null;
 }
 function spPlace(e) { // sit just above the bottom tab bar; if fixed UI is there, step above it; false = no free place
-  if (document.getElementById('gate')) return false; const bn = document.getElementById('bn'), br = bn ? bn.getBoundingClientRect() : null;
+  if (document.getElementById('gate') || document.getElementById('oddnew')) return false; /* oddnew = the what's new pop-up: wait until it is closed */ const bn = document.getElementById('bn'), br = bn ? bn.getBoundingClientRect() : null;
   let bot = (br && br.height && br.width > innerWidth * 0.6 && br.top > innerHeight / 2 ? Math.max(0, innerHeight - br.top) : 0) + 8; // on wide screens the tab bar is a rail on the left, not a bar along the bottom
   for (let i = 0; i < 6; i++) { e.style.bottom = bot + 'px'; const r = e.getBoundingClientRect(); if (r.top < 4) return false; const b = spBlock(e); if (!b) return true; const nb = innerHeight - b.top + 8; if (nb <= bot) return false; bot = nb; }
   return false;
@@ -3414,7 +3414,7 @@ if ('serviceWorker' in navigator) {
   document.addEventListener('visibilitychange', () => { if (hb) here(); });
   // ---- the invitation: a card in the page flow (never fixed, never a modal), at most once per app open ----
   const inv = () => { try { const o = JSON.parse(ls(IK) || '{}'); return { n: Number(o.n) || 0, t: Number(o.t) || 0 }; } catch (e) { return { n: 0, t: 0 }; } };
-  const overlay = () => !!(el('gate') || el('oddwarn') || el('gnm') || el('odash') || el('ogrp') || el('bnmore') || ['infosheet', 'teampage', 'mv', 'lvov'].some((id) => { const x = el(id); return x && !x.hidden; }));
+  const overlay = () => !!(el('gate') || el('oddwarn') || el('gnm') || el('odash') || el('ogrp') || el('bnmore') || el('oddnew') || ['infosheet', 'teampage', 'mv', 'lvov'].some((id) => { const x = el(id); return x && !x.hidden; }));
   function openToday() { try { const d = dayKey(Date.now()); return BETS.some((b) => !b.fin && !b.res && betDay(b) === d); } catch (e) { return false; } }
   function hide(forGood) { const c = el('bpinv'); if (c) { c.hidden = true; c.innerHTML = ''; } if (forGood) { BP.gone = true; clearInterval(BP.t); } }
   function invite() {
@@ -3585,5 +3585,95 @@ if ('serviceWorker' in navigator) {
 // ================= end v268 GUEST MODE (3 of 3) =================
 </script>
 <script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=273"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="announce.js?v=273"><\/script><script src="dash.js?v=273"><\/script>')</script>
+<script>
+// ================= WHAT'S NEW POP-UP (Nov 17 2026, branch whats-new; read "## What's new pop-up" in HANDOFF.md) =================
+// A "Look what's new" card, shown ONCE per device per release key the next time someone opens index.html (guests included). Never in ?mirror=1, never on
+// sports.html / classic.html, never on top of the sign-in / pay / trial screens or another open sheet (it waits until they close). No network call, no server change.
+// TO ANNOUNCE SOMETHING NEW: switch its isLive() on (or add an item) and change WHATSNEW to a new key. People who already closed an earlier key see only the
+// items they have not been shown before (localStorage 'odd-new-seen'); if nothing is left to show, nothing pops up.
+(function () {
+  if (window.MIRROR || /[?&]mirror=1/.test(location.search)) return;
+  const WHATSNEW = '2026-11-17a', K = 'odd-new-' + WHATSNEW, SEEN = 'odd-new-seen';
+  const lg = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const ls = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+  const go = (href) => () => { try { location.href = href; } catch (e) {} };
+  const groupsOn = () => { try { return grpOn(); } catch (e) { return false; } };
+  const openGroups = () => { try { navGo('groups'); } catch (e) {} }; // the Groups tab: grpLoad + OddGroups.open (it has its own Close / ‹ Back)
+  // THE LIST. One entry per thing to announce: {id, icon, title, line, isLive(), open()}. Only items whose isLive() is true are shown, in this order.
+  const ITEMS = [
+    { id: 'pga', icon: '⛳', title: 'PGA Tour', line: 'Live PGA Tour leaderboard for this week’s tournament.', isLive: () => true, open: go('pga.html') },
+    { id: 'golfgps', icon: '📍', title: 'Golf GPS', line: 'Yards to the pin on a satellite map of your course, hole by hole.', isLive: () => true, open: go('golfgps.html') },
+    { id: 'pickleball', icon: '🏓', title: 'Pickleball', line: 'Round robin, King of the Court and more, with points-only Calcutta, skins and pick’em.', isLive: () => true, open: go('pickleball.html') },
+    { id: 'groups', icon: '👥', title: 'Groups', line: 'Make a group, invite your friends and see who comes out on top.', isLive: groupsOn, open: openGroups },
+    { id: 'golfdays', icon: '🏌️', title: 'Golf days', line: 'Inside a group, tap Golf day: start a round, log your score, watch the leaderboard.', isLive: groupsOn, open: openGroups },
+    // TODO wire when the Calcutta auction ships: isLive: () => true (or the switch it ships behind) and open: the Calcutta screen.
+    { id: 'calcutta', icon: '🏆', title: 'Calcuttas', line: 'Main, side and weekly Calcuttas, plus golf tournament and season Calcuttas.', isLive: () => false, open: () => {} },
+    // TODO wire when the Calcutta auction ships (football): isLive and open as above.
+    { id: 'calcutta-fb', icon: '🏈', title: 'Football Calcuttas', line: 'Main, side and weekly Calcuttas for football.', isLive: () => false, open: () => {} },
+    // TODO wire when group pickleball games ship: isLive and open as above.
+    { id: 'group-pickleball', icon: '🏓', title: 'Group pickleball games', line: 'Pickleball games with your group.', isLive: () => false, open: () => {} },
+  ];
+  const seen = () => { try { const a = JSON.parse(lg(SEEN) || '[]'); return Array.isArray(a) ? a.map(String) : []; } catch (e) { return []; } };
+  const live = () => { const s = seen(); return ITEMS.filter((it) => { try { return !s.includes(it.id) && it.isLive(); } catch (e) { return false; } }); };
+  // Anything else that is up and asks for the person's attention first: the sign-in / pay / trial screens (gate), the name picker, the sport warning, the
+  // Kalshi cash-out, the Groups lock, Groups, the owner dashboard, the More sheet, the sync sheet, an info sheet, a team page, a game view, a live overlay, a score pop-up
+  // (z-index 400, it would sit on the card's buttons), an invite in progress.
+  const el = (id) => document.getElementById(id);
+  const busy = () => !!(el('gate') || el('gnm') || el('oddwarn') || el('kcom') || el('oglock') || el('ogrp') || el('odash') || el('bnmore')
+    || ['infosheet', 'teampage', 'mv', 'lvov', 'syncsheet', 'spop'].some((id) => { const x = el(id); return x && !x.hidden; })
+    || (() => { try { return !!grpPend(); } catch (e) { return false; } })() || document.hidden);
+  function css() {
+    if (el('oddnewcss')) return; const st = document.createElement('style'); st.id = 'oddnewcss';
+    st.textContent = '#oddnew{position:fixed;inset:0;z-index:150;background:rgba(5,8,16,.62);display:flex;align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom));box-sizing:border-box;overscroll-behavior:contain}'
+      + '#oddnew .onb{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:20px;box-shadow:0 14px 40px #000a;width:min(520px,100%);max-height:100%;overflow-y:auto;overflow-x:hidden;padding:14px 16px 16px;box-sizing:border-box;font:15px/1.4 system-ui,-apple-system,sans-serif;text-align:left;outline:none}'
+      + '#oddnew .onh{display:flex;align-items:center;justify-content:space-between;gap:10px}#oddnew h2{margin:0;font:800 20px/1.25 system-ui,-apple-system,sans-serif;color:var(--ink)}'
+      + '#oddnew .onx{flex:none;min-width:44px;min-height:44px;padding:0 12px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:12px;font:700 14px system-ui,-apple-system,sans-serif;cursor:pointer}'
+      + '#oddnew .ons{margin:4px 0 10px;color:var(--muted);font-size:14px}'
+      + '#oddnew .onl{display:grid;grid-template-columns:1fr;gap:8px}'
+      + '#oddnew .oni{display:flex;align-items:center;gap:12px;width:100%;min-height:64px;margin:0;padding:10px 12px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:14px;font:inherit;text-align:left;cursor:pointer;box-sizing:border-box;min-width:0}'
+      + '#oddnew .oni:hover,#oddnew .oni:focus-visible{border-color:var(--blue)}#oddnew .oni>span:first-child{flex:none;font-size:26px;line-height:1;width:32px;text-align:center}'
+      + '#oddnew .onm{flex:1;min-width:0;overflow-wrap:anywhere}#oddnew .onm b{display:block;font-size:16px}#oddnew .onm small{display:block;color:var(--muted);font-size:13px;line-height:1.35;margin-top:2px}#oddnew .oni i{flex:none;font-style:normal;color:var(--muted);font-size:22px}'
+      + '#oddnew .onf{display:flex;justify-content:flex-end;margin-top:12px}#oddnew .ong{min-height:48px;min-width:120px;padding:10px 22px;border:1px solid var(--blue);background:var(--blue);color:var(--bg);border-radius:12px;font:800 16px system-ui,-apple-system,sans-serif;cursor:pointer}'
+      + '@media (max-width:767px){#oddnew .ong{width:100%}}'
+      + '@media (min-width:768px){#oddnew .onb{width:min(880px,100%);padding:20px 22px 22px}#oddnew h2{font-size:24px}#oddnew .onl{grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}#oddnew .oni{flex-direction:column;align-items:flex-start;min-height:132px;padding:14px}#oddnew .oni i{display:none}}';
+    document.head.appendChild(st);
+  }
+  let shown = false, tries = 0;
+  function close(list) {
+    const o = el('oddnew'); if (!o) return; o.remove(); document.removeEventListener('keydown', onKey, true);
+    ls(K, String(Date.now())); const s = seen(); list.forEach((it) => { if (!s.includes(it.id)) s.push(it.id); }); ls(SEEN, JSON.stringify(s.slice(-60)));
+  }
+  let onKey = () => {};
+  function show() {
+    if (shown || el('oddnew')) return; const list = live(); if (!list.length) return; shown = true; css();
+    const o = document.createElement('div'); o.id = 'oddnew'; o.setAttribute('role', 'dialog'); o.setAttribute('aria-modal', 'true'); o.setAttribute('aria-labelledby', 'oddnew-t');
+    const b = document.createElement('div'); b.className = 'onb'; b.tabIndex = -1;
+    const h = document.createElement('div'); h.className = 'onh';
+    const t = document.createElement('h2'); t.id = 'oddnew-t'; t.textContent = 'Look what’s new'; h.appendChild(t);
+    const x = document.createElement('button'); x.type = 'button'; x.className = 'onx'; x.setAttribute('aria-label', 'Close'); x.textContent = 'Close'; h.appendChild(x); b.appendChild(h);
+    const s = document.createElement('div'); s.className = 'ons'; s.textContent = 'New in Oddable. Tap one to try it.'; b.appendChild(s);
+    const l = document.createElement('div'); l.className = 'onl';
+    list.forEach((it) => {
+      const r = document.createElement('button'); r.type = 'button'; r.className = 'oni'; r.setAttribute('data-id', it.id);
+      const ic = document.createElement('span'); ic.textContent = it.icon; ic.setAttribute('aria-hidden', 'true'); r.appendChild(ic);
+      const m = document.createElement('span'); m.className = 'onm'; const bb = document.createElement('b'); bb.textContent = it.title; const sm = document.createElement('small'); sm.textContent = it.line; m.appendChild(bb); m.appendChild(sm); r.appendChild(m);
+      const ch = document.createElement('i'); ch.textContent = '›'; ch.setAttribute('aria-hidden', 'true'); r.appendChild(ch);
+      r.onclick = () => { close(list); try { it.open(); } catch (e) {} };
+      l.appendChild(r);
+    });
+    b.appendChild(l);
+    const f = document.createElement('div'); f.className = 'onf'; const ok = document.createElement('button'); ok.type = 'button'; ok.className = 'ong'; ok.textContent = 'Got it'; f.appendChild(ok); b.appendChild(f);
+    o.appendChild(b);
+    x.onclick = () => close(list); ok.onclick = () => close(list); o.addEventListener('click', (ev) => { if (ev.target === o) close(list); });
+    onKey = (ev) => { if (ev.key === 'Escape') close(list); }; document.addEventListener('keydown', onKey, true);
+    document.body.appendChild(o); try { b.focus({ preventScroll: true }); } catch (e) {} // the card takes the focus (no ring on a button nobody touched); Tab reaches Close, the items and Got it
+  }
+  // Wait for the page and the account check to settle (gate.js may still put up the sign-in / pay screen), then show when nothing else is open.
+  function tick() { if (shown || lg(K)) return; if (busy()) { if (++tries < 400) setTimeout(tick, 1500); return; } show(); }
+  window.oddWhatsNew = { items: ITEMS, key: WHATSNEW, show: () => { shown = false; show(); } }; // for tests and the manager; show() ignores the release key but not the list
+  if (!lg(K)) setTimeout(tick, 2500);
+})();
+// ================= end what's new pop-up =================
+</script>
 </body>
 </html>

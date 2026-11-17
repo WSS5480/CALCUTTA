@@ -25,7 +25,7 @@
 // SWITCHES: the same as Groups (groups.js onFor = GROUPS_ENABLED / GROUPS_OWNER_ONLY / GROUPS_TESTERS). A blocked caller gets 403 {off:true} and nothing is read
 // from the database. An account whose time has ended gets 403 {expired:true} (the phone shows the same "Your time has ended" lock as everywhere else).
 // STORAGE: one row per group through sync.js dbGet / dbPut / dbPatchIf (sync.js not edited): id 'lock:gd:<group id>', data { days: [ ...the open day and the
-// last 5 closed ones ] }. The 'lock:' prefix keeps the row out of player lists and owner counts.
+// last 5 closed ones ], hist: [ v274: the compact final board of every day closed since v274, newest 500 ] }. The 'lock:' prefix keeps the row out of player lists and owner counts.
 // WHAT A MEMBER SEES OF ANOTHER MEMBER: the name the group shows and the group's short member id (pid). Never a phone number, an email, a PIN or an account id.
 const crypto = require('crypto');
 const D = {
@@ -39,7 +39,7 @@ const D = {
 };
 const FORMATS = ['gross', 'net', 'stableford'], FNAME = { gross: 'Stroke play (gross)', net: 'Stroke play (net)', stableford: 'Stableford (net points)' };
 const HOLES = ['all', 'front', 'back'], HNAME = { all: '18 holes', front: 'Front 9', back: 'Back 9' };
-const MAXHCP = 54, MAXSTROKES = 20, KEEP = 5, LOGMAX = 300, DAY = 864e5;
+const MAXHCP = 54, MAXSTROKES = 20, KEEP = 5, LOGMAX = 300, DAY = 864e5, HISTMAX = 500; // v274: HISTMAX = closed days kept in `hist` per group
 const GID = /^[A-Z2-9]{10}$/, DID = /^[A-Z2-9]{8}$/, PID = /^[A-Z2-9]{6}$/, COURSE = /^(way|relation|node)\/([1-9]\d{0,14})$/;
 const OFF_MSG = 'Groups is not open for this account yet.', LAPSED_MSG = 'Your time has ended. Pay to use Groups again.';
 const K = (gid) => 'lock:gd:' + gid;
@@ -223,9 +223,13 @@ async function handle(req, res) {
     }
     if (op === 'close') { // rule 8
       comm(); const half = b.short == null || b.short === '' ? '' : String(b.short);
-      out(await mut((d) => { need(d); if (!d.started) throw bad(409, 'No score has been logged. Cancel the Golf day instead.');
+      out(await rmw(K(gid), (x) => { const d = find(x.days, b.id); need(d); if (!d.started) throw bad(409, 'No score has been logged. Cancel the Golf day instead.');
         if (half) { if (d.holes !== 'all' || !['front', 'back'].includes(half)) throw bad(400, 'Only an 18-hole day can be shortened to nine'); if (!canShort(d, half)) throw bad(409, 'Not every player has all nine of those holes yet'); d.short = half; }
-        d.closed = now; logIt(d, { at: now, kind: 'close', by: who, short: half }); }));
+        d.closed = now; logIt(d, { at: now, kind: 'close', by: who, short: half });
+        // v274: the final board of every closed day is also kept in `hist` (compact: names, member ids, numbers), so lifetime stats (gstats.js) still
+        // count a day after it drops out of the last KEEP closed days. HISTMAX per group, oldest dropped first.
+        x.hist = (Array.isArray(x.hist) ? x.hist : []).filter((h) => h && h.id !== d.id).concat(require('./gstats').histOf(module.exports, d)).slice(-HISTMAX);
+        return d; }));
       return true;
     }
     if (op === 'cancel') { comm(); await rmw(K(gid), (x) => { const d = find(x.days, b.id); need(d); if (d.started) throw bad(409, 'Scores are in. Close the Golf day instead.'); x.days = x.days.filter((y) => y.id !== d.id); }); send(res, 200, { ok: true, gone: true }); return true; }

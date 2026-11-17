@@ -105,7 +105,7 @@
   }
   const gps = (X, then, fail) => { // the Golf GPS data layer (pics/golfgps.js: no screen code in it), fetched once. The SAME course search as the Golf GPS page.
     if (window.GolfGPS) return then(window.GolfGPS);
-    const sc = document.createElement('script'); sc.src = 'golfgps.js?v=273'; sc.onload = () => (window.GolfGPS ? then(window.GolfGPS) : fail()); sc.onerror = () => { sc.remove(); fail(); }; document.head.appendChild(sc);
+    const sc = document.createElement('script'); sc.src = 'golfgps.js?v=274'; sc.onload = () => (window.GolfGPS ? then(window.GolfGPS) : fail()); sc.onerror = () => { sc.remove(); fail(); }; document.head.appendChild(sc);
   };
   function search(X) {
     readDraft(X); const d = DR, q = d.q.trim(); if (SEARCHING) return; X.setErr(''); if (q.length < 2) { d.msg = 'Type a course name or a city.'; return X.paint(); }
@@ -187,6 +187,7 @@
       h += '<div class="ogdtr' + (cnt.includes(n) ? '' : ' off') + '"><span>' + n + (g ? ' ' + '•'.repeat(Math.min(g, 3)) : '') + '</span><span>' + d.par[n] + '</span><span>' + (has ? v : '–') + '</span><span>' + (!has ? '–' : sf ? Math.max(0, 2 + d.par[n] - nv) : net ? nv : toPar(v - d.par[n])) + '</span></div>'; });
     h += '<div class="ogdtr tot"><span>Total</span><span>' + r.par + '</span><span>' + (r.none ? '–' : r.gross) + '</span><span>' + (r.none ? '–' : sf ? r.pts : net ? r.net : toPar(r.gross - r.par)) + '</span></div></div><div>';
     if (d.usesHcp) h += '<div class="ogcard ogmut">• = a stroke given on that hole. Par and totals are for the holes played so far.</div>';
+    h += '<button type="button" class="ogsec" data-a="mstats" data-pid="' + X.att(r.pid) + '">' + (mine ? 'My stats' : X.esc(r.name) + '\'s group record') + ' ›</button>'; // v274: groups.js opens the lifetime record (a name anywhere opens it)
     if (mine && d.canScore) h += '<button type="button" class="ogpri" data-a="gdv" data-v="score">Log my score</button>';
     const done = holesOf(d.holes).filter((n) => isInt(sc[n], 1, 20));
     if (d.comm && !mine && !d.closed && done.length) h += '<div class="ogcard"><b>Correct a hole (commissioner)</b><div class="ogmeta">Only a hole ' + X.esc(r.name) + ' has entered. The change is shown to everyone under Changes.</div><div class="ogform"><label>Hole' + X.sel('gdfh', done.map((n) => [n, 'Hole ' + n + ' (now ' + sc[n] + ')']), s.fh || done[0]) + '</label><label>Correct strokes<input id="gdfs" class="ogin" type="number" inputmode="numeric" min="1" max="20" step="1" value="' + X.esc(s.fs == null ? '' : s.fs) + '"></label></div><button type="button" class="ogsec" data-a="gdfix">Save the correction</button></div>';

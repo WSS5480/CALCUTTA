@@ -806,6 +806,7 @@ async function handle(req, res) {
     if (op === 'bet/void') { send(res, 200, await betVoid(u, b, now)); return true; } // light: does this player's next bet go to a group?
     if (op === 'bet/edit' || op === 'bet/delete' || op === 'bet/swap') throw bad(409, LOCKED_MSG); // G16: never, even before kickoff
     if (op === 'partners') { send(res, 200, await partners(u, b)); return true; } // P1
+    if (op === 'stats') { send(res, 200, await require('./gstats').stats({ gread, memberOf, inContest, cEnded, standings, names, shownName, MK, pmap, limit, D, SPORTN }, u, b, now)); return true; } // v274 lifetime stats (odds-api/gstats.js): finished contests and closed Golf days of groups both people are in
     if (op === 'mine') {
       const mi = await D.S.dbGet(MK(u.mk)), x = (mi && mi.data) || {}, ids = [...new Set([...(x.g || []), ...Object.keys(x.own || {})])].slice(-60), qs = (x.q || []).slice(-60);
       const sid = await sidOf(u.e, true), ctx = { rows: new Map(), budget: 60 };

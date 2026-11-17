@@ -62,6 +62,7 @@
     const rank = U.map((u) => [u, agU(u)]).filter(([, a]) => a.w + a.l > 0).sort((x, y) => (y[1].pct || 0) - (x[1].pct || 0));
     const last = U.reduce((m, u) => Math.max(m, u.updated || 0), 0);
     return chips() + '<div class="sub" style="margin:-4px 0 10px">A player\'s numbers update when their app syncs; results of games that ended since then show as unsettled. Latest sync ' + (last ? new Date(last).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '—') + '.</div>' + (P === 'day' ? openOn(DAYSEL || today()) : '') + '<div class="odg">' + tile('users', U.length, 'Players') + tile('games', all.n, 'Bets · ' + PN[P]) + tile('gw', all.w, 'Wins · ' + PN[P], GOOD) + tile('gl', all.l, 'Losses · ' + PN[P], BAD) + tile('rank', sh(all.pct), 'Win % (' + all.w + '-' + all.l + ')') + tile('days', money(all.pl), 'Players\' P/L', all.pl >= 0 ? GOOD : BAD) + tile('open', OPN, 'Open bets now') + tile('users', act, 'Active this week') + tile('open', all.o, 'Unsettled · ' + PN[P]) + tile('days', money(all.risk), 'Risked · ' + PN[P]) + '</div>'
+      + sendCard()
       + card('Profit and loss by day', 'all players · tap a bar', bars(days, (d) => d.pl, (d) => d.day))
       + card('Running total', 'tap to open a day', line(days))
       + card('Bets per day', 'tap a bar', bars(days, (d) => d.n, (d) => d.day, BLUE))
@@ -92,6 +93,63 @@
     const arr = per.filter(({ b }) => GF === 'all' || b.fin === GF);
     return chips() + bar + gamesCard(GF === 'won' ? 'Winning bets' : GF === 'lost' ? 'Losing bets' : GF === 'push' ? 'Pushes' : 'Every game', PN[P] + ' · newest first', arr, true);
   }
+
+  // ---- v267: "Send to everyone". The owner writes a short message; the odds server (POST /acct/broadcast, owner only) hands it to My Apps, which sends the
+  // phone alerts and keeps it as the in-app message. Only drawn on the unlocked dashboard (home() needs the players, which the server gives to the owner alone).
+  // What was typed lives in BC, so a repaint (period chips, Refresh) never loses it. "Sent today" is this session only. All text goes out through esc() / textContent.
+  const BC = { open: false, title: '', body: '', aud: 'all', link: '', step: 'edit', busy: false, msg: '', bad: false, sent: [] };
+  const BCWHO = { all: 'Everyone', active: 'Paid or trial only', expired: 'Expired only' }, BCTO = { '': 'Nowhere (no button)', home: 'Home (games)', bets: 'My Bets', live: 'Live', sports: 'Sports (NBA, MLB, NHL)', pga: 'PGA Tour', pickleball: 'Pickleball', golfgps: 'Golf GPS' };
+  const BCURL = { home: '/', bets: '/?open=bets', live: '/?open=live', sports: '/sports.html', pga: '/pga.html', pickleball: '/pickleball.html', golfgps: '/golfgps.html' }; // same list as odds-api/announce.js LINKS
+  const BCASK = { all: 'everyone with an Oddable account', active: 'everyone with paid or trial access', expired: 'everyone whose access has ended' };
+  const BCGO = { all: 'Send to everyone', active: 'Send to paid or trial', expired: 'Send to expired' };
+  const FIELD = 'display:block;width:100%;box-sizing:border-box;min-height:44px;padding:8px 10px;margin:4px 0 2px;border-radius:10px;border:1px solid var(--line,#fff3);background:var(--panel2,#1a2340);color:var(--ink,#eee);font:16px/1.3 system-ui';
+  const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : (w === 'person' ? '' : 's'));
+  const ppl = (n) => (n === 1 ? '1 person' : n + ' people');
+  function sendCard() {
+    const opt = (o, cur) => Object.keys(o).map((k) => '<option value="' + esc(k) + '"' + (k === cur ? ' selected' : '') + '>' + esc(o[k]) + '</option>').join('');
+    const td = new Date().toDateString(), sent = BC.sent.filter((x) => new Date(x.at).toDateString() === td);
+    const list = sent.length ? '<div style="margin-top:12px;border-top:1px solid #8883;padding-top:8px"><b>Sent today</b>' + sent.map((x) => '<div class="odr" style="align-items:flex-start"><div style="min-width:0;overflow-wrap:anywhere"><b>' + esc(x.title) + '</b><div class="sub">' + esc(BCWHO[x.aud]) + ' · ' + esc(new Date(x.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })) + '</div></div><div class="sub" style="text-align:right;white-space:nowrap">' + esc(x.count) + '</div></div>').join('') + '</div>' : '';
+    const msg = '<div id="odbs" role="status" style="margin-top:8px;font-weight:700;overflow-wrap:anywhere;color:' + (BC.bad ? BAD : GOOD) + '">' + esc(BC.msg) + '</div>';
+    if (!BC.open) return card('📣 Send to everyone', 'a message to every Oddable user', '<div class="sub" style="margin-bottom:8px">Goes to their phones (if alerts are on) and shows at the top of Oddable.</div><button data-bc="open">✏️ Write a message</button>' + msg + list);
+    if (BC.step === 'confirm') return card('📣 Send to everyone', 'check it, then send', '<div id="odbc"><b>Send this to ' + esc(BCASK[BC.aud]) + '?</b><div class="sub" style="margin:4px 0 8px">It cannot be taken back once it is sent.</div>'
+      + '<div style="border:1px solid var(--line,#fff3);border-radius:10px;padding:10px;overflow-wrap:anywhere"><div class="sub">Title</div><div id="odbct" style="font-weight:800">' + esc(BC.title.trim()) + '</div><div class="sub" style="margin-top:6px">Message</div><div id="odbcm">' + esc(BC.body.trim()) + '</div><div class="sub" style="margin-top:6px">Who: ' + esc(BCWHO[BC.aud]) + ' · Opens: ' + esc(BCTO[BC.link]) + '</div></div>'
+      + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px"><button data-bc="yes" style="background:#0b3d91;border-color:#0b3d91;color:#fff"' + (BC.busy ? ' disabled' : '') + '>' + (BC.busy ? 'Sending…' : 'Yes, send now') + '</button><button data-bc="back"' + (BC.busy ? ' disabled' : '') + '>← Back, keep editing</button></div></div>' + msg + list);
+    return card('📣 Send to everyone', 'a message to every Oddable user', '<div id="odbf">'
+      + '<label style="display:block;margin-top:2px"><span class="sub">Title</span><input id="odbt" maxlength="60" autocomplete="off" placeholder="Short title" value="' + esc(BC.title) + '" style="' + FIELD + '"></label><div class="sub" id="odbtc" style="text-align:right">' + BC.title.length + '/60</div>'
+      + '<label style="display:block"><span class="sub">Message</span><textarea id="odbm" maxlength="240" rows="3" placeholder="What do you want to tell them?" style="' + FIELD + ';resize:vertical;min-height:84px">' + esc(BC.body) + '</textarea></label><div class="sub" id="odbmc" style="text-align:right">' + BC.body.length + '/240</div>'
+      + '<div style="display:flex;flex-wrap:wrap;gap:10px"><label style="flex:1 1 150px;min-width:0"><span class="sub">Who</span><select id="odba" style="' + FIELD + '">' + opt(BCWHO, BC.aud) + '</select></label><label style="flex:1 1 150px;min-width:0"><span class="sub">Open to</span><select id="odbl" style="' + FIELD + '">' + opt(BCTO, BC.link) + '</select></label></div>'
+      + '<div class="sub" style="margin:10px 0 2px">How it will look in the app</div><div id="odbpv"></div>'
+      + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px"><button data-bc="test"' + (BC.busy ? ' disabled' : '') + '>Send test to my devices</button><button data-bc="ask" id="odbgo" style="background:#0b3d91;border-color:#0b3d91;color:#fff"' + (BC.busy ? ' disabled' : '') + '>' + esc(BCGO[BC.aud]) + '</button><button data-bc="close"' + (BC.busy ? ' disabled' : '') + '>Close</button></div></div>' + msg + list);
+  }
+  function bcPreview() { // the very same card the phones draw (announce.js); plain text only
+    const pv = document.getElementById('odbpv'); if (!pv) return; pv.textContent = '';
+    const a = { id: 'preview', title: BC.title.trim() || 'Title', body: BC.body.trim() || 'Your message shows here.', link: BC.link ? BCURL[BC.link] : '', at: Date.now() };
+    if (window.oddAnnCard) pv.appendChild(window.oddAnnCard(a, { open: false, dismiss: function () {} })); else { const d = document.createElement('div'); d.textContent = '📣 ' + a.title + ' — ' + a.body; pv.appendChild(d); }
+  }
+  const bcSay = (t, bad) => { BC.msg = t || ''; BC.bad = !!bad; const m = document.getElementById('odbs'); if (m) { m.textContent = BC.msg; m.style.color = BC.bad ? BAD : GOOD; } };
+  function bcCheck() { if (!BC.title.trim()) { bcSay('Type a title.', true); return false; } if (BC.title.trim().length > 60) { bcSay('Keep the title to 60 characters or less.', true); return false; } if (!BC.body.trim()) { bcSay('Type a message.', true); return false; } if (BC.body.trim().length > 240) { bcSay('Keep the message to 240 characters or less.', true); return false; } return true; }
+  async function bcSend(test) {
+    if (BC.busy || !bcCheck()) return; BC.busy = true; BC.msg = test ? 'Sending the test…' : 'Sending…'; BC.bad = false; paint();
+    const out = { title: BC.title.trim(), body: BC.body.trim(), audience: BC.aud }; if (BC.link) out.link = BC.link; if (test) out.test = true;
+    try {
+      const r = await fetch(API.replace('/dash', '/broadcast'), { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': g('odd-tok') || '', 'x-dash': g('odd-dt') || '' }, body: JSON.stringify(out) }); const j = await r.json().catch(() => ({}));
+      if (r.status === 401 && j.need === 'owner-pin') { BC.busy = false; BC.msg = ''; NEEDPIN = true; D = null; paint(); return; }
+      if (!r.ok || j.ok !== true) throw new Error(typeof j.error === 'string' && j.error ? j.error : 'Could not send (server said ' + r.status + ').');
+      const P = typeof j.people === 'number' ? j.people : null, K = typeof j.devices === 'number' ? j.devices : null;
+      if (test) { BC.msg = 'Test sent to your devices' + (K != null ? ': ' + plural(K, 'device') : '') + '.' + (K === 0 ? ' None of your devices has alerts turned on.' : ''); }
+      else { const count = P != null && K != null ? ppl(P) + ', ' + plural(K, 'device') : P != null ? ppl(P) : K != null ? plural(K, 'device') : 'sent'; BC.sent.unshift({ title: out.title, aud: out.audience, at: Date.now(), count }); BC.msg = count === 'sent' ? 'Sent.' : 'Sent: ' + count + '.'; BC.title = ''; BC.body = ''; BC.link = ''; BC.aud = 'all'; BC.step = 'edit'; BC.open = false; }
+    } catch (e) { BC.bad = true; BC.msg = (e && e.message === 'Failed to fetch') ? 'Could not reach the server. Nothing was sent; try again in a few seconds.' : (e.message || 'Could not send.'); if (!test) BC.step = 'edit'; }
+    BC.busy = false; paint();
+  }
+  function bcTap(k) {
+    if (BC.busy) return;
+    if (k === 'open') { BC.open = true; BC.step = 'edit'; BC.msg = ''; paint(); const t = document.getElementById('odbt'); if (t) t.focus(); return; }
+    if (k === 'close') { BC.open = false; BC.step = 'edit'; BC.msg = ''; paint(); return; }
+    if (k === 'back') { BC.step = 'edit'; BC.msg = ''; paint(); return; }
+    if (k === 'test') { bcSend(true); return; }
+    if (k === 'ask') { if (!bcCheck()) return; BC.step = 'confirm'; BC.msg = ''; paint(); const c = document.getElementById('odbc'); if (c && c.scrollIntoView) c.scrollIntoView({ block: 'nearest' }); return; }
+    if (k === 'yes') { bcSend(false); }
+  }
   const TITLE = { games: 'Bets', home: 'Dashboard', users: 'Players', rank: 'Win %', days: 'Days', open: 'Open bets', day: 'Day', user: 'Player' };
 
   function paint() {
@@ -99,7 +157,7 @@
     if (NEEDPIN) { el.querySelector('.odb').innerHTML = '<div class="odc"><h3>Owner PIN</h3><div class="sub" style="margin-bottom:8px">One more check for this device (kept 30 days). Enter your owner PIN.</div><div style="display:flex;gap:8px;flex-wrap:wrap"><input id="oddpin" type="password" inputmode="numeric" autocomplete="off" placeholder="Owner PIN" style="flex:1;min-width:160px;min-height:44px;padding:6px 10px;border-radius:10px;border:1px solid var(--line,#fff3);background:var(--panel2,#1a2340);color:var(--ink,#eee);font:15px inherit"><button data-unlock="1">Unlock</button></div><div class="sub" id="oddps"></div></div>'; el.querySelector('.odt1').textContent = 'Dashboard'; el.querySelector('.odback').style.visibility = 'hidden'; return; }
     let body = err ? '<div class="odc" style="color:' + BAD + '">' + esc(err) + '</div>' : !D ? '<div class="odc">Loading players…</div>' : s.t === 'home' ? home() : s.t === 'users' ? users() : s.t === 'rank' ? rankV() : s.t === 'days' ? daysV() : s.t === 'open' ? openV() : s.t === 'day' ? dayV(s.v) : s.t === 'user' ? userV(s.v) : s.t === 'games' ? gamesV() : '';
     el.querySelector('.odb').innerHTML = body; el.querySelector('.odt1').textContent = s.t === 'user' ? (((D && D.users) || []).filter((x) => x.k === s.v).map(nm)[0] || 'Player') : s.t === 'day' ? s.v : TITLE[s.t];
-    el.querySelector('.odback').style.visibility = stack.length > 1 ? 'visible' : 'hidden';
+    el.querySelector('.odback').style.visibility = stack.length > 1 ? 'visible' : 'hidden'; bcPreview();
   }
   function go(v) { if (v === 'gw' || v === 'gl') { GF = v === 'gw' ? 'won' : 'lost'; v = 'games'; } else if (v === 'games') GF = 'all'; stack.push(v === 'users' || v === 'rank' || v === 'days' || v === 'open' || v === 'games' ? { t: v } : /^u:/.test(v) ? { t: 'user', v: v.slice(2) } : /^\d{4}-\d{2}-\d{2}$/.test(v) ? { t: 'day', v } : null); if (!stack[stack.length - 1]) stack.pop(); paint(); el().scrollTop = 0; }
   const el = () => document.getElementById('odash');
@@ -132,9 +190,11 @@
     e.onclick = (ev) => { const t = ev.target; const x = t.closest && t.closest('[data-go]'), pb = t.closest && t.closest('[data-p]');
       if (t.closest('.odx')) { try { sessionStorage.removeItem('odash-open'); } catch (x) {} e.remove(); return; } if (t.closest('.odback')) { if (stack.length > 1) stack.pop(); paint(); return; } if (t.closest('.odref')) { load(true); return; }
       if (t.closest && t.closest('[data-unlock]')) { unlock(); return; }
+      const bcb = t.closest && t.closest('[data-bc]'); if (bcb) { bcTap(bcb.getAttribute('data-bc')); return; }
       const sv = t.closest && t.closest('[data-save]'); if (sv) { saveName(sv.getAttribute('data-save')); return; }
       const gfb = t.closest && t.closest('[data-gf]'); if (gfb) { GF = gfb.getAttribute('data-gf'); paint(); return; } if (pb) { P = pb.getAttribute('data-p'); if (P === 'day' && !DAYSEL) DAYSEL = today(); paint(); return; } if (x) { const v = x.getAttribute('data-go'); if (v) go(v); } };
-    e.onchange = (ev) => { if (ev.target && ev.target.id === 'oddd' && /^\d{4}-\d{2}-\d{2}$/.test(ev.target.value)) { DAYSEL = ev.target.value; paint(); } };
+    e.oninput = (ev) => { const t = ev.target; if (!t) return; if (t.id === 'odbt') { BC.title = t.value.slice(0, 60); const c = document.getElementById('odbtc'); if (c) c.textContent = BC.title.length + '/60'; } else if (t.id === 'odbm') { BC.body = t.value.slice(0, 240); const c = document.getElementById('odbmc'); if (c) c.textContent = BC.body.length + '/240'; } else return; if (BC.msg) bcSay(''); bcPreview(); };
+    e.onchange = (ev) => { const t0 = ev.target; if (t0 && t0.id === 'odba' && BCWHO[t0.value]) { BC.aud = t0.value; const b = document.getElementById('odbgo'); if (b) b.textContent = BCGO[BC.aud]; return; } if (t0 && t0.id === 'odbl' && Object.prototype.hasOwnProperty.call(BCTO, t0.value)) { BC.link = t0.value; bcPreview(); return; } if (ev.target && ev.target.id === 'oddd' && /^\d{4}-\d{2}-\d{2}$/.test(ev.target.value)) { DAYSEL = ev.target.value; paint(); } };
     paint(); load(true);
   };
   // If the page reloads while the dashboard is open (app update, sync, phone waking the app), put it back instead of dropping the owner on the main screen.

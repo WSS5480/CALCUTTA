@@ -56,15 +56,16 @@
       return;
     }
     const m = me, dl = m.expires_on ? Math.ceil((new Date(m.expires_on + 'T23:59:59') - Date.now()) / 864e5) : 0;
-    el.innerHTML = '<div class="gb"><h1>Subscribe to Oddable</h1><p>' + (m.plan === 'pro' ? (m.expires_on && String(m.expires_on).slice(0, 10) < new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date()) ? 'Your access ended ' + esc(m.expires_on) + '.' : 'Your renewal is waiting for the owner to confirm. Tap Check again in a bit.') : (m.source === 'trial' ? 'Your free trial has ended.' : 'Your access has ended.')) + ' $' + esc(m.price) + ' per month unlocks everything.</p>' +
+    el.innerHTML = '<div class="gb">' + (early ? '<button id="gback" class="alt" style="width:auto;min-height:44px;padding:10px 16px;margin:0">← Back to Oddable</button>' : '') + '<h1>Subscribe to Oddable</h1><p>' + (early ? esc(dlText(early)) + '.' : m.plan === 'pro' ? (m.expires_on && String(m.expires_on).slice(0, 10) < new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date()) ? 'Your access ended ' + esc(m.expires_on) + '.' : 'Your renewal is waiting for the owner to confirm. Tap Check again in a bit.') : (m.source === 'trial' ? 'Your free trial has ended.' : 'Your access has ended.')) + ' $' + esc(m.price) + ' per month unlocks everything.</p>' +
       (m.pending ? '<div class="box ok">Payment request received. You will be unlocked as soon as it is confirmed. Tap Check again in a minute.</div>' : '') +
       '<div class="box"><b>Step 1.</b> Send $' + m.price + ' on Cash App' + (m.tag ? ' to <b>' + esc(m.tag) + '</b>' : '') + '.' +
       (/^https:\/\//.test(m.link || '') ? '<button id="gcash">Pay $' + m.price + ' with Cash App</button>' : '<p class="er">Payment is not set up yet. Contact the owner.</p>') +
       '<b>Step 2.</b> Come back and tap below.<label for="gtag">Your Cash App $handle</label><input id="gtag" placeholder="$yourtag" maxlength="21" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" aria-describedby="gtaghl gtagerr" value="' + esc(tagDraft != null ? tagDraft : (m.cashtag || '')) + '"><div class="hl" id="gtaghl">So we can match your payment.</div><div class="er" id="gtagerr" role="alert">' + esc(tagErr) + '</div><button id="gpaid" class="alt">I paid — unlock me</button></div>' +
       '<div class="box"><b>Have a code?</b><input id="gcode" placeholder="Access code" autocapitalize="characters"><button id="gred" class="alt">Redeem code</button></div>' +
-      (m.role === 'owner' ? '' : '<div class="box" id="gtime">' + timeHtml('gt', false, true) + '</div>') +
+      (m.role === 'owner' || (early && !timeNear(early) && !trLine()) ? '' : '<div class="box" id="gtime">' + timeHtml('gt', false, early ? timeNear(early) : true) + '</div>') +
       '<div class="er" id="gerr"></div><button id="gchk" class="alt">Check again</button><button id="gout" class="alt">Sign out</button>' + '<p style="font-size:13px;color:#8fa0bf;margin:14px 0 0">This app is in development. Credit card payments are coming soon.</p>' + '</div>';
     if ($('gcash')) $('gcash').onclick = () => { window.open(m.link, '_blank', 'noopener'); };
+    if ($('gback')) $('gback').onclick = payBack;
     // v263: the payer's Cash App handle goes with "I paid" so the owner can match the payment. Same rule as My Apps; its own message is shown if it still says no.
     const tg = $('gtag'), tagSay = (t) => { tagErr = t || ''; const te = $('gtagerr'); if (te) te.textContent = tagErr; if (tg) tg.setAttribute('aria-invalid', t ? 'true' : 'false'); };
     tg.oninput = () => { tagDraft = tg.value; if (tagErr) tagSay(''); };
@@ -87,6 +88,18 @@
   const daysLeft = (m) => { if (!m || !m.expires_on) return null; const n = new Date(), d = Math.round((new Date(String(m.expires_on).slice(0, 10) + 'T00:00:00') - new Date(n.getFullYear(), n.getMonth(), n.getDate())) / 864e5); return isNaN(d) ? null : d; }; // whole calendar days until the last day (0 = ends today)
   // True when the account's time has ended or ends within 5 days. An account with no end date (everything is free for now) is never "near", so nothing shows.
   const timeNear = (m) => { if (!m || m.role === 'owner') return false; if (!m.allowed) return true; const d = daysLeft(m); return d != null && d <= 5; };
+  // ---- v267: days-left reminders. The card itself is drawn by announce.js (index.html) from oddMe(); the pay screen is the ONE subscribe screen above. ----
+  // "5 free days left" (trial) / "5 days left" (paid) / "1 day left" / "Ends today".
+  const dlText = (m) => { const d = daysLeft(m), tr = m && m.source === 'trial'; return d == null ? '' : d <= 0 ? 'Ends today' : d + (tr ? ' free' : '') + ' day' + (d === 1 ? '' : 's') + ' left'; };
+  let early = null, wantPay = false; try { wantPay = /[?&]pay=1(&|$)/.test(location.search); } catch (e) {} // /?pay=1 = opened from a renewal reminder: straight to the pay screen after sign-in
+  // Opens the subscribe / pay screen for an account that still has time ("Pay now"). Back returns to the app without asking the server.
+  function payOpen() { if (!me || !g('odd-tok') || me.role === 'owner') return false; if (me.allowed) { if (!me.expires_on) return false; early = me; me = Object.assign({}, me, { allowed: false }); } show(); try { el.scrollTop = 0; } catch (e) {} return true; }
+  function payBack() { if (!early) return; me = early; early = null; hide(); }
+  window.oddPay = payOpen;
+  // What the page may know about the signed-in account for the days-left card: no token, no secret. null = signed out / owner / not loaded yet.
+  window.oddMe = function () { const m = early || me; if (!m || !g('odd-tok') || m.role === 'owner') return null; return { acct: String(m.email || ''), allowed: !!m.allowed, pending: !!m.pending, ends: !!m.expires_on, days: daysLeft(m), text: dlText(m), price: Number(m.price) > 0 ? Number(m.price) : 0, canAsk: timeNear(m) }; };
+  // "Request free time" on the card: opens Disclosures and brings the existing box in the Account section into view.
+  window.oddTimeBox = function () { try { const d = document.querySelector('header details.dsc'); if (d) d.open = true; drawAcct(); const b = $('acct-time') || $('acct'); if (b && b.scrollIntoView) b.scrollIntoView({ block: 'center' }); const n = $('at-note'); if (n) setTimeout(() => { try { n.focus({ preventScroll: true }); } catch (e) {} }, 50); } catch (e) {} };
   function trLine() {
     const t = trGet(); if (!t) return ''; if (t.s === 'pending') return '<b>Pending.</b> Request sent. Sir Oddable will answer soon.';
     if (Date.now() - (Number(t.t) || 0) > 7 * 864e5) return ''; // an old answer is not shown for ever
@@ -112,7 +125,7 @@
     if (b) b.onclick = timeSend;
   }
   // Repaints only the two request boxes, so nothing else typed on the screen is lost.
-  function timePaint() { const c = $('gtime'); if (c && me) { c.innerHTML = timeHtml('gt', false, true); timeWire('gt'); } drawAcct(); }
+  function timePaint() { const c = $('gtime'); if (c && me) { c.innerHTML = timeHtml('gt', false, early ? timeNear(early) : true); timeWire('gt'); } drawAcct(); }
   async function timeSend() {
     if (trBusy || !g('odd-tok')) return; trBusy = true; trMsg = ''; timePaint(); const note = noteDraft.replace(/\s+/g, ' ').trim().slice(0, 140);
     try { const j = await call('/time/request', note ? { note: note } : {}); if (j && j.ok) { trSet({ s: 'pending', t: Date.now() }); noteDraft = ''; } else trMsg = 'Requests are not open right now.'; }
@@ -156,7 +169,9 @@
     try { const j = await call('/phone', { phone: ph, pin: pn }); s('odd-tok', j.token); setMe(j.me); return true; } catch (e) { return false; }
   }
   function setMe(m) {
-    me = m; if (!m) return; setTimeout(drawAcct, 0); setTimeout(() => timeCheck(m), 0); try { const dg = document.getElementById('odiag'); if (dg) dg.textContent = (m.ownerDash || (m.role === 'owner' && m.source === 'owner')) ? ' · acct ' + (m.role || '?') + (m.ownerDash ? '+dash' : '') + ' ' + String(m.email || '').slice(-8) : ''; s('odd-dash', (m.role === 'owner' && m.source === 'owner') || m.ownerDash ? '1' : null); if (window.navRender) setTimeout(window.navRender, 0); } catch (e) {}
+    me = m; early = null; if (!m) return; setTimeout(drawAcct, 0); setTimeout(() => { try { if (window.oddDays) window.oddDays(); } catch (e) {} }, 0);
+    if (wantPay) { wantPay = false; try { history.replaceState(null, '', location.pathname); } catch (e) {} if (m.allowed && m.expires_on && m.role !== 'owner') setTimeout(payOpen, 0); } // not allowed = the same screen is already up
+     setTimeout(() => timeCheck(m), 0); try { const dg = document.getElementById('odiag'); if (dg) dg.textContent = (m.ownerDash || (m.role === 'owner' && m.source === 'owner')) ? ' · acct ' + (m.role || '?') + (m.ownerDash ? '+dash' : '') + ' ' + String(m.email || '').slice(-8) : ''; s('odd-dash', (m.role === 'owner' && m.source === 'owner') || m.ownerDash ? '1' : null); if (window.navRender) setTimeout(window.navRender, 0); } catch (e) {}
     if (m.allowed) { s('odd-ok', String(Date.now())); hide(); soon(m); setTimeout(namePrompt, 1200); } else show();
   }
   // Everyone needs a name or handle. New accounts type one at sign-up; accounts made before that get asked once.
@@ -171,7 +186,7 @@
   }
   function soon(m) {
     if (m.role === 'owner' || !m.expires_on) return; const d = Math.ceil((new Date(m.expires_on + 'T23:59:59') - Date.now()) / 864e5);
-    if (d <= 3 && d >= 0 && !document.getElementById('gtoast')) { const t = document.createElement('div'); t.id = 'gtoast'; t.textContent = (m.source === 'trial' ? 'Free trial' : 'Subscription') + ' ends ' + (d === 0 ? 'today' : 'in ' + d + ' day' + (d > 1 ? 's' : '')) + ' — tap to renew'; t.onclick = () => { me = Object.assign({}, m, { allowed: false }); show(); t.remove(); }; document.body.appendChild(t); setTimeout(() => t.remove(), 9000); }
+    if (d <= 3 && d >= 0 && !document.getElementById('gtoast')) { const t = document.createElement('div'); t.id = 'gtoast'; t.textContent = (m.source === 'trial' ? 'Free trial' : 'Subscription') + ' ends ' + (d === 0 ? 'today' : 'in ' + d + ' day' + (d > 1 ? 's' : '')) + ' — tap to renew'; t.onclick = () => { if (!payOpen()) { me = Object.assign({}, m, { allowed: false }); show(); } t.remove(); }; /* v267: same pay screen, now with a way back */ document.body.appendChild(t); setTimeout(() => t.remove(), 9000); }
   }
   function out() { s('odd-noauto', '1'); s('odd-tok', null); s('odd-ok', null); s('odd-push', null); s('sync-phone', null); s('sync-pin', null); s('sync-owner', null); window.oddWipe(); me = null; mode = 'in'; location.reload(); }
   async function refresh(force) {

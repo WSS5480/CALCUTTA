@@ -37,6 +37,7 @@ D.limits = () => LIM;
 const enterprise = async (who, on) => { await LIM.admin({ op: 'enterprise', key: LIM.keyOf(pe(SID[who])), on }); NOW += 31e3; }; // the owner's Enterprise flag on an ACCOUNT (the answer is cached 30 s)
 // ---- server ----
 const srv = http.createServer(async (req, res) => { if (!(await C.handle(req, res))) { res.statusCode = 404; res.end('{}'); } });
+srv.keepAliveTimeout = 120e3; // ROUND 7: a kept-alive socket the server closes during a long CPU-bound check gave "fetch failed" under heavy parallel load
 let P, raw = [];
 const call = async (who, op, b, ip) => { const r = await fetch('http://127.0.0.1:' + P + '/calcutta/' + op, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': who ? 't-' + who : '', 'x-ip': ip || '9.9.9.' + (who || 'x').length }, body: JSON.stringify(b || {}) }); const txt = await r.text(); raw.push(txt); return { s: r.status, j: JSON.parse(txt) }; };
 const team = (n) => ({ id: String(n), name: 'Team ' + n });

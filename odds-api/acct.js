@@ -110,11 +110,11 @@ async function expired(e) { if (!on() || !e || e === 'owner') return false; try 
 // GROUPS_ENABLED=1 and only for an account the switches let in (GROUPS_OWNER_ONLY: the owner-PIN sign-in, the OWNER_PHONE accounts, GROUPS_TESTERS). Everyone
 // else, and everyone while the variable is unset, gets exactly the `me` of v271: no field, no extra read, no new route. A copy is returned: OWNER_ME and the
 // entitlement cache are never changed.
-function gFlag(me, e) { if (!me || process.env.GROUPS_ENABLED !== '1') return me; try { return require('./groups').onFor(e) ? Object.assign({}, me, { groups: true }) : me; } catch (er) { return me; } }
+function gFlag(me, e) { if (!me || process.env.GROUPS_ENABLED !== '1') return me; try { return require('./groups').onFor(e) ? Object.assign({}, me, { groups: true }, process.env.LOCALEVENTS_ENABLED === '1' ? { levents: true } : {}) : me; } catch (er) { return me; } } // pickleball group game (localevents.js): `levents` ONLY while LOCALEVENTS_ENABLED=1 too, for the same accounts Groups is on for
 async function handle(req, res) {
   if (req.method === 'OPTIONS') return false;
   const path = req.url.split('?')[0];
-  if (path === '/acct/status') { send(res, 200, Object.assign({ gate: on(), guest: guestMode() }, process.env.GROUPS_ENABLED === '1' ? { groups: true } : {})); return true; } // v272: `groups` is there ONLY while GROUPS_ENABLED=1 (unset = the answer of v271, byte for byte); it says nothing about any one account // v268: guest = visitors with no account may browse scores (see guestMode)
+  if (path === '/acct/status') { send(res, 200, Object.assign({ gate: on(), guest: guestMode() }, process.env.GROUPS_ENABLED === '1' ? Object.assign({ groups: true }, process.env.LOCALEVENTS_ENABLED === '1' ? { levents: true } : {}) : {})); return true; } // v272: `groups` is there ONLY while GROUPS_ENABLED=1 (unset = the answer of v271, byte for byte); it says nothing about any one account // v268: guest = visitors with no account may browse scores (see guestMode)
   if (req.method !== 'POST' && !(req.method === 'GET' && path === '/acct/time/status')) return false; // v263: the time status may also be read with GET (x-token header)
   if (!on()) { send(res, 200, { gate: false }); return true; }
   const ip = require('./ip').clientIp(req); // third from the end of X-Forwarded-For (see ip.js)

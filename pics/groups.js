@@ -71,6 +71,7 @@
         + '<span class="ogmeta">' + (gr.role === 'comm' ? 'You run this group · ' : '') + gr.count + ' of ' + gr.join.max + ' members' + (P.length ? ' · ' + esc([...new Set(P.map((c) => SPORT[c.sport] || c.sportName))].join(', ')) : '') + '</span>'
         + (gr.role === 'comm' && gr.reqCount ? '<span class="ogmeta ogy">' + gr.reqCount + ' join request' + (gr.reqCount === 1 ? '' : 's') + ' waiting</span>' : '') + '<span class="oggo">Open ›</span></button>';
     }).join('') + '</div>';
+    s += '<button type="button" class="ogsec" data-a="mycalc">🏆 My Calcuttas ›</button>'; // calc-live F8
     if (H.pending.length) s += '<h3 class="ogh">Waiting for an answer</h3><div class="oggrid">' + H.pending.map((p) => '<div class="ogcard"><b class="ogname">' + esc(p.name) + '</b><div class="ogmeta">Request sent. The commissioner approves who joins.</div><button type="button" class="ogsec" data-a="cancel" data-id="' + att(p.id) + '">Cancel my request</button></div>').join('') + '</div>';
     return s;
   }
@@ -202,9 +203,9 @@
   }
   // Calcutta auction (a group game, calc-live): the screens live in pics/calcutta.js, fetched the first time a member opens the Calcutta tile. Its own
   // full-screen overlay (#ocalc) opens above this one, beside the tab bar; ‹ Group and Close come back here; closing Groups closes it too.
-  let CDL = null; const CDV = 'c1';
-  function calcOpen(gr) {
-    const go = () => window.oddCalc({ gr: { id: gr.id, name: gr.name, role: gr.role } });
+  let CDL = null; const CDV = GDV; // F11: calcutta.js?v= moves with every app version (see HANDOFF bump list)
+  function calcOpen(gr) { // gr null: My Calcuttas (every group), so a Calcutta whose group was deleted stays reachable
+    const go = () => window.oddCalc(gr ? { gr: { id: gr.id, name: gr.name, role: gr.role } } : { mine: true });
     if (window.oddCalc) return go();
     if (!CDL) CDL = new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = 'calcutta.js?v=' + CDV; sc.onload = ok; sc.onerror = () => { CDL = null; sc.remove(); no(); }; document.head.appendChild(sc); });
     CDL.then(go, () => { err = 'Could not load Calcutta. Check your signal and try again.'; paint(); });
@@ -222,6 +223,7 @@
     if (a === 'hubnew') { const s = cur(), gnew = s.gr || (s.pv && s.pv.members ? s.pv : null); stack = [{ t: 'home' }]; if (gnew) stack.push({ t: 'hub', gr: gnew }); err = ''; paint(); return loadHome(); }
     if (a === 'hub') { const x = H && H.groups.find((y) => y.id === id); if (x) push({ t: 'hub', gr: x }); return; }
     if (a === 'cancel') return act('cancel', { id }, async () => { loadHome(); });
+    if (a === 'mycalc') return calcOpen(null); // calc-live F8
     if (!gr) return;
     if (a === 'members') { push({ t: 'members', gr }); return act('get', { id: gr.id }, async (j) => { setGroup(j.group); paint(); }); }
     if (a === 'rules') return push({ t: 'rules', gr, cid: b.getAttribute('data-cid') });

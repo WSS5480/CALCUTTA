@@ -91,7 +91,7 @@ srv.listen(0, '127.0.0.1', async () => {
     r = await post('/calcutta/list', { g: gid }, H(stranger.token)); assert.strictEqual(r.s, 403); r = await post('/calcutta/list', { g: 'nope' }, H(tess.token)); assert.strictEqual(r.s, 404);
     r = await post('/calcutta/get', { id }, H(tess.token)); assert.strictEqual(r.s, 404, 'not joined yet: nothing to read');
     r = await post('/calcutta/gjoin', { id, preview: true }, H(tess.token)); assert.strictEqual(r.s, 200); assert.strictEqual(r.j.calc.role, 'none');
-    r = await post('/calcutta/gjoin', { id }, H(stranger.token)); assert.strictEqual(r.s, 403); assert.strictEqual(r.j.code, 'group');
+    r = await post('/calcutta/gjoin', { id }, H(stranger.token)); assert.strictEqual(r.s, 404, 'F10: another group\'s Calcutta is 404');
     r = await post('/calcutta/gjoin', { id, myName: 'Somebody Else' }, H(tess.token)); assert.strictEqual(r.s, 200, J(r.j)); assert.strictEqual(r.j.calc.role, 'member'); assert.ok(r.j.calc.members.some((m) => m.name === 'Tess'), 'the group\'s name, not a typed one');
     r = await post('/calcutta/gjoin', { id }, H(bo.token)); assert.strictEqual(r.s, 200);
     const code = c1.code; assert.match(code, /^[A-Z2-9]{12}$/);

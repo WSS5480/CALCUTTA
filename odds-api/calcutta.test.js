@@ -72,7 +72,7 @@ srv.listen(0, async () => {
     r = await call(null, 'peek', { code: 'c.' + c1.code.toLowerCase() }); ok(r); assert.deepStrictEqual(Object.keys(r.j).sort(), ['kind', 'title']); assert.strictEqual(r.j.kind, 'calcutta');
     r = await call('bob', 'get', { id: c1.id }); assert.strictEqual(r.s, 404, 'stranger cannot read');
     r = await call('bob', 'preview', { code: c1.code }); ok(r); assert.strictEqual(r.j.calc.role, 'none'); assert.ok(!r.j.calc.code && !r.j.calc.members, 'no code/members before joining'); assert.strictEqual(r.j.calc.takeText, 'Commissioner keeps 10% of the pot'); assert.strictEqual(r.j.calc.rules.rows.length, 3); assert.strictEqual(r.j.calc.rules.main, true);
-    r = await call('bob', 'bid', { id: c1.id, lot: 'L1', amt: 5 }); assert.strictEqual(r.s, 403, 'not a member yet');
+    r = await call('bob', 'bid', { id: c1.id, lot: 'L1', amt: 5 }); assert.strictEqual(r.s, 404, 'not a member yet (F10, calc-live: 404 before anything is read)');
     for (const w of ['bob', 'cat', 'dan']) { r = await call(w, 'join', { code: c1.code }); ok(r, 'join ' + w); }
     r = await call('bob', 'join', { code: c1.code }); ok(r); assert.strictEqual(r.j.calc.members.length, 4, 'join twice changes nothing');
     t('public peek = title + kind only; preview shows locked rules, payout table, take, main/side; join by code, idempotent; members only bid');
@@ -81,7 +81,7 @@ srv.listen(0, async () => {
     C._reset(); t('10 wrong codes -> 15 minute block (account and IP; public peek too)');
     // --- people cap: 8 (commissioner included), enterprise uncapped ---
     for (const w of ['eve', 'fay', 'gus', 'hal']) { r = await call(w, 'join', { code: c1.code }); ok(r); }
-    r = await call('ivy', 'join', { code: c1.code }); assert.strictEqual(r.s, 409); assert.ok(/up to 8 people/.test(r.j.error) && r.j.error.includes('Need more than 8? Oddable for courses, clubs and leagues: $500/month + $20 per player per game. Contact us.'), r.j.error); assert.strictEqual(r.j.code, 'cap');
+    r = await call('ivy', 'join', { code: c1.code }); assert.strictEqual(r.s, 409); assert.ok(/up to 8 people/.test(r.j.error) && r.j.error.includes('Need more than 8? Oddable for courses, clubs and leagues: $500/month + $20 per player per game.') && !/Contact/.test(r.j.error), r.j.error); assert.strictEqual(r.j.code, 'cap');
     await enterprise('ann', true); r = await call('ivy', 'join', { code: c1.code }); ok(r, 'enterprise commissioner is uncapped (shared limits.maxPeople)'); assert.strictEqual(r.j.calc.max, 500, 'Enterprise ceiling from the shared helper'); await enterprise('ann', false);
     r = await call('ivy', 'bid', { id: c1.id, lot: 'L1', amt: 5 }); assert.strictEqual(r.s, 403, '9th person cannot bid once the cap is back to 8');
     t('people cap: 9th person refused with the shared pricing text; enterprise flag lifts it; cap also enforced on bids');
@@ -212,7 +212,7 @@ srv.listen(0, async () => {
     // --- buy back half (OWNER DECISION Nov 16 2026): only the lot's own player(s) of record, half for half price ---
     C._reset(); r = await call('ann', 'create', { name: 'Golf day', ev: 'custom', lots: [{ teams: [{ name: 'Red' }], playersOfRecord: [{ me: true }] }, { teams: [{ name: 'Blue' }], playersOfRecord: [{ guest: true, name: 'Bo Guest' }] }, { teams: [{ name: 'Green' }, { name: 'Gold' }] }],
       rows: [{ k: 'win', n: 3, pct: 20 }, { k: 'champ', n: 1, pct: 40 }], minBid: 5, inc: 5, timer: 10, buyBack: true, take: { kind: 'pct', v: 7 }, order: 'listed', mode: 'manual' }); ok(r, 'custom with buy-back'); const c7 = r.j.calc;
-    assert.strictEqual(c7.local, true); assert.deepStrictEqual(c7.lots.map((l) => l.por.map((p) => [p.name, p.me])), [[['AnnBets', true]], [['Bo Guest', false]], []]); assert.ok(!/"k":|g7/.test(JSON.stringify(c7.lots)) && !JSON.stringify(c7).includes('g7'), 'player-of-record keys never sent');
+    assert.strictEqual(c7.local, true); assert.deepStrictEqual(c7.lots.map((l) => l.por.map((p) => [p.name, p.me])), [[['AnnBets', true]], [['Bo Guest', false]], []]); assert.ok(!/"k":/.test(JSON.stringify(c7.lots)) && !/"g:/.test(JSON.stringify(c7)), 'player-of-record keys never sent'); // F13 (calc-live): was a literal 'g7', which a random 12-letter guest id contains about 1 run in 90 (the 1-in-45 flake); the commissioner IS sent the bare guest id (to ask for a new claim link)
     for (const w of ['bob', 'cat', 'dan']) ok(await call(w, 'join', { code: c7.code }));
     const P7 = {}; for (const w of ['ann', 'bob', 'cat', 'dan']) P7[w] = (await call(w, 'get', { id: c7.id })).j.calc.me;
     r = await call('bob', 'por', { id: c7.id, lot: 'L2', players: [{ pid: P7.bob }] }); assert.strictEqual(r.s, 403, 'only the commissioner sets players of record');

@@ -49,7 +49,7 @@ const addDay = (day, n) => new Date(Date.parse(day + 'T12:00:00Z') + n * DAY).to
 // ONE shared check for every engine: odds-api/limits.js `await maxPeople(keyOf(accountId), gameId)` (8 standard, the Enterprise ceiling when the owner
 // turned Enterprise on for the commissioner's account, plus owner-set extra seats for one game). This engine has NO ceiling or Enterprise flag of
 // its own. `c.ak` = limits.keyOf(commissioner's account id), stored at creation. Until limits.js is in this branch (merge) the cap is the standard 8.
-const PRICE = 'Need more than 8? Oddable for courses, clubs and leagues: $500/month + $20 per player per game. Contact us.';
+const PRICE = 'Need more than 8? Oddable for courses, clubs and leagues: $500/month + $20 per player per game.'; // L7: no "Contact us" (nothing to tap)
 const STD = 8, MAXC = new Map(); // calc id -> { at, n }: the shared answer, kept 30 s so the checks inside a transaction stay synchronous
 const akOf = (e) => { const L = D.limits(); return L && L.keyOf ? L.keyOf(e) : null; };
 async function maxFor(ak, id) { const L = D.limits(); if (!L || !ak) return STD; try { const n = Number(await L.maxPeople(ak, id || '')); return n >= 1 ? n : STD; } catch (e) { return STD; } }
@@ -161,10 +161,10 @@ const ord = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd
 // ---------- rules ----------
 const MINB = [1, 2, 5, 10, 20, 25, 50, 100], INCS = [1, 2, 5, 10, 25], TIMERS = [10, 20, 25, 30], TIMER0 = 25; // Playbook play 10: default 25 s
 // Playbook play 10: what happens to the winnings of a lot nobody bought, picked at set-up and shown to members before the auction
-const UNSOLD = { roll: 'Rolled into the sold lots\' payouts, pro rata', carry: 'Carried to the commissioner\'s next Calcutta' };
+const UNSOLD = { roll: 'Added to the sold lots\' payouts, shared by what each earned', carry: 'Carried to the commissioner\'s next Calcutta' };
 // ROUND 4 #4: the carry rule says WHERE the money goes; the roll rule says what happens when no sold lot earned anything
 const carryTo = (c) => (c && c.group ? 'this group\'s next Calcutta' : 'the next Calcutta this commissioner runs') + ' (the commissioner holds it until then; Oddable never holds money)';
-const unsoldText = (r, c) => (r.unsold === 'carry' ? 'If an unsold lot wins, its winnings carry to ' + carryTo(c) + '.' : 'If an unsold lot wins, its winnings roll into the payouts of the sold lots, pro rata (in proportion to what each has earned), when the event is over. If no sold lot earned anything, they are paid in proportion to the price paid.');
+const unsoldText = (r, c) => (r.unsold === 'carry' ? 'If an unsold lot wins, its winnings carry to ' + carryTo(c) + '. Payout places nobody fills (a bye, a tie, a game no lot plays in) carry the same way.' : 'If an unsold lot wins, its winnings are added to the sold lots\' payouts, shared by what each has earned, when the event is over. If no sold lot earned anything, they are paid in proportion to the price paid. Payout places nobody fills (a bye, a tie, a game no lot plays in) go the same way.');
 function cleanRows(ev, rows) {
   if (!Array.isArray(rows) || !rows.length || rows.length > 12) throw bad(400, 'The payout table needs 1 to 12 rows');
   const out = rows.map((x) => {
@@ -184,8 +184,14 @@ function cleanRows(ev, rows) {
 function cleanLots(ev, lots, known, local, members) {
   if (!Array.isArray(lots) || lots.length < 2 || lots.length > 80) throw bad(400, 'Put 2 to 80 lots up for auction');
   const seen = new Set(); let x = 0;
+  // F2: a golf field lot holds up to 200 golfers (a Tour field is 120 to 156); a team event's field lot up to 70 teams. { rest: true } (golf, or any
+  // event with a team list) = "Rest of the field": every team of the event that no other lot names, filled in here from the source's own list.
+  const FMAX = ev.sport === 'golf' ? 200 : 70, rests = lots.filter((l) => l && l.rest === true);
+  if (rests.length > 1) throw bad(400, 'Only one "Rest of the field" lot'); if (rests.length && (!known || ev.manualOnly)) throw bad(400, '"Rest of the field" needs an event with a team list');
+  if (rests.length) { const named = new Set(); lots.forEach((l) => { if (l && l.rest !== true && Array.isArray(l.teams)) l.teams.forEach((t) => named.add(String(t && t.id || ''))); });
+    rests[0].teams = Object.keys(known).filter((id) => !named.has(id)).map((id) => ({ id, name: known[id].name, abbr: known[id].abbr })); if (!rests[0].teams.length) throw bad(400, 'Every team is already in a lot: nothing is left for "Rest of the field"'); rests[0].name = cleanName(rests[0].name, 40) || 'Rest of the field'; }
   return lots.map((l, i) => {
-    const ts = Array.isArray(l && l.teams) ? l.teams : []; if (!ts.length || ts.length > 70) throw bad(400, 'Each lot needs at least one team');
+    const ts = Array.isArray(l && l.teams) ? l.teams : []; if (!ts.length) throw bad(400, 'Each lot needs at least one team'); if (ts.length > FMAX) throw bad(400, 'A lot holds up to ' + FMAX + (ev.sport === 'golf' ? ' golfers' : ' teams') + ' (this one has ' + ts.length + ')');
     const teams = ts.map((t) => {
       let id = String(t && t.id || ''); const name = cleanName(t && t.name, 40); if (!name) throw bad(400, 'Every team needs a name');
       if (ev.manualOnly) id = 'x' + (++x); else if (!(ev.plug ? /^[\w:.-]{1,60}$/ : /^[\w-]{1,24}$/).test(id)) throw bad(400, 'Unknown team');
@@ -215,7 +221,7 @@ async function cleanRules(b, now, members, viewer) {
   const evk = String(b.ev || ''), ev = EVENTS[evk]; if (!ev) throw bad(400, 'Pick an event'); if (!evOn(evk)) throw bad(400, 'That event is coming soon');
   const ref = srcRef(ev, b);
   await organizerOk(evk, ref, viewer);
-  let known = null; if (!ev.manualOnly) { try { const t = await teamsOf(evk, ref, viewer); if (t.length) { known = {}; t.forEach((x) => { known[x.id] = x; }); } } catch (e) { if (ev.plug) throw e.status === 403 || e.status === 504 ? e : bad(502, 'Could not load the teams. Try again.'); } }
+  let known = null; if (!ev.manualOnly) { try { const t = await teamsOf(evk, ref, viewer); if (t.length) { known = {}; t.forEach((x) => { known[x.id] = x; }); } } catch (e) { if (ev.plug) throw e.status === 403 || e.status === 504 || e.code === 'underway' ? e : bad(502, 'Could not load the teams. Try again.'); } }
   if (ev.plug && !known) throw bad(400, 'There are no teams to auction there yet');
   const lots = cleanLots(ev, b.lots, known, evLocal(evk), members), rows = cleanRows(ev, b.rows);
   if (b.buyBack && !evLocal(evk)) throw bad(400, 'Buy back half is only for local events, where the auctioned player or team is in the group');
@@ -272,7 +278,7 @@ async function mutRow(rowId, init, fn, after) {
   }
   throw bad(409, 'Busy, try again');
 }
-const mutCalc = (id, fn, mk) => { let pre = null; return mutRow(ROW(id), null, async (c) => { if (c.deleted || (mk && !memberOf(c, mk))) throw bad(404, 'Calcutta not found'); pre = before(c); settle(c, D.now()); return fn(c); }, (row) => { RC.set(String(row.id).slice(10), { at: D.now(), row }); recordPlayers(row.data); activity(pre, row.data); }); };
+const mutCalc = (id, fn, mk) => { let pre = null; return mutRow(ROW(id), null, async (c) => { if (c.deleted || (mk && !memberOf(c, mk))) throw bad(404, 'Calcutta not found'); pre = before(c); const t = D.now(); settle(c, t); return fn(c, t); } /* L9: fn gets the clock the lazy settle used */, (row) => { RC.set(String(row.id).slice(10), { at: D.now(), row }); recordPlayers(row.data); activity(pre, row.data); }); };
 // MAIN: the owner's Activity (events.js -> My Apps). Taken from the row BEFORE the change (and before the lazy clock sells anything) and compared with the
 // row that was WRITTEN, so every sale is told once whichever request made it (a bid's timer ringing during a poll, Sold now, an entered result).
 // Called only after the conditional write succeeded; it never throws and never waits (events.js queues and sends on a timer). Keys: the auction id
@@ -294,10 +300,12 @@ function recordPlayers(c) { try { const L = D.limits(); if (!L || typeof L.recor
   keys.forEach((k) => { const key = c.id + '|' + k; if (PLAYED.has(key)) return; PLAYED.add(key); if (PLAYED.size > 60000) PLAYED.clear(); Promise.resolve().then(() => L.recordPlay(c.ak, 'calcutta', c.id, k)).catch(() => { PLAYED.delete(key); }); }); } catch (e) {} }
 const idxEntry = (c) => ({ name: c.name, comm: c.comm, mks: c.members.map((m) => m.mk), code: c.code, status: c.a.status, ev: c.ev, created: c.created, act: D.now(), group: c.group || null, pn: c.lots.reduce((a, l) => a + (l.por || []).length, 0), pks: [...new Set([].concat(...c.lots.map((l) => (l.por || []).filter((e) => !e.pend).map((e) => e.k).filter((k) => /^[0-9a-f]{24}$/.test(k)))))], gks: [...new Set([].concat(...c.lots.map((l) => (l.por || []).map((e) => e.k).concat(c.sold[l.id] && c.sold[l.id].bb && c.sold[l.id].bb.k ? [c.sold[l.id].bb.k] : []).filter((k) => /^g:/.test(k)))))] }); // S-ALL: players of record (account keys) find their Calcuttas too
 // REVIEW FIX 8: index cached 1 s, abandoned set-ups (never started, 90+ days) pruned, failed updates retried on the next request
-const IDXC = { at: 0, v: null }, PENDING = new Set(), ABANDON = 90 * DAY;
+const IDXC = { at: 0, v: null }, PENDING = new Set(), ABANDON = 90 * DAY, CLOSED_KEEP = 180 * DAY, CLOSED_SEASON = 400 * DAY, IDX_MAX = 3000;
 async function syncIdx(c) {
   for (let k = 0; k < 3; k++) { try { await mutRow(IDX, { calcs: {} }, (d) => { d.calcs = d.calcs || {}; const e = idxEntry(c), now = D.now(); const strip = (x) => JSON.stringify(Object.assign({}, x, { act: 0 })); let ch = !d.calcs[c.id] || strip(d.calcs[c.id]) !== strip(e) || now - (d.calcs[c.id].act || 0) >= DAY; d.calcs[c.id] = e;
-      Object.keys(d.calcs).forEach((id) => { const x = d.calcs[id]; if (id !== c.id && x.status === 'setup' && !x.group && !(x.pks || []).length && !(x.gks || []).length && !x.pn /* ROUND 4 LOWER: typed-name players count too */ && (x.mks || []).length <= 1 && now - (x.act || x.created || 0) > ABANDON) /* ROUND 2 D5 + ROUND 3 #7: commissioner alone, never in a group, no team players, no activity (his own views count) */ { delete d.calcs[id]; ch = true; } });
+      Object.keys(d.calcs).forEach((id) => { const x = d.calcs[id]; if (id !== c.id && x.status === 'setup' && !x.group && !(x.pks || []).length && !(x.gks || []).length && !x.pn /* ROUND 4 LOWER: typed-name players count too */ && (x.mks || []).length <= 1 && now - (x.act || x.created || 0) > ABANDON) /* ROUND 2 D5 + ROUND 3 #7: commissioner alone, never in a group, no team players, no activity (his own views count) */ { delete d.calcs[id]; ch = true; }
+        else if (id !== c.id && x.status === 'closed' && now - (x.act || x.created || 0) > ((EVENTS[x.ev] || {}).season ? CLOSED_SEASON : CLOSED_KEEP)) { delete d.calcs[id]; ch = true; } }); // F12: a closed Calcutta leaves the index (its row stays) 180 days after its last change (a season-long one 400 days)
+      const ids = Object.keys(d.calcs); if (ids.length > IDX_MAX) { ids.filter((id) => id !== c.id && d.calcs[id].status === 'closed').sort((a, b2) => (d.calcs[a].act || 0) - (d.calcs[b2].act || 0)).slice(0, ids.length - IDX_MAX).forEach((id) => { delete d.calcs[id]; }); ch = true; } // F12: and the index never holds more than IDX_MAX (oldest closed first)
       if (!ch) return { nochange: true }; return {}; }, (row) => { IDXC.at = D.now(); IDXC.v = row.data.calcs; }); PENDING.delete(c.id); IDXC.at = 0; return; } catch (e) { if (k === 2) { console.error('calcutta index:', e.message); PENDING.add(c.id); } } }
 }
 async function repairIdx() { if (!PENDING.size) return; for (const id of [...PENDING].slice(0, 5)) { PENDING.delete(id); const r = await D.S.dbGet(ROW(id)); if (r && r.data && !r.data.deleted) await syncIdx(r.data); } }
@@ -329,7 +337,7 @@ const memberOf = (c, mk) => c.members.find((m) => m.mk === mk);
 const isComm = (c, mk) => c.comm === mk;
 const newPid = (c) => { let p; do { p = rnd(6); } while (c.members.some((m) => m.pid === p)); return p; };
 const maxOf = (c) => (MAXC.get(c.id) || { n: STD }).n; // capLoad(c) runs first on every route
-const capMsg = (c, what) => what + ' (up to ' + maxOf(c) + ' people, the commissioner included). ' + (maxOf(c) <= 8 ? PRICE : 'Contact Oddable.');
+const capMsg = (c, what) => (what + ' (up to ' + maxOf(c) + ' people, the commissioner included). ' + (maxOf(c) <= 8 ? PRICE : '')).trim();
 
 // ---------- results (ESPN finals, pluggable sources, manual overrides) ----------
 const seasonYear = (ms, ev) => { const d = new Date(ms), y = d.getUTCFullYear(), m = d.getUTCMonth(); return ev.sport === 'nfl' || ev.sport === 'cfb' ? (m >= 6 ? y : y - 1) : y; };
@@ -410,7 +418,7 @@ function teamResults(ev, games, inEvent) {
 // startState() is PURE (row + cache + clock): bids and controls never wait on the feed; the feed is re-read in the background (touch -> refresh).
 const RES = new Map(); // calc id -> { at, R, err, tryAt, busy }  the last results read
 const KICK = new Map(); // calc id -> { at, t0, live, thru }
-const HORIZON = 12 * 36e5, FEED_MS = 15000, WAIT_MS = 4000;
+const HORIZON = 12 * 36e5, FEED_MS = 15000, WAIT_MS = 4000, PLUG_AHEAD = 36e5;
 const anyResult = (R) => Object.values(R || {}).some((x) => x && (x.wins || x.reached || x.champ || x.out || x.big || x.place));
 const sleep = (ms, v) => new Promise((ok) => { const t = setTimeout(() => ok(v), ms); if (t.unref) t.unref(); });
 // ROUND 4 B4: everything cached about the start carries the SIGNATURE of the event it was read for (event key + edit count). Editing the event bumps
@@ -431,7 +439,8 @@ async function feedResults(c) {
     if (typeof S.startTime === 'function') { const v = await S.startTime(c); if (v != null) { t0 = Number(v instanceof Date ? v.getTime() : v); if (!Number.isFinite(t0) || t0 <= 0) throw new Error('bad startTime'); } }
     let end = null; if (typeof S.endTime === 'function') { try { const v = await S.endTime(c); if (v != null) { const n = Number(v instanceof Date ? v.getTime() : v); if (Number.isFinite(n) && n > 0) end = n; } } catch (e) {} }
     if (end == null && t0 != null) end = t0 + (ev.span || 1) * DAY; // no endTime(): the scheduled end is taken as one day (ev.span days) after the start
-    GAMESOF.set(c.id, { sig, at: D.now(), G: [], S: { t0, end } }); if (GAMESOF.size > 3000) GAMESOF.delete(GAMESOF.keys().next().value);
+    let final = false; if (typeof S.final === 'function') { try { final = (await S.final(c)) === true; } catch (e) { final = false; } } // F2: the source says the event is over (true only)
+    GAMESOF.set(c.id, { sig, at: D.now(), G: [], S: { t0, end, final } }); if (GAMESOF.size > 3000) GAMESOF.delete(GAMESOF.keys().next().value);
     setKick(c.id, sig, t0, on || anyResult(R), 60e3); return R; }
   const today = chiDay(D.now()), games = []; const urls = urlsFor(c);
   for (let i = 0; i < urls.length; i += 4) (await Promise.all(urls.slice(i, i + 4).map((u) => getGames(u, today)))).forEach((g) => games.push(...g));
@@ -440,7 +449,10 @@ async function feedResults(c) {
   const ts = rel.filter((g) => !g.tbd).map((g) => g.t).filter((t) => t > 0); // ROUND 4 #3: placeholder times are not kickoffs
   // a game still "time TBD": "nothing has started" is trusted only until its placeholder day begins (then for a minute at a time, re-read while anyone is in)
   const now = D.now(), tbd = rel.filter((g) => g.tbd && !g.done && g.state !== 'in'), tb = tbd.length ? Math.min(...tbd.map((g) => g.t || now)) : null;
-  GAMESOF.set(c.id, { sig, at: now, G: rel.filter((g) => !g.done).slice(0, 120).map((g) => ({ id: g.id, t: g.t, tbd: !!g.tbd, teams: g.teams.map((t) => t.id) })), D: rel.filter((g) => g.done).map((g) => g.id).slice(-400), S: null }); if (GAMESOF.size > 3000) GAMESOF.delete(GAMESOF.keys().next().value);
+  // F1: a weekend event (Thu-Mon) is OVER once its window has passed (read on a later day, Central time) and every game of a lot team in it is final.
+  // Postponed / cancelled games do not count (they are out of the event). Until then the "win" slots nobody filled stay in play.
+  const fin = !!(ev.weekend && c.win && today > c.win.to && rel.every((g) => g.done));
+  GAMESOF.set(c.id, { sig, at: now, G: rel.filter((g) => !g.done).slice(0, 120).map((g) => ({ id: g.id, t: g.t, tbd: !!g.tbd, teams: g.teams.map((t) => t.id) })), D: rel.filter((g) => g.done).map((g) => g.id).slice(-400), S: null, fin }); if (GAMESOF.size > 3000) GAMESOF.delete(GAMESOF.keys().next().value);
   setKick(c.id, sig, ts.length ? Math.min(...ts) : null, rel.some((g) => g.done || g.state === 'in'), tb == null ? HORIZON : Math.max(60e3, Math.min(HORIZON, tb - now)));
   return teamResults(ev, uniq, ids);
 }
@@ -448,7 +460,7 @@ async function feedResults(c) {
 // the start is seen (sticky: never cleared, survives restarts) and every ownership change checks startState() INSIDE its transaction.
 const FEEDONLY = 'Results for this event come from the score feed only. A commissioner correction opens only when the feed still has no result 24 hours after the game\'s scheduled end.', GRPCOMM = 'Only that group\'s commissioner can attach a Calcutta, and it has to be a Calcutta he runs';
 const FROZEN = 'The event has started: who owns what is final now.', FEEDQ = 'The score feed cannot be read right now and the event may have started, so ownership is locked. Try again in a minute.';
-function notice(c, by, what, raw) { c.notices = c.notices || []; c.notices.push({ at: D.now(), by: cleanName(by, 24), what: cleanName(raw ? what : what + ' (after the auction closed)', 180) }); if (c.notices.length > 50) c.notices = c.notices.slice(-50); }
+function notice(c, by, what, raw, x) { c.notices = c.notices || []; c.notices.push(Object.assign({ at: D.now(), by: cleanName(by, 24), what: cleanName(raw ? what : what + ' (after the auction closed)', 180) }, x || {})); /* x (M1): { k: 'undo', pid, amt } so a phone can tell the bidder "your bid was removed" */ if (c.notices.length > 50) c.notices = c.notices.slice(-50); }
 function startOf(c) { // the earliest day the event can start (conservative): its window, else per event from the season
   if (c.win && c.win.from) return c.win.from; const ev = EVENTS[c.ev], sy = c.sy || seasonYear(c.created, ev);
   return { nfl_po: (sy + 1) + '-01-08', nfl_season: sy + '-09-03', cfp: sy + '-12-18' }[c.ev] || null; }
@@ -461,7 +473,7 @@ function startState(c, now) { // 'started' | 'open' | 'unknown' (unknown = fail 
     // ROUND 4 #2: the clock passing a CACHED kickoff starts the event only when that time was (re)confirmed: read at/after the kickoff itself, or within the
     // last refresh interval. An older time may have been moved (weather, flex): locked for now ('unknown' -> 409 feed, not sticky) until it is re-read.
     if (k.t0 != null && now >= k.t0) return k.at >= k.t0 || (now - k.at <= IVL(ev) && now >= k.at) ? 'started' : 'unknown';
-    if (now < k.thru || (k.t0 != null && !ev.plug)) return 'open'; } // a known kickoff still ahead: open, however old the read
+    if (now < k.thru || (k.t0 != null && (!ev.plug || k.t0 - now > PLUG_AHEAD))) return 'open'; } // a known kickoff still ahead: open, however old the read (F4: a source's start more than an hour away too, so a slow source never locks a Calcutta days before its event)
   const s0 = startOf(c); return !s0 || chiDay(now) >= s0 ? 'unknown' : 'open';
 }
 function refresh(c) { // one feed read per Calcutta at a time, in the background; never throws; resolves { ok, R }
@@ -484,10 +496,10 @@ function startNow(c) { // inside a transaction: mark started; an auction not fin
 async function markStarted(id) { try { const c = await mutCalc(id, (c) => { if (c.startedAt) return { nochange: true, v: c }; startNow(c); c.rev++; return c; }); syncIdx(c); } catch (e) { console.error('calcutta start:', e.message); } }
 async function afterFeed(id) { // after a good read: keep `c.kick` on the row (restart-proof) and persist the start the moment it is seen
   try { const k = KICK.get(id); if (!k) return; const row = await loadRow(id); if (!row || row.data.deleted) return; const now = D.now();
-    if (k.sig !== sigOf(row.data)) return; const h = RES.get(id), gm = GAMESOF.get(id), R = h && h.sig === k.sig && !h.err && h.R ? h.R : null, G = gm && gm.sig === k.sig ? { G: gm.G, S: gm.S } : null, frS = R ? JSON.stringify([R, G]) : null;
+    if (k.sig !== sigOf(row.data)) return; const h = RES.get(id), gm = GAMESOF.get(id), R = h && h.sig === k.sig && !h.err && h.R ? h.R : null, G = gm && gm.sig === k.sig ? { G: gm.G, S: gm.S, fin: !!gm.fin } : null, frS = R ? JSON.stringify([R, G]) : null;
     // the row's copy of the kickoff is rewritten when it changed, when the event's clock has passed it (so a restart knows it was confirmed), or when it is getting old
     const stale = (p) => !p || p.sig !== k.sig || p.t0 !== k.t0 || !!p.live !== !!k.live || (k.t0 != null && k.at >= k.t0 && p.at < k.t0) || p.thru - now < Math.min(HORIZON / 2, (k.thru - k.at) / 2) && !EVENTS[row.data.ev].plug;
-    const newR = (c) => !!frS && (!c.fr || c.fr.sig !== k.sig || JSON.stringify([c.fr.R, c.fr.G ? { G: c.fr.G, S: c.fr.S } : null]) !== frS);
+    const newR = (c) => !!frS && (!c.fr || c.fr.sig !== k.sig || JSON.stringify([c.fr.R, c.fr.G ? { G: c.fr.G, S: c.fr.S, fin: !!c.fr.fin } : null]) !== frS);
     const go = (c) => !c.startedAt && startState(c, now) === 'started'; if (!stale(row.data.kick) && !go(row.data) && !newR(row.data) && !voided(row.data).length) return; let st = false;
     const c = await mutCalc(id, (c) => { if (sigOf(c) !== k.sig) return { nochange: true, v: c }; let ch = false; if (stale(c.kick)) { if (!c.kick || c.kick.t0 !== k.t0) c.rev++; c.kick = { at: k.at, sig: k.sig, t0: k.t0, live: k.live, thru: k.thru }; ch = true; }
       if (newR(c)) { c.fr = Object.assign({ at: h.at, sig: k.sig, R }, G || {}); c.rev++; ch = true; } // ROUND 4 #1: the last good results stay on the row, so stats and boards never wait on the feed (also after a restart)
@@ -501,8 +513,9 @@ async function afterFeed(id) { // after a good read: keep `c.kick` on the row (r
 // Returns 'started' (persisted), 'unknown' (fail closed) or false.
 async function freezeCheck(id, wait) {
   const row = await loadRow(id, !!wait); if (!row) return false; const c = row.data, now = D.now(), ev = EVENTS[c.ev]; let st = startState(c, now);
+  const k0 = kickOf(c), far = !!ev.plug && st === 'open' && !!k0 && !k0.live && k0.t0 != null && k0.t0 - now > PLUG_AHEAD; // F4: a source's known start is more than an hour away
   if (st !== 'started' && !ev.manualOnly && near(c, now)) {
-    if (wait) { const x = RES.get(id) || {}, age = now - (x.at || 0); if (ev.plug || x.err || !x.at || age > 6e4 || age < 0) { const o = await Promise.race([refresh(c), sleep(WAIT_MS, { ok: false })]); if (!o.ok && ev.plug) return 'unknown'; /* a source that cannot answer: locked */ } }
+    if (wait) { const x = RES.get(id) || {}, age = now - (x.at || 0); if (ev.plug || x.err || !x.at || age > 6e4 || age < 0) { const o = await Promise.race([refresh(c), sleep(WAIT_MS, { ok: false })]); if (!o.ok && ev.plug && !far) return 'unknown'; /* F4: a source that cannot answer while its known start is over an hour away does not lock (it is still asked first, so a start it reports counts); otherwise: a source that cannot answer: locked */ } }
     else { touch(c, now); if (st === 'unknown') await Promise.race([refresh(c), sleep(300)]); }
     st = startState(c, D.now());
   }
@@ -511,7 +524,8 @@ async function freezeCheck(id, wait) {
 }
 const frozenIf = (c, fz) => { const st = startState(c, D.now()); if (st === 'started' || fz === 'started') throw bad(409, FROZEN, { code: 'frozen' }); if (st === 'unknown' || fz === 'unknown') throw bad(409, FEEDQ, { code: 'feed' }); }; // inside the transaction
 const teamOf = (c, tid) => { let t = null; c.lots.forEach((l) => l.teams.forEach((x) => { if (x.id === tid) t = x; })); return t; };
-const gamesOf = (c) => { const m = GAMESOF.get(c.id); if (m && m.sig === sigOf(c)) return m; return c.fr && c.fr.sig === sigOf(c) && (c.fr.G || c.fr.S) ? { at: c.fr.at, G: c.fr.G || [], D: [], S: c.fr.S || null } : null; };
+const gamesOf = (c) => { const m = GAMESOF.get(c.id); if (m && m.sig === sigOf(c)) return m; return c.fr && c.fr.sig === sigOf(c) && (c.fr.G || c.fr.S) ? { at: c.fr.at, G: c.fr.G || [], D: [], S: c.fr.S || null, fin: !!c.fr.fin } : null; };
+const finOf = (c) => { const g = gamesOf(c); return !!g && (g.fin === true || !!(g.S && g.S.final === true)); }; // F1 / F2: the feed or the source says the event is over
 const feedR = (c) => { const h = RES.get(c.id); if (h && h.sig === sigOf(c) && h.R) return { R: h.R, at: h.at }; return c.fr && c.fr.sig === sigOf(c) && c.fr.R ? { R: c.fr.R, at: c.fr.at } : null; }; // the last good feed results: memory, else the row
 // ROUND 4 B1: on a feed-backed event the feed is the only source of results. The one exception is a commissioner CORRECTION (c.manual[team] with corr:true),
 // which stands only while the feed still has no result for the game(s) it was entered for. The moment the feed reports, the correction is void.
@@ -524,20 +538,21 @@ const voided = (c) => { if (!feedBacked(c)) return []; const f = feedR(c); retur
 // end (listed start + the sport's game length), or, for a plugged source, 24 hours after the source's scheduled end with no result for the team.
 function fixable(c, tid, now) {
   const ev = EVENTS[c.ev], g = gamesOf(c); if (ev.manualOnly || !g) return null;
-  if (ev.plug) { const f = feedR(c); if (!g.S || g.S.end == null || now < g.S.end + DAY || (f && f.R && f.R[tid] && anyResult({ x: f.R[tid] }))) return null; return { games: [], end: g.S.end }; }
+  if (ev.plug) { const f = feedR(c); if (!g.S || g.S.final === true /* F3: a final board is the result */ || g.S.end == null || now < g.S.end + DAY || (f && f.R && f.R[tid] && anyResult({ x: f.R[tid] }))) return null; return { games: [], end: g.S.end }; }
   const late = (g.G || []).filter((x) => x.teams.includes(tid) && x.t > 0 && !x.tbd && now >= x.t + (DUR[ev.sport] || 4 * 36e5) + DAY); if (!late.length) return null;
   return { games: late.map((x) => x.id), end: Math.min(...late.map((x) => x.t)) + (DUR[ev.sport] || 4 * 36e5) };
 }
 // mode: true = wait for the feed (<= 4 s), false = a page (waits <= 2.5 s only when nothing at all is known), 'cache' = NEVER waits (stats, pot summaries)
 async function results(c, wait) { // feed results cached 5 min per Calcutta (1 min after a failure); a page never waits long on ESPN
   const h0 = RES.get(c.id), h = h0 && h0.sig === sigOf(c) ? h0 : null, now = D.now(), fresh = h && (h.err ? now - h.tryAt < 6e4 && now >= h.tryAt : h.R && now - h.at < 5 * 6e4 && now >= h.at);
-  const kept = feedR(c); let R = kept && kept.R; const done = wait === 'cache' && kept && now - kept.at < DAY && now >= kept.at && Object.values(kept.R).some((x) => x && x.champ); // a finished event is not re-read for every stats page
+  const kept = feedR(c); let R = kept && kept.R; const done = wait === 'cache' && kept && now - kept.at < DAY && now >= kept.at && (Object.values(kept.R).some((x) => x && x.champ) || finOf(c)); // a finished event is not re-read for every stats page
   if (!fresh && feedBacked(c) && !done && !(wait === 'cache' && h && h.busy)) { const p = refresh(c).then((o) => (o.ok ? o.R : R || {})); if (wait !== 'cache' && (wait || !h || !h.R)) R = await Promise.race([p, sleep(wait ? WAIT_MS : 2500, R || {})]); }
   const R0 = R || {}; R = clone(R0); Object.keys(c.manual || {}).forEach((id) => { const m = c.manual[id]; if (feedBacked(c) && (!m.corr || corrVoid(c, id, m, R0))) return; const x = R[id] = R[id] || { wins: 0, winT: [], reached: 0, reachT: {}, champ: false, out: false };
     if (m.wins != null) { const n = m.wins; while (x.winT.length < n) x.winT.push(9e15 + (m.at || 0)); /* hand-added wins are paid after the feed wins (slot order) */ x.winT = x.winT.slice(0, n); x.wins = n; }
     if (m.reached != null) { x.reached = m.reached; for (let r = 1; r <= m.reached; r++) if (x.reachT[r] == null) x.reachT[r] = 9e15 + (m.at || 0); }
     ['champ', 'out', 'big'].forEach((k) => { if (m[k] != null) x[k] = !!m[k]; }); if (m.place != null) x.place = m.place || null; x.manual = true; if (m.corr) { x.corr = true; x.reason = m.reason || ''; } });
   ['champ', 'big'].forEach((k) => { const hand = Object.keys(c.manual || {}).filter((id) => R[id] && R[id].manual && c.manual[id][k] === true); if (hand.length) Object.keys(R).forEach((id) => { if (!hand.includes(id)) R[id][k] = false; }); }); // REVIEW FIX 7: a hand-entered champion / biggest win replaces the feed's
+  if (feedBacked(c) && finOf(c)) Object.defineProperty(R, '_fin', { value: true }); // F1 / F2: not a team; money() reads it (the event is over)
   return R;
 }
 
@@ -573,14 +588,18 @@ function money(c, R) {
     const a = amts[i]; let paid = 0; evs.forEach((e, k) => { const v = k < a.length ? a[k] : 0; add(e.id, v); paid += v; });
     rowsOut.push({ k: r.k, r: r.r || null, n: r.n, pct: r.bp / 100, label: r.label, each: a.length ? a[0] / 100 : 0, total: a.reduce((s, v) => s + v, 0) / 100, hits: evs.length, paid: paid / 100, over: evs.length > r.n });
   });
-  const over = (() => { if (ev.manualOnly || ev.plug) { const pl = rules.rows.filter((r) => r.k === 'place'), champK = Object.values(R).some((x) => x.champ); return pl.length ? (pl.every((r) => covered(r.r)) || placed.length === oi) && (champK || !rules.rows.some((r) => r.k === 'champ')) : champK; } /* ROUND 4 B2: a tie covers the places it takes (1st, 1st, 3rd is over); so is an event where every team has its place */ /* over = champion known, or every paid place filled (was: over from the start when the table had no champion row) */ return Object.values(R).some((x) => x.champ); })();
+  const fin = !!(R && R._fin); // F1 / F2: the score feed (a weekend's window passed, every game final) or the source (a final board) says it is over
+  const over = fin || (() => { if (ev.manualOnly || ev.plug) { const pl = rules.rows.filter((r) => r.k === 'place'), champK = Object.values(R).some((x) => x.champ); return pl.length ? (pl.every((r) => covered(r.r)) || placed.length === oi) && (champK || !rules.rows.some((r) => r.k === 'champ')) : champK; } /* ROUND 4 B2: a tie covers the places it takes (1st, 1st, 3rd is over); so is an event where every team has its place */ /* over = champion known, or every paid place filled (was: over from the start when the table had no champion row) */ return Object.values(R).some((x) => x.champ); })();
+  // F1 / F2 (OWNER CAN CHANGE, see HANDOFF): once the event is over, a payout slot nobody filled (a bye week, a tie, a game between teams in no lot, a paid
+  // place no lotted golfer took) goes the way of unsold-lot money: rolled into the sold lots (roll) or carried (carry). Until then it is "in play".
+  let unusedC = 0, unusedN = 0; if (over) rowsOut.forEach((ro, i) => { const a = amts[i], h = ro.k === 'place' ? (ro.hits ? a.length : 0) : Math.min(ro.hits, a.length), cts = a.slice(h).reduce((x, v) => x + v, 0); ro.unused = a.length - h; if (ro.unused) { unusedC += cts; unusedN += ro.unused; } });
   const lots = c.lots.map((l) => { const e = l.teams.reduce((s, t) => s + (earnT[t.id] || 0), 0), s = c.sold[l.id];
     const alive = !over && l.teams.some((t) => !(R[t.id] && R[t.id].out)); const out = { id: l.id, name: l.name, field: !!l.field, earnedC: e, alive, teams: l.teams.map((t) => ({ id: t.id, name: t.name, abbr: t.abbr, r: R[t.id] ? { wins: R[t.id].wins, reached: R[t.id].reached, champ: !!R[t.id].champ, out: !!R[t.id].out, big: !!R[t.id].big, place: R[t.id].place || null, pos: posOf[t.id] ? posOf[t.id].pos : null, tie: !!(posOf[t.id] && posOf[t.id].tie), manual: !!R[t.id].manual, corr: !!R[t.id].corr, reason: R[t.id].corr ? R[t.id].reason || '' : undefined } : null, earned: (earnT[t.id] || 0) / 100 })) };
     if (s) { out.sold = { amt: s.amt, how: s.how, at: s.at }; out.holder = s.pid ? { pid: s.pid, name: mName(c, s.pid) } : { pid: null, name: s.name }; out._hk = hKey(c, s); if (s.bb) { const w = bbWho(c, s.bb); out.bb = { pid: w.pid, name: w.name }; out._bk = hKey(c, s.bb); } }
     return out; });
   // Playbook play 10: winnings of lots nobody bought. 'roll' (default): shared among the sold lots pro rata to what each has earned so far
   // (floors, leftover cents to the bigger earners; waits as "unclaimed" until a sold lot has earned). 'carry': set aside for the next Calcutta.
-  const unsoldRule = rules.unsold === 'carry' ? 'carry' : 'roll', unsoldC = lots.filter((l) => !l.sold).reduce((a, l) => a + l.earnedC, 0); let rolledC = 0;
+  const unsoldRule = rules.unsold === 'carry' ? 'carry' : 'roll', unsoldLotC = lots.filter((l) => !l.sold).reduce((a, l) => a + l.earnedC, 0), unsoldC = unsoldLotC + unusedC; let rolledC = 0;
   // ROUND 4 #4 + LOWER: the roll is PAID only when the event is over (an owner's winnings never go down mid-event); until then each sold lot shows its
   // share as "pending roll". Over and no sold lot earned anything: the unsold winnings are paid pro rata to the price paid, so nothing is left unpaid.
   let pendC = 0, rollBy = null;
@@ -601,7 +620,7 @@ function money(c, R) {
   owners.sort((a, b) => b.won - a.won || a.spent - b.spent || a.name.localeCompare(b.name)); owners.forEach((o, i) => { o.place = i + 1; });
   const paidC = lots.filter((l) => l.sold).reduce((a, l) => a + l.earnedC, 0), waitC = unsoldC - rolledC; // paid to owners | not (yet) with an owner
   lots.forEach((l) => { l.earned = l.earnedC / 100; l.rolled = (l.rollC || 0) / 100; l.pendingRoll = (l.pendC || 0) / 100; delete l.earnedC; delete l.rollC; delete l.pendC; delete l.shC; delete l._hk; delete l._bk; });
-  return { pot: potC / 100, take: takeC / 100, takeKind: rules.take.kind, takeV: rules.take.v, pool: poolC / 100, paidOut: paidC / 100, unclaimed: waitC / 100, rolled: rolledC / 100, pendingRoll: pendC / 100, rollBy, carry: unsoldRule === 'carry' ? unsoldC / 100 : 0, carryTo: unsoldRule === 'carry' ? carryTo(c) : null, unsoldRule, inPlay: (poolC - paidC - waitC) / 100, over, rows: rowsOut, lots, owners, main: rules.main };
+  return { pot: potC / 100, take: takeC / 100, takeKind: rules.take.kind, takeV: rules.take.v, pool: poolC / 100, paidOut: paidC / 100, unclaimed: waitC / 100, rolled: rolledC / 100, pendingRoll: pendC / 100, rollBy, carry: unsoldRule === 'carry' ? unsoldC / 100 : 0, carryTo: unsoldRule === 'carry' ? carryTo(c) : null, unsoldRule, unused: { slots: unusedN, amt: unusedC / 100, unsoldLots: unsoldLotC / 100 }, inPlay: (poolC - paidC - waitC) / 100, over, rows: rowsOut, lots, owners, main: rules.main };
 }
 const acctK = (k) => !!k && !/^n:/.test(k); // a member key or a guest id (not a typed name)
 const bbWho = (c, h) => { if (h.pid) return { pid: h.pid, name: mName(c, h.pid) }; const m = acctK(h.k) ? c.members.find((x) => x.mk === h.k) : null; return m ? { pid: m.pid, name: m.name } : { pid: null, name: h.name || 'Player' }; }; // a co-owner who joined later is that member
@@ -622,7 +641,7 @@ function full(c, mk, now) {
   const hb = a.cur ? high(c, a.cur) : null; o.a.high = hb ? { pid: hb.pid, name: mName(c, hb.pid), amt: hb.amt } : null; o.a.minNext = a.cur ? (hb ? hb.amt + c.rules.inc : c.rules.minBid) : null;
   o.a.bids = a.cur ? (c.bids[a.cur] || []).slice(-6).reverse().map((b) => ({ pid: b.pid, name: mName(c, b.pid), amt: b.amt, at: b.at })) : [];
   o.sold = c.a.order.filter((id) => c.sold[id]).map((id) => { const s = c.sold[id]; return { lot: id, name: lotOf(c, id).name, holder: s.pid ? { pid: s.pid, name: mName(c, s.pid) } : { pid: null, name: s.name }, amt: s.amt, at: s.at, how: s.how, bb: s.bb ? (s.bb.pid ? { pid: s.bb.pid, name: mName(c, s.bb.pid) } : { pid: null, name: s.bb.name }) : null }; }).sort((x, y) => y.at - x.at);
-  const st = startState(c, now), k = kickOf(c); o.started = st === 'started'; o.feedLock = st === 'unknown'; o.kick = !o.started && k && k.t0 ? k.t0 : null; /* the moment ownership locks, when known */ o.unsold = c.lots.filter((l) => !c.sold[l.id]).length; o.notices = (c.notices || []).slice(-5).reverse(); if (comm) o.guests = Object.keys(c.guests || {}).map((g) => ({ guest: g, name: c.guests[g].name, claimed: !!c.guests[g].claimed })); o.a.undo = a.cur && (c.bids[a.cur] || []).length ? { k: 'bid' } : a.just && c.sold[a.just] && c.sold[a.just].how === 'auction' ? { k: 'sale', name: lotOf(c, a.just).name } : null;
+  const st = startState(c, now), k = kickOf(c); o.started = st === 'started'; o.feedLock = st === 'unknown'; o.kick = !o.started && k && k.t0 ? k.t0 : null; /* the moment ownership locks, when known */ o.unsold = c.lots.filter((l) => !c.sold[l.id]).length; o.notices = (c.notices || []).slice(-5).reverse(); if (comm) o.guests = Object.keys(c.guests || {}).map((g) => ({ guest: g, name: c.guests[g].name, claimed: !!c.guests[g].claimed })); o.a.undo = a.cur && (c.bids[a.cur] || []).length ? { k: 'bid', pid: hb.pid, name: mName(c, hb.pid), amt: hb.amt } : a.just && c.sold[a.just] && c.sold[a.just].how === 'auction' ? { k: 'sale', lot: a.just, name: lotOf(c, a.just).name } : null; /* M3: what Undo would remove, so the phone can name it and send it back as expect */
   o.potSoFar = Object.values(c.sold).reduce((s, x) => s + x.amt, 0); o.now = now; o.rev = c.rev || 0; return o;
 }
 const canSee = (c, mk) => !!memberOf(c, mk);
@@ -650,7 +669,19 @@ async function joinCalc(id, u, nm, viaGroup, now) {
 const OFF_MSG = 'Groups is not open for this account yet.', LAPSED_MSG = 'Your time has ended. Pay to use Groups again.', GID = /^[A-Z2-9]{10}$/;
 const signedIn = (req) => { try { return D.acct().who(req) || null; } catch (e) { return null; } };
 const allowed = (e) => { try { return !!D.grp().onFor(e); } catch (er) { return false; } };
-async function lapsed(e) { if (!e) return false; try { const A = D.acct(); return typeof A.expired === 'function' ? !!(await A.expired(e)) : false; } catch (er) { return false; } }
+// H1 (review of fc5a111): "has this account's time ended?" asks My Apps (acct.expired -> entitlement, a 25 s timeout, a failure never cached there), and
+// every /calcutta call asks it, so a slow or asleep My Apps froze a live auction. Here the answer is kept per account: a known answer is served AT ONCE
+// and re-asked in the background once it is 2 minutes old; an account never asked waits at most 1.2 s (then: not ended, and the answer lands for the
+// next call). acct.expired() itself answers false when My Apps fails, so a failure keeps the account open for those 2 minutes (it never locks anyone
+// out on a guess). acct.js is unchanged. /groups and /golfday still ask the old way (HANDOFF).
+const LAPSE = new Map(), LAPSE_MS = 120e3, LAPSE_WAIT = 1200;
+function lapsed(e) { if (!e) return Promise.resolve(false); const h = LAPSE.get(e), now = D.now();
+  if (h && h.at && now - h.at < LAPSE_MS && now >= h.at) return Promise.resolve(h.v);
+  let p = h && h.busy; if (!p) { p = (async () => { try { const A = D.acct(); return typeof A.expired === 'function' ? !!(await A.expired(e)) : false; } catch (er) { return h ? !!h.v : false; } })()
+      .then((v) => { LAPSE.set(e, { at: D.now(), v }); if (LAPSE.size > 5000) LAPSE.delete(LAPSE.keys().next().value); return v; });
+    LAPSE.set(e, { at: h ? h.at : 0, v: h ? h.v : false, busy: p }); }
+  if (h && h.at) return Promise.resolve(h.v); // known before: the last answer now, the new one for the next call
+  return Promise.race([p, sleep(LAPSE_WAIT, null)]).then((v) => { if (v !== null) return v; const x = LAPSE.get(e); if (x && x.busy === p && !x.at) LAPSE.set(e, { at: D.now(), v: false, busy: p }); return false; }); } // no answer in time: let in, and serve that until My Apps answers
 async function groupOf(gid, e) { // MAIN: a member of that group -> { comm, pid, name, group } (groups.js memberCheck), else 403 / 404
   if (!GID.test(String(gid || ''))) throw bad(404, 'Group not found'); let m = null; try { m = await D.grp().memberCheck(String(gid), e); } catch (er) { m = null; }
   if (!m) throw bad(403, 'Calcuttas are for members of this group', { code: 'group' }); return m; }
@@ -671,13 +702,13 @@ async function handle(req, res) {
     }
     const u = await me(req); try { await repairIdx(); } catch (e) {}
     if (op === 'events') { send(res, 200, { events: Object.keys(EVENTS).map((k) => { const ev = EVENTS[k]; return { key: k, label: ev.label, sport: ev.sport, on: evOn(k), local: evLocal(k), teams: ev.teams || 0, kinds: ev.kinds, rounds: ev.rounds || [], manualOnly: !!ev.manualOnly, needsRef: ev.needsRef || null, plug: !!ev.plug, rows: ev.rows.map((r) => ({ k: r.k, r: r.r || null, n: r.n, pct: r.bp / 100, label: rowLabel(ev, r) })) }; }), minBids: MINB, incs: INCS, timers: TIMERS, timer0: TIMER0, unsold: Object.keys(UNSOLD).map((k) => ({ key: k, label: UNSOLD[k], text: unsoldText({ unsold: k }) })), max: await maxFor(akOf(u.e), ''), capText: PRICE }); return true; }
-    if (op === 'teams') { const k = String(b.ev || ''); if (!EVENTS[k]) throw bad(400, 'Pick an event'); if (!evOn(k)) throw bad(400, 'That event is coming soon'); rate('teams', u.mk, ip); /* ROUND 4 #5: rate limit, the caller goes to the source, 4 s at most, refusals pass through */ const ref = srcRef(EVENTS[k], b); let list; try { list = await teamsOf(k, ref, u); } catch (e) { throw e.status === 403 || e.status === 504 ? e : bad(502, 'Could not load the teams. Try again.'); }
+    if (op === 'teams') { const k = String(b.ev || ''); if (!EVENTS[k]) throw bad(400, 'Pick an event'); if (!evOn(k)) throw bad(400, 'That event is coming soon'); rate('teams', u.mk, ip); /* ROUND 4 #5: rate limit, the caller goes to the source, 4 s at most, refusals pass through */ const ref = srcRef(EVENTS[k], b); let list; try { list = await teamsOf(k, ref, u); } catch (e) { if (e.code === 'underway') { send(res, 200, { teams: [], msg: String(e.message).slice(0, 240), code: 'underway' }); return true; } /* F6: no golfers once the event is under way or over */ throw e.status === 403 || e.status === 504 ? e : bad(502, 'Could not load the teams. Try again.'); }
       send(res, 200, { teams: list.map((t) => ({ id: t.id, name: t.name, abbr: t.abbr, players: (t.players || []).length })) }); return true; }
     if ((op === 'claim' || op === 'guestlink') && CFG.groupOnly) throw bad(404, 'Claim links are not used in group Calcuttas'); // MAIN: a guest is a name on a lot; to own it in the app they join the group
     if (op === 'claim') { // ROUND 4 #7: a guest who signed up opens the claim link the commissioner sent: the guest's teams and buy-backs in THAT Calcutta move to the account
       if (codeBlocked('g|a|' + u.mk) || codeBlocked('g|i|' + ip)) throw bad(429, 'Too many wrong links. Wait 15 minutes.'); rate('claim', u.mk, ip);
       try { const o = await claimGuest(b.token, u.e); send(res, 200, { ok: true, id: o.id, name: o.name }); } catch (e) { if (e.status === 404) { codeFail('g|a|' + u.mk); codeFail('g|i|' + ip); } throw e; } return true; }
-    if (op === 'mine') { const all = await idx(), out = []; Object.keys(all).forEach((id) => { const x = all[id]; if ((x.mks || []).includes(u.mk)) out.push({ id, name: x.name, ev: x.ev, evLabel: (EVENTS[x.ev] || {}).label || '', status: x.status, comm: x.comm === u.mk, created: x.created, group: x.group }); }); out.sort((a, b2) => b2.created - a.created); send(res, 200, { calcs: out.slice(0, 50), max: await maxFor(akOf(u.e), ''), capText: PRICE }); return true; }
+    if (op === 'mine') { const all = await idx(), out = []; Object.keys(all).forEach((id) => { const x = all[id]; if ((x.mks || []).includes(u.mk)) out.push({ id, name: x.name, ev: x.ev, evLabel: (EVENTS[x.ev] || {}).label || '', status: x.status, comm: x.comm === u.mk, joined: true, people: (x.mks || []).length, created: x.created, group: x.group }); }); /* F8: the phone's fallback list when a Calcutta's group is gone (same row shape as list) */ out.sort((a, b2) => b2.created - a.created); send(res, 200, { calcs: out.slice(0, 50), max: await maxFor(akOf(u.e), ''), capText: PRICE }); return true; }
     if (op === 'list') { // MAIN: this group's Calcuttas, for a member of the group (the group page's Calcutta tile)
       const m = await groupOf(b.g, u.e), all = await idx(), gid = String(b.g), out = [];
       Object.keys(all).forEach((id) => { const x = all[id]; if (!x.group || x.group.groupId !== gid) return; const ev = EVENTS[x.ev] || {}; out.push({ id, name: x.name, ev: x.ev, evLabel: ev.label || '', sport: ev.sport || '', status: x.status, comm: x.comm === u.mk, joined: (x.mks || []).includes(u.mk), people: (x.mks || []).length, created: x.created }); });
@@ -689,7 +720,7 @@ async function handle(req, res) {
     if (op === 'create') { rate('create', u.mk, ip); const c = await createCalc(u.e, b); send(res, 200, Object.assign({ calc: full(c, u.mk, now) }, glinks(c._links))); return true; }
     if (op === 'gjoin') { // ROUND 4 B3: a Calcutta attached to a group is joined FROM ITS GROUP: any member of that group, by the Calcutta's id (the group screen has it). { preview: true } = look first.
       rate('join', u.mk, ip); const gid = String(b.id || ''); if (!/^[A-Z2-9]{10}$/.test(gid)) throw bad(404, 'Calcutta not found'); const r0 = await loadRow(gid); if (!r0 || r0.data.deleted || !r0.data.group) throw bad(404, 'Calcutta not found');
-      if (!memberOf(r0.data, u.mk) && !(await groupRole(r0.data.group.groupId, u.mk))) throw bad(403, 'Join the group first: this Calcutta is for its members', { code: 'group' }); await capLoad(r0.data);
+      if (!memberOf(r0.data, u.mk) && !(await groupRole(r0.data.group.groupId, u.mk))) throw bad(404, 'Calcutta not found'); // F10: another group's Calcutta does not exist for you await capLoad(r0.data);
       if (b.preview) { send(res, 200, { calc: full(r0.data, u.mk, now) }); return true; }
       let gm = null; try { gm = await D.grp().memberCheck(r0.data.group.groupId, u.e); } catch (er) { gm = null; } // MAIN: the name the group shows (falls back to the engine's own)
       const c = await joinCalc(gid, u, gm && gm.name ? cleanName(gm.name, 24) || 'Player' : await nameOf(u.e, b.myName), true, now); send(res, 200, { calc: full(c, u.mk, now) }); return true; }
@@ -703,6 +734,9 @@ async function handle(req, res) {
       const c = await joinCalc(id, u, await nameOf(u.e, b.myName), false, now); send(res, 200, { calc: full(c, u.mk, now) }); return true;
     }
     const id = String(b.id || ''); if (!/^[A-Z2-9]{10}$/.test(id)) throw bad(404, 'Calcutta not found');
+    // F10 (review of fc5a111): every route on one Calcutta answers 404 to anyone who is not in it, BEFORE anything is read from a score feed or source
+    // (a bid, a result, a buy-back of another group's Calcutta used to reach the feed first). Joining is the one way in (gjoin, above).
+    { const r0 = await loadRow(id); if (!r0 || r0.data.deleted || !memberOf(r0.data, u.mk)) throw bad(404, 'Calcutta not found'); }
     { const r0 = await loadRow(id); if (r0 && !r0.data.deleted) { const c0 = r0.data; if (!c0.ak && isComm(c0, u.mk) && akOf(u.e)) { try { c0.ak = (await mutCalc(id, (c) => { if (c.ak) return { nochange: true, v: c }; c.ak = akOf(u.e); return c; })).ak; } catch (e) {} } await capLoad(c0); // the shared people limit for this Calcutta
       if (isComm(c0, u.mk) && c0.a.status === 'setup' && (op === 'get' || op === 'state' || op === 'board')) { const e0 = (await idx())[id]; if (!e0 || D.now() - (e0.act || 0) >= DAY) syncIdx(c0).catch(() => {}); } } } // ROUND 3 #7: the commissioner looking at a set-up is activity (and puts a pruned one back)
     if (op === 'get' || op === 'state') {
@@ -720,7 +754,7 @@ async function handle(req, res) {
     if (op === 'bid') {
       rate('bid', u.mk, ip); const amt = Number(b.amt), lot = String(b.lot || ''); const fz = await freezeCheck(id, false); // ROUND 3 #4: never waits on the feed
       if (!(Number.isInteger(amt) && amt > 0 && amt <= 100000)) throw bad(400, 'Bids are whole dollars up to $100,000');
-      const c = await mutCalc(id, (c) => {
+      const c = await mutCalc(id, (c, t) => { // L9: one clock for the bell (settle) and this bid (its time, the new end time)
         const m = memberOf(c, u.mk); if (!m) throw bad(403, 'Join this Calcutta to bid');
         if (c.members.indexOf(m) >= maxOf(c)) throw bad(403, capMsg(c, 'Only the first ' + maxOf(c) + ' people can bid'), { code: 'cap' });
         if (c.rules.mode !== 'live') throw bad(409, 'This Calcutta is entered by the commissioner, not bid live');
@@ -732,8 +766,8 @@ async function handle(req, res) {
         const h = high(c, lot), min = h ? h.amt + c.rules.inc : c.rules.minBid;
         if (h && h.pid === m.pid) throw bad(409, 'You already have the high bid', { code: 'high' });
         if (amt < min) throw bad(409, h ? 'Outbid. The high bid is now $' + h.amt + ' (' + mName(c, h.pid) + '). Next bid at least $' + min + '.' : 'Lowest bid is $' + min, { code: h ? 'outbid' : 'min', high: h ? h.amt : null, min });
-        (c.bids[lot] = c.bids[lot] || []).push({ pid: m.pid, amt, at: now }); if (c.bids[lot].length > 400) c.bids[lot] = c.bids[lot].slice(-400);
-        c.a.endsAt = now + c.rules.timer * 1000; if (!c.locked) { c.locked = true; audit(c, m.name, 'First bid. Rules are locked.'); } c.rev++; return c;
+        (c.bids[lot] = c.bids[lot] || []).push({ pid: m.pid, amt, at: t }); if (c.bids[lot].length > 400) c.bids[lot] = c.bids[lot].slice(-400);
+        c.a.endsAt = t + c.rules.timer * 1000; if (!c.locked) { c.locked = true; audit(c, m.name, 'First bid. Rules are locked.'); } c.rev++; return c;
       });
       send(res, 200, { ok: true, calc: full(c, u.mk, now) }); return true;
     }
@@ -742,17 +776,18 @@ async function handle(req, res) {
       const c = await mutCalc(id, (c) => {
         if (!isComm(c, u.mk)) throw bad(403, 'Only the commissioner runs the auction'); const by = mName(c, memberOf(c, u.mk).pid), a = c.a;
         if (['undo', 'sold', 'next', 'start', 'resume', 'reorder'].includes(what)) frozenIf(c, fz);
-        const tell = (txt) => { audit(c, by, txt); notice(c, by, txt, true); }; // Playbook play 10: Undo / Sold now / Pause reach every member live (notice on the auction screen), not only the history
+        const tell = (txt, x) => { audit(c, by, txt); notice(c, by, txt, true, x); }; // Playbook play 10: Undo / Sold now / Pause reach every member live (notice on the auction screen), not only the history
         if (what === 'start') { if (c.rules.mode !== 'live') throw bad(409, 'This Calcutta is entered by hand'); if (a.status !== 'setup') throw bad(409, 'Already started');
           if (c.rules.order === 'random') { const o = a.order.slice(); for (let i = o.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); [o[i], o[j]] = [o[j], o[i]]; } a.order = o; }
           a.status = 'live'; openNext(c, null); audit(c, by, 'Started the auction'); idxSync = true; }
         else if (what === 'pause') { if (a.status !== 'live' || a.paused) return { nochange: true, v: c }; a.paused = true; a.left = a.endsAt ? Math.max(1000, a.endsAt - D.now()) : null; a.endsAt = null; a.nextLeft = a.nextAt ? Math.max(0, a.nextAt - D.now()) : null; a.nextAt = null; tell('The commissioner paused the auction'); }
         else if (what === 'resume') { if (a.status !== 'live' || !a.paused) return { nochange: true, v: c }; a.paused = false; a.endsAt = a.left != null ? D.now() + a.left : null; a.nextAt = a.nextLeft != null ? D.now() + a.nextLeft : (!a.cur ? D.now() : null); a.left = null; a.nextLeft = null; tell('The commissioner resumed the auction'); }
         else if (what === 'undo') {
-          if (a.cur && (c.bids[a.cur] || []).length) { const x = c.bids[a.cur].pop(); a.endsAt = c.bids[a.cur].length && !a.paused ? D.now() + c.rules.timer * 1000 : null; if (a.paused) a.left = c.bids[a.cur].length ? c.rules.timer * 1000 : null; tell('The commissioner undid a $' + x.amt + ' bid by ' + mName(c, x.pid) + ' on ' + lotOf(c, a.cur).name); }
-          else if (a.just && c.sold[a.just] && c.sold[a.just].how === 'auction') { const lot = a.just, s = c.sold[lot]; delete c.sold[lot]; a.cur = lot; /* REVIEW FIX 6: the bids stay; the winning bid is the high bid again */ a.just = null; a.nextAt = null; a.nextLeft = null; if (a.status === 'closed') { a.status = 'live'; a.closedAt = null; idxSync = true; }
+          const ex = b.expect && typeof b.expect === 'object' ? b.expect : null, CHG = () => bad(409, 'The bids changed. Look again before you undo.', { code: 'changed' }); // M3: the phone names what it means to undo, so a double tap or a bid that just came in never removes the wrong one
+          if (a.cur && (c.bids[a.cur] || []).length) { const top = c.bids[a.cur][c.bids[a.cur].length - 1]; if (ex && (ex.lot != null || String(ex.pid || '') !== top.pid || Number(ex.amt) !== top.amt)) throw CHG(); const x = c.bids[a.cur].pop(); a.endsAt = c.bids[a.cur].length && !a.paused ? D.now() + c.rules.timer * 1000 : null; if (a.paused) a.left = c.bids[a.cur].length ? c.rules.timer * 1000 : null; tell('The commissioner undid a $' + x.amt + ' bid by ' + mName(c, x.pid) + ' on ' + lotOf(c, a.cur).name, { k: 'undo', pid: x.pid, amt: x.amt, lot: a.cur }); }
+          else if (a.just && c.sold[a.just] && c.sold[a.just].how === 'auction') { const lot = a.just, s = c.sold[lot]; if (ex && (ex.pid != null || String(ex.lot || '') !== lot)) throw CHG(); delete c.sold[lot]; a.cur = lot; /* REVIEW FIX 6: the bids stay; the winning bid is the high bid again */ a.just = null; a.nextAt = null; a.nextLeft = null; if (a.status === 'closed') { a.status = 'live'; a.closedAt = null; idxSync = true; }
             a.endsAt = (c.bids[lot] || []).length && !a.paused ? D.now() + c.rules.timer * 1000 : null; if (a.paused) a.left = (c.bids[lot] || []).length ? c.rules.timer * 1000 : null; tell('The commissioner undid the sale of ' + lotOf(c, lot).name + ' ($' + s.amt + '); the lot is back on the block with its bids'); }
-          else throw bad(409, 'Nothing to undo');
+          else throw ex ? CHG() : bad(409, 'Nothing to undo');
         }
         else if (what === 'sold') { if (a.status !== 'live' || !a.cur || !high(c, a.cur)) throw bad(409, 'No bid to sell'); { const h = high(c, a.cur); notice(c, by, 'The commissioner used Sold now: ' + lotOf(c, a.cur).name + ' to ' + mName(c, h.pid) + ' for $' + h.amt, true); } sell(c, a.cur, D.now(), by); if (a.status === 'closed') idxSync = true; }
         else if (what === 'next') { if (a.status !== 'live') throw bad(409, 'The auction is not running'); if (a.cur && high(c, a.cur)) throw bad(409, 'There is a bid on this lot. Sell it or undo the bids first.'); const from = a.cur || a.just; openNext(c, from); a.just = null; if (a.paused) { a.left = null; } audit(c, by, 'Opened ' + lotOf(c, a.cur).name); }
@@ -921,4 +956,4 @@ async function claimGuest(token, userKey) {
 }
 async function reissueGuestToken(calcId, guestId) { let token = null; await mutCalc(String(calcId), (c) => { const gid = String(guestId || '').replace(/^g:/, ''), g = c.guests && Object.prototype.hasOwnProperty.call(c.guests, gid) ? c.guests[gid] : null; if (!g || g.claimed) throw bad(404, 'No such unclaimed guest in this Calcutta'); token = c.id + '-' + rnd(20); g.th = tokHash(token); return c; }); return token; }
 const hooks = {}; // reserved for the manager (e.g. hooks.groupMember(groupId, mk) when membership moves into the group)
-module.exports = { _cfg: CFG, handle, createCalc, attachToGroup, joinFromGroup, wireGroups, groupRole, setPlayersOfRecord, claimGuest, reissueGuestToken, evLocal, potSummary, fixable, seasonFor, statsFor, registerSource, capText: PRICE, startState, hooks, EVENTS, cleanRows, slotAmounts, money, teamResults, parseGames, settle, mkOf, _deps: D, _reset: () => { RL.clear(); RC.clear(); RES.clear(); GC.clear(); GF.clear(); GI.clear(); KICK.clear(); GAMESOF.clear(); PLAYED.clear(); MAXC.clear(); TEAMS.clear(); IDS.map = null; IDXC.at = 0; NAMES = { at: 0, v: {} }; writes = 0; }, _writes: () => writes };
+module.exports = { _cfg: CFG, handle, createCalc, attachToGroup, joinFromGroup, wireGroups, groupRole, setPlayersOfRecord, claimGuest, reissueGuestToken, evLocal, potSummary, fixable, seasonFor, statsFor, registerSource, capText: PRICE, startState, hooks, EVENTS, cleanRows, slotAmounts, money, teamResults, parseGames, settle, mkOf, _deps: D, _reset: () => { RL.clear(); LAPSE.clear(); RC.clear(); RES.clear(); GC.clear(); GF.clear(); GI.clear(); KICK.clear(); GAMESOF.clear(); PLAYED.clear(); MAXC.clear(); TEAMS.clear(); IDS.map = null; IDXC.at = 0; NAMES = { at: 0, v: {} }; writes = 0; }, _writes: () => writes };

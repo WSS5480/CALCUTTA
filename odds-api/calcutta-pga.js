@@ -5,10 +5,15 @@
 //                   ids 'e<eventId>d<yyyymmdd>:p<golferId>': which event and its start day travel with every lot, so the results can be read after
 //                   the scoreboard has moved on to next week's event (scoreboard?dates=<yyyymmdd>, the same read PGA.loadEvent makes).
 //   started(c)   -> true once ESPN shows the event in progress, suspended or final; false before; THROWS when the feed cannot be read (fail closed)
-//   startTime(c) -> the earliest of the event's start date and its first tee time (the engine freezes ownership at that moment at the latest)
+//   startTime(c) -> F5: the first tee time once ESPN lists it; until then the event's start date (midnight Eastern, ESPN's placeholder: the
+//                   engine locks then at the latest). The engine also locks the moment started() is true.
 //   endTime(c)   -> the event's end date
+//   final(c)     -> F2: true once ESPN shows the event final (the engine then treats the Calcutta as over: paid places no lotted golfer took follow
+//                   the unsold rule, and no commissioner correction opens)
 //   results(c)   -> {} until the event is final, except a golfer the FEED flags wd / dq / cut (out). At final: place = the finishing position
-//                   (ties share it: T3, T3 -> 3, 3, the engine splits the places they cover), everyone who did not finish = out.
+//                   (ties share it: T3, T3 -> 3, 3, the engine splits the places they cover), everyone who did not finish = out, and (F3) every
+//                   lotted golfer missing from the final board = out.
+//   teams(q)     -> F6: no golfers once the event is in progress or final (throws 409 code 'underway' with a sentence the phone shows).
 // NOT VERIFIED against the live feed on a tournament week: the field before Thursday, a round in progress, a playoff, the dated read (see pga.js).
 // Nothing here touches money, accounts or messages.
 const PGA = require('../pics/pga.js');
@@ -22,6 +27,7 @@ async function board(url, eventId) {
 const ymd = (ms) => { const d = new Date(ms); return d.getUTCFullYear() + String(d.getUTCMonth() + 1).padStart(2, '0') + String(d.getUTCDate()).padStart(2, '0'); };
 const safe = (s) => String(s == null ? '' : s).replace(/[^\w-]/g, '').slice(0, 20);
 const ID = /^e([\w-]{1,20})d(\d{8}):p([\w-]{1,20})$/;
+const UNDERWAY = (ev) => (ev.status === 'final' ? 'This week\'s Tour event (' + String(ev.name || 'the event').slice(0, 60) + ') is over' : 'This week\'s Tour event (' + String(ev.name || 'the event').slice(0, 60) + ') has already started') + ', so its golfers can\'t be auctioned. Next week\'s field shows here once ESPN lists it (usually Monday or Tuesday).';
 // which event a Calcutta is on: from its lots (every lot carries it)
 function eventOf(c) { for (const l of (c && c.lots) || []) for (const t of l.teams || []) { const m = ID.exec(String(t.id)); if (m) return { id: m[1], day: m[2] }; } return null; }
 async function eventBoard(c) {
@@ -33,17 +39,20 @@ async function eventBoard(c) {
 const source = {
   async teams(q) {
     const p = await board(PGA.SB), ev = p.event; if (!ev || !ev.dates.start || ev.status === 'canceled') return [];
+    if (ev.status === 'in' || ev.status === 'suspended' || ev.status === 'final') throw Object.assign(new Error(UNDERWAY(ev)), { status: 409, code: 'underway' });
     const want = q && q.golf && q.golf.eventId; if (want && String(want) !== safe(ev.id)) return [];
     const pre = 'e' + safe(ev.id) + 'd' + ymd(ev.dates.start) + ':p';
     return p.players.filter((x) => x.status !== 'wd' && x.status !== 'dq' && safe(x.id)).map((x) => ({ id: pre + safe(x.id), name: x.name, abbr: '' }));
   },
   async started(c) { const ev = (await eventBoard(c)).event; return ev.status === 'in' || ev.status === 'suspended' || ev.status === 'final'; },
-  async startTime(c) { const ev = (await eventBoard(c)).event, t = [ev.dates.start, ev.firstTee].filter((v) => Number.isFinite(v) && v > 0); return t.length ? Math.min(...t) : null; },
+  async startTime(c) { const ev = (await eventBoard(c)).event; return Number.isFinite(ev.firstTee) && ev.firstTee > 0 ? ev.firstTee : Number.isFinite(ev.dates.start) && ev.dates.start > 0 ? ev.dates.start : null; },
+  async final(c) { return (await eventBoard(c)).event.status === 'final'; },
   async endTime(c) { const ev = (await eventBoard(c)).event; return ev.dates.end || null; },
   async results(c) {
     const p = await eventBoard(c), e = eventOf(c), pre = 'e' + e.id + 'd' + e.day + ':p', R = {}, fin = p.event.status === 'final';
     p.players.forEach((x) => { const id = pre + safe(x.id); if (x.status !== 'active') { if (fin || x.statusSrc === 'feed') R[id] = { out: true }; return; }
       if (fin) { const m = /\d+/.exec(x.pos || ''); if (m) R[id] = { place: +m[0] }; else R[id] = { out: true }; } });
+    if (fin) ((c && c.lots) || []).forEach((l) => (l.teams || []).forEach((t) => { if (!R[t.id]) R[t.id] = { out: true }; })); // F3: not on the final board = did not finish
     return R;
   },
 };

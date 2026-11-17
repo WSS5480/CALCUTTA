@@ -1,4 +1,5 @@
 // Run: node odds-api/calcutta.test.js   (no network, no database: Supabase, ESPN and sign-in are in-memory fakes; the clock is fake)
+process.env.CALCUTTA_ENABLED = '1'; // ROUND 7 (M2): Calcutta is OFF unless CALCUTTA_ENABLED is exactly "1" (calcutta.round7.test.js checks the switches)
 const assert = require('assert'), http = require('http'), C = require('./calcutta'), D = C._deps;
 // ---- fake database (random delay so parallel requests really interleave) ----
 let db = {}, slow = 0, lost = 0;

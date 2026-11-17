@@ -1,4 +1,5 @@
 // Run: node odds-api/calcutta.round4.test.js   (round 4: the blocking and pre-launch items of the review of calcutta-v1 @4763f98; every check fails on 4763f98)   (no network, no database: Supabase, ESPN and sign-in are in-memory fakes; the clock is fake)
+process.env.CALCUTTA_ENABLED = '1'; // ROUND 7 (M2): Calcutta is OFF unless CALCUTTA_ENABLED is exactly "1" (calcutta.round7.test.js checks the switches)
 const assert = require('assert'), http = require('http'), C = require(process.env.CALC || './calcutta'), D = C._deps;
 // ---- fake database (random delay so parallel requests really interleave) ----
 let db = {}, slow = 0, lost = 0;
@@ -100,7 +101,7 @@ srv.listen(0, async () => {
   await chk('B1c a plugged source is feed-backed too: no hand result until 24 h after its scheduled end with nothing from the source; the source overwrites the correction', async () => { fresh('2026-11-17T18:00:00Z');
     const S = { t0: NOW + 2 * DAYMS, R: {} }; C.registerSource('golf', { teams: async () => [{ id: 'g1', name: 'Golfer A' }, { id: 'g2', name: 'Golfer B' }], results: async () => S.R, startTime: async () => S.t0, endTime: async () => S.t0 + 3 * DAYMS });
     r = await call('ann', 'create', { name: 'Tour', ev: 'golf', lots: ['g1', 'g2'].map((id) => ({ teams: [{ id, name: id }] })), rows: [{ k: 'place', r: 1, n: 1, pct: 100 }], minBid: 5, inc: 5, take: { kind: 'none' }, order: 'listed', mode: 'manual' }); ok(r); const c = r.j.calc; ok(await call('bob', 'join', { code: c.code }));
-    ok(await call('ann', 'enter', { id: c.id, lot: 'L1', name: 'Al', amt: 50 })); ok(await call('ann', 'enter', { id: c.id, lot: 'L2', name: 'Bo', amt: 50 }));
+    ok(await call('ann', 'enter', { id: c.id, lot: 'L1', name: 'Al', amt: 50 })); /* ROUND 7 (H3): the confirmer owns a different sold lot with his own account */ ok(await call('ann', 'enter', { id: c.id, lot: 'L2', pid: await pidOf('bob', c.id), amt: 50 }));
     r = await call('ann', 'result', { id: c.id, team: 'g1', place: 1, confirm: true, reason: 'typed at the bar' }); assert.deepStrictEqual([r.s, r.j.code], [409, 'feedonly'], 'before the event');
     NOW = S.t0 + 3 * DAYMS + 23 * H; tick(1); r = await call('ann', 'result', { id: c.id, team: 'g1', place: 1, reason: 'typed at the bar' }); assert.strictEqual(r.j.code, 'feedonly', '23 h after the end');
     NOW = S.t0 + 4 * DAYMS + 60e3; ok(await call('ann', 'result', { id: c.id, team: 'g1', place: 1, reason: 'The tour feed is stuck' })); ok(await call('bob', 'corrok', { id: c.id, ref: 's:g1' })); /* ROUND 6 (B1): 1st place is only proposed until another member confirms */ r = await call('bob', 'board', { id: c.id }); assert.deepStrictEqual([r.j.board.lots[0].earned, r.j.board.lots[0].teams[0].r.corr], [100, true]);

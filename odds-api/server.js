@@ -60,6 +60,9 @@ tickLines();
 // Price log (Kalshi + books + ESPN line, every 20 min) for measuring book-vs-Kalshi gaps after the season
 const PL = require('./pricelog.js'); const plTick = () => PL.tick(LINES, require('./games')).catch((e) => console.error('pricelog:', e.message));
 setInterval(plTick, 20 * 60 * 1000); setTimeout(plTick, 90 * 1000);
+// Groups (Phase 1, dark): light tick so the server re-reads running contests' group bets and their pregame prices before kickoff (groups.js spaces it: every
+// 5 min in game windows, else every 30). Does NOTHING unless GROUPS_ENABLED=1 (checked here and again inside tick()). Needs Supabase.
+if (process.env.SUPABASE_URL) { setInterval(() => { if (process.env.GROUPS_ENABLED !== '1') return; try { require('./groups').tick().catch((e) => console.error('groups tick:', e && e.message)); } catch (e) { console.error('groups tick:', e && e.message); } }, 5 * 60 * 1000); }
 // Free Render services sleep when idle; ping our own public URL so the tick keeps running (set KEEP_AWAKE=0 to turn off)
 if (process.env.RENDER_EXTERNAL_URL && process.env.KEEP_AWAKE !== '0') {
   setInterval(() => fetch(process.env.RENDER_EXTERNAL_URL + '/health').catch(() => {}), 10 * 60 * 1000);
@@ -85,6 +88,9 @@ http.createServer(async (req, res) => {
   if (req.url.startsWith('/propideas')) { try { if (await require('./propideas').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"prop ideas error"}'); } }
   if (req.url.startsWith('/appcfg')) { try { if (await require('./appcfg').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"appcfg error"}'); } }
   if (req.url.startsWith('/courts')) { try { if (await require('./courts').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"court search error"}'); } }
+  // Groups (Phase 1, dark): every /groups/* answer is decided by the switches at the top of groups.js handle() (GROUPS_ENABLED, GROUPS_OWNER_ONLY, GROUPS_TESTERS).
+  // If groups.js itself cannot load while Groups is off, the bet-status question still gets the safe "not in a group" answer (a failing status call must never block a bet).
+  if (req.url.startsWith('/groups')) { try { if (await require('./groups').handle(req, res)) return; } catch (e) { console.error('groups:', e && e.message); res.setHeader('Access-Control-Allow-Origin', '*'); if (process.env.GROUPS_ENABLED !== '1' && req.url.split('?')[0] === '/groups/bet/status') return res.end('{"betLock":0,"canBet":false,"saved":false}'); res.statusCode = 500; return res.end('{"error":"groups error"}'); } }
   if (req.url.startsWith('/locks')) { try { if (await require('./locks').handle(req, res)) return; } catch (e) { res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500; return res.end('{"error":"lock error"}'); } }
   if (req.url.startsWith('/games')) { res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json'); res.setHeader('Cache-Control', 'public, max-age=120'); try { const g = await require('./games').get('nfl', NAMES); return res.end(JSON.stringify({ updated: g.updated, remaining: g.remaining, games: g.games })); } catch (e) { res.statusCode = 502; return res.end(JSON.stringify({ error: e.message })); } }
   if (req.url.startsWith('/lines')) { res.setHeader('Cache-Control', 'public, max-age=60'); return res.end(JSON.stringify(LINES)); }

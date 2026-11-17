@@ -155,6 +155,16 @@ html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
 .tpt button{flex:1 1 30%;min-height:44px;padding:6px 8px;border:1px solid var(--line);border-radius:999px;background:none;color:inherit;font:600 14px system-ui}.tpt button.on{background:rgba(124,58,237,.3);border-color:rgba(124,58,237,.9);font-weight:800}
 .tpb{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:8px 12px calc(28px + env(safe-area-inset-bottom));line-height:1.35}
 [data-team]{cursor:pointer}.ngt .t[data-team],.gtm[data-team]{position:relative}.ngt .t[data-team]::after,.gtm[data-team]::after{content:"";position:absolute;inset:-8px -4px}span.tmt{position:relative;text-decoration:underline dotted;text-underline-offset:3px;text-decoration-color:rgba(160,160,200,.55)}span.tmt::after{content:"";position:absolute;left:-5px;right:-5px;top:50%;height:40px;transform:translateY(-50%)}
+/* v258: League + View menus (they replace the two pill rows) and the Standings / Team stats / Season views */
+.mrow{display:flex;gap:8px;align-items:flex-end;margin:86px 0 6px;max-width:100%}.mrow label{flex:1 1 0;min-width:0;max-width:260px;display:block}.mrow label>span{display:block;font:700 10px/1 system-ui;letter-spacing:.12em;text-transform:uppercase;color:#fff;opacity:.78;margin:0 0 4px 3px}
+.mrow select{display:block;width:100%;min-height:44px;padding:9px 10px;border:1px solid rgba(255,255,255,.55);border-radius:12px;background:rgba(0,0,0,.28);color:#fff;font:700 15px system-ui;box-sizing:border-box;cursor:pointer;text-overflow:ellipsis}.mrow select option{color:#111;background:#fff}html.cb .mrow select{background:rgba(4,30,66,.55);border-color:rgba(198,203,215,.5)}
+@media (min-width:900px){header .mrow{margin-top:30px}}
+.nvtg{display:flex;gap:8px;margin:8px 0}.nvtg button{flex:1 1 0;min-width:0;min-height:44px;padding:6px 8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:12px;font:700 14px system-ui;cursor:pointer}.nvtg button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.nvgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,400px),1fr));gap:10px;margin:8px 0;align-items:start}.nvgrid.nvgg{grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}.nvc{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 8px;min-width:0}.nvc h4{margin:0 4px 2px;font:800 14px system-ui}
+.nvt{width:100%;border-collapse:collapse;font-size:14px}.nvt th,.nvt td{padding:11px 3px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.nvt th{padding:6px 3px;font-weight:600;font-size:12px;color:var(--muted)}.nvt .l{text-align:left}.nvt td.l{white-space:normal}.nvt tr:last-child td{border-bottom:0}.nvt tr[data-team],.nvt tr[onclick]{cursor:pointer}.nvt td.nm{white-space:normal;overflow-wrap:anywhere}
+.nvt tr.nvcut td{padding:5px 3px;text-align:left;font:700 11px system-ui;letter-spacing:.05em;text-transform:uppercase;color:#f5c542;border-bottom:2px dashed #f5c542}.nvw{display:none}@media (min-width:560px){.nvw{display:inline}}
+.nvb{min-height:40px;margin-left:6px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:10px;padding:8px 14px;font:700 13px system-ui;cursor:pointer}
+.nvg{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 12px;min-width:0;cursor:pointer}.nvg .r{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:15px;line-height:1.5}.nvg .r b.n,.nvg .r span.n{font-variant-numeric:tabular-nums}.nvg .f{margin-top:4px;padding-top:6px;border-top:1px solid var(--line);font-size:13px;color:var(--muted);overflow-wrap:anywhere}
 /* desktop view */
 @media (min-width:900px){
 main{max-width:1200px}header{max-width:none!important;margin-left:0!important;margin-right:0!important}
@@ -224,18 +234,18 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v257 -->
+<!-- Pics v258 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v257</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v258</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
   <div id="arbbar" class="arbbar" hidden onclick="arbBarTap()" role="button" aria-label="Arbitrage alert"><span class="mq" id="arbmq"></span></div>
-  <div class="lg"><button data-lg="nfl">NFL</button><button data-lg="cfb">NCAA</button><button onclick="location.href='pickleball.html'">🏓 Pickleball</button><button data-sp="nba">NBA</button><button data-sp="mlb">MLB</button><button data-sp="nhl">NHL</button><button data-sp="ncaab">NCAAB</button></div>
+  <div class="mrow" id="mrow"><label><span>League</span><select id="lgsel" aria-label="League" autocomplete="off"><option value="nfl">🏈 NFL</option><option value="cfb">🎓 NCAA</option><option value="pickleball">🏓 Pickleball</option><option value="nba">🏀 NBA</option><option value="mlb">⚾ MLB</option><option value="nhl">🏒 NHL</option><option value="ncaab">🏀 NCAAB</option></select></label><label id="gvlab"><span>View</span><select id="gvsel" aria-label="View" autocomplete="off" onchange="gvSet(this.value)"></select></label></div>
   <div class="srow"><input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team"><select id="conf" aria-label="Conference"><option value="">All</option></select></div>
   <select id="team" aria-label="Team" hidden><option value="">All teams</option></select>
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v257 (several bet screenshots at once)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v258 (menus · standings · team stats · season)</div>
   <div class="sub nsw" id="nsw"></div>
   </details>
 </header>
@@ -245,7 +255,6 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <div id="survpage" hidden></div>
   <div class="rail" id="rail"></div><div class="dots" id="dots"></div>
   <div id="tban"></div>
-  <div class="gvbar" id="gvbar"></div>
   <div id="nb"></div>
   <div class="sums" id="sums"></div>
   <div id="list"></div>
@@ -254,7 +263,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </div>
 <div id="plb" hidden></div>
 <nav class="bn" id="bn"></nav>
-<script src="trophy.js?v=257"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
+<script src="trophy.js?v=258"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
 <script>
 const SC = document.getElementById('sc');
 // The page scrolls inside #sc so the banner and bottom bar (outside it) can never drift on iOS
@@ -404,9 +413,12 @@ function openGame(id) {
 let STYLE = (() => { try { return localStorage.getItem('pics-style') === 'classic' ? 'classic' : 'new'; } catch (e) { return 'new'; } })();
 function styleSet(v) { try { localStorage.setItem('pics-style', v); } catch (e) {} location.reload(); }
 let WKV = null, NFILT = 'all', NST = '';
-const GVS = [['games', 'Games'], ['stats', 'Stats'], ['best', 'Best odds'], ['moves', 'Line moves'], ['results', 'Results'], ['rest', 'Rest of season']];
+const NVK = ['stand', 'tstats', 'season']; // v258: Standings / Team stats / Season (NFL only: college standings and stats come in another shape)
+const GVS = [['games', 'Games'], ['stats', 'Stats'], ['best', 'Best odds'], ['moves', 'Line moves'], ['results', 'Results'], ['rest', 'Rest of season']].concat(CFB ? [] : [['stand', 'Standings'], ['tstats', 'Team stats'], ['season', 'Season']]);
 let GV = (() => { try { const v = localStorage.getItem('pics-gv'); return GVS.some((x) => x[0] === v) ? v : 'games'; } catch (e) { return 'games'; } })();
-function gvSet(k) { GV = k; try { localStorage.setItem('pics-gv', k); } catch (e) {} render(true); }
+function gvSet(k) { if (!GVS.some((x) => x[0] === k)) return; GV = k; try { localStorage.setItem('pics-gv', k); } catch (e) {} render(true); }
+// v258: the View menu (a real <select>, was the pill row #gvbar). Options are written once; the shown value follows GV.
+function gvMenu() { const s = $('#gvsel'); if (!s) return; if (!s.options.length) s.innerHTML = GVS.map(([k, l]) => `<option value="${k}">${l}</option>`).join(''); if (s.value !== GV) s.value = GV; }
 const gvHide = (sel) => STYLE === 'new' && (sel === '#rail' || sel === '#dots' || (sel === '#nb' && GV !== 'games') || (sel === '#sums' && GV !== 'stats' && GV !== 'results') || (sel === '#list' && GV === 'games'));
 function nGo(n) { WKV = (WKV == null ? CUR : WKV) + n; render(); }
 function nSet(f) { NFILT = f; render(); }
@@ -523,7 +535,7 @@ const gameCard = (g, noBet) => {
 function livePageRender(games) {
   const el = $('#livepage'); if (!el) return;
   const on = VIEW === 'live';
-  el.hidden = !on; ['#nb', '#sums', '#list', '#rail', '#dots'].forEach((s) => { const n = $(s); if (n) n.hidden = VIEW !== 'main' || gvHide(s); }); { const gb = $('#gvbar'); if (gb) gb.hidden = VIEW !== 'main' || STYLE !== 'new'; }
+  el.hidden = !on; ['#nb', '#sums', '#list', '#rail', '#dots'].forEach((s) => { const n = $(s); if (n) n.hidden = VIEW !== 'main' || gvHide(s); }); { const gb = $('#gvlab'); if (gb) gb.hidden = VIEW !== 'main' || STYLE !== 'new'; }
   const bp = $('#betspage'); if (bp) { bp.hidden = VIEW !== 'bets'; document.body.classList.add('bets'); const pb = $('#plb'); if (pb) pb.hidden = false; betsRender(); }
   { const sp = $('#survpage'); if (sp) { sp.hidden = VIEW !== 'surv'; if (VIEW === 'surv') survRender(); } }
   if (!on) return;
@@ -620,7 +632,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) xlSp
 SC.addEventListener('scroll', () => { window.__scrollAt = Date.now(); }, { passive: true });
 // The TODAY banner floats top-right. It stays in the header's empty corner; once the page scrolls far enough that the
 // sport chips (and everything under them) would slide beneath it, it tucks away, and comes back when you scroll to the top.
-function plbFit() { const pb = $('#plb'), lg = document.querySelector('header .lg'); if (!pb || !lg || pb.hidden || window.__plbo) return; /* open list is taller: measuring it would hide the banner it just opened */ const under = lg.getBoundingClientRect().top < pb.offsetTop + pb.offsetHeight + 6; pb.classList.toggle('away', under); }
+function plbFit() { const pb = $('#plb'), lg = document.querySelector('header .mrow'); if (!pb || !lg || pb.hidden || window.__plbo) return; /* open list is taller: measuring it would hide the banner it just opened */ const under = lg.getBoundingClientRect().top < pb.offsetTop + pb.offsetHeight + 6; pb.classList.toggle('away', under); }
 SC.addEventListener('scroll', () => { if (window.__plbf) return; window.__plbf = requestAnimationFrame(() => { window.__plbf = 0; plbFit(); }); }, { passive: true });
 window.addEventListener('resize', () => plbFit());
 document.addEventListener('click', () => { window.__scrollAt = 0; }, true); // a tap is deliberate: don't make its own re-render wait out the scroll guard
@@ -1782,7 +1794,7 @@ async function alertPush() {
   ASQ = Date.now();
   try { const r = await fetch(ALU, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': alertTok() }, body: JSON.stringify({ week: CUR, rec: { lock: a.lock, dogs: a.dogs, helper: { id: h.g.id, abbr: h.abbr, conf: h.conf } } }) }); if (!r.ok) return; const j = await r.json(); if (j && j.rec && j.week === CUR && alertTake(Object.assign({}, ASV, { [CUR]: j.rec }))) render(); } catch (e) {}
 }
-async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=257')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
+async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=258')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
 const trGrade = (p) => { const g = ALL[p.id]; if (!g || g.state !== 'post') return null; const m = (g.home.abbr === p.abbr ? 1 : -1) * (g.home.score - g.away.score) + p.line; return m === 0 ? 'push' : m > 0 ? 'hit' : 'miss'; };
 function trophyData() {
   if (CFB || !window.Trophy || !Trophy.ready()) return null;
@@ -1922,18 +1934,16 @@ async function tpGet(u) { const ctl = new AbortController(), to = setTimeout(() 
 // slot = { t, j, err, busy }. Fetches once per 10 minutes; repaints the page when it lands.
 function tpNeed(slot, url, a) {
   if (slot.busy || (slot.t && Date.now() - slot.t < TPTTL && (slot.j || slot.err))) return; slot.busy = true; slot.err = false;
-  tpGet(url).then((j) => { slot.j = j; slot.err = false; }).catch(() => { slot.err = true; }).then(() => { slot.busy = false; slot.t = Date.now(); if (TPS.length && (!a || TPS[TPS.length - 1] === a)) tpPaint(); });
+  tpGet(url).then((j) => { slot.j = j; slot.err = false; }).catch(() => { slot.err = true; }).then(() => { slot.busy = false; slot.t = Date.now(); if (TPS.length && (!a || TPS[TPS.length - 1] === a)) tpPaint(); try { nvLanded(); } catch (e) {} });
 }
 const tpSlot = (a, k) => { const c = (TPC[a] = TPC[a] || {}); return (c[k] = c[k] || { t: 0, j: null, err: false, busy: false }); };
 const tpWait = (slot, what) => (slot.j ? '' : slot.err ? `<div class="note">${what} not available right now. <a onclick="tpRetry()" style="cursor:pointer;text-decoration:underline">Try again</a></div>` : `<div class="note">Loading ${what.toLowerCase()}…</div>`);
 function tpRetry() { const a = TPS[TPS.length - 1]; if (!a) return; Object.values(TPC[a] || {}).forEach((x) => { if (x.err) x.t = 0; }); if (TPST && TPST.err) TPST.t = 0; tpPaint(); }
 const tpStand = () => { TPST = TPST || { t: 0, j: null, err: false, busy: false }; tpNeed(TPST, 'https://site.api.espn.com/apis/v2/sports/football/nfl/standings?level=3', ''); return TPST; };
 // ESPN standings -> the team's division: { name, rows: [{ abbr, name, s: { statName: displayValue } }], place }
-function tpDiv(a) {
-  const j = TPST && TPST.j; if (!j) return null; let out = null;
-  (j.children || []).forEach((c) => (c.children || []).forEach((d) => { const E = ((d.standings || {}).entries || []).map((e) => ({ abbr: ab((e.team || {}).abbreviation || ''), name: (e.team || {}).shortDisplayName || (e.team || {}).displayName || '', s: Object.fromEntries((e.stats || []).map((x) => [x.name || x.type, x.displayValue])) })); const i = E.findIndex((e) => e.abbr === a); if (i >= 0) out = { name: d.name || '', rows: E, place: i + 1 }; }));
-  return out;
-}
+// ESPN standings, whole league: [{ conf: 'AFC', name, divs: [{ name, rows: [{ abbr, name, s: { statName: displayValue } }] }] }] (divisions and teams already in ESPN's rank order)
+function tpStAll() { const j = TPST && TPST.j; if (!j) return null; return (j.children || []).map((c) => ({ conf: c.abbreviation || c.name || '', name: c.name || '', divs: (c.children || []).map((d) => ({ name: d.name || '', rows: ((d.standings || {}).entries || []).map((e) => ({ abbr: ab((e.team || {}).abbreviation || ''), name: (e.team || {}).shortDisplayName || (e.team || {}).displayName || '', s: Object.fromEntries((e.stats || []).map((x) => [x.name || x.type, x.displayValue])) })) })) })); }
+function tpDiv(a) { let out = null; (tpStAll() || []).forEach((c) => c.divs.forEach((d) => { const i = d.rows.findIndex((e) => e.abbr === a); if (i >= 0) out = { name: d.name, rows: d.rows, place: i + 1 }; })); return out; }
 const tpOrd = (n) => n + (['th', 'st', 'nd', 'rd'][n % 100 > 10 && n % 100 < 14 ? 0 : n % 10] || 'th');
 function tpOpen(a) { if (CFB || !a) return; a = ab(String(a)); if (TPS[TPS.length - 1] !== a) TPS.push(a); TPT = 'games'; const sh = document.getElementById('infosheet'); if (sh) sh.style.zIndex = ''; tpPaint(true); }
 function tpBack() { TPS.pop(); if (!TPS.length) return tpClose(); TPT = 'games'; tpPaint(true); }
@@ -2000,6 +2010,78 @@ function tpPaint(top) {
   const old = e.querySelector('.tpb'), y = old && !top ? old.scrollTop : 0;
   e.innerHTML = `<div class="tpw"><div class="tph" style="background:linear-gradient(135deg,${col},#0b0f17 140%)"><button onclick="tpBack()" aria-label="Back">‹ Back</button><div class="tpn"><b>${escH(t.name || NAMES[a] || a)}</b><small>${tpWL(rec)}${d ? ' · ' + tpOrd(d.place) + ' ' + escH(dn) : dn ? ' · ' + escH(dn) : ''}${st.busy && !d ? ' · …' : ''}</small></div><button onclick="tpClose()" aria-label="Close">✕</button></div><div class="tpt">${TPTABS.map(([k, l]) => `<button class="${TPT === k ? 'on' : ''}" onclick="tpTab('${k}')">${l}</button>`).join('')}</div><div class="tpb">${body}</div></div>`;
   e.hidden = false; const nb = e.querySelector('.tpb'); if (nb) nb.scrollTop = y;
+}
+// --- v258: Standings / Team stats / Season, three views in the View menu (NFL only). They draw into #list like Stats / Results do.
+// Standings reuse the team page's fetch and cache (tpStand / TPST); team stats are ONE league-wide ESPN request (NVTS) through the same tpNeed / tpGet (12 s timeout, kept 10 minutes).
+let NVM = (() => { try { return localStorage.getItem('pics-nvm') === 'conf' ? 'conf' : 'div'; } catch (e) { return 'div'; } })(), NVS = (() => { try { return localStorage.getItem('pics-nvs') || 'ppg'; } catch (e) { return 'ppg'; } })(), NVW = null, NVTS = null;
+const NVSURL = 'https://site.api.espn.com/apis/common/v3/sports/football/nfl/statistics/byteam';
+// [key, menu label, column header, feed category, split ('0' = the team, '900' = its opponents), stat name, 1 = higher is better]
+const NVSTATS = [['ppg', 'Points per game', 'Pts/G', 'passing', '0', 'totalPointsPerGame', 1], ['papg', 'Points allowed per game', 'Allowed/G', 'passing', '900', 'totalPointsPerGame', 0], ['ypg', 'Total yards per game', 'Yds/G', 'passing', '0', 'netYardsPerGame', 1], ['pass', 'Passing yards per game', 'Pass/G', 'passing', '0', 'netPassingYardsPerGame', 1], ['rush', 'Rushing yards per game', 'Rush/G', 'rushing', '0', 'rushingYardsPerGame', 1], ['yapg', 'Yards allowed per game', 'Allowed/G', 'passing', '900', 'netYardsPerGame', 0], ['tom', 'Turnover margin', 'Margin', 'miscellaneous', '0', 'turnOverDifferential', 1], ['take', 'Takeaways', 'Takeaways', 'miscellaneous', '0', 'totalTakeaways', 1], ['give', 'Giveaways', 'Giveaways', 'miscellaneous', '0', 'totalGiveaways', 0], ['third', '3rd down %', '3rd %', 'miscellaneous', '0', 'thirdDownConvPct', 1], ['sacks', 'Sacks by the defense', 'Sacks', 'passing', '900', 'sacks', 1], ['sacked', 'Sacks allowed', 'Sacked', 'passing', '0', 'sacks', 0]];
+const nvIs = () => VIEW === 'main' && STYLE === 'new' && NVK.includes(GV);
+function nvLanded() { if (nvIs()) render(); } // a standings / team stats answer (or failure) has landed
+function nvRetry() { [TPST, NVTS].forEach((x) => { if (x && !x.busy) x.t = 0; }); render(); }
+const nvAgain = '<button class="nvb" onclick="nvRetry()">Try again</button>';
+const nvWait = (slot, what) => (slot.err ? `<div class="note">${what} not available right now. ${nvAgain}</div>` : `<div class="note">Loading ${what.toLowerCase()}…</div>`);
+function nvMode(m) { NVM = m === 'conf' ? 'conf' : 'div'; try { localStorage.setItem('pics-nvm', NVM); } catch (e) {} render(); }
+function nvStat(k) { NVS = k; try { localStorage.setItem('pics-nvs', k); } catch (e) {} render(); }
+function nvWeek(n) { NVW = +n || null; render(); }
+function nvTeam(a, tab) { if (!a) return; tpOpen(a); if (tab && tab !== 'games') tpTab(tab); }
+function nvTeamPick(sel) { const a = sel.value; sel.value = ''; nvTeam(a, 'games'); }
+const nvTeams = () => [...new Set(Object.values(ALL).filter((g) => g.week >= 1 && g.week <= 18 && g.state !== 'canceled').flatMap((g) => [g.home.abbr, g.away.abbr]))].sort((x, y) => nvName(x).localeCompare(nvName(y)));
+const nvName = (a) => { try { return nm(a) || a; } catch (e) { return NAMES[a] || a; } };
+// ---- Standings: eight divisions grouped by conference, or each conference as one seeded list with the playoff line (ESPN gives playoffSeed).
+function nvStandHtml() {
+  const st = tpStand(), C = (tpStAll() || []).filter((c) => c.divs.some((d) => d.rows.length)), head = '<div class="gh">Standings</div>';
+  if (!C.length) return head + (st.j && !st.busy ? `<div class="note">Standings are not available right now. ${nvAgain}</div>` : nvWait(st, 'Standings'));
+  const all = C.flatMap((c) => c.divs.flatMap((d) => d.rows)), seeded = all.every((r) => +r.s.playoffSeed > 0), strk = all.some((r) => r.s.streak), conf = NVM === 'conf' && seeded;
+  const v = (r, k) => escH(r.s[k] === undefined || r.s[k] === '' ? '–' : r.s[k]), cols = `<th>W-L-T</th><th>Pct</th><th>Div</th><th>PF</th><th>PA</th>${strk ? '<th>Strk</th>' : ''}`, n = 6 + (strk ? 1 : 0);
+  const row = (r, i) => `<tr${tpAt(r.abbr)}><td class="l">${i}. <b>${escH(r.abbr)}</b><span class="nvw"> ${escH(r.name)}</span> <span class="sub">›</span></td><td>${v(r, 'wins')}-${v(r, 'losses')}-${v(r, 'ties')}</td><td>${v(r, 'winPercent')}</td><td>${v(r, 'divisionRecord')}</td><td>${v(r, 'pointsFor')}</td><td>${v(r, 'pointsAgainst')}</td>${strk ? `<td>${v(r, 'streak')}</td>` : ''}</tr>`;
+  const tbl = (first, body) => `<table class="nvt"><tr><th class="l">${first}</th>${cols}</tr>${body}</table>`;
+  const tg = seeded ? `<div class="nvtg" role="group" aria-label="Standings layout"><button class="${conf ? '' : 'on'}" aria-pressed="${!conf}" onclick="nvMode('div')">By division</button><button class="${conf ? 'on' : ''}" aria-pressed="${conf}" onclick="nvMode('conf')">Conference seeds</button></div>` : '';
+  const body = conf
+    ? `<div class="nvgrid">${C.map((c) => { const R = c.divs.flatMap((d) => d.rows).sort((x, y) => +x.s.playoffSeed - +y.s.playoffSeed); return `<div class="nvc"><h4>${escH(c.conf)} · seeds 1 to ${R.length}</h4>${tbl('Seed', R.map((r) => row(r, +r.s.playoffSeed) + (+r.s.playoffSeed === 7 && R.length > 7 ? `<tr class="nvcut"><td colspan="${n}">▲ Playoff line: the top 7 are in as it stands</td></tr>` : '')).join(''))}</div>`; }).join('')}</div>`
+    : C.map((c) => `<div class="gh" style="margin-top:14px">${escH(c.conf)}</div><div class="nvgrid">${c.divs.map((d) => `<div class="nvc"><h4>${escH(d.name)}</h4>${tbl('Team', d.rows.map((r, i) => row(r, i + 1)).join(''))}</div>`).join('')}</div>`).join('');
+  return head + tg + body + `<div class="sub" style="margin-top:8px">Div = record inside the division. PF / PA = points for and against.${strk ? ' Strk = current streak.' : ''}${conf ? ' Seeds are ESPN\'s as of now: 1 to 4 lead their divisions, 5 to 7 are the wild cards.' : ''} Tap a team to open its page. Standings from ESPN${st.busy ? ' · refreshing…' : ''}.</div>`;
+}
+// ---- Team stats: one stat for all 32 teams, ranked, next to each team's record against the spread (the same lines the team page uses).
+const nvStatSlot = () => { NVTS = NVTS || { t: 0, j: null, err: false, busy: false }; tpNeed(NVTS, NVSURL, ''); return NVTS; };
+// One stat for every team in the feed: { ABBR: { v: number, d: text as ESPN prints it } }. Values are read by position: the league-level names list gives the index.
+function nvStatVals(def) {
+  const j = NVTS && NVTS.j, out = {}; if (!j) return out; const lc = (j.categories || []).find((c) => c.name === def[3]), i = lc ? (lc.names || []).indexOf(def[5]) : -1; if (i < 0) return out;
+  (j.teams || []).forEach((t) => { const a = ab((t.team || {}).abbreviation || ''), opp = def[4] === '900', c = (t.categories || []).find((x) => x.name === def[3] && (x.splitId !== undefined ? String(x.splitId) === def[4] : /^Opponent/i.test(x.displayName || '') === opp)); if (!a || !c || !c.values || c.values[i] === null || c.values[i] === undefined) return; const val = +c.values[i]; if (!Number.isFinite(val)) return; out[a] = { v: val, d: c.totals && c.totals[i] !== undefined && c.totals[i] !== null ? String(c.totals[i]) : String(Math.round(val * 10) / 10) }; });
+  return out;
+}
+function nvStatsHtml() {
+  const sl = nvStatSlot(), head = '<div class="gh">Team stats</div>', feed = sl.j && Array.isArray(sl.j.teams) && sl.j.teams.length ? sl.j : null;
+  const defs = feed ? NVSTATS.filter((d) => Object.keys(nvStatVals(d)).length) : [], ats = NVS === 'ats' || !defs.length, def = ats ? null : (defs.find((d) => d[0] === NVS) || defs[0]);
+  const T = [...new Set([...nvTeams(), ...(feed ? feed.teams.map((t) => ab((t.team || {}).abbreviation || '')).filter(Boolean) : [])])], rec = {}; T.forEach((a) => { rec[a] = tpRec(tpGames(a).map((g) => tpRow(g, a))); });
+  const state = feed ? (defs.length ? '' : `<div class="note">Team stats are not available right now. ${nvAgain}</div>`) : sl.j && !sl.busy ? `<div class="note">Team stats are not available right now. ${nvAgain}</div>` : nvWait(sl, 'Team stats');
+  if (!T.length) return head + state;
+  const aT = (r) => r.ats.w + '-' + r.ats.l + (r.ats.p ? '-' + r.ats.p : ''), aP = (r) => (r.ats.w + r.ats.l ? r.ats.w / (r.ats.w + r.ats.l) : null);
+  const V = def ? nvStatVals(def) : {}, val = (a) => (def ? (V[a] ? V[a].v : null) : aP(rec[a])), hi = def ? def[6] : 1;
+  const L = T.slice().sort((x, y) => { const a = val(x), b = val(y); if (a === null || b === null) return (a === null) - (b === null) || nvName(x).localeCompare(nvName(y)); return (hi ? b - a : a - b) || (def ? 0 : rec[y].ats.w - rec[x].ats.w) || nvName(x).localeCompare(nvName(y)); });
+  let rk = 0; const ranks = L.map((a, i) => { const x = val(a); if (x === null) return ''; if (i && val(L[i - 1]) === x && (def || rec[L[i - 1]].ats.w === rec[a].ats.w)) return rk; rk = i + 1; return rk; });
+  const pick = `<div class="swk"><label for="nvstat">Rank by</label><select id="nvstat" onchange="nvStat(this.value)">${defs.map((d) => `<option value="${d[0]}" ${def === d ? 'selected' : ''}>${d[1]}</option>`).join('')}<option value="ats" ${ats ? 'selected' : ''}>Record against the spread</option></select></div>`;
+  const show = (a) => { if (!def) { const p = aP(rec[a]); return p === null ? '–' : Math.round(p * 100) + '%'; } const x = V[a]; if (!x) return '–'; return def[0] === 'tom' && x.v > 0 ? '+' + x.d : def[0] === 'third' ? x.d + '%' : x.d; };
+  const rows = L.map((a, i) => `<tr onclick="nvTeam('${escH(a)}','stats')"><td class="l">${ranks[i] === '' ? '–' : ranks[i]}</td><td class="l nm"><b>${escH(a)}</b><span class="nvw"> ${escH(nvName(a))}</span> <span class="sub">${tpWL(rec[a].su)} ›</span></td><td><b>${escH(show(a))}</b></td><td>${aT(rec[a])}</td></tr>`).join('');
+  const have = feed ? Object.keys(V).length : 0, part = def && have < T.length ? `<div class="note">ESPN's feed has this stat for ${have} of ${T.length} teams right now; the others are at the bottom. ${nvAgain}</div>` : '';
+  return head + pick + state + part + `<div class="nvc" style="margin:8px 0"><table class="nvt"><tr><th class="l">#</th><th class="l">Team</th><th>${def ? def[2] : 'Cover %'}</th><th>Vs spread</th></tr>${rows}</table></div><div class="sub" style="margin-top:8px">${def ? escH(def[1]) + ': ' + (hi ? 'most' : 'fewest') + ' first, season to date, from ESPN. ' : 'Cover % = spread wins out of spread wins and losses (pushes left out). '}Vs spread = the team's record against the spread in games played (closing line), W-L-push: a fact about results, not a pick. The small record by each team is wins and losses. ${ALLW ? '' : 'The season is still loading on this phone, so the records are still filling in. '}Tap a team for its stats page${sl.busy && feed ? ' · refreshing…' : ''}.</div>`;
+}
+// ---- Season: open any team's schedule (the team page's Games tab), plus the league scoreboard for any week from a week picker (not the Games board's ◀ ▶ bar: that board is one week of pick cards).
+function nvSeasonHtml() {
+  const head = '<div class="gh">Season</div>', G = Object.values(ALL).filter((g) => g.week >= 1 && g.week <= 18 && g.start && g.state !== 'canceled'), weeks = [...new Set(G.map((g) => g.week))].sort((a, b) => a - b), T = nvTeams();
+  if (!weeks.length) return head + '<div class="note">Loading the season…</div>';
+  const wk = NVW !== null && weeks.includes(NVW) ? NVW : weeks.includes(CUR) ? CUR : weeks[weeks.length - 1], W = G.filter((g) => g.week === wk).sort((a, b) => a.start - b.start || String(a.id).localeCompare(String(b.id)));
+  const cnt = (n) => { const x = G.filter((g) => g.week === n), f = x.filter((g) => g.state === 'post').length, lv = x.filter((g) => g.state === 'in').length; return f === x.length ? ' · final' : f || lv ? ' · ' + (lv ? lv + ' live, ' : '') + (x.length - f - lv) + ' to play' : ''; };
+  const tPick = `<div class="swk"><label for="nvteam">Team schedule</label><select id="nvteam" onchange="nvTeamPick(this)"><option value="">Pick a team…</option>${T.map((a) => `<option value="${escH(a)}">${escH(nvName(a))}</option>`).join('')}</select></div>`;
+  const wPick = `<div class="swk" style="margin-top:8px"><label for="nvwk">Week</label><select id="nvwk" onchange="nvWeek(this.value)">${weeks.map((n) => `<option value="${n}" ${n === wk ? 'selected' : ''}>Week ${n}${n === CUR ? ' · this week' : ''}${cnt(n)}</option>`).join('')}</select></div>`;
+  const when = (t) => new Date(t).toLocaleString(undefined, { weekday: 'short', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const lineTxt = (g, L) => (L === 0 ? 'pick\'em' : (L > 0 ? g.home.abbr : g.away.abbr) + ' -' + (Math.abs(L) % 1 ? Math.abs(L).toFixed(1) : Math.abs(L).toFixed(0)));
+  const game = (g) => { const L = tpLine(g), post = g.state === 'post', live = g.state === 'in', aw = post && g.away.score > g.home.score, hw = post && g.home.score > g.away.score, sc = (t, w) => (g.state === 'pre' ? '' : w ? `<b class="n">${t.score}</b>` : `<span class="n">${t.score}</span>`);
+    let f; if (post) { const m = L === null ? null : g.home.score - g.away.score - L; f = 'Final' + (L === null ? '' : ' · closing line ' + lineTxt(g, L) + ' · ' + (m > 0 ? g.home.abbr + ' covered' : m < 0 ? g.away.abbr + ' covered' : 'push')); } else if (live) f = '<b style="color:#ff6b6b">● LIVE</b> ' + escH(g.detail || '') + (L === null ? '' : ' · line ' + lineTxt(g, L)); else f = when(g.start) + (L === null ? ' · no line yet' : ' · line ' + lineTxt(g, L));
+    return `<div class="nvg" onclick="tpGame('${escH(g.id)}')"><div class="r"><span>${aw ? '<b>' + escH(g.away.abbr) + '</b>' : escH(g.away.abbr)}</span>${sc(g.away, aw)}</div><div class="r"><span><span class="sub">at</span> ${hw ? '<b>' + escH(g.home.abbr) + '</b>' : escH(g.home.abbr)}</span>${sc(g.home, hw)}</div><div class="f">${f} <span class="sub">›</span></div></div>`; };
+  const bye = ALLW && T.length >= 32 ? T.filter((a) => !W.some((g) => g.home.abbr === a || g.away.abbr === a)).sort() : [];
+  return head + tPick + wPick + `<div class="nvgrid nvgg">${W.map(game).join('')}</div>` + (bye.length ? `<div class="nvc" style="margin:8px 0;padding:10px 12px"><b>Bye:</b> ${bye.map((a) => escH(a)).join(', ')}</div>` : '') + '<div class="sub" style="margin-top:8px">Scores for games played, kickoff time (your time) and the spread for games to come. Closing line and who covered are facts about results, not picks. Tap a game to open it. For this week\'s picks use the Games view.</div>';
 }
 // One listener for every wired team name: it runs before the card's own tap, so the card does not also open its chart / drill / bet form.
 document.addEventListener('click', (e) => { const t = e.target && e.target.closest ? e.target.closest('[data-team]') : null; if (!t || CFB) return; e.preventDefault(); e.stopPropagation(); tpOpen(t.getAttribute('data-team')); }, true);
@@ -2823,9 +2905,9 @@ function renderInner() {
   const restHtml = Object.keys(future).length ? '<div class="gh">Rest of season</div>' + Object.keys(future).map(Number).sort((a, b) => a - b).map((n) => `<details data-k="f${n}" ${isOpen('f' + n, n === CUR + 1) ? 'open' : ''}><summary>Week ${n}: ${future[n].length} games · exp ${projText(future[n])}</summary>${future[n].map(card).join('')}</details>`).join('') : '';
   const resHtml = trophyBox() + (weeks.length ? '<div class="gh">Results</div>' + weeks.map((w) => `<details data-k="r${w.n}" ${isOpen('r' + w.n, w.n === CUR) ? 'open' : ''}><summary onclick="swkTap(${w.n},this)">Week ${w.n}${SW && SW.n === w.n ? ' 📊' : ''}: ${w.h}-${w.t - w.h} picks · spread ${w.ah}-${w.am}${w.ap ? '-' + w.ap : ''}</summary>${w.rows}</details>`).join('') : '');
   if (STYLE === 'new') {
-    setH($('#gvbar'), GVS.map(([k, l]) => `<button class="${GV === k ? 'on' : ''}" onclick="gvSet('${k}')">${l}</button>`).join(''));
+    gvMenu();
     setH($('#nb'), teamBox(games) + newBoard(games));
-    const part = { stats: lockedBox + labHtml(games), best: bestHtml, moves: movesBoard(games), rest: restHtml, results: resHtml }[GV] || '';
+    const part = GV === 'stand' ? nvStandHtml() : GV === 'tstats' ? nvStatsHtml() : GV === 'season' ? nvSeasonHtml() : { stats: lockedBox + labHtml(games), best: bestHtml, moves: movesBoard(games), rest: restHtml, results: resHtml }[GV] || '';
     setH($('#list'), part || (GV === 'stats' ? '' : '<div class="note">Nothing here yet.</div>'));
   } else {
     setH($('#nb'), '');
@@ -2892,8 +2974,17 @@ document.addEventListener('toggle', (e) => { const d = e.target; if (d.tagName =
 document.querySelector('#tsearch').addEventListener('input', (e) => { teamSelect(); const sel = $('#team'), opts = [...sel.options].filter((o) => o.value); if (e.target.value && opts.length === 1) { sel.value = opts[0].value; TEAM = sel.value; try { localStorage.setItem('pics-team-' + LG, TEAM); } catch (x) {} render(); } else if (!e.target.value && TEAM) { TEAM = ''; try { localStorage.setItem('pics-team-' + LG, ''); } catch (x) {} sel.value = ''; render(); } });
 document.querySelector('#conf').addEventListener('change', (e) => { CONF = e.target.value; try { localStorage.setItem('pics-conf-' + LG, CONF); } catch (x) {} render(true); });
 document.querySelector('#team').addEventListener('change', (e) => { TEAM = e.target.value; try { localStorage.setItem('pics-team-' + LG, TEAM); } catch (x) {} render(); });
-document.querySelectorAll('.lg button').forEach((b) => { if (b.dataset.lg === LG) b.classList.add('on'); });
-document.addEventListener('click', (e) => { const sp = e.target.closest('[data-sp]'); if (sp) { const go = () => { location.href = 'sports.html?lg=' + sp.dataset.sp; }; if (window.oddWarn) window.oddWarn(go); else go(); return; } const b = e.target.closest('[data-lg]'); if (!b || b.dataset.lg === LG) return; try { localStorage.setItem('pics-lg', b.dataset.lg); } catch (x) {} location.reload(); });
+// v258: the League menu (a real <select>, was the pill row). Choosing an item does what its pill did. The menu always shows the league this page is on,
+// so a cancelled "not a pick model yet" warning or coming Back from another page leaves it right.
+function lgPick(s) {
+  const v = s.value; s.value = LG; if (v === LG) return;
+  if (v === 'nfl' || v === 'cfb') { try { localStorage.setItem('pics-lg', v); } catch (x) {} location.reload(); return; }
+  if (v === 'pickleball') { location.href = 'pickleball.html'; return; }
+  if (!['nba', 'mlb', 'nhl', 'ncaab'].includes(v)) return;
+  const go = () => { location.href = 'sports.html?lg=' + v; }; if (window.oddWarn) window.oddWarn(go); else go();
+}
+{ const s = $('#lgsel'); if (s) { s.value = LG; s.addEventListener('change', () => lgPick(s)); window.addEventListener('pageshow', () => { s.value = LG; }); } }
+try { gvMenu(); const gb = $('#gvlab'); if (gb) gb.hidden = VIEW !== 'main' || STYLE !== 'new'; } catch (e) {} // the View menu is filled before the first data arrives
 document.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-lm],[data-lmmode]');
   if (!b) return;
@@ -2965,7 +3056,6 @@ if ('serviceWorker' in navigator) {
   });
 })();
 </script>
-<script>setTimeout(()=>{const l=document.querySelector('.lg'),o=l&&l.querySelector('.on');if(o)l.scrollLeft=Math.max(0,o.offsetLeft-60);},500);</script>
-<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=257"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
+<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=258"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
 </body>
 </html>

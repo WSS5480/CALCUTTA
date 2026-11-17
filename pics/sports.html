@@ -45,6 +45,10 @@ a.back{color:var(--blue)}
 #plbd{text-align:left;margin-top:8px;border-top:1px solid #fff3;padding-top:6px;width:min(260px,72vw);font:600 12px/1.3 system-ui;color:#eee}#plbd .bk{display:flex;justify-content:space-between;gap:10px;padding:3px 0}#plbd .bk i{display:block;font-style:normal;opacity:.65;font-size:10px}#plbd .bk b.p{color:#4fd18b}#plbd .bk b.n{color:#ff5a4d}#plbd .tot{border-top:1px solid #fff3;margin-top:4px;padding-top:5px;font-weight:800}#plbd .tot2{font-weight:800}[hidden]{display:none!important}#plb{cursor:pointer}#plb{color:#fff;background:linear-gradient(135deg,#6d35e0f0,#3b1a8cf0);border-color:#ffffff59}#plb .amt{display:block;font-size:22px;letter-spacing:-.01em;margin:1px 0 2px}#plb.pos .amt{color:#8dffbd}#plb.neg .amt{color:#ff9a90}body.bets .thm{display:none}
 #plb:empty{display:none}
 #mir{position:absolute;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0}
+/* v258: League + View menus (they replace the two pill rows), same look as index.html */
+.mrow{display:flex;gap:8px;align-items:flex-end;margin:86px 0 6px;max-width:100%}.mrow label{flex:1 1 0;min-width:0;max-width:260px;display:block}.mrow label>span{display:block;font:700 10px/1 system-ui;letter-spacing:.12em;text-transform:uppercase;color:#fff;opacity:.78;margin:0 0 4px 3px}
+.mrow select{display:block;width:100%;min-height:44px;padding:9px 10px;border:1px solid rgba(255,255,255,.55);border-radius:12px;background:rgba(0,0,0,.28);color:#fff;font:700 15px system-ui;box-sizing:border-box;cursor:pointer;text-overflow:ellipsis}.mrow select option{color:#111;background:#fff}html.cb .mrow select{background:rgba(4,30,66,.55);border-color:rgba(198,203,215,.5)}
+@media (min-width:900px){header .mrow{margin-top:30px}}
 header .lg{margin-top:86px}
 .fwatch{border:1px solid rgba(124,58,237,.5);background:rgba(124,58,237,.12);color:inherit;border-radius:999px;font:600 12px inherit;padding:4px 10px}.fwatch.on{background:#7c3aed;color:#fff}
 .bn{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:space-around;background:var(--panel);border-top:1px solid var(--line);padding:6px 4px max(8px,env(safe-area-inset-bottom));z-index:20}.bn button{background:none;border:0;color:var(--muted);font:600 11px inherit;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 10px;cursor:pointer}.bn button span{font-size:19px}.bn button.on{color:var(--ink)}
@@ -117,7 +121,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 <div id="sc">
 <header>
   <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="location.href='./?add=1'">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v127</span></div></div>
-  <div class="lg" id="lg"></div>
+  <div class="mrow" id="mrow"><label><span>League</span><select id="lgsel" aria-label="League" autocomplete="off"><option value="nfl">🏈 NFL</option><option value="cfb">🎓 NCAA</option><option value="pickleball">🏓 Pickleball</option><option value="nba">🏀 NBA</option><option value="mlb">⚾ MLB</option><option value="nhl">🏒 NHL</option><option value="ncaab">🏀 NCAAB</option></select></label><label><span>View</span><select id="gvsel" aria-label="View" autocomplete="off" onchange="gvSet(this.value)"></select></label></div>
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div class="sub" id="upd">Loading…</div>
   <div class="sub" id="mc" style="margin-top:2px;cursor:pointer" onclick="mcToggle()"></div>
@@ -126,7 +130,6 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   </details>
 </header>
 <main>
-  <div class="gvbar" id="gvbar"></div>
   <div class="day"><button onclick="goDay(-1)">◀</button><b id="dl"></b><button onclick="goDay(1)">▶</button></div>
   <div class="chips" id="chips"></div>
   <div id="list"></div>
@@ -138,7 +141,7 @@ const NAVI = [['all', '🏠', 'Games'], ['livepg', '📡', 'Live'], ['bets', '�
 function navGo(k) { if (k === 'all') { document.getElementById('sc').scrollTo({ top: 0, behavior: 'smooth' }); return; } try { localStorage.setItem('pics-view', k === 'livepg' ? 'live' : k === 'bets' ? 'bets' : 'main'); if (k === 'win' || k === 'lose') localStorage.setItem('pics-filt', k); } catch (e) {} location.href = './'; }
 document.getElementById('bn').innerHTML = NAVI.map(([k, i, l]) => `<button class="${k === 'all' ? 'on' : ''}" onclick="navGo('${k}')"><span>${i}</span>${l}</button>`).join('');
 const $ = (s) => document.querySelector(s);
-function plbFit() { const pb = $('#plb'), lg = document.querySelector('header .lg'); if (!pb || !lg || pb.hidden) return; const under = lg.getBoundingClientRect().top < pb.offsetTop + pb.offsetHeight + 6; pb.classList.toggle('away', under); if (under && window.__plbo) { window.__plbo = false; const d = $('#plbd'); if (d) d.hidden = true; } }
+function plbFit() { const pb = $('#plb'), lg = document.querySelector('header .mrow'); if (!pb || !lg || pb.hidden) return; const under = lg.getBoundingClientRect().top < pb.offsetTop + pb.offsetHeight + 6; pb.classList.toggle('away', under); if (under && window.__plbo) { window.__plbo = false; const d = $('#plbd'); if (d) d.hidden = true; } }
 document.getElementById('sc').addEventListener('scroll', () => { if (window.__plbf) return; window.__plbf = requestAnimationFrame(() => { window.__plbf = 0; plbFit(); }); }, { passive: true });
 const LGS = {
   nba: { path: 'basketball/nba', name: 'NBA', sd: 12, hfa: 2.5, w: 0.8, back: 45, minG: 120, unit: 'pts', q: '' },
@@ -171,7 +174,15 @@ function mirror() { try { const d = $('#mir').contentDocument; const s = d && d.
 $('#plb').onclick = () => { PLBO = !PLBO; const bd = $('#plbd'); if (bd) bd.hidden = !PLBO; };
 setInterval(mirror, 3000); setTimeout(mirror, 600); setTimeout(mirror, 1500); setTimeout(mirror, 6000);
 // league tabs
-$('#lg').innerHTML = `<a href="./" onclick="lss('pics-lg','nfl')">NFL</a><a href="./" onclick="lss('pics-lg','cfb')">NCAA</a><a href="pickleball.html">🏓 Pickleball</a><a href="sports.html?lg=nba" class="${LG === 'nba' ? 'on' : ''}" onclick="if(!this.classList.contains('on')&&window.oddWarn){var h=this.href;oddWarn(function(){location.href=h});return false}">NBA</a><a href="sports.html?lg=mlb" class="${LG === 'mlb' ? 'on' : ''}" onclick="if(!this.classList.contains('on')&&window.oddWarn){var h=this.href;oddWarn(function(){location.href=h});return false}">MLB</a><a href="sports.html?lg=nhl" class="${LG === 'nhl' ? 'on' : ''}" onclick="if(!this.classList.contains('on')&&window.oddWarn){var h=this.href;oddWarn(function(){location.href=h});return false}">NHL</a><a href="sports.html?lg=ncaab" class="${LG === 'ncaab' ? 'on' : ''}" onclick="if(!this.classList.contains('on')&&window.oddWarn){var h=this.href;oddWarn(function(){location.href=h});return false}">NCAAB</a>`; { const pb = $('#lg a[href="pickleball.html"]'), on = $('#lg a.on'); if (pb && on) on.after(pb); } // keep Pickleball next to the active league so it shows on phones
+// v258: the League menu (a real <select>, was the pill row). Choosing an item does what its pill did; the menu always shows the league this page is on.
+function lgPick(s) {
+  const v = s.value; s.value = LG; if (v === LG) return;
+  if (v === 'nfl' || v === 'cfb') { lss('pics-lg', v); location.href = './'; return; }
+  if (v === 'pickleball') { location.href = 'pickleball.html'; return; }
+  if (!LGS[v]) return;
+  const go = () => { location.href = 'sports.html?lg=' + v; }; if (window.oddWarn) window.oddWarn(go); else go();
+}
+{ const s = $('#lgsel'); if (s) { s.value = LG; s.addEventListener('change', () => lgPick(s)); window.addEventListener('pageshow', () => { s.value = LG; }); } }
 
 async function getJson(u) { const r = await fetch(u, { cache: 'no-store' }); if (!r.ok) throw new Error(r.status); return r.json(); }
 
@@ -408,7 +419,7 @@ function statsHtml() {
     ${shown.map((x) => `<div class="lkrow"><span><b>${esc(x.t)}</b><small>${esc(x.sub)}</small></span><b class="${x.ok ? 'hit' : 'miss'}">${x.ok ? '✓ hit' : '✗ miss'}</b></div>`).join('') || '<div class="note">Nothing here yet. Picks lock before games and show up after they finish.</div>'}`;
 }
 function draw() {
-  setH($('#gvbar'), GVS.map(([k, l]) => `<button class="${GV === k ? 'on' : ''}" onclick="gvSet('${k}')">${l}</button>`).join(''));
+  { const s = $('#gvsel'); if (s) { if (!s.options.length) s.innerHTML = GVS.map(([k, l]) => `<option value="${k}">${l}</option>`).join(''); if (s.value !== GV) s.value = GV; } } // v258: the View menu (was the pill row #gvbar)
   const dayEl = document.querySelector('.day'); if (dayEl) dayEl.hidden = GV === 'stats' || GV === 'up'; $('#chips').hidden = GV !== 'games';
   if (GV === 'up') {
     const dh = document.querySelector('.day'); if (dh) dh.hidden = true;
@@ -448,8 +459,7 @@ async function load() {
 setInterval(() => { if (!document.hidden && OFF === 0 && !OPEN && (GAMES.some((g) => g.state === 'in') || Date.now() - LASTAT > 120000)) load(); }, 30000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !OPEN) load(); });
 </script>
-<script>setTimeout(()=>{const l=document.querySelector('.lg'),o=l&&l.querySelector('.on');if(o)l.scrollLeft=Math.max(0,o.offsetLeft-60);},500);</script>
-<script src="gate.js?v=257"></script><script src="ai.js"></script><script src="live.js"></script>
+<script src="gate.js?v=258"></script><script src="ai.js"></script><script src="live.js"></script>
 <script>
 function aiCtx(gid) {
   const pc = (v) => Math.round((v || 0) * 100) + '%';

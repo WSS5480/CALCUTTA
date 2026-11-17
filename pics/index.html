@@ -166,6 +166,8 @@ html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
 #spop .spb{display:block;width:100%;background:none;border:0;padding:0;margin:0;color:inherit;font:inherit;text-align:left;cursor:pointer;border-radius:20px}#spop .scc{margin:0}
 #spop .spx{position:absolute;top:0;right:0;width:44px;height:44px;background:none;border:0;color:var(--bc-dim);font:700 17px system-ui;cursor:pointer;border-radius:0 20px 0 12px}
 .tbback{padding:8px 12px;min-height:40px;border:1px solid var(--line);border-radius:9px;background:none;color:inherit;font-weight:700}
+#bpset{margin-top:10px}#bpset label{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-weight:700}#bpset select{min-height:44px;max-width:100%;padding:8px 10px;border:1px solid rgba(255,255,255,.55);border-radius:12px;background:rgba(0,0,0,.28);color:#fff;font:700 14px system-ui}#bpset select option{color:#111;background:#fff}#bpset .bph{font-size:11px;opacity:.75;margin-top:4px}#bpset #bpmsg{font-size:12px;font-weight:700;margin-top:4px;overflow-wrap:anywhere}#bpset #bpmsg:empty{display:none}#bpset #bptest{min-height:44px;margin-top:6px;padding:8px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.55);background:rgba(0,0,0,.28);color:#fff;font:700 14px system-ui}#bpset [hidden]{display:none}
+.bpi{margin:10px 0;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);font:14px/1.4 system-ui;overflow-wrap:anywhere}.bpi[hidden]{display:none!important}.bpi .bpb{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}.bpi button{min-height:44px;padding:8px 16px;border-radius:12px;font:700 14px system-ui}.bpi .bpy{border:0;background:#0b3d91;color:#fff}.bpi .bpn{border:1px solid var(--line);background:none;color:inherit}.bpi .bpm{font-weight:700;margin-top:6px}.bpi .bpm:empty{display:none}.bpi.sm{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 12px}.bpi.sm .bpt{flex:1 1 180px}.bpi.sm .bpn{min-width:44px;padding:8px}.bpi.sm .bpm{flex:1 1 100%;margin:0}
 #spset{margin-top:8px}#spset label{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-weight:700}#spsel{min-height:44px;padding:8px 10px;border:1px solid rgba(255,255,255,.55);border-radius:12px;background:rgba(0,0,0,.28);color:#fff;font:700 14px system-ui}#spsel option{color:#111;background:#fff}
 #teampage{position:fixed;inset:0;z-index:350;background:var(--bg,#0b0f17);color:var(--ink);overflow:hidden}#teampage[hidden]{display:none}
 .tpw{display:flex;flex-direction:column;height:100%;max-width:820px;margin:0 auto}
@@ -266,10 +268,10 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v265 -->
+<!-- Pics v266 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v265</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v266</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
   <div id="arbbar" class="arbbar" hidden onclick="arbBarTap()" role="button" aria-label="Arbitrage alert"><span class="mq" id="arbmq"></span></div>
   <div class="mrow" id="mrow"><label><span>League</span><select id="lgsel" aria-label="League" autocomplete="off"><option value="nfl">🏈 NFL</option><option value="cfb">🎓 NCAA</option><option value="pga">⛳ PGA Tour</option><option value="golfgps">📍 Golf GPS</option><option value="pickleball">🏓 Pickleball</option><option value="nba">🏀 NBA</option><option value="mlb">⚾ MLB</option><option value="nhl">🏒 NHL</option><option value="ncaab">🏀 NCAAB</option></select></label><label id="gvlab"><span>View</span><select id="gvsel" aria-label="View" autocomplete="off" onchange="gvSet(this.value)"></select></label></div>
   <div class="srow"><input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team"><select id="conf" aria-label="Conference"><option value="">All</option></select></div>
@@ -277,9 +279,10 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v265 (full width on tablets · Golf GPS · PGA Tour)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v266 (phone alerts for your bets · Golf GPS · PGA Tour)</div>
   <div class="sub nsw" id="nsw"></div>
   <div class="sub" id="spset"><label>Score pop-ups <select id="spsel" aria-label="Score pop-ups" autocomplete="off" onchange="spSet(this.value)"><option value="mine">My bets only</option><option value="all">All live games</option><option value="off">Off</option></select></label><div style="font-size:11px;opacity:.75;margin-top:4px">A card pops up when a live game scores or ends, with where your bets stand right now.</div></div>
+  <div class="sub" id="bpset"><label>Phone alerts for my bets: every score, and the final. <select id="bpsel" aria-label="Phone alerts for my bets (app closed)" autocomplete="off" onchange="bpSet(this.value)"><option value="off">Off</option><option value="on">On</option></select></label><div class="bph">For when Oddable is closed. Needs Oddable added to your Home Screen on iPhone or iPad, and notifications allowed.</div><div id="bpbbw" hidden><label style="margin-top:6px">Basketball <select id="bpbb" aria-label="Basketball alerts" autocomplete="off" onchange="bpBB(this.value)"><option value="q">Quarter ends and final</option><option value="all">Every score</option></select></label><div class="bph">Every score in basketball can mean 150+ alerts a game.</div></div><div id="bpmsg" role="status"></div><button type="button" id="bptest" hidden onclick="bpTest()">Send me a test</button></div>
   </details>
 </header>
 <main>
@@ -288,6 +291,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <div id="survpage" hidden></div>
   <div class="rail" id="rail"></div><div class="dots" id="dots"></div>
   <div id="tban"></div>
+  <div id="bpinv" class="bpi" hidden></div>
   <div id="nb"></div>
   <div class="sums" id="sums"></div>
   <div id="list"></div>
@@ -296,7 +300,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </div>
 <div id="plb" hidden></div>
 <nav class="bn" id="bn"></nav>
-<script src="trophy.js?v=265"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
+<script src="trophy.js?v=266"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
 <script>
 const SC = document.getElementById('sc');
 // The page scrolls inside #sc so the banner and bottom bar (outside it) can never drift on iOS
@@ -1829,7 +1833,7 @@ async function alertPush() {
   ASQ = Date.now();
   try { const r = await fetch(ALU, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': alertTok() }, body: JSON.stringify({ week: CUR, rec: { lock: a.lock, dogs: a.dogs, helper: { id: h.g.id, abbr: h.abbr, conf: h.conf } } }) }); if (!r.ok) return; const j = await r.json(); if (j && j.rec && j.week === CUR && alertTake(Object.assign({}, ASV, { [CUR]: j.rec }))) render(); } catch (e) {}
 }
-async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=265')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
+async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=266')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
 const trGrade = (p) => { const g = ALL[p.id]; if (!g || g.state !== 'post') return null; const m = (g.home.abbr === p.abbr ? 1 : -1) * (g.home.score - g.away.score) + p.line; return m === 0 ? 'push' : m > 0 ? 'hit' : 'miss'; };
 function trophyData() {
   if (CFB || !window.Trophy || !Trophy.ready()) return null;
@@ -2979,7 +2983,7 @@ const BCTHEMES = ['oddable', 'black', 'light', 'green'], BCK = 'pics-cardth', CF
 let BCT = (() => { try { const v = localStorage.getItem(BCK); return BCTHEMES.includes(v) ? v : 'oddable'; } catch (e) { return 'oddable'; } })();
 const bcCls = () => 'bc bc-' + BCT;
 function bcApply(v) { if (!BCTHEMES.includes(v)) return; BCT = v; try { localStorage.setItem(BCK, v); } catch (e) {} document.querySelectorAll('.bc').forEach((e) => { e.className = e.className.replace(/\bbc-[a-z]+\b/g, '').replace(/\s+/g, ' ').trim() + ' bc-' + v; }); }
-async function bcLoad() { if (window.MIRROR) return; try { const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 8000); const j = await (await fetch(CFGU, { signal: ctl.signal })).json(); clearTimeout(to); if (j && j.ok === true && BCTHEMES.includes(j.card_theme)) bcApply(j.card_theme); } catch (e) {} } // a failed read keeps the saved (or default) colours; nothing is shown
+async function bcLoad() { if (window.MIRROR) return; try { const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 8000); const j = await (await fetch(CFGU, { signal: ctl.signal })).json(); clearTimeout(to); if (j && j.ok === true && BCTHEMES.includes(j.card_theme)) bcApply(j.card_theme); try { if (window.bpCfg) window.bpCfg(j); } catch (e) {} } catch (e) {} } // a failed read keeps the saved (or default) colours; nothing is shown
 function spSet(v) { SPM = SPMODES[v] ? v : 'mine'; try { localStorage.setItem(SPK, SPM); } catch (e) {} if (SPM === 'off') spFlush(); spSetPaint(); }
 function spSetPaint() { const s = document.getElementById('spsel'); if (s && s.value !== SPM) s.value = SPM; }
 const scN = (n) => String(+Math.abs(n).toFixed(1));
@@ -3254,6 +3258,97 @@ if ('serviceWorker' in navigator) {
   });
 })();
 </script>
-<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=265"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
+<script>
+// ---- v266: phone alerts for my bets (app closed). Self-contained block: the setting in ⓘ Disclosures (#bpset), the one-time invitation card (#bpinv),
+// and the calls to /betpush/* on the odds server. My Apps sends the notifications; the server switch is BETPUSH_ENABLED (the page learns it from /appcfg).
+// No call is made from here unless /appcfg said `betpush:true` (then ONE /betpush/status per load) or the player taps something.
+(function () {
+  if (/[?&]mirror=1/.test(location.search) || window.top !== window) return;
+  const API = 'https://calcutta-odds.onrender.com', IK = 'pics-bpinv', DAY = 864e5;
+  const ls = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} return null; };
+  const tok = () => ls('odd-tok') || '';
+  const BP = (window.BP = { enabled: false, st: null, sub: null, shown: false, gone: false, busy: false, t: null });
+  const el = (id) => document.getElementById(id);
+  const apple = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1); // iPadOS Safari says "Macintosh"
+  const standalone = () => navigator.standalone === true || !!(window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  const canPush = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  async function call(path, body, get) {
+    const r = await fetch(API + path, get ? { headers: { 'x-token': tok() } } : { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': tok() }, body: JSON.stringify(body || {}) });
+    const j = await r.json().catch(() => ({})); if (!r.ok && !j.error) j.error = 'Could not reach the server'; return j;
+  }
+  async function devSub() { try { if (!canPush()) return null; const reg = await navigator.serviceWorker.getRegistration(); return reg ? await reg.pushManager.getSubscription() : null; } catch (e) { return null; } }
+  const isOn = () => !!(BP.st && BP.st.on && BP.st.hasDevice && BP.sub);
+  const say = (t) => { const m = el('bpmsg'); if (m) m.textContent = t || ''; };
+  function paint() {
+    const s = el('bpsel'), b = el('bpbb'), bw = el('bpbbw'), t = el('bptest'); if (!s) return;
+    s.value = isOn() ? 'on' : 'off'; if (b) b.value = BP.st && BP.st.bb === 'all' ? 'all' : 'q'; if (bw) bw.hidden = !isOn(); if (t) t.hidden = !(isOn() && BP.st.test);
+  }
+  // Called by bcLoad() with the /appcfg answer the page already fetches once per load.
+  window.bpCfg = async function (j) {
+    BP.enabled = !!(j && j.betpush === true); if (!BP.enabled || !tok()) return;
+    try { const st = await call('/betpush/status', null, true); if (st && st.enabled === true) BP.st = st; else { BP.enabled = false; return; } } catch (e) { return; }
+    BP.sub = await devSub(); paint(); beat(); if (!isOn()) { clearInterval(BP.t); BP.t = setInterval(invite, 1000); const soon = () => { if (!BP.gone) setTimeout(invite, 0); }; document.addEventListener('click', soon, true); document.addEventListener('change', soon, true); } // the card follows a tap to another view at once, not a second later
+  };
+  // The one flow behind the setting and the invitation card. The browser's permission question is asked only here, on a tap. -> 'on' | 'home' | 'no'
+  async function turnOn(out) {
+    if (BP.busy) return 'no'; BP.busy = true;
+    try {
+      if (!BP.enabled) { out('Alerts are not switched on at the server yet.'); return 'no'; }
+      if (!tok()) { out('Sign in first.'); return 'no'; }
+      if (apple() && !standalone()) { out('Add to Home Screen first. 1. Tap Share. 2. Add to Home Screen. 3. Open Oddable from that icon and tap Turn on again.'); return 'home'; }
+      if (!canPush()) { out(apple() ? 'Alerts need iOS or iPadOS 16.4 or newer. Update this device, then try again.' : 'This browser cannot get alerts.'); return 'no'; }
+      out('Turning on…');
+      const perm = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+      if (perm !== 'granted') { out(perm === 'denied' ? 'Blocked in Settings. Allow notifications for Oddable in your phone\'s Settings, then turn this on again.' : 'Notifications were not allowed.'); return 'no'; }
+      const reg = await navigator.serviceWorker.ready; let sub = await reg.pushManager.getSubscription();
+      if (!sub) { const k = await call('/acct/push-key', {}); if (!k.key) { out(k.error || 'Alerts are not set up yet.'); return 'no'; }
+        const p = '='.repeat((4 - k.key.length % 4) % 4), raw = atob((k.key + p).replace(/-/g, '+').replace(/_/g, '/')); sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: Uint8Array.from([...raw].map((c) => c.charCodeAt(0))) }); }
+      const r = await call('/betpush/set', { on: true, mode: 'bets', subscription: sub.toJSON() });
+      if (!r.ok) { out(r.enabled === false ? 'Alerts are not switched on at the server yet.' : r.error || 'Could not turn alerts on.'); return 'no'; }
+      BP.st = r; BP.sub = sub; ls('odd-push', '1'); /* the same My Apps subscription the renewal reminders use: the Account box now says they are on */ out('Allowed. Alerts are on for this phone.'); beat(); return 'on';
+    } catch (e) { out('Could not turn alerts on: ' + ((e && e.message) || 'try again')); return 'no'; } finally { BP.busy = false; paint(); }
+  }
+  window.bpSet = async function (v) {
+    if (v === 'on') { const r = await turnOn(say); if (r === 'on') hide(true); return; }
+    if (!BP.enabled || !tok() || !BP.st) { paint(); say(''); return; }
+    try { const r = await call('/betpush/set', { on: false }); if (r.ok) { BP.st = r; say('Alerts are off.'); } else say(r.error || 'Could not save.'); } catch (e) { say('Could not save.'); } paint(); beat();
+  };
+  window.bpBB = async function (v) { if (!isOn()) return paint(); try { const r = await call('/betpush/set', { on: true, mode: 'bets', bb: v === 'all' ? 'all' : 'q' }); if (r.ok) BP.st = r; else say(r.error || 'Could not save.'); } catch (e) { say('Could not save.'); } paint(); };
+  window.bpTest = async function () { say('Sending…'); try { const r = await call('/betpush/test', {}); say(r.ok ? 'Test sent. It should show on this phone in a few seconds.' : r.error || 'Could not send the test.'); } catch (e) { say('Could not send the test.'); } };
+  // While the app is open and its own score pop-ups are on, tell the server, so the same score does not also arrive as a phone alert.
+  let hb = null;
+  const here = () => { let pop = 'mine'; try { pop = SPM; } catch (e) {} if (!document.hidden && isOn() && pop !== 'off') call('/betpush/here', {}).catch(() => {}); };
+  function beat() { clearInterval(hb); hb = null; if (!isOn()) return; here(); hb = setInterval(here, 25000); }
+  document.addEventListener('visibilitychange', () => { if (hb) here(); });
+  // ---- the invitation: a card in the page flow (never fixed, never a modal), at most once per app open ----
+  const inv = () => { try { const o = JSON.parse(ls(IK) || '{}'); return { n: Number(o.n) || 0, t: Number(o.t) || 0 }; } catch (e) { return { n: 0, t: 0 }; } };
+  const overlay = () => !!(el('gate') || el('oddwarn') || el('gnm') || el('odash') || ['infosheet', 'teampage', 'mv', 'lvov'].some((id) => { const x = el(id); return x && !x.hidden; }));
+  function openToday() { try { const d = dayKey(Date.now()); return BETS.some((b) => !b.fin && !b.res && betDay(b) === d); } catch (e) { return false; } }
+  function hide(forGood) { const c = el('bpinv'); if (c) { c.hidden = true; c.innerHTML = ''; } if (forGood) { BP.gone = true; clearInterval(BP.t); } }
+  function invite() {
+    const c = el('bpinv'); if (!c || BP.gone) return;
+    if (!BP.enabled || !BP.st || isOn() || !tok()) return hide(true);
+    let view = 'main'; try { view = VIEW; } catch (e) {}
+    const where = view === 'main' ? el('nb') : view === 'bets' && openToday() ? el('betspage') : null;
+    if (!BP.shown) { const i = inv(); if (i.n >= 2 || (i.n === 1 && Date.now() - i.t < 14 * DAY)) return hide(true); if (!where || overlay()) return; }
+    if (!where) { c.hidden = true; return; }
+    if (c.nextElementSibling !== where) where.parentNode.insertBefore(c, where);
+    if (!c.firstChild) {
+      const small = !!BP.sub; // this phone already allowed notifications (renewal reminders): no permission question is needed, so one line is enough
+      c.className = small ? 'bpi sm' : 'bpi';
+      c.innerHTML = small ? '<span class="bpt">Score alerts for your bets are available.</span><button type="button" class="bpy" id="bpiy">Turn on</button><button type="button" class="bpn" id="bpin" aria-label="Not now">✕</button><div class="bpm" id="bpim" role="status"></div>'
+        : '<div class="bpt"><b>🔔 Get score alerts for your bets.</b> A notification every time a game you bet on scores, even with Oddable closed.</div><div class="bpm" id="bpim" role="status"></div><div class="bpb"><button type="button" class="bpy" id="bpiy">Turn on</button><button type="button" class="bpn" id="bpin">Not now</button></div>';
+      el('bpiy').onclick = async () => { const r = await turnOn((t) => { const m = el('bpim'); if (m) m.textContent = t; }); if (r === 'on') { BP.gone = true; clearInterval(BP.t); c.textContent = '🔔 Alerts are on for this phone.'; setTimeout(() => hide(true), 4000); } }; // 'home' and 'no' keep the card for next time
+      el('bpin').onclick = () => { const i = inv(); ls(IK, JSON.stringify({ n: i.n + 1, t: Date.now() })); hide(true); };
+    }
+    c.hidden = false; BP.shown = true;
+  }
+  // A tapped alert opens My Bets: "?open=bets" on a fresh start, a message from the service worker when the app was already open.
+  const toBets = () => { try { if (!el('gate')) setView('bets'); } catch (e) {} };
+  if (/[?&]open=bets\b/.test(location.search)) { setTimeout(toBets, 800); try { history.replaceState(null, '', location.pathname); } catch (e) {} }
+  if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', (e) => { const d = e.data || {}; if (d.type === 'bp-open') toBets(); });
+})();
+</script>
+<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=266"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="dash.js?v=219"><\/script>')</script>
 </body>
 </html>

@@ -82,13 +82,26 @@ async function entitlement(email, fresh) {
   const c = CACHE.get(email); if (!fresh && c && Date.now() - c.t < 120e3) return c.v;
   const r = await ma('/api/v1/account', { email });
   if (!r.ok && r.status !== 404 && r.status !== 403) throw new Error('Account service unavailable'); // asleep or misconfigured: never treat as "no account", never cache
-  const v = r.ok ? r.j : null; CACHE.set(email, { t: Date.now(), v }); return v;
+  let v = r.ok ? r.j : null;
+  // v276 (My Apps 5j, manager decision (a) Nov 17): a phone account JOINED to an existing account keeps its phone id as its Oddable identity (token, owner
+  // powers, Groups, bet alerts, golf, bets row) but its plan / access lives on that account. My Apps says which in `joined_to`; read it there.
+  // plan_acct = the account to read and pay the plan through (only set for a joined phone). That account suspended or gone = no access, like a suspended account.
+  if (v && typeof v.joined_to === 'string' && v.joined_to) {
+    const jt = v.joined_to.trim().toLowerCase(), t = await ma('/api/v1/account', { email: jt });
+    if (!t.ok && t.status !== 404 && t.status !== 403) throw new Error('Account service unavailable');
+    v = t.ok ? Object.assign({}, t.j, { plan_acct: jt }) : null;
+  }
+  CACHE.set(email, { t: Date.now(), v }); return v;
 }
+// v276: the account the plan is read and paid through (the joined account for a joined phone, else the account itself). My Apps down = the account itself.
+// (only a phone account can be joined: an email account is never looked up here)
+async function planAcct(e) { if (!e || e === 'owner' || !/^[0-9a-f]{20}@phone\.oddable$/.test(e)) return e; try { const a = await entitlement(e, false); return (a && a.plan_acct) || e; } catch (er) { return e; } }
 async function shape(email, fresh) {
   const a = await entitlement(email, fresh); if (!a) return null;
-  const info = await ma('/api/v1/pay/info', { account: email });
+  const info = await ma('/api/v1/pay/info', { account: a.plan_acct || email });
   const p = info.ok ? info.j : {};
-  return { email: a.email, role: a.role, plan: a.plan, expires_on: a.expires_on, source: a.source, allowed: !!allowed(a), pending: !!a.pending || !!p.pending,
+  // v276: email = a joined phone's own phone id (the phone keys its data by it), not the joined account's
+  return { email: a.plan_acct ? email : a.email, role: a.role, plan: a.plan, expires_on: a.expires_on, source: a.source, allowed: !!allowed(a), pending: !!a.pending || !!p.pending,
     price: p.price || a.price || 99, link: p.link || null, tag: p.tag || null, payReady: !!p.configured, cashtag: okTag(p.cashtag), // tag = the OWNER's tag (where to pay); cashtag = this customer's own saved handle (v263)
     // v271, from My Apps /api/v1/account (builds .38 and .41), at the END so every older field is where it was. An older My Apps does not send them: then
     // has_email_login is null ("not known": the phone offers nothing) and ref_locked is true (the phone never sends a code).
@@ -155,7 +168,11 @@ async function handle(req, res) {
       // answers with that phone account's id, so the token, the plan and the bets row are the same ones the cell number + PIN opens. For an ordinary email
       // account `account` is the email itself, and an older My Apps sends none: both give exactly what this line did before.
       const ja = typeof r.j.account === 'string' ? r.j.account.trim().toLowerCase() : '';
-      const acct = ja && (ja === email || /^[0-9a-f]{20}@phone\.oddable$/.test(ja)) ? ja : email;
+      let acct = ja && (ja === email || /^[0-9a-f]{20}@phone\.oddable$/.test(ja)) ? ja : email;
+      // v276 (My Apps 5j .43): an existing account that a phone sign-in was JOINED to answers with that phone's id too: the person's Oddable identity is the
+      // phone (bets row, owner powers, Groups), so the token is minted for it and the plan is read through the account (entitlement above).
+      const pa = typeof r.j.phone_account === 'string' ? r.j.phone_account.trim().toLowerCase() : '';
+      if (path === '/acct/login' && /^[0-9a-f]{20}@phone\.oddable$/.test(pa)) acct = pa;
       CACHE.delete(acct);
       const me = await shape(acct, true); if (me && acct !== email && isOwnerPhone(acct)) me.ownerDash = true;
       send(res, 200, { token: mint(acct), me: gFlag(me, acct) }); return true;
@@ -196,13 +213,14 @@ async function handle(req, res) {
     }
     if (path === '/acct/push') {
       if (e === 'owner') { send(res, 400, { error: 'Owner has no renewals' }); return true; }
-      const r = await ma('/api/v1/push/subscribe', { account: e, subscription: b.subscription });
+      const r = await ma('/api/v1/push/subscribe', { account: await planAcct(e), subscription: b.subscription }); // v276: renewal reminders go with the plan
       send(res, r.ok ? 200 : (r.status || 502), r.ok ? { ok: true } : { error: r.j.error || 'Could not turn reminders on' }); return true;
     }
     if (path === '/acct/pay') {
       // v263: optional Cash App handle of the payer, so the owner can match the payment. My Apps owns the rule; its 400 message is passed on.
       const ct = typeof b.cashtag === 'string' ? b.cashtag.trim().slice(0, 40) : '';
-      const r = await ma('/api/v1/pay/request', ct ? { account: e, cashtag: ct } : { account: e });
+      const pa = await planAcct(e); // v276: a joined phone pays onto the account that holds its plan
+      const r = await ma('/api/v1/pay/request', ct ? { account: pa, cashtag: ct } : { account: pa });
       if (!r.ok) { send(res, r.status === 400 && ct ? 400 : 502, { error: r.j.error || 'Could not record your payment' }); return true; }
       CACHE.delete(e); send(res, 200, { ok: true, ref: r.j.ref, link: r.j.link, amount: r.j.amount, cashtag: okTag(r.j.cashtag) }); return true;
     }
@@ -210,14 +228,15 @@ async function handle(req, res) {
       if (throttled(ip + '|timereq') || throttled(e + '|timereq')) { send(res, 429, { ok: false, error: 'Too many tries, wait a few minutes' }); return true; }
       const note = cleanNote(b.note);
       if (note === null || note.length > 140) { send(res, 400, { ok: false, code: 'note', error: TIME_ERR.note[1] }); return true; }
-      const r = await ma('/api/v1/time/request', note ? { account: e, note } : { account: e });
+      const pa = await planAcct(e);
+      const r = await ma('/api/v1/time/request', note ? { account: pa, note } : { account: pa });
       if (r.ok && r.j.ok !== false) { send(res, 200, { ok: true, status: 'pending', already: !!r.j.already }); return true; }
       const m = TIME_ERR[r.j.error]; // anything else (bad secret, unknown app, My Apps down) gets a plain message, never the upstream text
       send(res, m ? m[0] : 502, { ok: false, code: m ? r.j.error : 'failed', error: m ? m[1] : 'Could not send your request. Please try again later.' }); return true;
     }
     if (path === '/acct/time/status') { // v263: the latest request of the signed-in account
       if (throttled(e + '|timest', 30)) { send(res, 429, { ok: false, error: 'Too many tries, wait a few minutes' }); return true; }
-      const r = await ma('/api/v1/time/status', { account: e }), st = r.j.status;
+      const r = await ma('/api/v1/time/status', { account: await planAcct(e) }), st = r.j.status;
       if (!r.ok || r.j.ok === false || !['none', 'pending', 'granted', 'declined'].includes(st)) { send(res, 502, { ok: false, code: 'failed', error: 'Could not check your request. Please try again later.' }); return true; }
       const d = Number(r.j.days);
       if (st === 'granted') CACHE.delete(e); // the days are already on the account: read it fresh next time
@@ -225,7 +244,7 @@ async function handle(req, res) {
     }
     if (path === '/acct/redeem') {
       if (throttled(ip + '|redeem') || throttled(e + '|redeem')) { send(res, 429, { error: 'Too many tries, wait a few minutes' }); return true; }
-      const r = await ma('/api/v1/redeem', { account: e, code: String(b.code || '').trim() });
+      const r = await ma('/api/v1/redeem', { account: await planAcct(e), code: String(b.code || '').trim() });
       if (!r.ok) { send(res, 400, { error: r.j.error || 'Code not valid' }); return true; }
       CACHE.delete(e); send(res, 200, { me: gFlag(await shape(e, true), e) }); return true;
     }
@@ -253,5 +272,5 @@ const phoneEmail = (id) => crypto.createHmac('sha256', KEY()).update('phoneid|' 
 function ownerOk(req) { const e = verify(req.headers['x-token']); return !!e && dashOk(e, req); }
 // Groups (groups.js): who is signed in (the account id inside a valid token, or null). Never sent to other players.
 function who(req) { if (!on()) return null; const e = verify(req.headers['x-token']); if (!e) return null; if (e === 'owner' && !OWNER_PIN()) return null; return e; }
-module.exports = { gFlag, guestMode, expired, handle, check, on, phoneEmail, ownerOk, ma, maReady: () => !!(URL_() && SECRET()), who, isOwnerPhone, namesGet, ownerName: OWNER_NAME,
+module.exports = { planAcct, gFlag, guestMode, expired, handle, check, on, phoneEmail, ownerOk, ma, maReady: () => !!(URL_() && SECRET()), who, isOwnerPhone, namesGet, ownerName: OWNER_NAME,
   tokenAcct, revoke, revLoad, mint, shape, cleanRef, uncache: (e) => CACHE.delete(e) }; // v271 (second line): for sync.js (token sync) and recover.js // ma / maReady: courts.js reads the app settings from My Apps; who / isOwnerPhone / namesGet / ownerName: groups.js

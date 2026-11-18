@@ -3,12 +3,12 @@
 Start here if you are a new AI session picking up this repo. Update this file in the same commit as every change.
 
 ## START HERE FOR THE NEXT MANAGER SESSION (written Nov 17, 1:45 PM CT; the previous manager session was retired by Steve to save credits)
-- STATE: `main` = v275 (college / NFL team search list). v270 to v275 all shipped today. Groups (v272), Golf days (v273), Games list + lifetime stats (v274) are DARK until `GROUPS_ENABLED=1` (+ `GROUPS_OWNER_ONLY=1`, `GROUPS_TESTERS`) is set on ODDABLE; Steve has NOT said "Groups on" yet. `BETPUSH_ENABLED=1` is set. `GUEST_MODE` default on.
+- STATE: `main` = v276 (prove-and-join: a phone sign-in joins the account its email already has; read "## v276"). v270 to v276 all shipped Nov 17. Groups (v272), Golf days (v273), Games list + lifetime stats (v274) are DARK until `GROUPS_ENABLED=1` (+ `GROUPS_OWNER_ONLY=1`, `GROUPS_TESTERS`) is set on ODDABLE; **Groups is ON, owner-only, since Nov 17 5:44 PM CT (`GROUPS_ENABLED=1` + `GROUPS_OWNER_ONLY=1` set on ODDABLE).** `BETPUSH_ENABLED=1` is set. `GUEST_MODE` default on.
 - CREDITS (Steve, Nov 17 1:39 PM: "we are burning too much credits"): coders on Opus for big builds, Sonnet for small fixes; no agent on the top tier. Keep briefs short. Test at 390 / 820 / 1180 only, and run the full old-vs-new screen comparison only when shared screens change. Do not start a build on guesses: ask Steve first when rules are missing. One coder at a time.
 - THIS FILE IS TOO LONG (1,600+ lines): first cheap job for the new manager = move everything older than v270 into `HANDOFF-ARCHIVE.md` (repo root, NOT in pics/) and keep here: start-here, rules, bump list, deploy rule, v270+ sections, open items. Steve has not yet said yes to that (it was option 3 of the credit list; he chose option 4 = fresh session).
 - NOT THIS SESSION'S WORK: live Calcutta auction and group pickleball (another session; see the owner instruction below). That session adds its games with `window.OddGroups.addGame(...)` ("## v274 (groups-stats)").
-- OPEN BUG / DECISION: adding steve.smith's own email in Oddable answers "That email is already used by another Oddable account." (My Apps `ma_users.email` is one list for every app; his address is already a My Apps account, so `link` answers `taken`.) **DECIDED Nov 17 2026: Steve chose "A" = prove-and-join** (a code to that email joins the phone sign-in to the existing account; the existing account wins). **My Apps side BUILT and pushed: build 2026-11-17.42, commit `42b2919` on `karaoke-bars`** (contract 5j in the My Apps HANDOFF: `/api/v1/link/join`, `/api/v1/link/join/verify`; after a join, the phone's made-up login answers `account` = the existing account, `via:"join"`). **Oddable side NOT built: the coder stopped on a conflict, waiting on the manager / Steve.** In Oddable the token's account id is the person's identity for far more than the plan: owner powers (`isOwnerPhone(e)`: owner dashboard, `/acct/name`, `/acct/dash`, announce, golf course owner, Groups owner-only switch), Groups membership (`mkOf(e)`), bet-alert subscriptions (`betwatch` `who(req)`), golf day / course entries, and the token bets sync (`sync.rowIdFor` only maps phone ids). If a joined phone signs in as the target (rule 3/4 of the brief), Steve's own owner phone joined to his email account would LOSE the owner dashboard and Groups owner access (both key off his phone id, and "no new owner powers" forbids keying them off the email account's role), his groups made under the phone id would not show, and an email + password device would get no bets. Options for the manager: (a) keep the phone id as the Oddable identity and carry the target only for plan/entitlement (token gains the target; `shape`/`check` use it); (b) carry the phone id inside the token beside the target and make `isOwnerPhone`/Groups/betwatch use it; (c) Oddable does not offer join for owner phones. Nothing in Oddable was changed for this.
-- WAITING ON STEVE: (1) DONE: Steve's phone shows v275 (Nov 17, 5:43 PM CT); (2) DONE Nov 17 5:25 PM CT: `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM=Oddable` set on my-apps-management; test mail sent 5:39 PM from his Gmail as "Oddable" and confirmed delivered, so email codes / PIN and password reset are live; (3) "Groups on"; (4) Golf day questions (unfinished cards after close, offline scores, Log my score on the GPS hole screen, commissioner flag colours); (5) stats questions (Games tile vs Standings shortcut, shared first = win, left / deleted groups count?); (6) DONE: the email decision (A, prove-and-join; Oddable side blocked, see OPEN BUG above); (7) which apps get PowerPoints / My Apps listings; (8) guests and the five-tab bar when Groups goes public.
+- EMAIL ALREADY USED (was the open bug): BUILT in v276 + My Apps .42/.43. Decision Nov 17 2026: Steve chose **"A" (prove-and-join)**; manager decision (a) the same day: the PHONE id stays the person's Oddable identity everywhere (token, owner powers, Groups, bet alerts, golf, bets row), the joined account is used ONLY for plan / access / pay. Read "## v276" at the end. Steve's own phone can join his email account and keeps the owner dashboard and Groups.
+- WAITING ON STEVE: (1) DONE: Steve's phone shows v275 (Nov 17, 5:43 PM CT); (2) DONE Nov 17 5:25 PM CT: `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM=Oddable` set on my-apps-management; test mail sent 5:39 PM from his Gmail as "Oddable" and confirmed delivered, so email codes / PIN and password reset are live; (3) DONE: Groups on, owner-only (Nov 17 5:44 PM CT); (4) Golf day questions (unfinished cards after close, offline scores, Log my score on the GPS hole screen, commissioner flag colours); (5) stats questions (Games tile vs Standings shortcut, shared first = win, left / deleted groups count?); (6) DONE: the email decision (A, prove-and-join; Oddable side blocked, see OPEN BUG above); (7) DECIDED Nov 17: system presentations (PowerPoints) are only for the Merakris / Master Medical build; Oddable gets none (My Apps listings still open); (8) guests and the five-tab bar when Groups goes public.
 - NEVER VERIFIED ON A REAL PHONE: anything from v264 on. PGA page against a live round: first chance Thu Nov 19.
 - AFTER EVERY PUSH check BOTH Render deploys (steves-pics `srv-dbfc7d8m7kps738hlfgg`, ODDABLE `srv-dbfbg07avr4c73dgr3pg`).
 
@@ -1683,3 +1683,53 @@ Revert this commit. No new stored key except reusing `pics-team-<lg>` / `pics-co
 
 ### To-do for the owner (unchanged)
 Upgrade The Odds API plan (about $30/month) if the app sells. Search spends no credits.
+
+
+## v276 — Nov 17 2026: prove-and-join (a phone sign-in joins the account its email already has)
+
+Coder agent on `main` (from 38b4e62). Pushed after My Apps .43 (`98bc489`, `karaoke-bars`).
+
+**Problem.** Adding an email to a cell number + PIN account answered "That email is already used by another Oddable account." when the address was already an account's sign-in in My Apps (Steve's own address is his console account). **Owner's choice Nov 17: "A", prove-and-join.** **Manager decision (a), Nov 17:** the phone id stays the Oddable identity everywhere; the joined account is used only for plan / access / pay; an email sign-in of that account lands on the same phone id.
+
+### What the person sees (`pics/gate.js`)
+- When "Add an email and password" (or the sign-up's email step) answers `taken`: a screen **"That email already has an account"**: "That email already has an account. Send a code to it to join this phone sign-in to that account." + "Your bets stay just as they are…", buttons **[Send code]** and **[Use a different email]** (back to the email form).
+- Send code -> **"Check your email"** (same style as the confirm-email code screen): code box, **[Join my phone sign-in]**, Resend (30 s apart), Use a different email. Wrong / expired / locked code: the message under the box.
+- Joined -> **"Joined"**: "This phone sign-in is joined to the account for s•••@… Your bets are just as you left them. Sign in with your cell number and PIN, or with that email and its password." + Continue + Share. The reminder card goes away (`has_email_login` true).
+- An older My Apps (no join routes) or "that account already has a phone joined": the screen shows only "That email already has an account. Use a different email." and the one button.
+- Screens: plain, 44 px targets, no sideways scroll at 390 / 820 / 1180, nothing fixed over the sheet (the sheet is `#gate`, z 200; checked by script for every fixed element at z >= 200). Screenshots in the session scratch folder `/tmp/work/shots/` (not in the repo).
+
+### Server
+- `odds-api/recover.js`: `POST /acct/link/join {email}` -> My Apps `/api/v1/link/join` (account from the token only) -> `{ok, sent, hint}`. `POST /acct/link/join/verify {code}` -> `/api/v1/link/join/verify` -> `{ok, joined:true, hint, me}`; **the token is NOT changed** (same phone id). Codes for the phone: `joined` 409, `joingone` 409 (address no longer joinable), `nojoin` **200** (My Apps older than .42: a 404 that is not `account`), plus the usual `code` / `expired` / `locked` / `email` / `nomail` / `limit` / `slow` / `failed`. Limits: 8 starts per 10 min per account and per address, 20 verifies per account. Nothing logged.
+- `odds-api/acct.js`:
+  - `entitlement(e)`: when My Apps' `/api/v1/account` answer for a phone id carries `joined_to` (My Apps .43), the plan is read from that account instead; the cached object gets `plan_acct`. That account suspended / gone = no access (as a suspended account). `shape()` keeps `email` = the phone id and asks `pay/info` for `plan_acct`.
+  - `planAcct(e)` (exported): the account the plan is paid / read through. Used by `/acct/pay`, `/acct/time/request`, `/acct/time/status`, `/acct/redeem`, `/acct/push` (renewal reminders). Only phone ids are looked up (an email account cannot be joined), so email accounts make exactly the calls they made before.
+  - `/acct/login`: when My Apps answers with `phone_account` (the existing account of a join, .43), the token is minted for that PHONE id: owner dashboard, Groups, bets by token (`sync.tokenRow`) all work as for the cell number + PIN.
+  - `/acct/phone`: unchanged (it always minted the phone id); a joined phone's login answer names the joined account, which is ignored here on purpose.
+- NOT changed: `isOwnerPhone`, Groups (`mkOf`), `betwatch`, golf, announce, events, `sync.js`, ref / influencer calls (they stay on the phone id). No Calcutta auction or pickleball group code touched.
+
+### Owner rule
+No new owner powers: owner powers still come from `isOwnerPhone(phone id)` and the owner PIN. A customer phone joined to a customer account gets no dashboard and no Groups (tested). If a phone joins an account whose My Apps role is `owner`, `me.role` reads `owner` as for that account's own sign-in (existing rule).
+
+### Version
+v276 on the whole bump list: index.html (comment, header pill, footer "Oddable v276 (join a phone sign-in to the account its email already has)", `trophy.js`, `alert-frozen.json`, `groups.js` in `grpLoad()`, `gate.js`, `announce.js`, `dash.js`), sports.html (`gate.js`, `groups.js`), sw.js `pics-v276`, pickleball.html, pga.html, golfgps.html (all their tags + comments + footers), groups.js `GDV = '276'`, golfday.js `golfgps.js?v=276`.
+
+### Tests
+- New `node odds-api/join.test.js`, 9 checks (fake My Apps that behaves like .42/.43 + fake `oddable_sync`): owner phone signed in with owner dashboard + Groups + 2 bets, link answers taken; join start takes the account from the token only, wrong / bad code, signed out 401; verify keeps the phone id, owner dashboard and Groups, plan from the joined account, same token; cell number + PIN after the join; **email + password of the joined account -> token for the phone id, owner dashboard, Groups, bets pulled with the token**; pay and pay info through the joined account; a second phone to the same account = `joined`; a customer phone joins its own account with no owner powers; older My Apps -> `nojoin`.
+- Every `odds-api/*.test.js` passes (28 files).
+- Static build command from DEPLOY RULE run on a copy of the checkout: exit 0; no folders in `pics/`.
+- Playwright at 390x844, 820x1180, 1180x820 (gate active, every outside call mocked): join offer, code screen, Joined screen, and the older-My-Apps screen: no sideways scroll, no target under 44 px, nothing fixed over the sheet, no page errors.
+
+### NOT verified
+- Live: My Apps .42/.43 on Render (deploys from `karaoke-bars`) and a real email code. A real phone (iOS Safari). The cross-origin calls from the real page (no new header; the CORS list is unchanged).
+
+### Decisions (Nov 17 2026)
+1. Owner: "A" prove-and-join. Manager: (a) phone id = identity, joined account = plan only. Why: owner powers, Groups, bet alerts, golf and the bets row all key off the phone id; moving the identity would have taken Steve's own owner dashboard away.
+2. The join answer does not change the token. Why: same person, same phone id.
+3. `nojoin` is a 200 like `nomail`. Why: an older My Apps is not an error the person can fix; the screen offers "Use a different email".
+
+### Owner to-do
+1. After both deploys (my-apps-management and the two Oddable services), on your phone: Account box > Add email and password > type steve.smith@buddyrents.com > Send code > type the code from Gmail > "Joined". Then check the owner dashboard and Groups are still there.
+2. Upgrade The Odds API plan (about $30/month) if the app sells.
+
+### Roll back
+Revert this commit. Joins already made stay in My Apps; v275 then mints the joined account's email on an email sign-in (an empty Oddable identity) and reads the phone's own plan (free): those people should use cell number + PIN until v276 is back.

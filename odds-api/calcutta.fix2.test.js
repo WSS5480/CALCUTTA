@@ -115,7 +115,7 @@ srv.listen(0, '127.0.0.1', async () => {
     // (a) postponed on Sunday's page, played Tuesday
     const idP = await wk('Postponed'); at('2026-11-22T12:00:00Z'); await brd(idP);
     NFL.pages['20261122'] = sunday(mkG(12, 'pre', 0, 0, null, 'STATUS_POSTPONED')); NFL.pages['20261124'] = [mkG(12, 'pre', 0, 0, '2026-11-24T23:00Z')];
-    at('2026-11-24T18:00:00Z'); let B = await brd(idP); assert.deepStrictEqual([B.over, B.waiting.sort()], [false, ['Team 25', 'Team 26']], 'Tuesday, the postponed game not played yet: not over, "Waiting on" its teams'); assert.deepStrictEqual(B.waitGames.map((x) => x.slice().sort()), [['Team 25', 'Team 26']], 'v278: the same wait as ONE game (the phone says "the Team 25 vs Team 26 game")');
+    at('2026-11-24T18:00:00Z'); let B = await brd(idP); assert.deepStrictEqual([B.over, B.waiting.sort()], [false, ['Team 25', 'Team 26']], 'Tuesday, the postponed game not played yet: not over, "Waiting on" its teams'); assert.deepStrictEqual(B.waitGames.map((x) => x.slice().sort()), [['Team 25', 'Team 26']], 'v279: the same wait as ONE game (the phone says "the Team 25 vs Team 26 game")');
     assert.ok(C2(B.inPlay) > 0, 'its win slot is still in play');
     NFL.pages['20261124'] = [mkG(12, 'post', 10, 41, '2026-11-24T23:00Z')]; at('2026-11-25T15:00:00Z'); B = await brd(idP);
     assert.deepStrictEqual([B.over, B.waiting, B.unused.slots, C2(B.inPlay)], [true, [], 0, 0], 'Wednesday: final; all 13 win slots filled, nothing unused');

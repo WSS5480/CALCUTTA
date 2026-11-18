@@ -114,8 +114,8 @@ body{padding-bottom:84px}
 .bsd{display:flex;gap:8px;margin:8px 0}.bsd button{flex:1;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:12px;padding:12px;font:800 16px inherit;cursor:pointer}.bsd button.on{background:var(--blue);color:#fff;border-color:var(--blue)}
 #bform label,.kf label{display:block;margin:8px 0;font-size:13px;color:var(--muted)}#bform input,#bform select,.kf input,.kf textarea{display:block;width:100%;margin-top:4px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);font:600 16px inherit}
 .bcard{border:1px solid var(--line);border-radius:28px;padding:12px 10px 10px;margin:14px 0;background:var(--panel)}.bcard.bw{border-color:var(--green)}.bcard.bl{border-color:var(--red)}.bcard .gc{margin:8px 0 0}.bhd{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:0 6px}.bcard .bbtn{padding:0 6px}
-header .thm,.legbtn,.nchips button,.bn{min-height:44px}header .hrow{padding-right:146px;box-sizing:border-box}#plb{position:fixed;top:max(10px,env(safe-area-inset-top));right:12px;z-index:40;padding:8px 16px;border-radius:16px;min-width:116px;font:800 17px/1.1 system-ui;text-align:center;border:1.5px solid;backdrop-filter:blur(8px);box-shadow:0 4px 18px #0008}#plb small.lbl{font-size:9px;letter-spacing:.14em;opacity:.7;margin:0 0 2px}#plb small{display:block;font-size:10px;font-weight:700;opacity:.85;margin-top:1px}
-#plbd{text-align:left;margin-top:8px;border-top:1px solid #fff3;padding-top:6px;width:min(260px,72vw);font:600 12px/1.3 system-ui;color:#eee}#plbd .bk{display:flex;justify-content:space-between;gap:10px;padding:3px 0}#plbd .bk i{display:block;font-style:normal;opacity:.65;font-size:10px}#plbd .bk b.p{color:#4fd18b}#plbd .bk b.n{color:#ff5a4d}#plbd .tot{border-top:1px solid #fff3;margin-top:4px;padding-top:5px;font-weight:800}#plbd .tot2{font-weight:800}[hidden]{display:none!important}#plb{cursor:pointer;transition:opacity .18s,transform .18s}#plb.away{opacity:0;transform:translate3d(0,-130%,0)!important;-webkit-transform:translate3d(0,-130%,0)!important;pointer-events:none}#plb{color:#fff;background:linear-gradient(135deg,#6d35e0f0,#3b1a8cf0);border-color:#ffffff59}#plb .amt{display:block;font-size:22px;letter-spacing:-.01em;margin:1px 0 2px}#plb.pos .amt{color:#8dffbd}#plb.neg .amt{color:#ff9a90}body.bets .thm{display:none}
+header .thm,.legbtn,.nchips button,.bn{min-height:44px}header .hrow{padding-right:var(--plbr,146px);min-height:var(--plbh,0px);box-sizing:border-box}#plb{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);right:12px;z-index:40;padding:8px 16px;border-radius:16px;min-width:116px;font:800 17px/1.1 system-ui;text-align:center;border:1.5px solid;backdrop-filter:blur(8px);box-shadow:0 4px 18px #0008}#plb small.lbl{font-size:9px;letter-spacing:.14em;opacity:.7;margin:0 0 2px}#plb small{display:block;font-size:10px;font-weight:700;opacity:.85;margin-top:1px}
+#plbd{text-align:left;margin-top:8px;border-top:1px solid #fff3;padding-top:6px;width:min(260px,72vw);font:600 12px/1.3 system-ui;color:#eee}#plbd .bk{display:flex;justify-content:space-between;gap:10px;padding:3px 0}#plbd .bk i{display:block;font-style:normal;opacity:.65;font-size:10px}#plbd .bk b.p{color:#4fd18b}#plbd .bk b.n{color:#ff5a4d}#plbd .tot{border-top:1px solid #fff3;margin-top:4px;padding-top:5px;font-weight:800}#plbd .tot2{font-weight:800}[hidden]{display:none!important}#plb{cursor:pointer;transition:opacity .18s,transform .18s}#plb{color:#fff;background:linear-gradient(135deg,#6d35e0f0,#3b1a8cf0);border-color:#ffffff59}#plb .amt{display:block;font-size:22px;letter-spacing:-.01em;margin:1px 0 2px}#plb.pos .amt{color:#8dffbd}#plb.neg .amt{color:#ff9a90}body.bets .thm{display:none}
 html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
 #sc{position:fixed;top:0;left:0;right:0;bottom:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding-bottom:calc(92px + env(safe-area-inset-bottom))}
 .bn,#plb,#ptr{transform:translate3d(0,0,0);-webkit-transform:translate3d(0,0,0);will-change:transform}
@@ -272,10 +272,10 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v278 -->
+<!-- Pics v279 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v278</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v279</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
   <div id="arbbar" class="arbbar" hidden onclick="arbBarTap()" role="button" aria-label="Arbitrage alert"><span class="mq" id="arbmq"></span></div>
   <div class="mrow" id="mrow"><label><span>League</span><select id="lgsel" aria-label="League" autocomplete="off"><option value="nfl">🏈 NFL</option><option value="cfb">🎓 NCAA</option><option value="pga">⛳ PGA Tour</option><option value="golfgps">📍 Golf GPS</option><option value="pickleball">🏓 Pickleball</option><option value="nba">🏀 NBA</option><option value="mlb">⚾ MLB</option><option value="nhl">🏒 NHL</option><option value="ncaab">🏀 NCAAB</option></select></label><label id="gvlab"><span>View</span><select id="gvsel" aria-label="View" autocomplete="off" onchange="gvSet(this.value)"></select></label></div>
   <div class="srow"><input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team"><select id="conf" aria-label="Conference"><option value="">All</option></select></div>
@@ -284,7 +284,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v278 (Calcutta, group pickleball, what's new)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v279 (Calcutta, group pickleball, what's new)</div>
   <div class="sub nsw" id="nsw"></div>
   <div class="sub" id="spset"><label>Score pop-ups <select id="spsel" aria-label="Score pop-ups" autocomplete="off" onchange="spSet(this.value)"><option value="mine">My bets only</option><option value="all">All live games</option><option value="off">Off</option></select></label><div style="font-size:11px;opacity:.75;margin-top:4px">A card pops up when a live game scores or ends, with where your bets stand right now.</div></div>
   <div class="sub" id="bpset"><label>Phone alerts for my bets: every score, and the final. <select id="bpsel" aria-label="Phone alerts for my bets (app closed)" autocomplete="off" onchange="bpSet(this.value)"><option value="off">Off</option><option value="on">On</option></select></label><div class="bph">For when Oddable is closed. Needs Oddable added to your Home Screen on iPhone or iPad, and notifications allowed.</div><div id="bpbbw" hidden><label style="margin-top:6px">Basketball <select id="bpbb" aria-label="Basketball alerts" autocomplete="off" onchange="bpBB(this.value)"><option value="q">Quarter ends and final</option><option value="all">Every score</option></select></label><div class="bph">Every score in basketball can mean 150+ alerts a game.</div></div><div id="bpmsg" role="status"></div><button type="button" id="bptest" hidden onclick="bpTest()">Send me a test</button></div>
@@ -305,7 +305,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </div>
 <div id="plb" hidden></div>
 <nav class="bn" id="bn"></nav>
-<script src="trophy.js?v=278"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
+<script src="trophy.js?v=279"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
 <script>
 // ================= v268 GUEST MODE (1 of 3): the flag. The rest is in the "v268 GUEST MODE" script block near the end of this file and in gate.js. =================
 // window.__oddLock: '' = signed in and paid up, or no gate (everything shows, exactly as before v268) · 'guest' = no account · 'expired' = signed in, time has ended.
@@ -545,7 +545,7 @@ function navMore(open) {
 let GRPL = 0; const GRPQ = [];
 function grpLoad(then) { // pics/groups.js, fetched the first time it is needed
   if (window.OddGroups) { if (then) then(); return; } if (then) GRPQ.push(then); if (GRPL) return; GRPL = 1;
-  const sc = document.createElement('script'); sc.src = 'groups.js?v=278'; sc.onload = () => { GRPQ.splice(0).forEach((f) => { try { f(); } catch (e) {} }); }; sc.onerror = () => { GRPL = 0; GRPQ.length = 0; sc.remove(); }; document.head.appendChild(sc);
+  const sc = document.createElement('script'); sc.src = 'groups.js?v=279'; sc.onload = () => { GRPQ.splice(0).forEach((f) => { try { f(); } catch (e) {} }); }; sc.onerror = () => { GRPL = 0; GRPQ.length = 0; sc.remove(); }; document.head.appendChild(sc);
 }
 // Invite links: https://<site>/?join=g.<code> (built with window.oddShareUrl, so they also carry ?ref=). The code is kept for this tab and taken out of the address bar.
 // Read ONLY when the server says Groups exists (/acct/status `groups`, kept in 'odd-gsw'); with Groups dark the link is left alone and opens the app as any link does.
@@ -746,8 +746,9 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) xlSp
 SC.addEventListener('scroll', () => { window.__scrollAt = Date.now(); }, { passive: true });
 // The TODAY banner floats top-right. It stays in the header's empty corner; once the page scrolls far enough that the
 // sport chips (and everything under them) would slide beneath it, it tucks away, and comes back when you scroll to the top.
-function plbFit() { const pb = $('#plb'), lg = document.querySelector('header .mrow'); if (!pb || !lg || pb.hidden || window.__plbo) return; /* open list is taller: measuring it would hide the banner it just opened */ const under = lg.getBoundingClientRect().top < pb.offsetTop + pb.offsetHeight + 6; pb.classList.toggle('away', under); }
-SC.addEventListener('scroll', () => { if (window.__plbf) return; window.__plbf = requestAnimationFrame(() => { window.__plbf = 0; plbFit(); }); }, { passive: true });
+/* v278: the banner STAYS on screen while scrolling (owner, Nov 17). plbFit() no longer tucks it away; it only reserves room for it in the header (the --plbr / --plbh vars read by `header .hrow`) so at scroll 0 it never sits on the header controls. */
+function plbFit() { const pb = $('#plb'), hr = document.querySelector('header .hrow'), rs = document.documentElement.style; if (!pb || !hr || pb.hidden || !pb.offsetWidth) { rs.removeProperty('--plbr'); rs.removeProperty('--plbh'); return; } const b = pb.getBoundingClientRect(), h = hr.getBoundingClientRect(), top0 = h.top + SC.scrollTop; const r = Math.max(0, Math.ceil(h.right - b.left + 8)); if (r <= 0) { rs.removeProperty('--plbr'); rs.removeProperty('--plbh'); return; } rs.setProperty('--plbr', r + 'px'); rs.setProperty('--plbh', Math.max(0, Math.ceil(b.bottom + 8 - top0)) + 'px'); }
+try { if (window.ResizeObserver) { const ro = new ResizeObserver(() => plbFit()); ro.observe($('#plb')); const hr0 = document.querySelector('header .hrow'); if (hr0) ro.observe(hr0); } } catch (e) {}
 window.addEventListener('resize', () => plbFit());
 document.addEventListener('click', () => { window.__scrollAt = 0; }, true); // a tap is deliberate: don't make its own re-render wait out the scroll guard
 window.__scrollAt = 0; ['scroll', 'touchstart', 'touchmove', 'touchend'].forEach((ev) => window.addEventListener(ev, () => { window.__scrollAt = Date.now(); }, { passive: true }));
@@ -1925,7 +1926,7 @@ async function alertPush() {
   ASQ = Date.now();
   try { const r = await fetch(ALU, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': alertTok() }, body: JSON.stringify({ week: CUR, rec: { lock: a.lock, dogs: a.dogs, helper: { id: h.g.id, abbr: h.abbr, conf: h.conf } } }) }); if (!r.ok) return; const j = await r.json(); if (j && j.rec && j.week === CUR && alertTake(Object.assign({}, ASV, { [CUR]: j.rec }))) render(); } catch (e) {}
 }
-async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=278')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
+async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=279')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
 const trGrade = (p) => { const g = ALL[p.id]; if (!g || g.state !== 'post') return null; const m = (g.home.abbr === p.abbr ? 1 : -1) * (g.home.score - g.away.score) + p.line; return m === 0 ? 'push' : m > 0 ? 'hit' : 'miss'; };
 function trophyData() {
   if (CFB || !window.Trophy || !Trophy.ready()) return null;
@@ -3623,7 +3624,7 @@ if ('serviceWorker' in navigator) {
 })();
 // ================= end v268 GUEST MODE (3 of 3) =================
 </script>
-<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=278"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="announce.js?v=278"><\/script><script src="dash.js?v=278"><\/script>')</script>
+<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=279"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="announce.js?v=279"><\/script><script src="dash.js?v=279"><\/script>')</script>
 <script>
 // ================= WHAT'S NEW POP-UP (Nov 17 2026, branch whats-new; read "## What's new pop-up" in HANDOFF.md) =================
 // A "Look what's new" card listing the LIVE items this device has not been shown yet (guests included). It shows when at least one such item exists,
@@ -3639,7 +3640,7 @@ if ('serviceWorker' in navigator) {
   const go = (href) => () => { try { location.href = href; } catch (e) {} };
   const groupsOn = () => { try { return grpOn(); } catch (e) { return false; } };
   const openGroups = () => { try { if (grpOn()) navGo('groups'); } catch (e) {} }; // the Groups tab: grpLoad + OddGroups.open (it has its own Close / ‹ Back)
-  // v278: Golf days and group pickleball live in the v274 Games catalog (group page > Games). openGames = Groups straight at the Games screen when the
+  // v279: Golf days and group pickleball live in the v274 Games catalog (group page > Games). openGames = Groups straight at the Games screen when the
   // person is in one group, else My groups (pick a group, then Games). Falls back to the Groups tab if groups.js has no openGames.
   const openGames = () => { try { if (!grpOn()) return; if (document.getElementById('bnmore')) navMore(false); grpLoad(() => { if (!grpOn()) return; const G = window.OddGroups; if (G.openGames) G.openGames(); else G.open(); }); } catch (e) {} };
   const hasGame = (k) => { try { return !!window.OddGroups && typeof window.OddGroups.games === 'function' && window.OddGroups.games().some((x) => x.key === k); } catch (e) { return false; } }; // registered in the Games catalog
@@ -3650,11 +3651,11 @@ if ('serviceWorker' in navigator) {
     { id: 'pickleball', icon: '🏓', title: 'Pickleball', line: 'Round robin, King of the Court and more, with points-only Calcutta, skins and pick’em.', isLive: () => true, open: go('pickleball.html') },
     { id: 'groups', icon: '👥', title: 'Groups', line: 'Make a group, invite your friends and see who comes out on top.', isLive: groupsOn, open: openGroups },
     { id: 'golfdays', icon: '🏌️', title: 'Golf days', line: 'Inside a group, tap Games, then Golf day: start a round, log your score, watch the leaderboard.', isLive: groupsOn, open: openGames },
-    // v278 (calc-live merged): both Calcutta items are live where Groups is on AND groups.js registered the 'calcutta' game; they open the Games catalog
+    // v279 (calc-live merged): both Calcutta items are live where Groups is on AND groups.js registered the 'calcutta' game; they open the Games catalog
     // (the Calcutta card is there). Their lines name only what a group can start today; PGA season, golf-day and local-event lots say Coming soon inside the Calcutta only.
     { id: 'calcutta', icon: '🏆', title: 'Calcuttas', line: 'Inside a group, tap Games, then Calcutta: this week’s PGA Tour event, a playoff, or your own in-person event with buy back half.', isLive: () => groupsOn() && hasGame('calcutta'), open: openGames },
     { id: 'calcutta-fb', icon: '🏈', title: 'Football Calcuttas', line: 'NFL and college football weekend games, the NFL season or the playoffs, main or side. In a group: Games, then Calcutta.', isLive: () => groupsOn() && hasGame('calcutta'), open: openGames },
-    // v278: live where Groups is on AND groups.js registered the 'pickleball' game (pics/groups.js addGame); opens the Games catalog like Golf days.
+    // v279: live where Groups is on AND groups.js registered the 'pickleball' game (pics/groups.js addGame); opens the Games catalog like Golf days.
     { id: 'group-pickleball', icon: '🏓', title: 'Group pickleball games', line: 'Inside a group, tap Games, then Pickleball: round robin, brackets, ladder, scores on court.', isLive: () => groupsOn() && hasGame('pickleball'), open: openGames },
   ];
   const isLive = (it) => { try { return !!it.isLive(); } catch (e) { return false; } };
@@ -3669,7 +3670,7 @@ if ('serviceWorker' in navigator) {
   const vis = (id) => { const x = el(id); return !!x && !x.hidden; };
   const busy = () => {
     if (document.hidden) return true;
-    if (el('gate') || el('oddmoved') || el('gnm') || el('oddwarn') || el('kcom') || el('oglock') || el('ogrp') || el('oevt') || el('ocalc') || el('odash') || el('bnmore')) return true; // sign-in / pay / trial, v277's moved card on steves-pics (it wins; the pop-up waits until Not now / Open Oddable removes it, v278), name picker, sport warning, cash-out, Groups lock, Groups (its Games catalog, stats and Golf day screens draw inside #ogrp), group Pickleball (#oevt, v278), the Calcutta (#ocalc, v278; it sits on #ogrp too), dashboard, More
+    if (el('gate') || el('oddmoved') || el('gnm') || el('oddwarn') || el('kcom') || el('oglock') || el('ogrp') || el('oevt') || el('ocalc') || el('odash') || el('bnmore')) return true; // sign-in / pay / trial, v277's moved card on steves-pics (it wins; the pop-up waits until Not now / Open Oddable removes it, v279), name picker, sport warning, cash-out, Groups lock, Groups (its Games catalog, stats and Golf day screens draw inside #ogrp), group Pickleball (#oevt, v279), the Calcutta (#ocalc, v279; it sits on #ogrp too), dashboard, More
     if (['infosheet', 'teampage', 'mv', 'lvov', 'syncsheet', 'aisheet', 'spop'].some(vis)) return true; // info sheet, team page, game view, live overlay, sync, Ask AI, score pop-up (z 400)
     try { if (grpPend()) return true; } catch (e) {} // a group invite in progress
     try { if (typeof BF !== 'undefined' && BF && BF.step) return true; } catch (e) {} // the Add bet / prop / parlay form is open
@@ -3680,7 +3681,7 @@ if ('serviceWorker' in navigator) {
   };
   // Signed in: wait for the account check (gate.js -> oddGroupsChanged / oddMe), at most 10 s, so the Groups items are known before the first card.
   const T0 = Date.now(); let meSeen = false;
-  const ready = () => { if (Date.now() - T0 > 10000) return true; if (groupsOn() && !window.OddGroups) return false; /* v278: a Groups account waits for groups.js (its Games registry says whether group pickleball is live) */ if (!lg('odd-tok') || meSeen) return true; try { return !!(window.oddMe && window.oddMe()); } catch (e) { return false; } };
+  const ready = () => { if (Date.now() - T0 > 10000) return true; if (groupsOn() && !window.OddGroups) return false; /* v279: a Groups account waits for groups.js (its Games registry says whether group pickleball is live) */ if (!lg('odd-tok') || meSeen) return true; try { return !!(window.oddMe && window.oddMe()); } catch (e) { return false; } };
   function css() {
     if (el('oddnewcss')) return; const st = document.createElement('style'); st.id = 'oddnewcss';
     st.textContent = '#oddnew{position:fixed;inset:0;z-index:150;background:rgba(5,8,16,.62);display:flex;align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));box-sizing:border-box}'

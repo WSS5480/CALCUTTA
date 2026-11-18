@@ -18,7 +18,7 @@
 html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
 body{background:var(--bg);color:var(--ink);font:15px/1.35 system-ui,-apple-system,sans-serif}
 #sc{position:fixed;top:0;left:0;right:0;bottom:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding-bottom:84px}
-#plb{transform:translate3d(0,0,0);will-change:transform;transition:opacity .2s,transform .2s}#plb.away{opacity:0;transform:translate3d(0,-130%,0)!important;-webkit-transform:translate3d(0,-130%,0)!important;pointer-events:none}
+#plb{transform:translate3d(0,0,0);will-change:transform}header .hrow{padding-right:var(--plbr,0px);min-height:var(--plbh,0px);box-sizing:border-box}
 header{padding:max(16px,env(safe-area-inset-top)) max(16px,calc((100% - 688px)/2)) 14px;background:linear-gradient(135deg,#7c3aed 0%,#4c1d95 55%,#1b1f29 100%);border-radius:0 0 26px 26px;color:#fff}
 h1{margin:0 0 6px;font-size:26px}
 .lg{display:flex;gap:8px;margin:6px 0;flex-wrap:wrap}.lg a,.lg button{border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.12);color:#fff;border-radius:999px;padding:6px 16px;font:700 14px inherit;cursor:pointer;text-decoration:none}.lg .on{background:#fff;color:#4c1d95}
@@ -41,7 +41,7 @@ main{max-width:720px;margin:0 auto;padding:0 16px}
 .bf .row{display:flex;gap:8px}.bf .row>*{flex:1}.bf button{border:1px solid var(--blue);background:var(--blue);color:#0a0c10;border-radius:12px;padding:10px;font:800 15px inherit}.bf button.x{background:none;color:var(--blue)}
 .note{color:var(--muted);text-align:center;padding:24px 8px}
 a.back{color:var(--blue)}
-#plb{position:fixed;top:max(10px,env(safe-area-inset-top));right:12px;z-index:40;padding:8px 16px;border-radius:16px;min-width:116px;font:800 17px/1.1 system-ui;text-align:center;border:1.5px solid;backdrop-filter:blur(8px);box-shadow:0 4px 18px #0008}#plb small.lbl{font-size:9px;letter-spacing:.14em;opacity:.7;margin:0 0 2px}#plb small{display:block;font-size:10px;font-weight:700;opacity:.85;margin-top:1px}
+#plb{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);right:12px;z-index:40;padding:8px 16px;border-radius:16px;min-width:116px;font:800 17px/1.1 system-ui;text-align:center;border:1.5px solid;backdrop-filter:blur(8px);box-shadow:0 4px 18px #0008}#plb small.lbl{font-size:9px;letter-spacing:.14em;opacity:.7;margin:0 0 2px}#plb small{display:block;font-size:10px;font-weight:700;opacity:.85;margin-top:1px}
 #plbd{text-align:left;margin-top:8px;border-top:1px solid #fff3;padding-top:6px;width:min(260px,72vw);font:600 12px/1.3 system-ui;color:#eee}#plbd .bk{display:flex;justify-content:space-between;gap:10px;padding:3px 0}#plbd .bk i{display:block;font-style:normal;opacity:.65;font-size:10px}#plbd .bk b.p{color:#4fd18b}#plbd .bk b.n{color:#ff5a4d}#plbd .tot{border-top:1px solid #fff3;margin-top:4px;padding-top:5px;font-weight:800}#plbd .tot2{font-weight:800}[hidden]{display:none!important}#plb{cursor:pointer}#plb{color:#fff;background:linear-gradient(135deg,#6d35e0f0,#3b1a8cf0);border-color:#ffffff59}#plb .amt{display:block;font-size:22px;letter-spacing:-.01em;margin:1px 0 2px}#plb.pos .amt{color:#8dffbd}#plb.neg .amt{color:#ff9a90}body.bets .thm{display:none}
 #plb:empty{display:none}
 #mir{position:absolute;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0}
@@ -148,8 +148,10 @@ const NAVI = [['all', '🏠', 'Games'], ['livepg', '📡', 'Live'], ['bets', '�
 function navGo(k) { if (k === 'all') { document.getElementById('sc').scrollTo({ top: 0, behavior: 'smooth' }); return; } try { localStorage.setItem('pics-view', k === 'livepg' ? 'live' : k === 'bets' ? 'bets' : 'main'); if (k === 'win' || k === 'lose') localStorage.setItem('pics-filt', k); } catch (e) {} location.href = './'; }
 document.getElementById('bn').innerHTML = NAVI.map(([k, i, l]) => `<button class="${k === 'all' ? 'on' : ''}" onclick="navGo('${k}')"><span>${i}</span>${l}</button>`).join('');
 const $ = (s) => document.querySelector(s);
-function plbFit() { const pb = $('#plb'), lg = document.querySelector('header .mrow'); if (!pb || !lg || pb.hidden) return; const under = lg.getBoundingClientRect().top < pb.offsetTop + pb.offsetHeight + 6; pb.classList.toggle('away', under); if (under && window.__plbo) { window.__plbo = false; const d = $('#plbd'); if (d) d.hidden = true; } }
-document.getElementById('sc').addEventListener('scroll', () => { if (window.__plbf) return; window.__plbf = requestAnimationFrame(() => { window.__plbf = 0; plbFit(); }); }, { passive: true });
+/* v278: the banner STAYS on screen while scrolling (owner, Nov 17). plbFit() only reserves room for it in the header (--plbr / --plbh read by `header .hrow`). */
+function plbFit() { const pb = $('#plb'), hr = document.querySelector('header .hrow'), rs = document.documentElement.style; if (!pb || !hr || pb.hidden || !pb.offsetWidth) { rs.removeProperty('--plbr'); rs.removeProperty('--plbh'); return; } const b = pb.getBoundingClientRect(), h = hr.getBoundingClientRect(), top0 = h.top + document.getElementById('sc').scrollTop; const r = Math.max(0, Math.ceil(h.right - b.left + 8)); if (r <= 0) { rs.removeProperty('--plbr'); rs.removeProperty('--plbh'); return; } rs.setProperty('--plbr', r + 'px'); rs.setProperty('--plbh', Math.max(0, Math.ceil(b.bottom + 8 - top0)) + 'px'); }
+try { if (window.ResizeObserver) { const ro = new ResizeObserver(() => plbFit()); ro.observe($('#plb')); const hr0 = document.querySelector('header .hrow'); if (hr0) ro.observe(hr0); } } catch (e) {}
+window.addEventListener('resize', () => plbFit());
 const LGS = {
   nba: { path: 'basketball/nba', name: 'NBA', sd: 12, hfa: 2.5, w: 0.8, back: 45, minG: 120, unit: 'pts', q: '' },
   mlb: { path: 'baseball/mlb', name: 'MLB', sd: 4.4, hfa: 0.25, w: 0.8, back: 40, minG: 400, unit: 'runs', q: '' },
@@ -516,7 +518,7 @@ window.oddGuestChanged = function (isLocked) {
 window.afterSignIn = function () {}; // nothing to continue here: the page unlocks in place (Add bet lives on the card that is now drawn)
 // ================= end v268 GUEST MODE (2 of 2) =================
 </script>
-<script src="gate.js?v=278"></script><script src="ai.js"></script><script src="live.js"></script>
+<script src="gate.js?v=279"></script><script src="ai.js"></script><script src="live.js"></script>
 <script>
 function aiCtx(gid) {
   const pc = (v) => Math.round((v || 0) * 100) + '%';
@@ -527,6 +529,6 @@ function aiCtx(gid) {
   return LG.toUpperCase() + ' GAMES:\n' + (L.join('\n') || 'none loaded') + (gid ? '' : '\n\nMY BETS:\n' + (B.join('\n') || 'none'));
 }
 </script>
-<script src="sync.js"></script><script>/* v272 Groups phase 2: the bet step (pics/groups.js) is fetched ONLY when the server switched Groups on for this signed-in account ('odd-grp', kept by gate.js from /acct/me). Nobody else gets the file or makes a /groups call. */window.oddGroupsChanged=function(){try{if(!window.OddGroups&&!window.__grpl&&localStorage.getItem('odd-grp')==='1'&&localStorage.getItem('odd-tok')){window.__grpl=1;var gs=document.createElement('script');gs.src='groups.js?v=278';document.head.appendChild(gs)}}catch(e){}};window.oddGroupsChanged();/* gate.js calls it again once it has the account */</script>
+<script src="sync.js"></script><script>/* v272 Groups phase 2: the bet step (pics/groups.js) is fetched ONLY when the server switched Groups on for this signed-in account ('odd-grp', kept by gate.js from /acct/me). Nobody else gets the file or makes a /groups call. */window.oddGroupsChanged=function(){try{if(!window.OddGroups&&!window.__grpl&&localStorage.getItem('odd-grp')==='1'&&localStorage.getItem('odd-tok')){window.__grpl=1;var gs=document.createElement('script');gs.src='groups.js?v=279';document.head.appendChild(gs)}}catch(e){}};window.oddGroupsChanged();/* gate.js calls it again once it has the account */</script>
 </body>
 </html>

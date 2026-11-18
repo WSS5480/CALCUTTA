@@ -538,7 +538,7 @@ Integration coder (Opus 5.5), branch `integ-279` (built as `integ-275` -> `integ
 - **SHIP NOTE: the odds server READS `pics/pga.js`** (`calcutta-pga.js`). Any release that changes `pics/pga.js` must redeploy ODDABLE (calcutta-odds) with steves-pics. Check BOTH deploys after the push.
 
 ### Fix rounds (after the reviews of the integration; detail in the archive)
-- B1 a bid can no longer land on the wrong lot (both bid controls carry the lot; a tap across a repaint or within 900 ms of a lot change is refused with "The auction moved while you tapped..."; the typed box cannot carry an amount to a new lot). B3 the error / Reconnecting line sits under the bid row, so nothing moves it; short phones get a tighter auction header.
+- B1 a bid can no longer land on the wrong lot (both bid controls carry the lot; a tap across a repaint or within 900 ms of a lot change is refused with "The auction moved while you tapped..."; the typed box cannot carry an amount to a new lot; last review fix: the lot under the finger is compared with NO time limit, so a quick bid or the typed Bid held down for more than 3 s while the commissioner taps Next lot is refused too, with mouse and touch; Enter in the box has no finger and keeps its own checks). B3 the error / Reconnecting line sits under the bid row, so nothing moves it; short phones get a tighter auction header.
 - A1 a lazy-clock status change syncs the Calcutta index, and a deleted Calcutta never comes back as a "closed" ghost. A2 `/local` uses the same cached ended-account check. A3 `local.calcutta.check.js` skips on main. A4 the Groups tab's open and a join link close the Calcutta too.
 
 ### Merge onto v276 (461a3b1)
@@ -566,6 +566,7 @@ On v279 (9823cf2 merged, Nov 18): all 43 `odds-api/*.test.js` exit 0 (`join.test
 - **Calcutta auction with their banner** (`t_b3`, 390x844 inset 59 navy, 390x844 inset 0 light, 820x1180 navy, 1180x820 light, short and two-line team names; 136/136): banner at inset + 10 and under the auction, header at or below the inset, quick bids, Bid and the status line in view, an error / its clearing / Reconnecting / its end move neither the bid row nor the status line, the error and Reconnecting line start in view, nothing covers a control.
 - Team search with the pop-up (`t_ts`, 390 / 820 / 1180 × navy / light): 142/142.
 - Calcutta bids: `t_tap` and `t_tap2b` output identical to the fix round's (every moved tap refused, no bid placed), `t_plain` a plain quick tap and typed Bid still bid.
+- Held bids (reviewer's `t_hold` / `t_hold_touch`, copied, plus a copy aimed at the typed Bid button): $5 or the Bid button held 2.5 s and 3.6 s while the lot moves is refused every time (6/6, no bid placed, "The auction moved while you tapped..."); `t10c_fix` unchanged (3 placed, 1 refused), `t_tap` / `t_tap2b` identical again after this fix.
 - Reviewers' round-3 set (tcap, t1-t3, t5, t6, t8-t12, c_t13, c_terr, c_talign, c_twait, c_twaitg, t4) 18/18 exit 0 (t4 2,016 checks; t5 / t6: the banner covers nothing on the group page or the Calcutta at 320 / 390 / 820 / 1440), t7 with Groups off exit 0.
 
 ### Open / for the manager or owner

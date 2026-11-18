@@ -450,7 +450,7 @@
   }
   function down(ev) { const t = ev.target && ev.target.closest && ev.target.closest('[data-a="bid"],[data-a="bidin"]'); DOWNAMT = t ? { el: t, amt: t.getAttribute('data-amt'), lot: t.getAttribute('data-lot'), at: Date.now() } : null; }
   function click(ev) {
-    const t = ev.target.closest('button,a,[data-a],[data-tab]'); const d0 = DOWNAMT; DOWNAMT = null; const moved = d0 && Date.now() - d0.at < 3000 && (!t || d0.el !== t || d0.amt !== t.getAttribute('data-amt') || d0.lot !== t.getAttribute('data-lot'));
+    const t = ev.target.closest('button,a,[data-a],[data-tab]'); const d0 = DOWNAMT; DOWNAMT = null; const moved = d0 && (d0.lot !== (t && t.getAttribute('data-lot')) || (Date.now() - d0.at < 3000 && (!t || d0.el !== t || d0.amt !== t.getAttribute('data-amt')))); // v279 (review): the lot is compared with NO time limit, so a bid held down longer than 3 s while the lot changes is refused too (quick bids and the typed Bid share this path; Enter in the box has no finger and keeps its own checks)
     if (moved || (t && /^bid(in)?$/.test(t.getAttribute('data-a') || '') && Date.now() - LOTAT < 900)) { if (cur().t === 'auction') { err = 'The auction moved while you tapped. Look again and tap the bid you want.'; note = ''; paint(); } return; }
     if (!t || t.disabled) return; const a = t.getAttribute('data-a');
     if (a === 'close' || (a === 'back' && stack.length < 2)) { window.oddCalc.close(); try { if (window.OddGroups && window.OddGroups.refresh) window.OddGroups.refresh(); } catch (x) {} return; } // back to the group page under it (v279: the Games screen under it asks its states again)

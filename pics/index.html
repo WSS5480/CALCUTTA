@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<script>/* what's new pop-up: did this open come by a link that opens its own screen? Read before gate.js / announce.js / the page clean the address. ?pay= ?open= ?add= slip= always open a screen. ?join= opens one only where Groups exists: a launch when this device knows Groups exists (odd-gsw), or, when it has never heard from the server (no odd-gate yet), on the first load of this tab only; a ?join= left in the address while Groups is dark does not block later opens. ?ref= opens nothing. */ (function(){var L=false;try{var q=location.search+location.hash;L=/[?&#](pay|open|add|slip)=/.test(q);if(!L&&/[?&]join=/.test(location.search)){var gs=null,gt=null;try{gs=localStorage.getItem('odd-gsw');gt=localStorage.getItem('odd-gate')}catch(e){}if(gs==='1')L=true;else if(gt===null){var k='odd-new-j'+location.search,first=true;try{first=!sessionStorage.getItem(k);sessionStorage.setItem(k,'1')}catch(e){}L=first}}}catch(e){L=false}window.__oddLaunch=L})()</script>
+<script>/* what's new pop-up: did this open come by a link that opens its own screen? Read before gate.js / announce.js / the page clean the address. ?pay= ?open= ?add= slip= always open a screen. ?join= opens one only where Groups exists: a launch when this device knows Groups exists (odd-gsw), or, when it has never heard from the server (no odd-gate yet), on the first load of this tab only; a ?join= left in the address while Groups is dark does not block later opens. ?ref= opens nothing. v283: their v280 owner-PIN card's "Sign in with cell number" signs out and reloads with sessionStorage odd-goin, and gate.js then opens the cell + PIN sign-in: that open counts as a launch too, so the pop-up never races it. */ (function(){var L=false;try{var q=location.search+location.hash;L=/[?&#](pay|open|add|slip)=/.test(q);if(!L&&/[?&]join=/.test(location.search)){var gs=null,gt=null;try{gs=localStorage.getItem('odd-gsw');gt=localStorage.getItem('odd-gate')}catch(e){}if(gs==='1')L=true;else if(gt===null){var k='odd-new-j'+location.search,first=true;try{first=!sessionStorage.getItem(k);sessionStorage.setItem(k,'1')}catch(e){}L=first}}if(!L){try{L=sessionStorage.getItem('odd-goin')==='1'}catch(e){}}}catch(e){L=false}window.__oddLaunch=L})()</script>
 <script>try{if(localStorage.getItem('pics-theme')!=='violet')document.documentElement.classList.add('cb')}catch(e){document.documentElement.classList.add('cb')}function themeSet(v){try{localStorage.setItem('pics-theme',v)}catch(e){}location.reload()}document.addEventListener('DOMContentLoaded',()=>{if(document.documentElement.classList.contains('cb')){const m=document.querySelector('meta[name=theme-color]');if(m)m.content='#041e42'}})</script>
 
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -155,6 +155,8 @@ html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
 .bc.bc-black{--bc-bg:#111111;--bc-border:#26324d;--bc-text:#ffffff;--bc-dim:#9aa6bd;--bc-win-bg:#143d1c;--bc-win-text:#b9f5c2;--bc-lose-bg:#4a1616;--bc-lose-text:#ffc2c2;--bc-neutral-bg:#1d2740;--bc-neutral-text:#c9d6f2}
 .bc.bc-light{--bc-bg:#ffffff;--bc-border:#c3cad8;--bc-text:#1a2233;--bc-dim:#4d586b;--bc-win-bg:#dcf5e6;--bc-win-text:#0b5a30;--bc-lose-bg:#fde3e3;--bc-lose-text:#8f1a1a;--bc-neutral-bg:#e8ecf3;--bc-neutral-text:#1a2233}
 .bc.bc-green{--bc-bg:linear-gradient(135deg,#0e5a36,#083d24);--bc-border:#5fae84;--bc-text:#ffffff;--bc-dim:#cfe8da;--bc-win-bg:#052a17;--bc-win-text:#a7f3c5;--bc-lose-bg:#5a1a20;--bc-lose-text:#ffc7c7;--bc-neutral-bg:#06301c;--bc-neutral-text:#e6f4ec}
+/* v281: default (oddable) preset on the bet cards (My Bets + Today's bets sheet) uses the colours of the My Bets summary tiles (.sum): var(--panel) fill, var(--line) border, var(--ink) / var(--muted) text, 14px radius. Pills keep their own win / lose colours. The score pop-up (#spop and the cards inside it) keeps the blue. */
+.scc.bc.bc-oddable,.bc.bc-oddable:not(#spop) .scc{--bc-bg:var(--panel);--bc-border:var(--line);--bc-text:var(--ink);--bc-dim:var(--muted);--bc-neutral-bg:var(--panel2);--bc-neutral-text:var(--ink);border-radius:14px}
 .scc{background:var(--bc-bg);color:var(--bc-text);border:1px solid var(--bc-border);border-radius:20px;padding:12px 14px;margin:0 0 10px;font:14px/1.25 system-ui;text-align:left;box-sizing:border-box}
 .sct{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 8px}.scc.hasx>.sct:first-child{padding-right:36px;min-height:28px}.sct.scb{margin-top:8px;justify-content:flex-start}
 .scl{min-width:0;overflow-wrap:anywhere}.scl b{font-size:15px;font-weight:700}.scl small{color:var(--bc-dim);font-size:13px}
@@ -164,6 +166,12 @@ html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
 .scS{font:800 36px/1 system-ui;font-variant-numeric:tabular-nums;padding:0 2px}.scS.pre{color:var(--bc-dim)}
 .scC{min-width:0}.scC b{display:block;font-size:15px}.scC small{display:block;color:var(--bc-dim);font-size:12.5px;font-weight:600;overflow-wrap:anywhere}
 .scf{margin-top:6px;color:var(--bc-text);font-size:12.5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}.scm{margin-top:4px;color:var(--bc-dim);font-size:12px}
+.mbopin{border:1px solid var(--line,#2a3550);border-radius:12px;padding:10px 12px;margin:0 0 10px;font-size:15px;overflow-wrap:anywhere}.mbopin button{display:block;width:100%;min-height:44px;margin-top:8px;border-radius:10px;border:0;background:#2f6fed;color:#fff;font:700 15px inherit;cursor:pointer;white-space:normal}@media(min-width:700px){.mbopin{display:flex;align-items:center;gap:12px}.mbopin>div{flex:1}.mbopin button{width:auto;margin:0;padding:8px 16px}}.mbgrid>.mbc{margin:0 0 12px}@media(min-width:700px){.mbgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;align-items:start}.mbgrid>.mbc{margin:0}}
+.mbc.bw{border-color:var(--bc-win-text)}.mbc.bl{border-color:var(--bc-lose-text)}.mbc .sub{color:var(--bc-dim)}.mbc .mbwa{color:var(--bc-win-text)}.mbc .mbag{color:var(--bc-lose-text)}.mbc .mbm{margin-top:8px;font-size:14px;color:var(--bc-text);overflow-wrap:anywhere}.mbc .mbapp{margin-top:4px;font-size:12.5px}.mbc .mbtx{margin:10px 0 4px;font-size:15px;font-weight:600;color:var(--bc-text);overflow-wrap:anywhere}
+.mbc .bbtn,.mbc .legbtn{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;padding:0}.mbc .bbtn button,.mbc .legbtn button{background:transparent;color:var(--bc-text);border:1px solid var(--bc-border);border-radius:10px;min-height:44px;min-width:44px;padding:8px 12px;font:600 14px system-ui;cursor:pointer}.mbc .bbtn .sub{align-self:center}
+.mbc .scdd{text-align:center;font-size:13px;font-weight:700;color:var(--bc-dim);margin-top:2px}.mbc .scf{text-align:center}.mbc .gcx{margin-top:8px;background:var(--panel);color:var(--ink);border-radius:12px;padding:6px}
+.mbc .kcob{border-color:var(--bc-lose-text);color:var(--bc-lose-text);min-height:44px;padding:8px 14px;margin:6px 0 0}.mbc [data-kco] span[style*='color']{color:var(--bc-text)!important}.mbc .ldate{border-color:var(--bc-border);color:var(--bc-dim)}.mbc .ldate.diff{background:#facc15;border-color:#facc15;color:#1b1400}.mbc .pm.hit{color:var(--bc-win-text)}.mbc .pm.miss{color:var(--bc-lose-text)}
+.mbl{border-top:1px solid var(--bc-border);margin-top:10px;padding-top:8px}.mbl .scl small{color:var(--bc-dim)}.mbl .scg{margin:6px 0 2px}.mbl .scS{font-size:24px}.mbl .scT b{font-size:15px}.mbl .scT small{font-size:11.5px}.mbl .scC b{font-size:13px}.mbl .scC small{font-size:11.5px}.mbl .pm{display:inline-block;min-width:22px;text-align:center}
 .scdot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#ef4444;margin-right:5px;vertical-align:middle}
 #spop{position:fixed;left:8px;right:8px;bottom:76px;margin:0 auto;max-width:460px;z-index:400;border-radius:20px;box-shadow:0 8px 26px #000b;opacity:0;transition:opacity .2s}#spop.in{opacity:1}#spop[hidden]{display:none}
 @media (prefers-reduced-motion:reduce){#spop{transition:none}}
@@ -272,10 +280,10 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v279 -->
+<!-- Pics v283 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v279</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v283</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
   <div id="arbbar" class="arbbar" hidden onclick="arbBarTap()" role="button" aria-label="Arbitrage alert"><span class="mq" id="arbmq"></span></div>
   <div class="mrow" id="mrow"><label><span>League</span><select id="lgsel" aria-label="League" autocomplete="off"><option value="nfl">🏈 NFL</option><option value="cfb">🎓 NCAA</option><option value="pga">⛳ PGA Tour</option><option value="golfgps">📍 Golf GPS</option><option value="pickleball">🏓 Pickleball</option><option value="nba">🏀 NBA</option><option value="mlb">⚾ MLB</option><option value="nhl">🏒 NHL</option><option value="ncaab">🏀 NCAAB</option></select></label><label id="gvlab"><span>View</span><select id="gvsel" aria-label="View" autocomplete="off" onchange="gvSet(this.value)"></select></label></div>
   <div class="srow"><input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team"><select id="conf" aria-label="Conference"><option value="">All</option></select></div>
@@ -284,7 +292,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v279 (Calcutta, group pickleball, what's new)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v283 (Calcutta, group pickleball, what's new)</div>
   <div class="sub nsw" id="nsw"></div>
   <div class="sub" id="spset"><label>Score pop-ups <select id="spsel" aria-label="Score pop-ups" autocomplete="off" onchange="spSet(this.value)"><option value="mine">My bets only</option><option value="all">All live games</option><option value="off">Off</option></select></label><div style="font-size:11px;opacity:.75;margin-top:4px">A card pops up when a live game scores or ends, with where your bets stand right now.</div></div>
   <div class="sub" id="bpset"><label>Phone alerts for my bets: every score, and the final. <select id="bpsel" aria-label="Phone alerts for my bets (app closed)" autocomplete="off" onchange="bpSet(this.value)"><option value="off">Off</option><option value="on">On</option></select></label><div class="bph">For when Oddable is closed. Needs Oddable added to your Home Screen on iPhone or iPad, and notifications allowed.</div><div id="bpbbw" hidden><label style="margin-top:6px">Basketball <select id="bpbb" aria-label="Basketball alerts" autocomplete="off" onchange="bpBB(this.value)"><option value="q">Quarter ends and final</option><option value="all">Every score</option></select></label><div class="bph">Every score in basketball can mean 150+ alerts a game.</div></div><div id="bpmsg" role="status"></div><button type="button" id="bptest" hidden onclick="bpTest()">Send me a test</button></div>
@@ -305,7 +313,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </div>
 <div id="plb" hidden></div>
 <nav class="bn" id="bn"></nav>
-<script src="trophy.js?v=279"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
+<script src="trophy.js?v=283"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
 <script>
 // ================= v268 GUEST MODE (1 of 3): the flag. The rest is in the "v268 GUEST MODE" script block near the end of this file and in gate.js. =================
 // window.__oddLock: '' = signed in and paid up, or no gate (everything shows, exactly as before v268) · 'guest' = no account · 'expired' = signed in, time has ended.
@@ -518,7 +526,7 @@ function newBoard(games) {
 function swRender() { const e = $('#nsw'); if (e) e.innerHTML = STYLE === 'new' ? '<a onclick="styleSet(\'classic\')">Use classic view</a> · <a href="classic.html">frozen classic build</a>' : '<a onclick="styleSet(\'new\')">Use new look</a>'; if (e) e.innerHTML += ' · <a onclick="themeSet(document.documentElement.classList.contains(\'cb\') ? \'violet\' : \'cowboys\')">' + (document.documentElement.classList.contains('cb') ? 'Original violet colors' : 'Cowboys colors') + '</a>'; }
 function navRender() { swRender();
   const anyLive = Object.values(ALL).some((g) => g.state === 'in');
-  if (grpOn()) return navRender5(anyLive); // v272: the five-tab bar, only for an account Groups is switched on for. Everyone else: the bar below, unchanged.
+  if (grpBar()) return navRender5(anyLive); // v272: the five-tab bar, only for an account Groups is switched on for. Everyone else: the bar below, unchanged.
   const it = [['all', '🏠', 'Games'], ['livepg', '📡', 'Live'], ['bets', '🧾', 'My Bets'], ['surv', '🛡️', 'Survivor'], ['win', '✅', 'Winning'], ['lose', '🔻', 'Losing']];
   try { if (localStorage.getItem('odd-dash') === '1') it.push(['dash', '📊', 'Dashboard']); } catch (e) {}
   $('#bn').classList.toggle('n7', it.length > 6); $('#bn').innerHTML = it.map(([k, i, l]) => `<button class="${(k === 'livepg' ? VIEW === 'live' : k === 'bets' ? VIEW === 'bets' : k === 'surv' ? VIEW === 'surv' : VIEW === 'main' && FILT === k) ? 'on' : ''}" onclick="navGo('${k}')"><span>${i}</span>${l}${k === 'livepg' && anyLive ? '<i class="dot"></i>' : ''}</button>`).join('');
@@ -526,7 +534,9 @@ function navRender() { swRender();
 // ================= v272 GROUPS PHASE 2: the switch, the five-tab bar, invite links =================
 // grpOn(): the server said Groups is on for THIS signed-in account (gate.js keeps `me.groups` from /acct/me in 'odd-grp'; env GROUPS_ENABLED / GROUPS_OWNER_ONLY /
 // GROUPS_TESTERS on the odds server). False for everybody else and in ?mirror=1: no tab, no More sheet, pics/groups.js is never requested, no /groups call.
-const grpOn = () => { try { return !/[?&]mirror=1/.test(location.search) && localStorage.getItem('odd-grp') === '1' && !!localStorage.getItem('odd-tok'); } catch (e) { return false; } };
+const grpOn = () => { try { return !/[?&]mirror=1/.test(location.search) && (localStorage.getItem('odd-grp') === '1' || localStorage.getItem('odd-gpub') === '1') && !!localStorage.getItem('odd-tok'); } catch (e) { return false; } }; // v282: 'odd-gpub' (gate.js, /acct/status `gpub`) = Groups open to everyone: every signed-in account counts, whatever its own flag says
+// grpBar(): the five-tab bar. A Groups account (grpOn) always; a GUEST (no account) only while the server says Groups is open to everyone ('odd-gpub'). A guest never loads groups.js and never calls /groups/*.
+const grpBar = () => { try { return grpOn() || (!/[?&]mirror=1/.test(location.search) && localStorage.getItem('odd-gpub') === '1'); } catch (e) { return false; } };
 const grpOpen = () => !!document.getElementById('ogrp');
 // FIVE buttons: Games, Live, My Bets, Groups, More. Survivor, Winning, Losing and the owner's Dashboard move into the More sheet; More is lit while one of them shows.
 function navRender5(anyLive) {
@@ -545,7 +555,7 @@ function navMore(open) {
 let GRPL = 0; const GRPQ = [];
 function grpLoad(then) { // pics/groups.js, fetched the first time it is needed
   if (window.OddGroups) { if (then) then(); return; } if (then) GRPQ.push(then); if (GRPL) return; GRPL = 1;
-  const sc = document.createElement('script'); sc.src = 'groups.js?v=279'; sc.onload = () => { GRPQ.splice(0).forEach((f) => { try { f(); } catch (e) {} }); }; sc.onerror = () => { GRPL = 0; GRPQ.length = 0; sc.remove(); }; document.head.appendChild(sc);
+  const sc = document.createElement('script'); sc.src = 'groups.js?v=283'; sc.onload = () => { GRPQ.splice(0).forEach((f) => { try { f(); } catch (e) {} }); }; sc.onerror = () => { GRPL = 0; GRPQ.length = 0; sc.remove(); }; document.head.appendChild(sc);
 }
 // Invite links: https://<site>/?join=g.<code> (built with window.oddShareUrl, so they also carry ?ref=). The code is kept for this tab and taken out of the address bar.
 // Read ONLY when the server says Groups exists (/acct/status `groups`, kept in 'odd-gsw'); with Groups dark the link is left alone and opens the app as any link does.
@@ -566,18 +576,18 @@ async function grpAsk(btn) {
   catch (e) { if (m) m.textContent = 'Could not reach the server. Try again in a moment.'; if (btn) btn.disabled = false; }
 }
 // gate.js calls these: oddGroupsSw() when /acct/status says Groups exists; oddGroupsChanged() each time it has the account (`me`) from the server.
-let GRPWAS = grpOn();
+let GRPWAS = grpBar();
 window.oddGroupsSw = function () { grpCapture(); if (!grpPend()) return; setTimeout(() => { try { if (grpPend() && window.__oddLock === 'guest' && !lsg('odd-tok') && window.oddSignUp) window.oddSignUp('group:g:' + grpPend()); } catch (e) {} }, 400); }; // a guest with an invite: the sign-up sheet, then afterSignIn brings them back
 window.oddGroupsChanged = function () {
-  const on = grpOn(); if (on !== GRPWAS) { GRPWAS = on; if (!on) { navMore(false); try { if (window.OddGroups) window.OddGroups.close(); } catch (e) {} } try { navRender(); } catch (e) {} }
+  const on = grpOn(), bar = grpBar(); if (bar !== GRPWAS) { GRPWAS = bar; if (!bar) { navMore(false); try { if (window.OddGroups) window.OddGroups.close(); } catch (e) {} } try { navRender(); } catch (e) {} }
   if (on) grpLoad(grpJoinRun); else if (lsg('odd-gsw') === '1') grpJoinRun();
 };
-if (GRPWAS) setTimeout(() => grpLoad(), 1500); // a known Groups account: the file is ready before the first bet (the bet step lives in it)
+if (grpOn()) setTimeout(() => grpLoad(), 1500); // a known Groups account: the file is ready before the first bet (the bet step lives in it)
 // ================= end v272 Groups (switch, bar, invites) =================
 function navGo(k) {
   if (k === 'more') { navMore(!document.getElementById('bnmore')); return; }
   if (document.getElementById('bnmore')) navMore(false);
-  if (k === 'groups') { grpLoad(() => { if (grpOn()) window.OddGroups.open(); }); return; }
+  if (k === 'groups') { if (!lsg('odd-tok')) { if (window.oddSignUp) window.oddSignUp('groups'); return; } /* v282: a guest taps Groups -> the sign-up screen ("Groups needs a free account"), no file, no /groups call */ grpLoad(() => { if (grpOn()) window.OddGroups.open(); }); return; }
   if (grpOpen()) { try { window.OddGroups.close(); } catch (e) {} }
   if (k === 'livepg') { setView('live'); return; }
   if (k === 'bets') { setView('bets'); return; }
@@ -798,6 +808,10 @@ let NFLAB = null;
 const bSport1 = (o) => { const lg = (o.lg || '').toLowerCase(); if (lg === 'cfb') return 'ncaa'; if (lg === 'nfl' || lg === 'ncaa' || BSPN[lg]) return lg; const g = o.gid && ALL[o.gid]; const ab = g ? [g.home.abbr, g.away.abbr] : [o.home, o.away]; if (ab[0] || ab[1]) { if (!NFLAB) NFLAB = new Set(Object.values(NFLD).flat()); return NFLAB.has(ab[0]) || NFLAB.has(ab[1]) ? 'nfl' : 'ncaa'; } return 'other'; };
 const bSports = (b) => new Set(b.kind === 'parlay' ? (b.legs || []).map(bSport1) : [bSport1(b)]);
 function bSportSet(v) { BSP = v || 'all'; try { localStorage.setItem('pics-bsp', BSP); } catch (e) {} BDRILL = null; betsRender(true); }
+// v280: the OWNER-PIN sign-in (owner token from /acct/owner) has no bets row, so My Bets is empty there. Tell him, with a way to the cell + PIN sign-in (gate.js oddOutToPhone). Not shown for phone or email sign-ins.
+function mbOpinCard() { try { if (!window.oddOwnerPin || !window.oddOwnerPin()) return ''; } catch (e) { return ''; } return '<div class="mbopin" id="mbopin" role="note"><div>Owner PIN sign-in has no bets. Sign in with your cell number to see yours.</div><button onclick="mbOpinGo()">Sign in with cell number</button></div>'; }
+function mbOpinGo() { if (window.oddOutToPhone) window.oddOutToPhone(); }
+window.oddMeChanged = function () { try { if (VIEW === 'bets') betsRender(true); } catch (e) {} };
 function betsRender(force) {
   const el = $('#betspage'); if (!el) return; if (SQ.cur && !BF && !SQ.busy) sqReviewEnd(); try { spReconcile(); } catch (e) {} kLegLink(); if (!force && scrolling()) { clearTimeout(window.__bdef); window.__bdef = setTimeout(() => betsRender(), 800); return; } try { betSync(); } catch (e) {}
   const done = BETS.map((b) => ({ b, r: betGrade(b) })), fin = done.filter((x) => ['won', 'lost', 'push'].includes(x.r.st));
@@ -846,17 +860,10 @@ function betsRender(force) {
   const stake = finV.reduce((a, x) => a + (x.b.stake || 0), 0);
   const ordr = { live: 0, pending: 1, won: 2, lost: 2, push: 2 };
   const sortF = (a, z) => ordr[a.r.st] - ordr[z.r.st] || (z.b.t || 0) - (a.b.t || 0);
-  const cardHtml = ({ b, r }) => {
+  const cardHtml = ({ b, r }) => { // v279: every bet card is drawn in the Today's bets look (scCard); one card per bet
     if (b.kind === 'parlay') return parlayCard(b, r, money);
     if (b.kind === 'prop') return propCard(b, r, money);
-    const g = r.g, ag = betAgainst(b);
-    const what = b.type === 'sp' ? `${b.side} ${sgn(b.line)}` : `${b.side} to win`;
-    const sc = g && g.state !== 'pre' ? `${g.away.abbr} ${g.away.score} – ${g.home.abbr} ${g.home.score}${g.state === 'in' ? ' · ' + g.detail : ' · Final'}` : (g ? new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : 'game not loaded');
-    const badge = r.st === 'live' ? `<span class="b ${r.cur === 'won' ? 'hit' : r.cur === 'lost' ? 'miss' : 'push'}">● LIVE ${r.cur === 'won' ? 'covering' : r.cur === 'lost' ? 'losing' : 'even'}</span>` : r.st === 'pending' ? '<span class="b push">Pending</span>' : `<span class="b ${r.st === 'won' ? 'hit' : r.st === 'lost' ? 'miss' : 'push'}">${r.st === 'won' ? '✓ WON' : r.st === 'lost' ? '✗ LOST' : 'PUSH'} ${money(betPL(b, r.st))}</span>`;
-    return `<div class="bcard ${['won', 'lost'].includes(r.st) ? (r.st === 'won' ? 'bw' : 'bl') : r.st === 'live' ? (r.cur === 'won' ? 'bw' : r.cur === 'lost' ? 'bl' : '') : ''}"><div class="bhd"><div><div class="bwhat">${what}${b.stake ? ` <small>· ${usd(b.stake)}</small>` : ''}${b.mult ? ` <small>· pays ${b.mult}x</small>` : (b.odds && b.odds !== -110 ? ` <small>· ${sgn(b.odds)}</small>` : '')}</div><div class="sub">${b.noApp ? '<b>Imported slip</b> · open the ' + (b.lg || '').toUpperCase() + ' page once to add the app pick' : (ag ? '<b style="color:var(--red)">Against the app</b>' : '<b style="color:var(--green)">With the app</b>') + ' · app had ' + b.appSu + (b.appConf ? ' ' + pct(b.appConf) : '')}${b.type === 'sp' && b.appAts ? ' · spread ' + b.appAts : ''}${b.type === 'sp' && b.appLine !== null && b.appLine !== undefined ? ' · app line ' + sgn(b.side === b.home ? -b.appLine : b.appLine) : ''}</div></div>${badge}</div>
-      ${g && g.state !== 'pre' ? `<div class="sub" style="margin:4px 0"><b>${sc}</b></div>` : ''}${g ? (ALL[b.gid] ? gameCard(g, true) : miniGame(g) + liveBtn(b.gid)) : `<div class="sub" style="padding:8px 0">${b.away} @ ${b.home} · wk ${b.week} · game not loaded</div>`}
-      ${b.cash !== undefined && b.cash !== null ? `<div class="sub" style="margin:6px 0">💵 Cashed out on Kalshi for <b>$${Number(b.cash).toFixed(2)}</b> (${b.cash >= (b.stake || 0) ? '+' : '-'}$${Math.abs(b.cash - (b.stake || 0)).toFixed(2)})${b.soldN ? ' · ' + b.soldN + ' contracts' : ''}</div>` : ''}${b.src === 'kalshi' && !b.res && b.kt && b.kn && (b.cash === undefined || b.cash === null) ? `<div class="sub" data-kco="${escH(b.id)}" style="margin:6px 0">💵 Checking cash-out value…</div>` : ''}
-      <div class="bbtn">${gLk(b) ? gLkTag : `<button onclick="betEdit('${b.id}')">Edit</button><button onclick="betDel('${b.id}')">Delete</button>`}</div></div>`;
+    return mbSingle(b, r, money);
   };
   const isPast = (x) => betDay(x.b) < today && ['won', 'lost', 'push'].includes(x.r.st);
   const pastBy = {}; done.filter(isPast).forEach((x) => { (pastBy[betDay(x.b)] = pastBy[betDay(x.b)] || []).push(x); });
@@ -871,12 +878,12 @@ function betsRender(force) {
     else if (D.k === 'open') { rows = doneV.filter((x) => !['won', 'lost', 'push'].includes(x.r.st)); ttl = 'Open bets'; }
     else { rows = finV.filter((x) => !D.from || betDay(x.b) >= D.from); ttl = D.lbl + ' — settled bets'; }
     const net = rows.reduce((a, x) => a + (x.r.st === 'won' ? betPL(x.b, 'won') : x.r.st === 'lost' ? betPL(x.b, 'lost') : 0), 0);
-    drillHtml = `<div class="lpg"><button class="pill" style="margin:4px 0 10px" onclick="bDrill(null)">← Back</button><div class="bh"><h2>${ttl}</h2></div><div class="sub" style="margin-bottom:8px">${rows.length} bet${rows.length === 1 ? '' : 's'}${D.k !== 'open' && rows.length ? ' · ' + money(net) : ''}</div>${rows.slice().sort(sortF).map(cardHtml).join('') || '<div class="note">Nothing here yet.</div>'}<button class="pill" style="margin:10px 0" onclick="bDrill(null)">← Back to My Bets</button></div>`;
+    drillHtml = `<div class="lpg"><button class="pill" style="margin:4px 0 10px" onclick="bDrill(null)">← Back</button><div class="bh"><h2>${ttl}</h2></div><div class="sub" style="margin-bottom:8px">${rows.length} bet${rows.length === 1 ? '' : 's'}${D.k !== 'open' && rows.length ? ' · ' + money(net) : ''}</div>${rows.length ? '<div class="mbgrid">' + rows.slice().sort(sortF).map(cardHtml).join('') + '</div>' : '<div class="note">Nothing here yet.</div>'}<button class="pill" style="margin:10px 0" onclick="bDrill(null)">← Back to My Bets</button></div>`;
   }
   const sportSel = Object.keys(spCnt).length > 1 ? `<div class="srow" style="margin:0 0 8px"><select onchange="bSportSet(this.value)" aria-label="Filter bets by sport"><option value="all">All sports (${done.length})</option>${Object.keys(BSPN).filter((k) => spCnt[k]).map((k) => `<option value="${k}" ${BSP === k ? 'selected' : ''}>${BSPN[k]} (${spCnt[k]})</option>`).join('')}</select></div>${BSP !== 'all' ? `<div class="sub" style="margin:-2px 0 8px">Showing ${BSPN[BSP]} only · the TODAY box and daily log still count every sport</div>` : ''}` : '';
   const html = drillHtml || `<div class="lpg"><div class="bh"><h2>My Bets</h2><div class="pillw"><button class="pill" onclick="aiOpen(null,'Analyze all my open bets one by one: for each say keep, hedge or leave alone with a one-line reason using the model numbers, then give an overall risk summary.')">🤖 Analyze</button><button class="pill" onclick="addMenu()">＋ Add bet ▾</button><div id="addmenu" ${window.__addm ? '' : 'hidden'}><button onclick="addMenu(0);betNew()">✍️ Add a bet</button><label>📷 Upload bet screenshots (one or many)<small>Pick several pictures at once. Each picture is one slip.</small><input type="file" accept="image/*" multiple hidden onchange="addMenu(0);betImportFiles(this.files);this.value=''"></label><button onclick="addMenu(0);slipPaste()">📋 Paste slip text</button><button onclick="addMenu(0);aiOpen()">🤖 Ask Claude</button>${lsg('kal-id') ? `<button onclick="addMenu(0);kalshiSync(true)">🔄 Sync Kalshi now</button><button onclick="addMenu(0);kalshiOff()">⛓️‍💥 Disconnect Kalshi</button>` : `<button onclick="addMenu(0);kalshiConnect()">⚡ Connect Kalshi</button>`}</div></div></div>
-    <div class="sums">${stat('Overall', all, stake ? ' · ' + usd(stake) + ' staked' : '', 'all')}${stat('Against the app', agA, '', 'against')}${stat('With the app', withA, '', 'with')}<div class="sum" data-dr="1" onclick="bDrill('open')"><b>${doneV.length - finV.length}</b><span>Open bets</span><small>${doneV.length} total</small></div></div>
-    ${KFORM && !(lsg('kal-id') && lsg('kal-pem')) ? kalshiFormHtml() : ''}${sportSel}${perfHtml}<div class="sub" style="margin:0 0 6px"><span id="kst"></span></div><div class="sub" id="impst" style="margin:-4px 0 8px">${IMP}</div><div id="sqbox"></div><div id="bform">${BF ? betFormHtml() : ''}</div>${logHtmlF()}${list || '<div class="note">No bets yet. Tap “Add a bet”, pick a game, then set your side and the line you got.</div>'}</div>`;
+    ${mbOpinCard()}<div class="sums">${stat('Overall', all, stake ? ' · ' + usd(stake) + ' staked' : '', 'all')}${stat('Against the app', agA, '', 'against')}${stat('With the app', withA, '', 'with')}<div class="sum" data-dr="1" onclick="bDrill('open')"><b>${doneV.length - finV.length}</b><span>Open bets</span><small>${doneV.length} total</small></div></div>
+    ${KFORM && !(lsg('kal-id') && lsg('kal-pem')) ? kalshiFormHtml() : ''}${sportSel}${perfHtml}<div class="sub" style="margin:0 0 6px"><span id="kst"></span></div><div class="sub" id="impst" style="margin:-4px 0 8px">${IMP}</div><div id="sqbox"></div><div id="bform">${BF ? betFormHtml() : ''}</div>${logHtmlF()}${list ? '<div class="mbgrid">' + list + '</div>' : '<div class="note">No bets yet. Tap “Add a bet”, pick a game, then set your side and the line you got.</div>'}</div>`;
   const kt = lsg('kal-id') ? (KST || 'Kalshi connected') : (KST || '');
   const hh = html.replace('<span id="kst"></span>', '');
   if (el.__h !== hh) { el.innerHTML = html; el.__h = hh; }
@@ -1379,16 +1386,44 @@ function legText(l) { if (!l.gid) return escH(l.text); const g = gameOf(l.gid); 
 const legDay = (l) => { const g = l.gid ? gameOf(l.gid) : null; return g ? dayKey(g.start) : (l.day || null); };
 const betDaySet = (b) => b.kind !== 'parlay' ? [betDay(b)] : [...new Set(b.legs.map(legDay).filter(Boolean))].sort();
 const dayNice = (k) => new Date(k + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+// --- v279: My Bets cards in the Today's bets look (owner, Nov 17: "Can this be the look in the My Bets for all bets, adding buttons needed there"). Same card frame and colours as the sheet (scCard, My Apps card_theme); every button the old cards had, same handlers. ---
+const mbFin = (st) => st === 'won' || st === 'lost' || st === 'push';
+const mbFinP = (b, st, money) => ({ c: st === 'won' ? 'g' : st === 'lost' ? 'r' : 'n', t: (st === 'won' ? '✓ WON' : st === 'lost' ? '✗ LOST' : 'PUSH') + ' ' + money(betPL(b, st)) }); // same words and P/L as the old badge
+const mbHead = (lab, sub, p) => `<div class="sct"><span class="scl"><b>${lab}</b>${sub ? ` <small>· ${sub}</small>` : ''}</span><span class="scp ${p.c}">${escH(p.t)}</span></div>`;
+const mbWrap = (b, cls, inner) => `<div class="scc mbc ${bcCls()}${cls ? ' ' + cls : ''}" data-bid="${escH(b.id)}">${inner}</div>`;
+const mbPay = (b) => { const a = []; if (b.stake) a.push('<b>' + usd(b.stake) + '</b>'); a.push(b.mult ? 'pays ' + escH(b.mult) + 'x' : sgn(Math.abs(Number(b.odds)) >= 100 ? Number(b.odds) : -110)); if (b.stake) a.push('to win ' + usd(b.stake * betProfit(b))); return `<div class="mbm">${a.join(' · ')}</div>`; };
+function mbGameBtns(g, gid) { // the buttons the old full game card / mini game gave a bet: Field view, View live game, Watch, chart
+  const here = !!ALL[gid], a = [];
+  if (here && g.state === 'in' && !CFB) a.push(`<button onclick="fvOpen('${g.id}')">🏟 Field view ›</button>`);
+  a.push(here ? `<button class="livebtn" onclick="liveOpen('football/'+(CFB?'college-football':'nfl'),'${g.id}')">📡 View live game</button>` : liveBtn(gid));
+  if (here) a.push(`<button onclick="pinToggle('${g.id}')" aria-pressed="${PIN.includes(g.id)}">${PIN.includes(g.id) ? '📌 Watching' : '📍 Watch'}</button>`);
+  if (here && g.state !== 'pre') a.push(`<button onclick="gcToggle('${g.id}')" aria-expanded="${!!DET['lp' + g.id]}">📈 ${DET['lp' + g.id] ? 'Hide chart' : 'Win chart'}</button>`);
+  const ch = here && DET['lp' + g.id] && g.state !== 'pre' ? `<div class="gcx" data-lvc="${g.id}">${WPH[g.id] ? wpChart(g, WPH[g.id]) : '<div class="sub">Loading win probability…</div>'}</div>` : '';
+  return `<div class="bbtn mbgbt">${a.join('')}</div>${ch}`;
+}
+function mbSingle(b, r, money) {
+  const g = r.g || gameOf(b.gid), ag = betAgainst(b);
+  let p = mbFin(r.st) ? mbFinP(b, r.st, money) : g ? scPill(b, r) : { c: 'n', t: 'Pending' };
+  const wp = r.st === 'live' && b.type === 'ml' && g && g.sit && Number.isFinite(g.sit.wp) && g.sit.wp >= 0 && g.sit.wp <= 1 ? Math.round((b.side === g.home.abbr ? g.sit.wp : 1 - g.sit.wp) * 100) : null; if (wp !== null) p = { c: p.c, t: p.t + ' · Live ' + wp + '%' };
+  const typ = b.type === 'sp' ? 'spread' : b.type === 'ou' || b.type === 'tot' ? 'total' : 'moneyline';
+  const app = b.noApp ? '<b>Imported slip</b> · open the ' + escH((b.lg || '').toUpperCase()) + ' page once to add the app pick' : (ag ? '<b class="mbag">Against the app</b>' : '<b class="mbwa">With the app</b>') + ' · app had ' + escH(b.appSu) + (b.appConf ? ' ' + pct(b.appConf) : '') + (b.type === 'sp' && b.appAts ? ' · spread ' + escH(b.appAts) : '') + (b.type === 'sp' && b.appLine !== null && b.appLine !== undefined ? ' · app line ' + sgn(b.side === b.home ? -b.appLine : b.appLine) : '');
+  const cls = r.st === 'won' || (r.st === 'live' && r.cur === 'won') ? 'bw' : r.st === 'lost' || (r.st === 'live' && r.cur === 'lost') ? 'bl' : '';
+  const blk = g ? `<div class="mbgb">${scCard(g, { bare: 1 })}</div>${mbGameBtns(g, b.gid)}` : `<div class="mbtx">${escH(b.away)} @ ${escH(b.home)} · wk ${escH(b.week)} · game not loaded</div>`;
+  return mbWrap(b, cls, mbHead(scLab(b), typ, p) + blk + mbPay(b) + `<div class="sub mbapp">${app}</div>`
+    + (b.cash !== undefined && b.cash !== null ? `<div class="sub" style="margin:6px 0">💵 Cashed out on Kalshi for <b>$${Number(b.cash).toFixed(2)}</b> (${b.cash >= (b.stake || 0) ? '+' : '-'}$${Math.abs(b.cash - (b.stake || 0)).toFixed(2)})${b.soldN ? ' · ' + b.soldN + ' contracts' : ''}</div>` : '') + (b.src === 'kalshi' && !b.res && b.kt && b.kn && (b.cash === undefined || b.cash === null) ? `<div class="sub" data-kco="${escH(b.id)}" style="margin:6px 0">💵 Checking cash-out value…</div>` : '')
+    + `<div class="bbtn">${gLk(b) ? gLkTag : `<button onclick="betEdit('${b.id}')">Edit</button><button onclick="betDel('${b.id}')">Delete</button>`}</div>`);
+}
 function parlayCard(b, r, money) {
-  const ds = betDaySet(b), multi = ds.length > 1;
+  const ds = betDaySet(b), multi = ds.length > 1, n = b.legs.length;
   const hit = r.legs.filter((x) => x.st === 'won' || (x.st === 'live' && x.cur === 'won')).length;
-  const rows = b.legs.map((l, i) => { const x = r.legs[i], g = x.g; const sc = g && g.state !== 'pre' ? `${g.away.abbr} ${g.away.score}–${g.home.abbr} ${g.home.score}${g.state === 'in' ? ' · ' + g.detail : ' · Final'}` : g ? new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '';
-    const man = !l.gid ? `<span class="legbtn"><button onclick="legSet('${b.id}',${i},'won')">✓</button><button onclick="legSet('${b.id}',${i},'lost')">✗</button><button onclick="legSet('${b.id}',${i},'push')">push</button>${l.res ? `<button onclick="legSet('${b.id}',${i},'')">reset</button>` : ''}</span>` : '';
-    const man2 = l.k ? '' : man;
-    const ld = multi ? legDay(l) : null; return `<div class="leg">${legMark(x.st, x.cur)}<div><b>${legText(l)}</b>${ld ? ` <span class="ldate ${ld !== ds[0] ? 'diff' : ''}">${dayNice(ld)}</span>` : ''}${sc ? `<small class="sub" style="display:block">${sc}</small>` : ''}${g ? liveBtn(l.gid) : ''}${man2}</div></div>`; }).join('');
-  return `<div class="bcard ${r.st === 'won' ? 'bw' : r.st === 'lost' ? 'bl' : r.st === 'live' ? (r.cur === 'lost' ? 'bl' : 'bw') : ''}"><div class="bhd"><div><div class="bwhat">${b.legs.length}-leg parlay${payTxt(b)}</div><div class="sub">${hit} of ${b.legs.length} hitting${multi ? ` · <b class="ldate diff">spans ${ds.length} days</b>` : ''}</div></div>${badgeOf(r, money, b)}</div><div class="legs">${rows}</div>
-    ${b.cash !== undefined && b.cash !== null ? `<div class="sub" style="margin:6px 0">💵 Cashed out on Kalshi for <b>$${Number(b.cash).toFixed(2)}</b> (${b.cash >= (b.stake || 0) ? '+' : '-'}$${Math.abs(b.cash - (b.stake || 0)).toFixed(2)})</div>` : ''}${b.src === 'kalshi' && r.st === 'pending' && b.kt && b.kn && (b.cash === undefined || b.cash === null) || (b.src === 'kalshi' && r.st === 'live' && b.kt && b.kn && (b.cash === undefined || b.cash === null)) ? `<div class="sub" data-kco="${escH(b.id)}" style="margin:6px 0">💵 Checking cash-out value…</div>` : ''}
-    ${b.src === 'kalshi' ? '<div class="sub" style="margin-top:6px">From Kalshi · each leg is set automatically when it settles</div>' : ''}<div class="bbtn">${gLk(b) ? gLkTag : `${b.src === 'kalshi' ? '' : `<button onclick="betEdit('${b.id}')">Edit</button>`}<button onclick="betDel('${b.id}')">Delete</button>`}</div></div>`;
+  const p = mbFin(r.st) ? mbFinP(b, r.st, money) : r.st === 'live' ? (r.cur === 'lost' ? { c: 'r', t: '▼ ' + r.legs.filter((x) => x.st === 'live' && x.cur === 'lost').length + ' leg losing right now' } : { c: 'g', t: '▲ winning right now' }) : { c: 'n', t: 'Pending' };
+  const rows = b.legs.map((l, i) => { const x = r.legs[i], g = x.g;
+    const man = !l.gid && !l.k ? `<span class="legbtn"><button onclick="legSet('${b.id}',${i},'won')">✓</button><button onclick="legSet('${b.id}',${i},'lost')">✗</button><button onclick="legSet('${b.id}',${i},'push')">push</button>${l.res ? `<button onclick="legSet('${b.id}',${i},'')">reset</button>` : ''}</span>` : '';
+    const ld = multi ? legDay(l) : null, lp = l.gid ? scPill(l, x, true) : null;
+    return `<div class="mbl"><div class="sct"><span class="scl">${legMark(x.st, x.cur)} <b>${legText(l)}</b>${ld ? ` <span class="ldate ${ld !== ds[0] ? 'diff' : ''}">${dayNice(ld)}</span>` : ''}</span>${lp ? `<span class="scp ${lp.c}">${escH(lp.t)}</span>` : ''}</div>${g ? `<div class="mbgb">${scCard(g, { bare: 1, play: '' })}</div>${liveBtn(l.gid) ? `<div class="bbtn">${liveBtn(l.gid)}</div>` : ''}` : ''}${man}</div>`; }).join('');
+  return mbWrap(b, r.st === 'won' ? 'bw' : r.st === 'lost' ? 'bl' : r.st === 'live' ? (r.cur === 'lost' ? 'bl' : 'bw') : '', mbHead(`${n}-leg parlay`, `${hit} of ${n} hitting${multi ? ` · <b class="ldate diff">spans ${ds.length} days</b>` : ''}`, p) + `<div class="mbls">${rows}</div>` + mbPay(b)
+    + (b.cash !== undefined && b.cash !== null ? `<div class="sub" style="margin:6px 0">💵 Cashed out on Kalshi for <b>$${Number(b.cash).toFixed(2)}</b> (${b.cash >= (b.stake || 0) ? '+' : '-'}$${Math.abs(b.cash - (b.stake || 0)).toFixed(2)})</div>` : '') + (b.src === 'kalshi' && r.st === 'pending' && b.kt && b.kn && (b.cash === undefined || b.cash === null) || (b.src === 'kalshi' && r.st === 'live' && b.kt && b.kn && (b.cash === undefined || b.cash === null)) ? `<div class="sub" data-kco="${escH(b.id)}" style="margin:6px 0">💵 Checking cash-out value…</div>` : '')
+    + (b.src === 'kalshi' ? '<div class="sub" style="margin-top:6px">From Kalshi · each leg is set automatically when it settles</div>' : '') + `<div class="bbtn">${gLk(b) ? gLkTag : `${b.src === 'kalshi' ? '' : `<button onclick="betEdit('${b.id}')">Edit</button>`}<button onclick="betDel('${b.id}')">Delete</button>`}</div>`);
 }
 // --- Live player props: pick a game, a player, a stat and a line; the card tracks the stat live and grades itself ---
 const PSTATS = { rushYds: 'Rushing yards', recYds: 'Receiving yards', passYds: 'Passing yards', rec: 'Receptions', passTD: 'Passing TDs', rushTD: 'Rushing TDs', recTD: 'Receiving TDs', anyTD: 'Touchdowns (rush + rec)', comp: 'Pass completions', rushAtt: 'Rushing attempts', int: 'Interceptions thrown' };
@@ -1423,8 +1458,14 @@ function pStatHtml(b) {
 }
 setInterval(() => { try { propTick(); } catch (e) {} }, 30000); setTimeout(() => { try { propTick(); } catch (e) {} }, 6000);
 function propCard(b, r, money) {
-  return `<div class="bcard ${r.st === 'won' ? 'bw' : r.st === 'lost' ? 'bl' : ''}"><div class="bhd"><div><div class="bwhat">${b.text.replace(/</g, '&lt;')}${payTxt(b)}</div><div class="sub">Prop bet · ${b.day}${b.pp ? ' · live tracked' : ''}</div></div>${badgeOf(r, money, b)}</div>${pStatHtml(b)}
-    ${b.src === 'kalshi' ? `<div class="sub">From Kalshi · result is set automatically</div><div class="bbtn"><button onclick="betDel('${b.id}')">Hide</button></div></div>` : ''}${b.src === 'kalshi' ? '' : `<div class="bbtn"><button onclick="propSet('${b.id}','won')">✓ Won</button><button onclick="propSet('${b.id}','lost')">✗ Lost</button><button onclick="propSet('${b.id}','push')">Push</button>${b.res ? `<button onclick="propSet('${b.id}','')">Reset</button>` : ''}${gLk(b) ? gLkTag : `<button onclick="betEdit('${b.id}')">Edit</button><button onclick="betDel('${b.id}')">Delete</button>`}</div></div>`}`;
+  const g = b.pp && b.pp.gid ? gameOf(b.pp.gid) : null, x = g ? pVal(b) : null;
+  const p = mbFin(r.st) ? mbFinP(b, r.st, money) : g ? { c: 'n', t: g.state === 'pre' ? 'Not started' : x && x.v !== null && x.v !== undefined ? x.v + ' so far' : 'Tracking' } : { c: 'n', t: 'Pending' };
+  const lab = g ? escH(b.text) : b.src === 'kalshi' ? 'Kalshi' : 'Prop bet', sub = (g ? 'prop · ' : '') + (/^\d{4}-\d\d-\d\d$/.test(b.day || '') ? dayNice(b.day) : escH(b.day)) + (b.pp ? ' · live tracked' : '');
+  const blk = g ? `<div class="mbgb">${scCard(g, { bare: 1 })}</div>${pStatHtml(b)}` : `<div class="mbtx">${escH(b.text)}</div>${pStatHtml(b)}`;
+  const btns = b.src === 'kalshi' ? `<div class="sub">From Kalshi · result is set automatically</div><div class="bbtn"><button onclick="betDel('${b.id}')">Hide</button></div>` : `<div class="bbtn"><button onclick="propSet('${b.id}','won')">✓ Won</button><button onclick="propSet('${b.id}','lost')">✗ Lost</button><button onclick="propSet('${b.id}','push')">Push</button>${b.res ? `<button onclick="propSet('${b.id}','')">Reset</button>` : ''}${gLk(b) ? gLkTag : `<button onclick="betEdit('${b.id}')">Edit</button><button onclick="betDel('${b.id}')">Delete</button>`}</div>`;
+  // v280: a single Kalshi market (YES or NO side) gets the same cash-out box as the combos; kcoLoad / kcoPaint / kcoAsk / kcoGo sell side b.ks at that side's bid
+  const kx = b.src === 'kalshi' ? (b.cash !== undefined && b.cash !== null ? `<div class="sub" style="margin:6px 0">💵 Cashed out on Kalshi for <b>$${Number(b.cash).toFixed(2)}</b> (${b.cash >= (b.stake || 0) ? '+' : '-'}$${Math.abs(b.cash - (b.stake || 0)).toFixed(2)})${b.soldN ? ' · ' + b.soldN + ' contracts' : ''}</div>` : !b.res && b.kt && b.kn && (b.ks === 'yes' || b.ks === 'no') ? `<div class="sub" data-kco="${escH(b.id)}" style="margin:6px 0">💵 Checking cash-out value…</div>` : '') : '';
+  return mbWrap(b, r.st === 'won' ? 'bw' : r.st === 'lost' ? 'bl' : '', mbHead(lab, sub, p) + blk + mbPay(b) + kx + btns);
 }
 function legSet(id, i, res) { const b = BETS.find((x) => x.id === id); if (!b) return; b.legs[i].res = res || null; delete b.fin; delete b.finPL; betsSave(); betsRender(); }
 function propSet(id, res) { const b = BETS.find((x) => x.id === id); if (!b) return; b.res = res || null; delete b.fin; delete b.finPL; betsSave(); betsRender(); }
@@ -1926,7 +1967,7 @@ async function alertPush() {
   ASQ = Date.now();
   try { const r = await fetch(ALU, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': alertTok() }, body: JSON.stringify({ week: CUR, rec: { lock: a.lock, dogs: a.dogs, helper: { id: h.g.id, abbr: h.abbr, conf: h.conf } } }) }); if (!r.ok) return; const j = await r.json(); if (j && j.rec && j.week === CUR && alertTake(Object.assign({}, ASV, { [CUR]: j.rec }))) render(); } catch (e) {}
 }
-async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=279')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
+async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=283')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
 const trGrade = (p) => { const g = ALL[p.id]; if (!g || g.state !== 'post') return null; const m = (g.home.abbr === p.abbr ? 1 : -1) * (g.home.score - g.away.score) + p.line; return m === 0 ? 'push' : m > 0 ? 'hit' : 'miss'; };
 function trophyData() {
   if (CFB || !window.Trophy || !Trophy.ready()) return null;
@@ -3144,12 +3185,14 @@ function scCard(g, o) {
   const top = bets.length ? row(bets[0]) : `<div class="sct"><span class="scl"><b>${escH(g.away.abbr)} @ ${escH(g.home.abbr)}</b></span>${o.nobet ? '<span class="scp n">No bet on this game</span>' : ''}</div>`;
   const hex = (c) => (/^#[0-9a-fA-F]{6}$/.test(c || '') ? c : '');
   const to = (n) => (s && Number.isFinite(n) ? `<small class="scto" aria-label="${n} timeouts left">${'●'.repeat(Math.max(0, Math.min(3, n)))}${'○'.repeat(3 - Math.max(0, Math.min(3, n)))}</small>` : '');
-  const team = (t, n) => `<div class="scT"><b>${s && s.poss === t.abbr ? '<span class="scball" aria-label="has the ball">🏈</span>' : ''}${escH(t.abbr)}</b>${hex(t.color) ? `<i class="scbar" style="background:${hex(t.color)}"></i>` : ''}<small>${escH(nm(t))}</small>${to(n)}</div>`;
+  const team = (t, n) => `<div class="scT"${o.bare && ALL[g.id] ? tpAt(t.abbr) : ''}><b>${s && s.poss === t.abbr ? '<span class="scball" aria-label="has the ball">🏈</span>' : ''}${escH(t.abbr)}</b>${hex(t.color) ? `<i class="scbar" style="background:${hex(t.color)}"></i>` : ''}<small>${escH(nm(t))}</small>${to(n)}</div>`;
   const mid = pre ? new Date(g.start).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : g.state === 'post' ? 'Final' : String(g.detail || 'Live').replace(/^(\d{1,2}:\d\d) - (.+)$/, '$2 $1'); // ESPN's "1:56 - 2nd" reads "2nd 1:56" on the card
   const sub = o.sub !== undefined ? o.sub : pre ? new Date(g.start).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : on ? 'Live' : '';
   const sc = (v) => `<div class="scS${pre ? ' pre' : ''}">${pre ? '–' : escH(v)}</div>`;
   const play = o.play !== undefined ? o.play : (s && (s.ptxt || s.text)) || '';
-  return `<div class="scc${o.x ? ' hasx' : ''}">${top}<div class="scg">${team(g.away, s ? s.ato : null)}${sc(g.away.score)}<div class="scC"><b>${on ? '<i class="scdot"></i>' : ''}${escH(mid)}</b>${sub ? `<small>${escH(sub)}</small>` : ''}</div>${sc(g.home.score)}${team(g.home, s ? s.hto : null)}</div>${o.all ? bets.slice(1).map((b) => row(b, ' scb')).join('') : ''}${play ? `<div class="scf">${escH(play)}</div>` : ''}${o.foot ? `<div class="scm">${o.foot}</div>` : ''}</div>`;
+  const grid = `<div class="scg">${team(g.away, s ? s.ato : null)}${sc(g.away.score)}<div class="scC"><b>${on ? '<i class="scdot"></i>' : ''}${escH(mid)}</b>${sub ? `<small>${escH(sub)}</small>` : ''}</div>${sc(g.home.score)}${team(g.home, s ? s.hto : null)}</div>`;
+  if (o.bare) { const dd = s && s.down ? `${ord(s.down)} & ${s.dist}${s.rz ? ' · red zone' : ''}` : ''; return `${grid}${dd ? `<div class="scdd">${escH(dd)}</div>` : ''}${play ? `<div class="scf">${escH(play)}</div>` : ''}`; } // v279: the game block alone, for the My Bets cards
+  return `<div class="scc${o.x ? ' hasx' : ''}">${top}${grid}${o.all ? bets.slice(1).map((b) => row(b, ' scb')).join('') : ''}${play ? `<div class="scf">${escH(play)}</div>` : ''}${o.foot ? `<div class="scm">${o.foot}</div>` : ''}</div>`;
 }
 // --- pop-up: detect changes ---
 // list = games just read from a feed (never stale ones). A game seen for the first time is recorded silently, so opening the app or coming back to it never bursts.
@@ -3624,7 +3667,7 @@ if ('serviceWorker' in navigator) {
 })();
 // ================= end v268 GUEST MODE (3 of 3) =================
 </script>
-<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=279"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="announce.js?v=279"><\/script><script src="dash.js?v=279"><\/script>')</script>
+<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=283"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="announce.js?v=283"><\/script><script src="dash.js?v=283"><\/script>')</script>
 <script>
 // ================= WHAT'S NEW POP-UP (Nov 17 2026, branch whats-new; read "## What's new pop-up" in HANDOFF.md) =================
 // A "Look what's new" card listing the LIVE items this device has not been shown yet (guests included). It shows when at least one such item exists,
@@ -3640,7 +3683,7 @@ if ('serviceWorker' in navigator) {
   const go = (href) => () => { try { location.href = href; } catch (e) {} };
   const groupsOn = () => { try { return grpOn(); } catch (e) { return false; } };
   const openGroups = () => { try { if (grpOn()) navGo('groups'); } catch (e) {} }; // the Groups tab: grpLoad + OddGroups.open (it has its own Close / ‹ Back)
-  // v279: Golf days and group pickleball live in the v274 Games catalog (group page > Games). openGames = Groups straight at the Games screen when the
+  // v283: Golf days and group pickleball live in the v274 Games catalog (group page > Games). openGames = Groups straight at the Games screen when the
   // person is in one group, else My groups (pick a group, then Games). Falls back to the Groups tab if groups.js has no openGames.
   const openGames = () => { try { if (!grpOn()) return; if (document.getElementById('bnmore')) navMore(false); grpLoad(() => { if (!grpOn()) return; const G = window.OddGroups; if (G.openGames) G.openGames(); else G.open(); }); } catch (e) {} };
   const hasGame = (k) => { try { return !!window.OddGroups && typeof window.OddGroups.games === 'function' && window.OddGroups.games().some((x) => x.key === k); } catch (e) { return false; } }; // registered in the Games catalog
@@ -3651,11 +3694,11 @@ if ('serviceWorker' in navigator) {
     { id: 'pickleball', icon: '🏓', title: 'Pickleball', line: 'Round robin, King of the Court and more, with points-only Calcutta, skins and pick’em.', isLive: () => true, open: go('pickleball.html') },
     { id: 'groups', icon: '👥', title: 'Groups', line: 'Make a group, invite your friends and see who comes out on top.', isLive: groupsOn, open: openGroups },
     { id: 'golfdays', icon: '🏌️', title: 'Golf days', line: 'Inside a group, tap Games, then Golf day: start a round, log your score, watch the leaderboard.', isLive: groupsOn, open: openGames },
-    // v279 (calc-live merged): both Calcutta items are live where Groups is on AND groups.js registered the 'calcutta' game; they open the Games catalog
+    // v283 (calc-live merged): both Calcutta items are live where Groups is on AND groups.js registered the 'calcutta' game; they open the Games catalog
     // (the Calcutta card is there). Their lines name only what a group can start today; PGA season, golf-day and local-event lots say Coming soon inside the Calcutta only.
     { id: 'calcutta', icon: '🏆', title: 'Calcuttas', line: 'Inside a group, tap Games, then Calcutta: this week’s PGA Tour event, a playoff, or your own in-person event with buy back half.', isLive: () => groupsOn() && hasGame('calcutta'), open: openGames },
     { id: 'calcutta-fb', icon: '🏈', title: 'Football Calcuttas', line: 'NFL and college football weekend games, the NFL season or the playoffs, main or side. In a group: Games, then Calcutta.', isLive: () => groupsOn() && hasGame('calcutta'), open: openGames },
-    // v279: live where Groups is on AND groups.js registered the 'pickleball' game (pics/groups.js addGame); opens the Games catalog like Golf days.
+    // v283: live where Groups is on AND groups.js registered the 'pickleball' game (pics/groups.js addGame); opens the Games catalog like Golf days.
     { id: 'group-pickleball', icon: '🏓', title: 'Group pickleball games', line: 'Inside a group, tap Games, then Pickleball: round robin, brackets, ladder, scores on court.', isLive: () => groupsOn() && hasGame('pickleball'), open: openGames },
   ];
   const isLive = (it) => { try { return !!it.isLive(); } catch (e) { return false; } };
@@ -3670,7 +3713,7 @@ if ('serviceWorker' in navigator) {
   const vis = (id) => { const x = el(id); return !!x && !x.hidden; };
   const busy = () => {
     if (document.hidden) return true;
-    if (el('gate') || el('oddmoved') || el('gnm') || el('oddwarn') || el('kcom') || el('oglock') || el('ogrp') || el('oevt') || el('ocalc') || el('odash') || el('bnmore')) return true; // sign-in / pay / trial, v277's moved card on steves-pics (it wins; the pop-up waits until Not now / Open Oddable removes it, v279), name picker, sport warning, cash-out, Groups lock, Groups (its Games catalog, stats and Golf day screens draw inside #ogrp), group Pickleball (#oevt, v279), the Calcutta (#ocalc, v279; it sits on #ogrp too), dashboard, More
+    if (el('gate') || el('oddmoved') || el('gnm') || el('oddwarn') || el('kcom') || el('oglock') || el('ogrp') || el('oevt') || el('ocalc') || el('odash') || el('bnmore')) return true; // sign-in / pay / trial, v277's moved card on steves-pics (it wins; the pop-up waits until Not now / Open Oddable removes it, v283), name picker, sport warning, cash-out, Groups lock, Groups (its Games catalog, stats and Golf day screens draw inside #ogrp), group Pickleball (#oevt, v283), the Calcutta (#ocalc, v283; it sits on #ogrp too), dashboard, More
     if (['infosheet', 'teampage', 'mv', 'lvov', 'syncsheet', 'aisheet', 'spop'].some(vis)) return true; // info sheet, team page, game view, live overlay, sync, Ask AI, score pop-up (z 400)
     try { if (grpPend()) return true; } catch (e) {} // a group invite in progress
     try { if (typeof BF !== 'undefined' && BF && BF.step) return true; } catch (e) {} // the Add bet / prop / parlay form is open
@@ -3681,7 +3724,7 @@ if ('serviceWorker' in navigator) {
   };
   // Signed in: wait for the account check (gate.js -> oddGroupsChanged / oddMe), at most 10 s, so the Groups items are known before the first card.
   const T0 = Date.now(); let meSeen = false;
-  const ready = () => { if (Date.now() - T0 > 10000) return true; if (groupsOn() && !window.OddGroups) return false; /* v279: a Groups account waits for groups.js (its Games registry says whether group pickleball is live) */ if (!lg('odd-tok') || meSeen) return true; try { return !!(window.oddMe && window.oddMe()); } catch (e) { return false; } };
+  const ready = () => { if (Date.now() - T0 > 10000) return true; if (groupsOn() && !window.OddGroups) return false; /* v283: a Groups account waits for groups.js (its Games registry says whether group pickleball is live) */ if (!lg('odd-tok') || meSeen) return true; try { return !!(window.oddMe && window.oddMe()); } catch (e) { return false; } };
   function css() {
     if (el('oddnewcss')) return; const st = document.createElement('style'); st.id = 'oddnewcss';
     st.textContent = '#oddnew{position:fixed;inset:0;z-index:150;background:rgba(5,8,16,.62);display:flex;align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));box-sizing:border-box}'

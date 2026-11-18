@@ -131,7 +131,7 @@ function gFlag(me, e) { if (!me || process.env.GROUPS_ENABLED !== '1') return me
 async function handle(req, res) {
   if (req.method === 'OPTIONS') return false;
   const path = req.url.split('?')[0];
-  if (path === '/acct/status') { send(res, 200, Object.assign({ gate: on(), guest: guestMode() }, process.env.GROUPS_ENABLED === '1' ? { groups: true } : {})); return true; } // v272: `groups` is there ONLY while GROUPS_ENABLED=1 (unset = the answer of v271, byte for byte); it says nothing about any one account // v268: guest = visitors with no account may browse scores (see guestMode)
+  if (path === '/acct/status') { send(res, 200, Object.assign({ gate: on(), guest: guestMode() }, process.env.GROUPS_ENABLED === '1' ? (process.env.GROUPS_OWNER_ONLY === '1' ? { groups: true } : { groups: true, gpub: true }) : {})); return true; } // v282: `gpub: true` ONLY while GROUPS_ENABLED=1 AND GROUPS_OWNER_ONLY is not exactly 1 (Groups open to everyone: the phone then shows the five-tab bar to guests too); otherwise the answer is v281's, byte for byte. // v272: `groups` is there ONLY while GROUPS_ENABLED=1 (unset = the answer of v271, byte for byte); it says nothing about any one account // v268: guest = visitors with no account may browse scores (see guestMode)
   if (req.method !== 'POST' && !(req.method === 'GET' && path === '/acct/time/status')) return false; // v263: the time status may also be read with GET (x-token header)
   if (!on()) { send(res, 200, { gate: false }); return true; }
   const ip = require('./ip').clientIp(req); // third from the end of X-Forwarded-For (see ip.js)

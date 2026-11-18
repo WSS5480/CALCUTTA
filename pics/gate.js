@@ -566,6 +566,7 @@
   }
   function setMe(m) {
     me = m; early = null; if (!m) return; setTimeout(drawAcct, 0);
+    try { const op = m.role === 'owner' && m.source === 'owner' ? '1' : null; if (g('odd-opin') !== op) { s('odd-opin', op); if (window.oddMeChanged) setTimeout(() => { try { window.oddMeChanged(); } catch (e) {} }, 0); } } catch (e) {} // v280 owner-PIN card on My Bets
     // v272 Groups phase 2: the server says, on the `me` this phone already gets, whether Groups is on for THIS account (odds-api/acct.js gFlag). Not said = no Groups: no tab, no file, no call.
     try { const gv = m.groups === true ? '1' : null; if (g('odd-grp') !== gv) s('odd-grp', gv); if (window.oddGroupsChanged) setTimeout(() => { try { window.oddGroupsChanged(); } catch (e) {} }, 0); } catch (e) {} setTimeout(() => { try { if (window.oddDays) window.oddDays(); } catch (e) {} }, 0);
     // v267 /?pay=1 (a renewal reminder): straight to the ONE pay screen. v270: time left = the early screen; time ended in guest mode = the pay sheet (it is not up by itself any more); GUEST_MODE=0 and ended = the subscribe wall is already up.
@@ -592,7 +593,10 @@
     if (m.role === 'owner' || !m.expires_on) return; const d = Math.ceil((new Date(m.expires_on + 'T23:59:59') - Date.now()) / 864e5);
     if (d <= 3 && d >= 0 && !document.getElementById('gtoast')) { const t = document.createElement('div'); t.id = 'gtoast'; t.textContent = (m.source === 'trial' ? 'Free trial' : 'Subscription') + ' ends ' + (d === 0 ? 'today' : 'in ' + d + ' day' + (d > 1 ? 's' : '')) + ' — tap to renew'; t.onclick = () => { if (!payOpen()) { me = Object.assign({}, m, { allowed: false }); sheet = gmode; show(); } t.remove(); }; /* v270: the one pay screen (v267 early wording, Back) */ document.body.appendChild(t); setTimeout(() => t.remove(), 9000); }
   }
-  function out() { s('odd-noauto', '1'); s('odd-grp', null); s('odd-gbl', null); s('odd-tok', null); s('odd-ok', null); s('odd-exp', null); s('odd-push', null); s('sync-phone', null); s('sync-pin', null); s('sync-owner', null); s('odd-oacct', null); window.oddWipe(); me = null; mode = 'in'; location.reload(); }
+  function out() { s('odd-noauto', '1'); s('odd-grp', null); s('odd-gbl', null); s('odd-tok', null); s('odd-ok', null); s('odd-exp', null); s('odd-push', null); s('sync-phone', null); s('sync-pin', null); s('sync-owner', null); s('odd-oacct', null); s('odd-opin', null); window.oddWipe(); me = null; mode = 'in'; location.reload(); }
+  // v280: the OWNER-PIN sign-in (/acct/owner: role owner, source owner) has no bets row. My Bets shows a card for it (index.html mbOpinCard); its button signs out and opens the cell + PIN sign-in.
+  window.oddOwnerPin = () => !!(g('odd-tok') && (me ? me.role === 'owner' && me.source === 'owner' : g('odd-opin') === '1'));
+  window.oddOutToPhone = function () { try { sessionStorage.setItem('odd-goin', '1'); } catch (e) {} s('odd-way', null); out(); };
   async function refresh(force) {
     let j; try { j = await call('/me'); } catch (e) { const dg = document.getElementById('odiag'); if (dg && g('odd-dash') === '1') dg.textContent = ' · acct check failed: ' + (e.message || e.status); throw e; } setMe(j.me); return j.me;
   }
@@ -663,7 +667,7 @@
       sheet = true; show(); if (!me) { el.innerHTML = '<div class="gb">' + BACK + '<h1>Oddable</h1><p>Checking your account…</p><div class="er" id="gerr"></div></div>'; wireBack(); refresh().then(() => { if (el && me && !me.allowed) { sheet = true; draw(); } }).catch((e) => { if (e.status === 401) gone(e); else err('Could not reach the server. It may be waking up. Go back and try again.'); }); return; }
       if (m === 'time') { const t = $('gtime'); if (t && t.scrollIntoView) t.scrollIntoView({ block: 'start' }); } return;
     }
-    mode = m === 'in' ? 'in' : 'up'; scr = ''; FE = {}; sheet = true; if (/^group:/.test(String(target || ''))) notice = 'You were invited to a group on Oddable. Create your free account (or sign in) and you go straight to it.'; /* v272: only a group invite link gets here with this target */ show();
+    mode = m === 'in' ? 'in' : 'up'; scr = ''; FE = {}; sheet = true; if (target === 'groups') notice = 'Groups needs a free account. Create yours (or sign in) and you go straight to Groups.'; else if (/^group:/.test(String(target || ''))) notice = 'You were invited to a group on Oddable. Create your free account (or sign in) and you go straight to it.'; /* v272: only a group invite link gets here with this target */ show();
   };
   // v270: ONE "Pay now" for every entry point. An account that still has time (v267: days-left card, /?pay=1, the "ends soon" toast) -> payOpen(), the early wording.
   // An ended account in guest mode, or nobody signed in -> the sheet through oddSignUp (pay screen / sign-up).
@@ -682,7 +686,8 @@
   async function status() { // -> true / false = is the gate on; throws when the server cannot be reached
     const r = await fetch(API + '/status', { cache: 'no-store', signal: AbortSignal.timeout(12000) }), j = await r.json(); const on = j.gate === true; s('odd-gate', on ? '1' : '0');
     if (typeof j.guest === 'boolean') { gmode = j.guest; s('odd-guest', gmode ? '1' : '0'); } else { gmode = GUEST_MODE; s('odd-guest', null); } // an older server does not say: the constant decides
-    if (j.groups === true) { s('odd-gsw', '1'); try { if (window.oddGroupsSw) window.oddGroupsSw(); } catch (e) {} } else if (g('odd-gsw')) { s('odd-gsw', null); s('odd-grp', null); } // v272: Groups exists on the server at all (GROUPS_ENABLED=1). Not said = dark: nothing Groups-related is kept or run
+    if (j.groups === true) { s('odd-gsw', '1'); try { if (window.oddGroupsSw) window.oddGroupsSw(); } catch (e) {} } else if (g('odd-gsw')) { s('odd-gsw', null); s('odd-grp', null); }
+    { const pv = j.groups === true && j.gpub === true ? '1' : null; if (g('odd-gpub') !== pv) { s('odd-gpub', pv); try { if (window.oddGroupsChanged) setTimeout(() => { try { window.oddGroupsChanged(); } catch (e) {} }, 0); } catch (e) {} } } // v282: Groups is open to EVERYONE (GROUPS_ENABLED=1 and not owner-only): the five-tab bar for guests too. Not said = dark: nothing kept, nothing run // v272: Groups exists on the server at all (GROUPS_ENABLED=1). Not said = dark: nothing Groups-related is kept or run
     return on;
   }
   async function boot() {
@@ -716,5 +721,8 @@
   // ================= end of block 3 =================
   // Cover the app immediately to avoid a flash of content when a token exists and the gate is on.
   if (g('odd-gate') === '1' && !(g('odd-tok') && Date.now() - Number(g('odd-ok') || 0) < GRACE)) { document.addEventListener('DOMContentLoaded', () => {}); }
-  if (document.body) boot(); else document.addEventListener('DOMContentLoaded', boot);
+  // v280: "Sign in with cell number" from the owner-PIN card signed out and reloaded: open the cell + PIN sign-in once the page is up.
+  const goIn = () => { let f = null; try { f = sessionStorage.getItem('odd-goin'); sessionStorage.removeItem('odd-goin'); } catch (e) {} if (f === '1' && !g('odd-tok')) setTimeout(() => { try { window.oddSignUp('', 'in'); } catch (e) {} }, 0); };
+  const boot2 = () => Promise.resolve(boot()).catch(() => {}).then(goIn);
+  if (document.body) boot2(); else document.addEventListener('DOMContentLoaded', boot2);
 })();

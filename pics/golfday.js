@@ -105,7 +105,7 @@
   }
   const gps = (X, then, fail) => { // the Golf GPS data layer (pics/golfgps.js: no screen code in it), fetched once. The SAME course search as the Golf GPS page.
     if (window.GolfGPS) return then(window.GolfGPS);
-    const sc = document.createElement('script'); sc.src = 'golfgps.js?v=279'; sc.onload = () => (window.GolfGPS ? then(window.GolfGPS) : fail()); sc.onerror = () => { sc.remove(); fail(); }; document.head.appendChild(sc);
+    const sc = document.createElement('script'); sc.src = 'golfgps.js?v=283'; sc.onload = () => (window.GolfGPS ? then(window.GolfGPS) : fail()); sc.onerror = () => { sc.remove(); fail(); }; document.head.appendChild(sc);
   };
   function search(X) {
     readDraft(X); const d = DR, q = d.q.trim(); if (SEARCHING) return; X.setErr(''); if (q.length < 2) { d.msg = 'Type a course name or a city.'; return X.paint(); }

@@ -1,4 +1,4 @@
-// v276 (server review A1): an auction sold out by the TIMER (the lazy clock inside a poll, not Sold now) used to leave the Calcutta index 'live':
+// v277 (server review A1): an auction sold out by the TIMER (the lazy clock inside a poll, not Sold now) used to leave the Calcutta index 'live':
 // the Games card said 'auction running', the 20-open cap counted it and F12 never slimmed it. mutCalc now syncs the index on any status change.
 // Also: a deleted Calcutta never comes back in the index (the delete race the A1 hook opened, fixed the same day).
 // Run: node odds-api/calcutta.idx.test.js (no network; the same fakes as calcutta.main.test.js)
@@ -60,7 +60,7 @@ srv.listen(0, '127.0.0.1', async () => {
     assert.strictEqual(c.a.status, 'closed', 'the timer sold every lot'); t('the timer sold both lots inside polls: the row is closed');
     const l = (await post('/calcutta/list', { g: g.id }, H(B.token))).j; assert.deepStrictEqual(l.calcs.map((x) => x.status), ['closed'], 'the group list (the Games card) reads closed, not live'); t('the group list (Games card) says closed');
     const m = (await post('/calcutta/mine', {}, H(B.token))).j; assert.deepStrictEqual(m.calcs.map((x) => x.status), ['closed'], 'My Calcuttas reads closed'); t('My Calcuttas says closed');
-    // v276 regression check (server review): a delete sets status 'closed' + deleted. The A1 hook must not sync it, and syncIdx must never write a
+    // v277 regression check (server review): a delete sets status 'closed' + deleted. The A1 hook must not sync it, and syncIdx must never write a
     // deleted Calcutta back, or the late write lands after the delete route removed the entry and the Calcutta comes back as a 'closed' ghost
     // (list, mine, the Games card; tapping it gives 404). Database calls get a random 0-15 ms delay here so the writes can interleave.
     const f0 = global.fetch; global.fetch = async (u, o) => { if (String(u).startsWith('https://fake.supabase.co')) await new Promise((r2) => setTimeout(r2, Math.random() * 15)); return f0(u, o); };

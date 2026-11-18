@@ -5,6 +5,8 @@
 //   Signed in (x-token; the account always comes from the token, never from the body):
 //     POST /acct/link          {email, password}   -> My Apps /api/v1/link          (step 1: a 6-digit code is mailed; nothing is live yet)
 //     POST /acct/link/verify   {code}              -> My Apps /api/v1/link/verify   (step 2: the email + password now opens this same account)
+//     POST /acct/link/join        {email}          -> My Apps /api/v1/link/join        (v276: the email is another account's sign-in: mail a code to it)
+//     POST /acct/link/join/verify {code}           -> My Apps /api/v1/link/join/verify (v276: joined; this phone keeps its id, its plan now lives on that account)
 //     GET|POST /acct/ref                           -> My Apps /api/v1/ref/mine      {ok, ref}: the code this person's share links carry (kept 1 hour)
 //     POST /acct/ref/attach    {ref}               -> My Apps /api/v1/ref/attach    a code for an account that already exists
 //   Signed out:
@@ -49,6 +51,9 @@ const MSG = {
   nopin: [409, 'This account signs in with an email and password. It has no PIN.'],
   norow: [404, 'Could not find the saved bets for this account. Ask Sir Oddable.'],
   failed: [502, 'Could not do that right now. Please try again later.'],
+  joined: [409, 'That account already has a phone sign-in joined to it. Use a different email.'], // v276
+  joingone: [409, 'That email can no longer be joined. Use a different email.'], // v276
+  nojoin: [200, 'Joining is not available yet. Use a different email.'], // v276: My Apps is older than build .42 (no join routes)
 };
 const no = (res, code) => { const m = MSG[code] || MSG.failed; send(res, m[0], { ok: false, code: MSG[code] ? code : 'failed', error: m[1] }); return true; };
 // My Apps' error word -> ours, only from the list a route expects; anything else (bad secret, unknown app, 404 account, 5xx, down) = failed.
@@ -60,7 +65,7 @@ const REFC = new Map(); // account -> { t, ref }: /acct/ref, 1 hour
 async function handle(req, res) {
   if (req.method === 'OPTIONS') return false;
   const path = req.url.split('?')[0];
-  if (!/^\/acct\/(link|link\/verify|ref|ref\/attach|recover\/(start|check|password|pin))$/.test(path)) return false;
+  if (!/^\/acct\/(link|link\/verify|link\/join|link\/join\/verify|ref|ref\/attach|recover\/(start|check|password|pin))$/.test(path)) return false;
   if (req.method !== 'POST' && !(req.method === 'GET' && path === '/acct/ref')) return false;
   if (!A.on()) { send(res, 200, { gate: false }); return true; }
   const ip = String(require('./ip').clientIp(req) || '').slice(0, 64);
@@ -157,6 +162,29 @@ async function handle(req, res) {
     const r = await ma('/api/v1/link/verify', { account: e, code, ip });
     if (!good(r)) return no(res, word(r, ['code', 'expired', 'locked', 'taken', 'limit']));
     A.uncache(e); send(res, 200, { ok: true, verified: true, hint: okHint(r.j.login_hint) }); return true;
+  }
+  // v276 (My Apps contract 5j, owner's choice "A", manager decision (a)): /acct/link answered `taken` because the address already signs in to another account.
+  // A code to that address joins this phone sign-in to it. This phone keeps its id everywhere in Oddable (token, owner powers, Groups, bet alerts, bets row);
+  // only the plan is read through that account (acct.js entitlement). An older My Apps (no join routes: 404 that is not "account") answers `nojoin`.
+  const noJoin = (r) => !!(r && r.status === 404 && !(r.j && r.j.error === 'account'));
+  if (path === '/acct/link/join') {
+    const email = okEmail(b.email); if (!email) return no(res, 'email');
+    if (slow(ip + '|jn', 8) || slow(e + '|jn', 8)) return no(res, 'slow');
+    const r = await ma('/api/v1/link/join', { account: e, email, ip });
+    if (noJoin(r)) return no(res, 'nojoin');
+    if (!good(r)) return no(res, word(r, ['nomail', 'limit', 'joined', 'has_login', 'email']));
+    send(res, 200, { ok: true, sent: true, hint: okHint(r.j.login_hint) }); return true;
+  }
+  if (path === '/acct/link/join/verify') {
+    const code = okCode(b.code); if (!code) return no(res, 'code');
+    if (slow(e + '|jv', 20)) return no(res, 'slow');
+    const r = await ma('/api/v1/link/join/verify', { account: e, code });
+    if (noJoin(r)) return no(res, 'nojoin');
+    if (!good(r)) { const w = word(r, ['code', 'expired', 'locked', 'joined', 'taken', 'limit']); return no(res, w === 'taken' ? 'joingone' : w); } // taken here = that address can no longer be joined
+    A.uncache(e);
+    let me = null; try { me = await A.shape(e, true); } catch (er) {}
+    if (me && A.isOwnerPhone(e)) me.ownerDash = true;
+    send(res, 200, Object.assign({ ok: true, joined: true, hint: okHint(r.j.login_hint) }, me ? { me: A.gFlag(me, e) } : {})); return true; // the same token: this phone is still the same person
   }
   return false;
 }

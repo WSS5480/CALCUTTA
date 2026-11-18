@@ -981,7 +981,7 @@ function groupScrub(o, n) { // n = the people limit limits.maxPeople gives this 
 }
 const signedIn = (req) => { try { return D.acct().who(req) || null; } catch (e) { return null; } };
 const allowed = (e) => { try { return !!D.grp().onFor(e); } catch (er) { return false; } };
-// v276 (server review A2): "has this account's time ended?" is asked on every /local call. acct.expired() answers false when My Apps is down, after up
+// v277 (server review A2): "has this account's time ended?" is asked on every /local call. acct.expired() answers false when My Apps is down, after up
 // to 25 s and with no cache, so a slow My Apps stalled scoring. Same rule as the Calcutta's lapsed() (odds-api/calcutta.js): the answer is kept per
 // account; a KNOWN answer is good for 2 minutes and then re-asked in the background while it is still served; My Apps not answering ('unknown',
 // acct.expiredState) never changes a known answer (asked again 30 s later); an account never answered for waits at most 1.2 s, then is let in

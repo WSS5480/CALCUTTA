@@ -209,6 +209,7 @@
     if (st === 'done') return emDone(); // that address was already proven on this account (My Apps): live at once, no code
     if (st === 'nomail') cardSnooze(false); // mail is off: the reminder card waits 14 days ("we'll ask you later"), not counted as a "Not now"
     F.gemail2 = em; F.gpw2 = pw; // only in memory, for "send it again" / another address; never saved on the phone
+    if (st === 'taken' && EM_RE.test(em)) { EX.e = em; EX.nojoin = false; return emShow('emjoin'); } // v276: that email already has an account: offer to join it
     emShow(st === 'code' ? 'emcode' : st === 'taken' || (st === 'todo' && emsg) ? 'emform' : 'emdone', st === 'taken' ? { gemail2: emsg } : null, st === 'todo' ? emsg : '');
   }
   // ---- lost my password / lost my PIN (signed out). The answer to "send me a code" is the same whether or not the email has an account. ----
@@ -264,7 +265,7 @@
   const emlSet = (o) => s('odd-eml', o ? JSON.stringify(o) : null);
   const canLink = (m) => !!m && m.role !== 'owner' && PH_ACCT.test(String(m.email || '')) && m.has_email_login === false; // strictly false: an older My Apps does not say, and then nothing is offered
   function emShow(sc, fes, msg) { scr = sc; FE = fes || {}; sheet = true; show(); if (msg) err(msg); const f = el && el.querySelector('input[data-f]'); if (f && sc !== 'emdone') { try { f.focus({ preventScroll: true }); } catch (e) {} } if (sc === 'emdone') refFresh(); }
-  function emClose() { if (EX && EX.up && (scr === 'emcode' || scr === 'emform')) cardSnooze(false, 1); const o = emlGet(); if (o && o.open) { delete o.open; emlSet(o); } /* a code that was sent stays good for its 15 minutes: the card / Account box go straight back to the code box */ scr = ''; EX = null; F = {}; FE = {}; hide(); emCard(); drawAcct(); }
+  function emClose() { if (EX && EX.up && (scr === 'emcode' || scr === 'emform' || scr === 'emjoin' || scr === 'emjcode')) cardSnooze(false, 1); const o = emlGet(); if (o && o.open) { delete o.open; emlSet(o); } /* a code that was sent stays good for its 15 minutes: the card / Account box go straight back to the code box */ scr = ''; EX = null; F = {}; FE = {}; hide(); emCard(); drawAcct(); }
   // Opens "Add an email and password" (the card, the Account box). A code that is still waiting (asked less than 15 minutes ago) goes straight to the code box.
   window.oddAddEmail = function () {
     if (!g('odd-tok') || !canLink(me)) return false; const o = emlGet();
@@ -279,6 +280,18 @@
         '<div class="box"><b>No code?</b><p class="hl">It works for 15 minutes. Look in spam too.</p><button type="button" class="lnk" id="gcr">Resend the code</button><button type="button" class="lnk" id="gce">Use a different email</button><button type="button" class="alt" id="gcs">Skip for now</button>' +
         '<p class="hl">Skipping is fine: your account works with your cell number and PIN, and we will remind you later.</p></div></div></div>';
       $('gcv').onclick = emVerify; $('gcr').onclick = emResend; $('gce').onclick = () => { F.gemail2 = x.e || ''; F.gpw2 = ''; emShow('emform'); }; $('gcs').onclick = () => { const o = emlGet(); if (o) { o.st = 'todo'; emlSet(o); } x.st = 'skip'; if (x.up) cardSnooze(false, 1); emShow('emdone'); };
+    } else if (scr === 'emjoin') { // v276: the email already signs in to another account (My Apps 5j). Join this phone sign-in to it, or use another email.
+      el.innerHTML = '<div class="gb gw">' + BACK + '<h1>That email already has an account</h1><div class="g2 g2b"><div class="box">' +
+        (x.nojoin ? '<p id="gjsay">That email already has an account. Use a different email.</p>'
+          : '<p id="gjsay">That email already has an account. Send a code to it to join this phone sign-in to that account.</p><p class="hl">Your bets stay just as they are. You keep signing in with your cell number and PIN, and you can also sign in with that email and its password.</p>') +
+        '<div class="er" id="gerr" role="alert"></div>' + (x.nojoin ? '' : '<button type="button" id="gjs" data-go="1">Send code</button>') +
+        '<button type="button" class="' + (x.nojoin ? '' : 'alt') + '" id="gjd">Use a different email</button></div></div></div>';
+      if ($('gjs')) $('gjs').onclick = () => joinSend(false); $('gjd').onclick = () => { F.gemail2 = ''; F.gpw2 = ''; emShow('emform'); };
+    } else if (scr === 'emjcode') {
+      el.innerHTML = '<div class="gb gw">' + BACK + '<h1>Check your email</h1><div class="g2 g2b"><form class="box" id="gfj" novalidate><p id="gjcsay">Enter the 6-digit code we emailed to <b>' + esc(x.h || 'that address') + '</b> to join this phone sign-in to that account.</p>' +
+        fld('gcode3', 'Code from the email', CODE_AT) + '<div class="er" id="gerr" role="alert"></div><button id="gjv" data-go="1" type="submit">Join my phone sign-in</button></form>' +
+        '<div class="box"><b>No code?</b><p class="hl">It works for 15 minutes. Look in spam too.</p><button type="button" class="lnk" id="gjr">Resend the code</button><button type="button" class="lnk" id="gje">Use a different email</button></div></div></div>';
+      $('gjv').onclick = joinVerify; $('gjr').onclick = () => joinSend(true); $('gje').onclick = () => { F.gemail2 = ''; F.gpw2 = ''; emShow('emform'); };
     } else if (scr === 'emform') {
       el.innerHTML = '<div class="gb gw">' + BACK + '<h1>Add an email and password</h1><div class="g2 g2b"><form class="box" id="gfa" novalidate>' + fld('gemail2', 'Email', EMAIL_AT + ' autocomplete="email" placeholder="you@example.com"') + fld('gpw2', 'Password', 'type="password" autocomplete="new-password" maxlength="200" placeholder="8 or more characters"', { pw: 1 }) +
         '<div class="er" id="gerr" role="alert"></div><button id="gas" data-go="1" type="submit">Email me a code</button></form>' +
@@ -286,8 +299,9 @@
       $('gas').onclick = emSend; $('gan').onclick = () => { if (x.up) { x.st = 'skip'; cardSnooze(false, 1); emShow('emdone'); } else emClose(); };
     } else {
       const st = x.st, up = !!x.up;
-      const t = st === 'pin' ? 'Your PIN is changed' : up ? "You're in" : st === 'ok' || st === 'done' ? 'Email added' : 'Not yet';
+      const t = st === 'pin' ? 'Your PIN is changed' : st === 'joined' ? 'Joined' : up ? "You're in" : st === 'ok' || st === 'done' ? 'Email added' : 'Not yet';
       const line = st === 'pin' ? 'Your bets are just as you left them. Use your cell number and the new PIN on your other devices: they have been signed out.'
+        : st === 'joined' ? 'This phone sign-in is joined to the account for ' + esc(x.h || 'that email') + '. Your bets are just as you left them. Sign in with your cell number and PIN, or with that email and its password.'
         : st === 'ok' || st === 'done' ? 'Your email is confirmed' + (x.h ? ' (' + esc(x.h) + ')' : '') + '. You can sign in with it and your password on any device, and use it if you ever lose your PIN.'
         : st === 'nomail' ? (up ? NOMAIL_UP : "Email isn't switched on yet. Your account still works with your cell number and PIN. We'll ask you again later.")
         : 'Your account works with your cell number and PIN. We will remind you to confirm your email, so you can get back in if you lose the PIN.';
@@ -304,6 +318,7 @@
     if (j && j.ok && j.verified) { x.h = j.hint || ''; return emDone(); }
     if (j && j.code === 'nomail') { x.e = em; x.st = 'nomail'; keep('nomail'); cardSnooze(false); return emShow('emdone'); }
     const m = e ? netMsg(e) : (j && j.error) || 'Could not send the code. Please try again later.', c = e && e.code;
+    if (c === 'taken') { x.e = em; x.nojoin = false; return emShow('emjoin'); } // v276: that email already has an account: offer to join it
     emShow('emform', c === 'taken' || c === 'email' ? { gemail2: m } : c === 'password' ? { gpw2: m } : null, c === 'taken' || c === 'email' || c === 'password' ? '' : m);
   }
   async function emSend() {
@@ -330,6 +345,29 @@
     busy = true; btnBusy('gcv', 'Please wait…'); let j = null;
     try { j = await call('/link/verify', { code: code }); } catch (e) { busy = false; btnBusy('gcv'); const c = e.code; if (c === 'taken') { F.gemail2 = ''; return emShow('emform', { gemail2: netMsg(e) }); } return c === 'code' || c === 'expired' || c === 'locked' ? fe({ gcode2: netMsg(e) }) : err(netMsg(e)); }
     busy = false; if (j && j.ok) { if (EX) EX.h = j.hint || EX.h; return emDone(); } btnBusy('gcv'); err('Could not confirm the code. Please try again.');
+  }
+  // v276: join this phone sign-in to the account that email already opens (My Apps 5j). An older My Apps has no join: then only "Use a different email".
+  async function joinSend(again) {
+    const x = EX || (EX = {}); if (busy || !x.e) return;
+    if (again && Date.now() - rsAt < 30000) return err('Please wait half a minute before asking for another code.');
+    const id = again ? 'gjr' : 'gjs'; busy = true; btnBusy(id, 'Please wait…'); let j = null, er = null;
+    try { j = await call('/link/join', { email: x.e }); } catch (e) { er = e; }
+    busy = false; btnBusy(id);
+    if (j && j.ok) { rsAt = Date.now(); x.h = j.hint || x.h || ''; F.gcode3 = ''; emShow('emjcode'); if (again) err('A new code is on its way. The old one no longer works.'); return; }
+    if (j && j.code === 'nojoin') { x.nojoin = true; return emShow('emjoin'); }
+    if (j && j.code === 'nomail') return err("Email isn't switched on yet. Use a different email or try later.");
+    if (er && er.code === 'joined') { x.nojoin = true; emShow('emjoin'); return err(netMsg(er)); }
+    err(er ? netMsg(er) : 'Could not send the code. Please try again later.');
+  }
+  async function joinVerify() {
+    if (busy) return; const code = digits(F.gcode3), x = EX || (EX = {});
+    if (!/^\d{6}$/.test(code)) return fe({ gcode3: 'Enter the 6-digit code from the email.' });
+    busy = true; btnBusy('gjv', 'Please wait…'); let j = null;
+    try { j = await call('/link/join/verify', { code: code }); } catch (e) { busy = false; btnBusy('gjv'); const c = e.code; if (c === 'joined' || c === 'joingone') { x.nojoin = true; emShow('emjoin'); return err(netMsg(e)); } return c === 'code' || c === 'expired' || c === 'locked' ? fe({ gcode3: netMsg(e) }) : err(netMsg(e)); }
+    busy = false;
+    if (j && j.ok) { if (j.hint) x.h = j.hint; x.st = 'joined'; x.pw = ''; emlSet(null); s('odd-emc', null); if (j.me) setMe(j.me); if (me) me = Object.assign({}, me, { has_email_login: true }); emShow('emdone'); emCard(); drawAcct(); return; } // the same token: this phone is the same person, only its plan now comes from that account
+    if (j && j.code === 'nojoin') { x.nojoin = true; return emShow('emjoin'); }
+    btnBusy('gjv'); err('Could not confirm the code. Please try again.');
   }
   function emDone() { const x = EX || (EX = {}); x.st = 'ok'; x.pw = ''; emlSet(null); s('odd-emc', null); if (me) { me = Object.assign({}, me, { has_email_login: true, has_contact: true, contact_verified: true, contact_hint: x.h || me.contact_hint || '' }); } emShow('emdone'); emCard(); drawAcct(); }
   // ---- the reminder card for accounts that have no email sign-in yet (index.html only: top of the list, in normal page flow, under the message and days-left cards) ----

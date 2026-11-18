@@ -79,7 +79,7 @@
     return s;
   }
   function loadHome() { act('mine', {}, async (j) => { H = { groups: j.groups || [], pending: j.pending || [] }; blSet(j.betLock); const s = cur(); if (s.t === 'hub' && s.gr) { const n = H.groups.find((x) => x.id === s.gr.id); if (n) s.gr = n; } paint(); if (WANTG) gamesGo(); }); }
-  // v277: the what's-new pop-up's "Golf days" / "Group pickleball" items open the Games catalog: straight to a group's Games screen when the person is in
+  // v278: the what's-new pop-up's "Golf days" / "Group pickleball" items open the Games catalog: straight to a group's Games screen when the person is in
   // exactly ONE group, else My groups (pick a group, then Games). WANTG is cleared by any other way into Groups (open() without keep, a join link).
   let WANTG = false;
   function gamesGo() { WANTG = false; const s = cur(); if (expired() || !H || s.t !== 'home' || stack.length !== 1 || H.groups.length !== 1) return; const gr = H.groups[0]; stack.push({ t: 'hub', gr }); gamesOpen(gr); }
@@ -173,7 +173,7 @@
   function lookup(code) { const c = normCode(code); cur().code = String(code || ''); if (!c) { err = 'That code is not complete. It has 8 letters and numbers.'; return paint(); } act('preview', { code: c }, async (j) => { const s = cur(); s.code = c; s.pv = j.group; paint(); }); }
   function doJoin() { const s = cur(); act('join', { code: s.code }, async (j) => { s.done = j.pending ? { pending: true, text: j.text || 'Request sent. The commissioner approves who joins.' } : { pending: false, text: 'You joined ' + (j.group ? j.group.name : 'the group') + '.' }; s.gr = j.pending ? null : j.group; H = null; paint(); blStatus(); }); }
   // An invite link (?join=g.<code>) lands here once the person is signed in (index.html grpJoinRun, also through gate.js afterSignIn('group:g:<code>')).
-  function openJoin(code) { WANT = String(code || ''); WANTG = false; open(true); if (window.OddLocal) { try { window.OddLocal.close(); } catch (x) {} } try { if (window.oddCalc && window.oddCalc.close) window.oddCalc.close(); } catch (x) {} /* v277 (review A4): a join link closes the Calcutta too */ stack = [{ t: 'home' }, { t: 'join', code: WANT }]; err = ''; paint(); if (expired()) return; WANT = ''; lookup(cur().code); }
+  function openJoin(code) { WANT = String(code || ''); WANTG = false; open(true); if (window.OddLocal) { try { window.OddLocal.close(); } catch (x) {} } try { if (window.oddCalc && window.oddCalc.close) window.oddCalc.close(); } catch (x) {} /* v278 (review A4): a join link closes the Calcutta too */ stack = [{ t: 'home' }, { t: 'join', code: WANT }]; err = ''; paint(); if (expired()) return; WANT = ''; lookup(cur().code); }
 
   // ---------- invite ----------
   async function invite() {
@@ -194,11 +194,11 @@
     e.querySelector('.ogin0').innerHTML = top(stack.length > 1 && !expired()) + (err && !expired() ? '<div class="ogerr" role="alert">' + esc(err) + '</div>' : '') + '<div class="ogbody">' + body + '</div>';
   }
   function paintBusy(on) { const e = el(); if (!e) return; e.classList.toggle('ogbusy', !!on); e.querySelectorAll('button[data-a]').forEach((b) => { if (!/^(back|close)$/.test(b.getAttribute('data-a'))) b.disabled = !!on; }); }
-  function back() { err = ''; if (cur().t === 'create') readDraft(); if (cur().t === 'golf' && window.OddGolfDay) { try { window.OddGolfDay.leave(cur(), GDX); } catch (e) {} } if (stack.length > 1) stack.pop(); if (cur().t === 'home' && !H) loadHome(); if (cur().t === 'games' && !expired()) return gamesState(cur()), (el().scrollTop = 0); /* v277: back on the Games screen = its states asked again */ if (cur().t === 'golf' && window.OddGolfDay) { try { window.OddGolfDay.back(cur(), GDX); } catch (e) {} } paint(); el().scrollTop = 0; }
+  function back() { err = ''; if (cur().t === 'create') readDraft(); if (cur().t === 'golf' && window.OddGolfDay) { try { window.OddGolfDay.leave(cur(), GDX); } catch (e) {} } if (stack.length > 1) stack.pop(); if (cur().t === 'home' && !H) loadHome(); if (cur().t === 'games' && !expired()) return gamesState(cur()), (el().scrollTop = 0); /* v278: back on the Games screen = its states asked again */ if (cur().t === 'golf' && window.OddGolfDay) { try { window.OddGolfDay.back(cur(), GDX); } catch (e) {} } paint(); el().scrollTop = 0; }
   function push(v) { err = ''; stack.push(v); paint(); el().scrollTop = 0; }
   // v273 Golf days (a group game): the screens live in pics/golfday.js, fetched the first time a member opens the Golf day tile. It draws inside this
   // overlay and uses the same stack (Back), the same one-call-at-a-time `act` (so an ended account gets the same lock card) and the same classes.
-  let GDL = null; const GDV = '277';
+  let GDL = null; const GDV = '278';
   const GDX = { esc, att, fmtDay, chiDay, addDays, push, back: () => back(), paint: () => paint(), cur, el, act, post, errText, tile, sel, busy: () => busy, setErr: (m) => { err = m || ''; }, me: () => g('odd-name') || '' };
   function gdOpen(gr) {
     push({ t: 'golf', v: 'home', gr });
@@ -207,7 +207,7 @@
     if (!GDL) GDL = new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = 'golfday.js?v=' + GDV; sc.onload = ok; sc.onerror = () => { GDL = null; sc.remove(); no(); }; document.head.appendChild(sc); });
     GDL.then(go, () => { err = 'Could not load Golf days. Check your signal and try again.'; paint(); });
   }
-  // Pickleball (branch pb-group; v277 integration: a Games catalog entry, key 'pickleball', registered below with addGame): the screens live in pics/local.js,
+  // Pickleball (branch pb-group; v278 integration: a Games catalog entry, key 'pickleball', registered below with addGame): the screens live in pics/local.js,
   // fetched the first time a member taps the Pickleball card on the Games screen (same tag as Golf days: GDV = the app version). It draws its own screen
   // (#oevt) exactly over this one, one z-index above, so the tab bar stays visible; its Back on the first screen returns here (the Games screen).
   let PBL = null;
@@ -225,7 +225,7 @@
   //     title  the card's name; blurb: one line saying what the game is
   //     open   called with the group (the object the group page holds) when the card is tapped: push your own screen (GDX.push / push) so Back works
   //     state  optional: (gr) -> {k: 'none' | 'open' | 'finished', text} or a Promise of it. Shown on the card ('None yet' / 'Open' / 'Finished').
-  // Only games that exist on main are registered here: the Picks contest (v272), Golf days (v273) and, since the v277 integration, group Pickleball (pics/local.js) and the Calcutta (pics/calcutta.js).
+  // Only games that exist on main are registered here: the Picks contest (v272), Golf days (v273) and, since the v278 integration, group Pickleball (pics/local.js) and the Calcutta (pics/calcutta.js).
   const GAMES = [];
   function addGame(x) { if (!x || !/^[a-z][a-z0-9]{0,15}$/.test(String(x.key || '')) || !x.title || typeof x.open !== 'function') return false; const i = GAMES.findIndex((y) => y.key === x.key); if (i >= 0) GAMES[i] = x; else GAMES.push(x); return true; }
   const span = (c) => esc(SPORT[c.sport] || c.sportName || '') + ' · ' + esc(fmtDay(c.startDay) + ' to ' + fmtDay(c.endDay));
@@ -235,14 +235,14 @@
   addGame({ key: 'golf', title: 'Golf day', blurb: 'A round at one course: each player logs their own score hole by hole, live leaderboard, Golf GPS for the course.',
     state: (gr) => within(post('/golfday/list', { g: gr.id }), 12000).then((j) => (j.open ? { k: 'open', text: 'Open · ' + esc(j.open.name) + ' · ' + esc(fmtDay(j.open.date)) } : (j.past || []).length ? { k: 'finished', text: 'Last one · ' + esc(j.past[0].name) + ' · ' + esc(fmtDay(j.past[0].date)) } : { k: 'none', text: 'No Golf day yet' + (j.comm ? ': start one' : '') })),
     open: (gr) => gdOpen(gr) });
-  // v277 (integration): group pickleball (pics/local.js, server odds-api/local.js) as a catalog entry. State: ONE POST /local/list for the group (the call
+  // v278 (integration): group pickleball (pics/local.js, server odds-api/local.js) as a catalog entry. State: ONE POST /local/list for the group (the call
   // its own home screen makes; local.js is NOT fetched for it): Open (a game not finished: under way, or its start) / Finished (the last one) / None yet.
   const pbDay = (ms) => esc(new Date(ms).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }));
   addGame({ key: 'pickleball', title: 'Pickleball', blurb: 'Round robin, brackets, ladder and heads-up games: scores entered on court, live standings. Bragging rights only.',
     state: (gr) => within(post('/local/list', { g: gr.id }), 12000).then((j) => { const E = Array.isArray(j.events) ? j.events : [], o = E.filter((x) => !x.fin), f = E.filter((x) => x.fin).sort((a, b) => (b.fin || 0) - (a.fin || 0));
       return o.length ? { k: 'open', text: 'Open · ' + esc(o[0].title) + ' · ' + (o[0].started ? 'under way' : 'starts ' + pbDay(o[0].start)) + (o.length > 1 ? ' · ' + o.length + ' games' : '') } : f.length ? { k: 'finished', text: 'Last one · ' + esc(f[0].title) + ' · ' + pbDay(f[0].start) } : { k: 'none', text: 'No pickleball game yet' + (gr.role === 'comm' ? ': start one' : '') }; }),
     open: (gr) => pbOpen(gr) });
-  // v277 (integration): the Calcutta (pics/calcutta.js, server odds-api/calcutta.js) as a catalog entry; its old hub tile is gone. State: ONE POST
+  // v278 (integration): the Calcutta (pics/calcutta.js, server odds-api/calcutta.js) as a catalog entry; its old hub tile is gone. State: ONE POST
   // /calcutta/list for the group (the call its own first screen makes; calcutta.js is NOT fetched for it). That list knows each auction's status
   // (not started / running / closed), not whether the event's games are over, so a Calcutta stays Open after its auction closes (owners are paid as
   // teams win); None yet when the group has none.
@@ -259,7 +259,7 @@
         + '<span class="ogmeta">' + (v ? v.text : 'Checking…') + '</span><span class="oggo">Open ›</span></button>'; }).join('') + '</div>';
   }
   function gamesOpen(gr) { const s = { t: 'games', gr, st: {} }; push(s); gamesState(s); }
-  // v277: the states are asked again when the person comes BACK to the Games screen (from a game's screens: Back in groups.js, or Back on the first
+  // v278: the states are asked again when the person comes BACK to the Games screen (from a game's screens: Back in groups.js, or Back on the first
   // Pickleball screen through OddGroups.refresh()), so a game started meanwhile shows Open. The last answer stays on the card until the new one arrives.
   function gamesState(s) {
     const gr = s.gr, n = (s.n = (s.n || 0) + 1);
@@ -268,7 +268,7 @@
     paint();
   }
   function refresh() { const s = cur(); if (el() && s && s.t === 'games' && !expired()) gamesState(s); }
-  // v277: open a registered game for the group the Groups screen is on (pics/local.js's "Open the group contest" / "Open Golf day" buttons). false = nothing opened.
+  // v278: open a registered game for the group the Groups screen is on (pics/local.js's "Open the group contest" / "Open Golf day" buttons). false = nothing opened.
   function openGame(k) { const gr = curGroup(), x = GAMES.find((y) => y.key === k); if (!el() || !gr || !x || busy || expired()) return false; try { x.open(gr); return true; } catch (e) { err = 'Could not open that game.'; paint(); return false; } }
   function openContest(gr, cid) { const c = cof(gr, cid); push({ t: 'contest', gr, cid }); if (c && c.started) act('standings', { id: gr.id, cid }, async (j) => { const s = cur(); if (s.t === 'contest') { s.rows = j.rows || []; if (j.group) setGroup(j.group); } paint(); }); }
 
@@ -310,12 +310,12 @@
       + (k === 'picks' || k === 'record' ? 'Place and record are the contest\'s own final standings. "T" = a shared place. "–" = no settled bet in that contest.' : 'Net to par = strokes after the playing strokes, minus par, on a finished card (no strokes on a gross day). "thru N" = the card was not finished.') + '</div></div>';
   }
 
-  // Calcutta auction (a group game, calc-live): the screens live in pics/calcutta.js, fetched the first time a member opens it (since the v277
+  // Calcutta auction (a group game, calc-live): the screens live in pics/calcutta.js, fetched the first time a member opens it (since the v278
   // integration: the Calcutta card on the Games screen, or "My Calcuttas" on the Groups home). Its own full-screen overlay (#ocalc) opens above
   // this one, beside the tab bar; ‹ Group and Close come back here; closing Groups closes it too.
   let CDL = null; const CDV = GDV; // F11: calcutta.js?v= moves with every app version (see HANDOFF bump list)
   function calcOpen(gr) { // gr null: My Calcuttas (every group), so a Calcutta whose group was deleted stays reachable
-    const from = cur(); // v277: same guard as pbOpen: opened only if Groups is still open on the same screen and the account has not ended
+    const from = cur(); // v278: same guard as pbOpen: opened only if Groups is still open on the same screen and the account has not ended
     const go = () => { if (el() && cur() === from && !expired()) window.oddCalc(gr ? { gr: { id: gr.id, name: gr.name, role: gr.role } } : { mine: true }); };
     if (window.oddCalc) return go();
     if (!CDL) CDL = new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = 'calcutta.js?v=' + CDV; sc.onload = ok; sc.onerror = () => { CDL = null; sc.remove(); no(); }; document.head.appendChild(sc); });
@@ -377,7 +377,7 @@
   function open(keep) {
     css(); let e = el(); if (!e) { e = document.createElement('div'); e.id = 'ogrp'; e.setAttribute('role', 'dialog'); e.setAttribute('aria-label', 'Groups'); e.innerHTML = '<div class="ogin0"></div>'; document.body.appendChild(e); e.addEventListener('click', click); window.addEventListener('resize', fit); }
     fit(); try { if (window.navRender) window.navRender(); } catch (x) {} fit(); if (window.OddLocal) { try { window.OddLocal.fit(); } catch (x) {} }
-    if (keep) return; WANTG = false; if (window.OddLocal) { try { window.OddLocal.close(); } catch (x) {} } try { if (window.oddCalc && window.oddCalc.close) window.oddCalc.close(); } catch (x) {} /* v277 (review A4): and the Calcutta */ stack = [{ t: 'home' }]; err = ''; paint(); if (!expired()) loadHome(); // the Groups tab again = my groups, Pickleball closed
+    if (keep) return; WANTG = false; if (window.OddLocal) { try { window.OddLocal.close(); } catch (x) {} } try { if (window.oddCalc && window.oddCalc.close) window.oddCalc.close(); } catch (x) {} /* v278 (review A4): and the Calcutta */ stack = [{ t: 'home' }]; err = ''; paint(); if (!expired()) loadHome(); // the Groups tab again = my groups, Pickleball closed
   }
   function close() { try { if (window.oddCalc && window.oddCalc.close) window.oddCalc.close(); } catch (x) {} const e = el(); if (!e) return; if (window.OddGolfDay) { try { window.OddGolfDay.stop(); } catch (x) {} } if (window.OddLocal) { try { window.OddLocal.close(); } catch (x) {} } e.remove(); window.removeEventListener('resize', fit); busy = false; try { if (window.navRender) window.navRender(); } catch (x) {} }
   // gate.js tells the page when the lock changes (paid, signed out, time ended): the open screen follows without a reload.
@@ -431,7 +431,7 @@
     if (r.personal) { try { alert(r.text); } catch (e) {} return true; }
     bet.gl = r.gl; bet.sa = r.sa; if (r.text) { try { alert(r.text); } catch (e) {} } return true;
   }
-  window.OddGroups = { open, close, join: openJoin, gate, poke, lockChanged, isOpen: () => !!el(), active: () => BL.n > 0 && !!g('odd-tok') && !expired(), locked: (b) => !!(b && Number(b.gl) > 0), LOCKNOTE, addGame, games: () => GAMES.map((x) => ({ key: x.key, title: x.title, blurb: x.blurb })), openGame, openGames, refresh }; // v274: addGame = the games catalog registry; v277: openGame(key) opens a registered game for the group on screen (pics/local.js's games list uses it), openGames() = Groups at the Games catalog (the what's-new pop-up), refresh() = the Games screen asks its states again (pics/local.js Back)
+  window.OddGroups = { open, close, join: openJoin, gate, poke, lockChanged, isOpen: () => !!el(), active: () => BL.n > 0 && !!g('odd-tok') && !expired(), locked: (b) => !!(b && Number(b.gl) > 0), LOCKNOTE, addGame, games: () => GAMES.map((x) => ({ key: x.key, title: x.title, blurb: x.blurb })), openGame, openGames, refresh }; // v274: addGame = the games catalog registry; v278: openGame(key) opens a registered game for the group on screen (pics/local.js's games list uses it), openGames() = Groups at the Games catalog (the what's-new pop-up), refresh() = the Games screen asks its states again (pics/local.js Back)
   window.oddGroups = () => open();
   if (g('odd-tok')) setTimeout(poke, 3000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden && g('odd-tok')) poke(); });

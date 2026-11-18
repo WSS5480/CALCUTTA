@@ -1,6 +1,6 @@
 // Run: node odds-api/local.calcutta.check.js   MERGED BUILD ONLY: the events Calcutta source against the REAL calcutta.js (round 4 contract, checked on
 // calcutta-v1 dc5371b) and the shared limits.js. One in-memory database and sign-in for both engines. Skips (exit 0) while those files are not in the build.
-// v277 (server review A3): it also skips (exit 0) while the live server does not register the 'events' Calcutta source. On main, server.js plugs in
+// v278 (server review A3): it also skips (exit 0) while the live server does not register the 'events' Calcutta source. On main, server.js plugs in
 // only the golf source (calcutta-pga.js) and the pickleball engine's routes are /local/... behind the group gate, so the preview's events/create and
 // events/join that this check drives are not there. It runs again on a build whose server.js calls ADAPTER.registerCalcutta.
 if (!/registerCalcutta\s*\(/.test(require('fs').readFileSync(require('path').join(__dirname, 'server.js'), 'utf8'))) { console.log('skipped: the events Calcutta source is not registered in this build (server.js never calls ADAPTER.registerCalcutta)'); process.exit(0); }

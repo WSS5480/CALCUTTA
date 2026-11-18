@@ -1,4 +1,4 @@
-// v277 (server review A2): the "time ended" check on /local calls no longer stalls when My Apps is slow or down.
+// v278 (server review A2): the "time ended" check on /local calls no longer stalls when My Apps is slow or down.
 // lapsed() keeps each account's last KNOWN answer (2 minutes, then re-asked in the background), never lets "My Apps did not answer" undo a known
 // "ended", and waits at most 1.2 s for an account it has never heard about (then lets it in provisionally and asks again 30 s later).
 // Run: node odds-api/local.lapse.test.js (no network: the account module is a stub)

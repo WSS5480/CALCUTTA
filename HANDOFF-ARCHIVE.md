@@ -1236,9 +1236,9 @@ Coder agent, branch `guest-mode` from main 3a022df (v266). v267 (`broadcast`) wa
 
 **After deploy (owner / manager).** 1. Render → ODDABLE (calcutta-odds): nothing to set for guest mode (on by default). To go back to the wall set env var `GUEST_MODE` to `0`. 2. Open https://steves-pics.onrender.com/ in a private window: no sign-in screen, scores show, "Sign up free" in the header. 3. `GET https://calcutta-odds.onrender.com/acct/status` should answer `{"gate":true,"guest":true}`. 4. Sign in on your own phone: nothing should look different from v266.
 
-## v277 build detail (moved from HANDOFF.md Nov 18 2026): the "Look what's new" pop-up, group pickleball, the Calcutta auction, the integration and its fix rounds
+## v278 build detail (moved from HANDOFF.md Nov 18 2026): the "Look what's new" pop-up, group pickleball, the Calcutta auction, the integration and its fix rounds
 
-The short version is "## v277" in HANDOFF.md. The integration was built and tested as "v276" (branches `integ-275`, `integ-276`); that number went to the other session's prove-and-join, so it shipped as v277. The text below is as it stood before the move (headings one level down); "v276" in it means this integration.
+The short version is "## v278" in HANDOFF.md. The integration was built and tested as "v276" (branches `integ-275`, `integ-276`); 276 went to the other session's prove-and-join and 277 to its moved card, so it shipped as v278. The text below is as it stood before the move (headings one level down); "v276" in it means this integration.
 
 ### Change-log lines of these branches
 

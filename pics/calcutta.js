@@ -44,7 +44,7 @@
   // ROUND 3 #6: every screen honours calc.started: the lock line replaces the Bid / Enter / Buy-back buttons (no more "try it and get an error")
   const lockCard = (c) => (!c ? '' : c.started ? '<div class="cwarn clockd" role="status"><b>🔒 The event has started</b>Who owns what is final. No more sales, buy-backs or player changes.</div>' : c.feedLock ? '<div class="cwarn clockd" role="status"><b>🔒 Locked for now</b>The score feed cannot be read and the event may have started. Sales and buy-backs open again if it has not.</div>' : c.kick ? '<div class="cnote ckick">🔒 Sales, buy-backs and players lock for good when the event starts: ' + esc(fmtTime(c.kick)) + '.</div>' : '');
   const badge = (c) => (c.rules && c.rules.main ? '<span class="cbadge">Main pot</span>' : '<span class="cbadge cy">Side pot</span>');
-  // v277: "Waiting on the …" names each postponed / moved GAME once (board.waitGames: the lotted teams of each game, "A vs B"); an older server's
+  // v278: "Waiting on the …" names each postponed / moved GAME once (board.waitGames: the lotted teams of each game, "A vs B"); an older server's
   // flat team list (board.waiting) still reads as before.
   const andList = (L) => (L.length > 3 ? L.slice(0, 3).join(', ') + ' and ' + (L.length - 3) + ' more' : L.length === 1 ? L[0] : L.slice(0, -1).join(', ') + ' and ' + L[L.length - 1]);
   const waitText = (b) => { const G = Array.isArray(b.waitGames) && b.waitGames.length ? b.waitGames.map((t) => t.join(' vs ')) : b.waiting; return esc(andList(G)) + (G.length === 1 ? ' game' : ' games'); };
@@ -181,7 +181,7 @@
     const comm = c.role === 'comm', a = c.a, lot = a.cur && c.lots.find((l) => l.id === a.cur), nSold = c.sold.length, down = FAILS >= 2;
     let h = '<div class="crow"><h1>' + (a.status === 'setup' ? 'Auction' : a.status === 'closed' ? 'Auction closed' : 'Live auction') + '</h1>' + (comm ? '<span class="cbadge">Commissioner</span>' : '') + '</div>';
     h += '<div class="cmeta">' + esc(c.name) + ' · ' + esc(c.evLabel) + '</div>' + lockCard(c);
-    // v277 (B3): the Reconnecting line (M2) and the error / note line sit UNDER the bid row (inside the block card, under the status line; under the
+    // v278 (B3): the Reconnecting line (M2) and the error / note line sit UNDER the bid row (inside the block card, under the status line; under the
     // block card when no lot is up), never above it, so neither moves the bid buttons, the typed Bid or the status line when it comes or goes
     const slot = '<div class="cmsg cmsgin"' + (s.msgH ? ' style="min-height:' + s.msgH + 'px"' : '') + '>' + (down ? '<div class="cwarn cdown" role="status"><b>Reconnecting…</b>No answer from the server for a few seconds. What you see may be out of date, so bids are off until it answers.</div>' : '') + (err ? '<div class="cerr" role="alert">' + esc(err) + '</div>' : '') + (note ? '<div class="cok" role="status">' + esc(note) + '</div>' : '') + '</div>'; let slotIn = false;
     let m = ''; // M5: the block card comes first, notices under it; M4: tiles and the sold list go beside it on a wide screen
@@ -381,7 +381,7 @@
   const VIEWS = { home, join: joinV, create1, create2, auction: auctionV, order: orderV, enter: enterV, board: boardV, pot: potV, owner: ownerV, lot: lotV, audit: auditV, members: membersV };
   function paint() {
     const e = el(); if (!e) return; const s = cur(), f = document.activeElement, fid = f && e.contains(f) ? f.id : '', fv = fid ? f.value : null, sp = fid && f.selectionStart != null ? [f.selectionStart, f.selectionEnd] : null;
-    if (s.t === 'auction') { const i = document.getElementById('camt'); if (i) s.amt = i.value; const lk = (s.c && s.c.a && s.c.a.cur) || ''; if (s.msgLot !== lk) { if (s.hadLot) { LOTAT = Date.now(); if (!(i && document.activeElement === i)) { s.amt = ''; s.amtFor = ''; if (i) i.value = ''; } else if (s.amt && !s.amtFor) s.amtFor = s.msgLot || 'x'; } s.msgLot = lk; s.msgH = 0; } if (s.c) s.hadLot = true; } // v277 (B1): a new lot clears the typed box; one still being typed in is kept but marked as typed for the lot before
+    if (s.t === 'auction') { const i = document.getElementById('camt'); if (i) s.amt = i.value; const lk = (s.c && s.c.a && s.c.a.cur) || ''; if (s.msgLot !== lk) { if (s.hadLot) { LOTAT = Date.now(); if (!(i && document.activeElement === i)) { s.amt = ''; s.amtFor = ''; if (i) i.value = ''; } else if (s.amt && !s.amtFor) s.amtFor = s.msgLot || 'x'; } s.msgLot = lk; s.msgH = 0; } if (s.c) s.hadLot = true; } // v278 (B1): a new lot clears the typed box; one still being typed in is kept but marked as typed for the lot before
     const back = stack.length > 1 ? (stack[stack.length - 2].t === 'home' ? 'Calcuttas' : 'Back') : MINE ? 'Groups' : 'Group'; // MAIN: on the first screen ‹ Group goes back to the group page
     morph(e.querySelector('.cin0'), top(back) + '<div class="cvw cv-' + s.t + (s.t === 'home' ? ' cwide' : '') + '"><div class="cmsg">' + (s.t !== 'auction' && err ? '<div class="cerr" role="alert">' + esc(err) + '</div>' : '') + (s.t !== 'auction' && note ? '<div class="cok" role="status">' + esc(note) + '</div>' : '') + '</div>' + (VIEWS[s.t] ? VIEWS[s.t]() : '') + '</div>');
     // on the auction the message line keeps the tallest height it has had FOR THIS LOT (round 3: no longer for the whole session; a new lot on the
@@ -442,7 +442,7 @@
   // L3: a typed bid is whole dollars (never rounded behind your back) and at least the lowest bid (the box resets to it)
   function bidTyped(lot) {
     const s = cur(), c = s.c, i = document.getElementById('camt'), raw = String((i && i.value) || '').trim(), v = Number(raw), mn = c && c.a.minNext; if (!c) return;
-    if (s.amtFor && s.amtFor !== lot) { s.amtFor = ''; s.amt = ''; if (i) i.value = ''; err = 'The auction moved while you typed. Look at the team on the block and type your bid again.'; note = ''; paint(); return; } // v277 (B1)
+    if (s.amtFor && s.amtFor !== lot) { s.amtFor = ''; s.amt = ''; if (i) i.value = ''; err = 'The auction moved while you typed. Look at the team on the block and type your bid again.'; note = ''; paint(); return; } // v278 (B1)
     if (!raw || !isFinite(v) || v <= 0) { err = 'Type your bid in whole dollars.'; paint(); return; }
     if (!Number.isInteger(v)) { err = 'Bids are whole dollars: type ' + Math.floor(v) + ' or ' + Math.ceil(v) + ', not ' + raw + '.'; paint(); return; }
     if (mn && v < mn) { s.amt = String(mn); if (i) i.value = s.amt; err = 'The lowest bid now is ' + usd(mn) + '. The box shows it: tap Bid to send it.'; paint(); return; }
@@ -453,7 +453,7 @@
     const t = ev.target.closest('button,a,[data-a],[data-tab]'); const d0 = DOWNAMT; DOWNAMT = null; const moved = d0 && Date.now() - d0.at < 3000 && (!t || d0.el !== t || d0.amt !== t.getAttribute('data-amt') || d0.lot !== t.getAttribute('data-lot'));
     if (moved || (t && /^bid(in)?$/.test(t.getAttribute('data-a') || '') && Date.now() - LOTAT < 900)) { if (cur().t === 'auction') { err = 'The auction moved while you tapped. Look again and tap the bid you want.'; note = ''; paint(); } return; }
     if (!t || t.disabled) return; const a = t.getAttribute('data-a');
-    if (a === 'close' || (a === 'back' && stack.length < 2)) { window.oddCalc.close(); try { if (window.OddGroups && window.OddGroups.refresh) window.OddGroups.refresh(); } catch (x) {} return; } // back to the group page under it (v277: the Games screen under it asks its states again)
+    if (a === 'close' || (a === 'back' && stack.length < 2)) { window.oddCalc.close(); try { if (window.OddGroups && window.OddGroups.refresh) window.OddGroups.refresh(); } catch (x) {} return; } // back to the group page under it (v278: the Games screen under it asks its states again)
     if (a === 'back') { readDraft(); err = ''; note = ''; if (stack.length > 1) stack.pop(); const s = cur(); if (s.t === 'home') loadHome(); else if (s.t === 'auction' || s.t === 'enter' || s.t === 'members') loadCalc(s); else if (s.t === 'board') loadBoard(s); paint(); sched(); return; }
     if (t.hasAttribute('data-tab') && !a) { const s = cur(); if (s.t === 'board') { s.tab = t.getAttribute('data-tab'); paint(); } else { const o = { t: 'board', id: idOf(), tab: t.getAttribute('data-tab') }; push(o); loadBoard(o); } return; }
     if (t.hasAttribute('data-mode')) { readDraft(); DR.mode = t.getAttribute('data-mode'); paint(); return; }
@@ -528,7 +528,7 @@
     if (ev.target.hasAttribute('data-who')) { const p = ev.target.getAttribute('data-who');  const box = ev.target.closest('.ccard'); if (box) { const n = box.querySelector('#' + p + 'name'); if (ev.target.value === '_' && !n) ev.target.closest('label').insertAdjacentHTML('afterend', '<label class="clab">Their name<input id="' + p + 'name" class="cin" maxlength="24"></label>'); if (ev.target.value !== '_' && n) n.closest('label').remove(); } return; }
     if (/^(ctake|ctv|rk\d+|rr\d+|rn\d+|rp\d+|cmin|cinc|ctimer|corder|cuns)$/.test(id)) { readDraft(); paint(); }
   }
-  function input(ev) { if (ev.target && ev.target.id === 'cq') { readDraft(); paint(); } if (ev.target && ev.target.id === 'camt') { const s = cur(); if (s.amtFor) s.amtFor = ''; } } // v277 (B1): edited after the lot changed = typed for this lot
+  function input(ev) { if (ev.target && ev.target.id === 'cq') { readDraft(); paint(); } if (ev.target && ev.target.id === 'camt') { const s = cur(); if (s.amtFor) s.amtFor = ''; } } // v278 (B1): edited after the lot changed = typed for this lot
   function keydown(ev) { if (ev.key !== 'Enter' || !ev.target) return; const id = ev.target.id; if (id === 'camt') { ev.preventDefault(); const b = el().querySelector('[data-a="bidin"]'); if (!b || b.disabled) return; if (Date.now() - LOTAT < 900) { err = 'The auction moved while you tapped. Look again and tap the bid you want.'; note = ''; paint(); return; } bidTyped(b.getAttribute('data-lot')); } if (id === 'cadd') { ev.preventDefault(); el().querySelector('[data-a="cadd"]').click(); } }
   function css() {
     if (document.getElementById('occss')) return; const st = document.createElement('style'); st.id = 'occss';

@@ -63,7 +63,7 @@ srv.listen(0, '127.0.0.1', async () => {
     eq(osm.filter((r) => r.host === 'nominatim.openstreetmap.org').length, 8, 'courts: place + 3 searches; golf: place + 3 searches (2 + the bracket spelling, since nothing was found)'); eq(osm.filter((r) => r.host === 'api.openstreetmap.org').length, 1, 'holes: the course itself (404)');
     ok(new Set(osm.map((r) => r.who)).size === 2, 'both modules used the queue');
     for (let i = 1; i < osm.length; i++) ok(osm[i].at - osm[i - 1].at >= 1100, 'ONE queue for courts + golf, Nominatim + the OSM API: request ' + i + ' started ' + (osm[i].at - osm[i - 1].at) + ' ms after the one before');
-    eq(most, 1, 'never two requests in flight at once'); ok(osm.every((r) => /^Oddable\/1\.0 \(.+; https:\/\/steves-pics\.onrender\.com\)$/.test(r.ua)), 'a real User-Agent on every request');
+    eq(most, 1, 'never two requests in flight at once'); ok(osm.every((r) => /^Oddable\/1\.0 \(.+; https:\/\/oddable\.onrender\.com\)$/.test(r.ua)), 'a real User-Agent on every request');
     // Overpass: the three requests ran at once, so each found out for itself (2 servers each); from then on nobody asks it for 10 minutes
     const over = () => reqs.filter((r) => /interpreter/.test(r.u)); ok(over().length >= 2 && over().length <= 6, 'Overpass tries: ' + over().length); ok(F.down(clock), 'marked busy');
     const o0 = over().length; overDown = false;

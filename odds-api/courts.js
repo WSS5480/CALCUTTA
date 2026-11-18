@@ -30,7 +30,7 @@ const D = {
   signal: (ms) => timeout(ms) // the time limit of one map-server try (the tests read it)
 };
 const F = require('./osmfall');
-const UA = 'Oddable/1.0 (pickleball court finder; https://steves-pics.onrender.com)';
+const UA = 'Oddable/1.0 (pickleball court finder; https://oddable.onrender.com)';
 const NOMINATIM = F.NOMINATIM, OVERPASS = F.OVERPASS;
 const NM_BUDGET = 20000, NM_TIMEOUT = 8000, NM_TTL = 7 * 864e5; // worst case for one search: place 10 s + settings 6 s + Google 12 s + map 18 s + short list 20 s = 66 s, under the phone's 70 s
 const GOOGLE = 'https://places.googleapis.com/v1/places:searchText';

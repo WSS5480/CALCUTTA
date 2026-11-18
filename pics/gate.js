@@ -3,6 +3,32 @@
 // locked card that opens this file's sign-up / pay screen as a sheet with a Back. Switch: /acct/status `guest` (env GUEST_MODE on the odds server). See "v268 GUEST MODE" below.
 // v271: every account has an email + password as well as the cell number + PIN (sign-up asks for both; older accounts get a reminder card), "Lost my password" /
 // "Lost my PIN" by a code emailed from My Apps, and Share Oddable with the person's share / influencer code. See the "v271" block below and HANDOFF "## v271".
+// v277: the old address steves-pics.onrender.com keeps running, but Oddable now lives at https://oddable.onrender.com. On the old address ONLY, every page shows this card at the top
+// (normal page flow, never fixed, so nothing is covered). Storage is per address, so players sign in again on the new one. "Not now" hides it for 1 day.
+(function () {
+  try {
+    if (location.hostname !== 'steves-pics.onrender.com') return;
+    const K = 'odd-moved-hide', NEW = 'https://oddable.onrender.com';
+    const draw = () => {
+      try {
+        if (document.getElementById('oddmoved') || !document.body) return;
+        let t = 0; try { t = Number(localStorage.getItem(K) || 0); } catch (e) {}
+        if (t && Date.now() - t < 864e5) return;
+        const c = document.createElement('div'); c.id = 'oddmoved';
+        c.style.cssText = 'position:static;box-sizing:border-box;margin:8px 12px;padding:12px 14px;background:var(--panel,#121a33);color:var(--ink,#eee);border:1px solid var(--line,#fff3);border-left:4px solid #7c3aed;border-radius:14px;font:15px/1.4 system-ui,-apple-system,sans-serif;overflow-wrap:anywhere';
+        const m = document.createElement('div'); m.textContent = '\ud83d\udccd Oddable has moved to oddable.onrender.com. Open it there, sign in again with your cell number and PIN, and your bets come back. Then add it to your Home Screen again.';
+        const r = document.createElement('div'); r.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;align-items:center';
+        const a = document.createElement('a'); a.textContent = 'Open Oddable'; a.href = NEW + location.pathname + location.search + location.hash;
+        a.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;min-height:44px;min-width:44px;padding:0 18px;background:#7c3aed;color:#fff;border-radius:10px;font-weight:700;text-decoration:none';
+        const b = document.createElement('button'); b.type = 'button'; b.textContent = 'Not now';
+        b.style.cssText = 'min-height:44px;min-width:44px;padding:0 14px;background:transparent;color:inherit;border:1px solid var(--line,#fff3);border-radius:10px;font:13px system-ui;opacity:.8;cursor:pointer';
+        b.onclick = () => { try { localStorage.setItem(K, String(Date.now())); } catch (e) {} c.remove(); };
+        r.appendChild(a); r.appendChild(b); c.appendChild(m); c.appendChild(r); const host = document.getElementById('sc') || document.body; host.insertBefore(c, host.firstChild); /* index / sports scroll inside the fixed #sc box: the card goes in it, in the flow */
+      } catch (e) {}
+    };
+    if (document.body) draw(); else document.addEventListener('DOMContentLoaded', draw);
+  } catch (e) {}
+})();
 (function () {
   const API = 'https://calcutta-odds.onrender.com/acct';
   const g = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
@@ -398,7 +424,7 @@
   // then opens the phone's own share sheet, or copies the link where there is none. It resolves to 'shared' | 'copied' | 'cancel' | 'fail'.
   const refMine = () => { const o = jget('odd-myref'); return o && me && g('odd-tok') && o.a === String(me.email || '').toLowerCase() && REF_RE.test(String(o.r || '')) ? o : null; };
   window.oddShareUrl = function (path) {
-    let u; const base = new URL('.', location.href); try { u = new URL(String(path || ''), base); if (u.origin !== base.origin) u = base; } catch (e) { u = base; }
+    let u; const base = new URL('.', location.href); if (location.hostname === 'steves-pics.onrender.com') { base.protocol = 'https:'; base.host = 'oddable.onrender.com'; } /* v277: the old address builds links on the new one */ try { u = new URL(String(path || ''), base); if (u.origin !== base.origin) u = base; } catch (e) { u = base; }
     u.searchParams.delete('ref'); const c = refMine(); if (c) u.searchParams.set('ref', c.r); return u.href;
   };
   let refP = null;

@@ -289,7 +289,7 @@ srv.listen(0, async () => {
     // sport catalog (main, pb-group: the list a group member sees): every sport present; 'Available now' only for pickleball formats the server accepts, or a
     // tile the group page already has (Golf day, the picks contest); every other game says Coming soon and starts nothing; the cap line is the group's
     const CAT = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, '../pics/games-catalog.json'), 'utf8'));
-    // v277 (integration): a tile is a key of the v274 Games catalog registry in pics/groups.js (addGame), opened through OddGroups.openGame(key)
+    // v278 (integration): a tile is a key of the v274 Games catalog registry in pics/groups.js (addGame), opened through OddGroups.openGame(key)
     const GKEYS = [...require('fs').readFileSync(require('path').join(__dirname, '../pics/groups.js'), 'utf8').matchAll(/addGame\(\{ key: '([a-z0-9]+)'/g)].map((m) => m[1]);
     assert.deepStrictEqual(GKEYS, ['picks', 'golf', 'pickleball', 'calcutta'], 'the Games catalog registers picks, golf, pickleball and (calc-live) the Calcutta');
     for (const k of ['football', 'basketball', 'baseball', 'hockey', 'soccer', 'golf', 'pickleball', 'tennis', 'racing', 'horse', 'fighting']) assert.ok(CAT.sports.find((x) => x.key === k), 'catalog sport ' + k);

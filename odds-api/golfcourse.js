@@ -41,7 +41,7 @@ const D = {
   handle: (by) => { const A = require('./acct'); try { if (by === 'owner' || A.isOwnerPhone(by)) return A.ownerName() || 'Owner'; } catch (e) {} return by ? 'Player ' + String(by).replace(/[^0-9a-z]/gi, '').slice(0, 4) : 'A player'; },
   hasDb: () => !!(process.env.SUPABASE_URL && process.env.SUPABASE_KEY), log: (...a) => console.error(...a)
 };
-const UA = 'Oddable/1.0 (golf GPS; https://steves-pics.onrender.com)';
+const UA = 'Oddable/1.0 (golf GPS; https://oddable.onrender.com)';
 const F = require('./osmfall');
 const NOMINATIM = F.NOMINATIM, OVERPASS = F.OVERPASS;
 const FB_TTL = 10 * 6e4, NM_TTL = 7 * 864e5, NM_TIMEOUT = 8000, NM_BUDGET = 20000, API_TIMEOUT = 20000, API_PAD_M = 150; // worst case for holes: map 18 s + two OSM API reads (1.1 s apart, 20 s each) = 60 s, under the phone's 70 s

@@ -667,7 +667,7 @@
       sheet = true; show(); if (!me) { el.innerHTML = '<div class="gb">' + BACK + '<h1>Oddable</h1><p>Checking your account…</p><div class="er" id="gerr"></div></div>'; wireBack(); refresh().then(() => { if (el && me && !me.allowed) { sheet = true; draw(); } }).catch((e) => { if (e.status === 401) gone(e); else err('Could not reach the server. It may be waking up. Go back and try again.'); }); return; }
       if (m === 'time') { const t = $('gtime'); if (t && t.scrollIntoView) t.scrollIntoView({ block: 'start' }); } return;
     }
-    mode = m === 'in' ? 'in' : 'up'; scr = ''; FE = {}; sheet = true; if (/^group:/.test(String(target || ''))) notice = 'You were invited to a group on Oddable. Create your free account (or sign in) and you go straight to it.'; /* v272: only a group invite link gets here with this target */ show();
+    mode = m === 'in' ? 'in' : 'up'; scr = ''; FE = {}; sheet = true; if (target === 'groups') notice = 'Groups needs a free account. Create yours (or sign in) and you go straight to Groups.'; else if (/^group:/.test(String(target || ''))) notice = 'You were invited to a group on Oddable. Create your free account (or sign in) and you go straight to it.'; /* v272: only a group invite link gets here with this target */ show();
   };
   // v270: ONE "Pay now" for every entry point. An account that still has time (v267: days-left card, /?pay=1, the "ends soon" toast) -> payOpen(), the early wording.
   // An ended account in guest mode, or nobody signed in -> the sheet through oddSignUp (pay screen / sign-up).
@@ -686,7 +686,8 @@
   async function status() { // -> true / false = is the gate on; throws when the server cannot be reached
     const r = await fetch(API + '/status', { cache: 'no-store', signal: AbortSignal.timeout(12000) }), j = await r.json(); const on = j.gate === true; s('odd-gate', on ? '1' : '0');
     if (typeof j.guest === 'boolean') { gmode = j.guest; s('odd-guest', gmode ? '1' : '0'); } else { gmode = GUEST_MODE; s('odd-guest', null); } // an older server does not say: the constant decides
-    if (j.groups === true) { s('odd-gsw', '1'); try { if (window.oddGroupsSw) window.oddGroupsSw(); } catch (e) {} } else if (g('odd-gsw')) { s('odd-gsw', null); s('odd-grp', null); } // v272: Groups exists on the server at all (GROUPS_ENABLED=1). Not said = dark: nothing Groups-related is kept or run
+    if (j.groups === true) { s('odd-gsw', '1'); try { if (window.oddGroupsSw) window.oddGroupsSw(); } catch (e) {} } else if (g('odd-gsw')) { s('odd-gsw', null); s('odd-grp', null); }
+    { const pv = j.groups === true && j.gpub === true ? '1' : null; if (g('odd-gpub') !== pv) { s('odd-gpub', pv); try { if (window.oddGroupsChanged) setTimeout(() => { try { window.oddGroupsChanged(); } catch (e) {} }, 0); } catch (e) {} } } // v282: Groups is open to EVERYONE (GROUPS_ENABLED=1 and not owner-only): the five-tab bar for guests too. Not said = dark: nothing kept, nothing run // v272: Groups exists on the server at all (GROUPS_ENABLED=1). Not said = dark: nothing Groups-related is kept or run
     return on;
   }
   async function boot() {

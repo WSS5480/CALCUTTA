@@ -112,6 +112,15 @@ srv.listen(0, '127.0.0.1', async () => {
     t('only the commissioner deletes the group (before the start)');
 
     // ---- 6. open to everyone, then off again: OWNER_ME was never changed ----
+    // v282: `gpub` on /acct/status = Groups enabled AND not owner-only; absent in every other state (answer = v281's, byte for byte)
+    { const raw = async () => { const r = await real('http://127.0.0.1:' + P + '/acct/status'); return r.text(); };
+      assert.deepStrictEqual((await get('/acct/status')).j, { gate: true, guest: true, groups: true }, 'owner-only: no gpub');
+      process.env.GROUPS_OWNER_ONLY = '1'; assert.strictEqual(await raw(), '{"gate":true,"guest":true,"groups":true}', 'owner-only: byte-identical to v281');
+      delete process.env.GROUPS_OWNER_ONLY; assert.deepStrictEqual((await get('/acct/status')).j, { gate: true, guest: true, groups: true, gpub: true }, 'enabled, not owner-only: gpub');
+      for (const v of ['0', 'true', 'on', '']) { process.env.GROUPS_OWNER_ONLY = v; assert.strictEqual((await get('/acct/status')).j.gpub, true, 'only the exact value 1 means owner-only: ' + J(v)); }
+      process.env.GROUPS_OWNER_ONLY = '1'; assert.strictEqual((await get('/acct/status')).j.gpub, undefined);
+      delete process.env.GROUPS_OWNER_ONLY; const en = process.env.GROUPS_ENABLED; delete process.env.GROUPS_ENABLED; assert.strictEqual(await raw(), '{"gate":true,"guest":true}', 'GROUPS_ENABLED unset: no groups, no gpub'); process.env.GROUPS_ENABLED = en; }
+    t('v282 /acct/status `gpub: true` only while GROUPS_ENABLED=1 and GROUPS_OWNER_ONLY is not exactly 1; owner-only and off answers are v281\'s byte for byte');
     delete process.env.GROUPS_OWNER_ONLY; for (const [who, tok] of ALL) assert.strictEqual((await me(tok)).groups, true, who);
     delete process.env.GROUPS_ENABLED; assert.deepStrictEqual((await get('/acct/status')).j, { gate: true, guest: true }); for (const [who, tok] of ALL) assert.ok(!has(await me(tok)), 'off again: ' + who); assert.ok(!has((await post('/acct/owner', { pin: '4321' })).j.me));
     t('GROUPS_OWNER_ONLY removed = every account is flagged; GROUPS_ENABLED removed = the field is gone for everyone (roll back with no deploy)');

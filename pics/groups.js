@@ -90,7 +90,7 @@
     const gr = cur().gr, comm = gr.role === 'comm', P = picks(gr), c = P[0];
     let s = '<div class="ogrow"><h1>' + esc(gr.name) + '</h1>' + (comm ? '<span class="ogbadge">Commissioner</span>' : '') + '</div><p class="ogsub">' + esc(whenTxt(gr)) + (gr.commName && !comm ? ' · run by ' + esc(gr.commName) : '') + '</p>';
     s += '<div class="og3">' + tile('Members', gr.count + ' of ' + gr.join.max, 'data-a="members"', comm && gr.reqCount ? gr.reqCount + ' asking to join' : '')
-      + tile('Games', GAMES.length + (GAMES.length === 1 ? ' game' : ' games'), 'data-a="games"', esc(GAMES.filter((x) => !(gr.nopicks && x.key === 'picks')).map((x) => x.title).join(' · '))) // v274: the games catalog (Picks contest, Golf day)
+      + tile('Games', GAMES.length + (GAMES.length === 1 ? ' game' : ' games'), 'data-a="games"', esc(runTxt(gr))) // v274: the games catalog; v285: the subtitle says what is RUNNING in the group
       + (c ? tile('Rules', esc(RUN[c.runs] || 'Dates'), 'data-a="rules" data-cid="' + att(c.cid) + '"', esc(fmtDay(c.startDay) + ' to ' + fmtDay(c.endDay))) : '') + '</div>';
     s += '<div class="oggrid">';
     if (!gr.ended && (gr.nopicks || Date.now() < gr.joinUntil)) s += '<div class="ogcard"><b>Invite people</b><div class="ogmeta">' + (comm ? (gr.join.auto ? 'Anyone who opens your link joins straight away.' : 'People who open your link ask to join. You approve each one.') : 'People who open your link ask to join. The commissioner approves each one.') + (gr.nopicks ? '' : ' Joining closes when the contest starts.') + '</div><button type="button" class="ogpri" data-a="invite">Invite</button><div id="ginv"></div></div>';
@@ -209,7 +209,7 @@
   function push(v) { err = ''; stack.push(v); paint(); el().scrollTop = 0; }
   // v273 Golf days (a group game): the screens live in pics/golfday.js, fetched the first time a member opens the Golf day tile. It draws inside this
   // overlay and uses the same stack (Back), the same one-call-at-a-time `act` (so an ended account gets the same lock card) and the same classes.
-  let GDL = null; const GDV = '284';
+  let GDL = null; const GDV = '285';
   const GDX = { esc, att, fmtDay, chiDay, addDays, push, back: () => back(), paint: () => paint(), cur, el, act, post, errText, tile, sel, busy: () => busy, setErr: (m) => { err = m || ''; }, me: () => g('odd-name') || '' };
   function gdOpen(gr) {
     push({ t: 'golf', v: 'home', gr });
@@ -269,7 +269,19 @@
       return '<button type="button" class="ogcard ogbtn" data-a="game" data-k="' + att(x.key) + '"><span class="ogrow"><b class="ogname">' + esc(x.title) + '</b><span class="ogbadge' + (v && v.k === 'open' ? ' ogy' : '') + '">' + esc(v ? STN[v.k] || '–' : 'Checking…') + '</span></span><span class="ogmeta">' + esc(x.blurb || '') + '</span>'
         + '<span class="ogmeta">' + (v ? v.text : 'Checking…') + '</span><span class="oggo">Open ›</span></button>'; }).join('') + '</div>';
   }
-  function gamesOpen(gr, pick) { const s = { t: 'games', gr, st: {}, pick: !!pick }; push(s); gamesState(s); }
+  // v285: what is RUNNING in a group, for the Games tile on the group page. ONE cache per group (GST[group id].st), filled by the same catalog state() calls the
+  // Games list makes (that list writes into it too, so coming back to it refreshes the tile); the group page asks once per group, never on every paint.
+  const GST = {};
+  function gstOf(gr) { return GST[gr.id] || (GST[gr.id] = { st: {}, asked: false }); }
+  function runTxt(gr) {
+    const c = gstOf(gr); if (!c.asked) { c.asked = true; GAMES.forEach((x) => { let v; try { v = x.state ? x.state(gr) : null; } catch (e) { v = null; }
+      const set = (r) => { c.st[x.key] = r && STN[r.k] ? r : { k: '' }; c.n = (c.n || 0) + 1; if (c.n >= GAMES.length && cur() && cur().t === 'hub' && cur().gr && cur().gr.id === gr.id && !busy) paint(); };
+      if (v && typeof v.then === 'function') v.then(set, () => set(null)); else set(v); }); }
+    if (Object.keys(c.st).length < GAMES.length) return 'Checking…';
+    const on = GAMES.filter((x) => c.st[x.key] && c.st[x.key].k === 'open').map((x) => x.title + (x.key === 'picks' && /^Running/.test(c.st[x.key].text || '') ? ' running' : ' open'));
+    return on.length ? on.join(' · ') : 'Pick a game';
+  }
+  function gamesOpen(gr, pick) { const s = { t: 'games', gr, st: gstOf(gr).st, pick: !!pick }; push(s); gamesState(s); }
   // v283: the states are asked again when the person comes BACK to the Games screen (from a game's screens: Back in groups.js, or Back on the first
   // Pickleball screen through OddGroups.refresh()), so a game started meanwhile shows Open. The last answer stays on the card until the new one arrives.
   function gamesState(s) {

@@ -834,7 +834,7 @@ async function handle(req, res) {
       if (gname.length < 2) throw bad(400, 'Give the group a name (2+ characters)');
       const take = cleanTake(b.take, NOC ? 0 : C.rules.entry * join.max);
       const mi = await D.S.dbGet(MK(u.mk)).catch(() => null), own = (mi && mi.data && mi.data.own) || {};
-      if (Object.keys(own).filter((id) => own[id] >= chiDay(now)).length >= MAXMINE) throw bad(400, 'You already run ' + MAXMINE + ' groups');
+      if (Object.keys(own).filter((id) => own[id] >= chiDay(now) || own[id] === '0000-00-00' /* v285: a group with no picks contest has no end day; it still counts */).length >= MAXMINE) throw bad(400, 'You already run ' + MAXMINE + ' groups. Delete one to start another.');
       const ix = await D.S.dbGet(IDX).catch(() => null); if (ix && ix.data && Object.keys(ix.data.g || {}).length >= MAXG) { const I = ix.data.g; const old = Object.keys(I).filter((id) => I[id].e < dstr(dnum(chiDay(now)) - 60)); if (Object.keys(I).length - old.length >= MAXG) throw bad(503, 'Too many groups right now. Try later.'); try { await rmw(IDX, { g: {} }, async (y) => { old.forEach((id) => delete y.g[id]); return {}; }); } catch (e) {} }
       const sid = await sidOf(u.e, true), nm = await nameOf(u.e, sid, b.myName);
       let id; do { id = rnd(10); } while (await D.S.dbGet(GK(id)));

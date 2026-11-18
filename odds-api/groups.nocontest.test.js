@@ -82,6 +82,16 @@ test('v284: the group is made FIRST; the commissioner adds the picks contest lat
   r = await call('ann', 'contest/add', { id: g.id, contest: C }); assert.strictEqual(r.s, 409, 'a second MAIN pot after people joined is still locked');
 });
 
+test('v285: a person runs at most 20 groups, no-contest groups count; a deleted one frees a place; the refusal says so', async () => {
+  NOW = START - 3 * DAY; const ids = [];
+  for (let i = 0; i < 20; i++) { G._reset(); const r = await call('ann', 'create', { name: 'Cap' + i, take: { kind: 'none', v: 0 }, noContest: true, join: { requests: true, open: false, auto: true, max: 8, late: 'no' } }); assert.strictEqual(r.s, 200, i + ' ' + JSON.stringify(r.j)); ids.push(r.j.group.id); }
+  G._reset(); let r = await call('ann', 'create', { name: 'Cap21', take: { kind: 'none', v: 0 }, noContest: true, join: { requests: true, open: false, auto: true, max: 8, late: 'no' } });
+  assert.strictEqual(r.s, 400); assert.ok(/You already run 20 groups\. Delete one to start another\./.test(JSON.stringify(r.j)), JSON.stringify(r.j));
+  G._reset(); r = await call('bob', 'create', { name: 'Bobs', take: { kind: 'none', v: 0 }, noContest: true, join: { requests: true, open: false, auto: true, max: 8, late: 'no' } }); assert.strictEqual(r.s, 200, 'another person is not blocked');
+  G._reset(); r = await call('ann', 'delete', { id: ids[0] }); assert.strictEqual(r.s, 200, JSON.stringify(r.j));
+  G._reset(); r = await call('ann', 'create', { name: 'Cap22', take: { kind: 'none', v: 0 }, noContest: true, join: { requests: true, open: false, auto: true, max: 8, late: 'no' } }); assert.strictEqual(r.s, 200, 'a deleted group frees a place');
+});
+
 srv.listen(0, async () => {
   P = srv.address().port; let fail = 0;
   for (const [name, fn] of TESTS) { db = {}; writes = {}; WHO.forEach((w) => row(w, [])); G._reset(); G.limits._reset(); try { await fn(); console.log('  PASS', name); } catch (e) { fail++; console.log('  FAIL', name, '\n   ', e && e.stack || e); } }

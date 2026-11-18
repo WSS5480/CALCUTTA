@@ -56,7 +56,7 @@ Start here if you are a new AI session picking up this repo. Update this file in
 - 2026-11-17 — Oddable's address is https://oddable.onrender.com; the old steves-pics.onrender.com stays running with a moved card (shown on every page, hidden 1 day by Not now) — owner asked for oddable.onrender.com at 5:52 PM CT; deleting the old site would strand phones with Home Screen icons.
 - 2026-11-12 — Week filter is in-memory only (resets to whole season on reload) — the season record is the default view; one week is a quick look.
 - 2026-11-12 — The game-card stat strip (NST) stays season-wide — it describes the model overall, not a week.
-- 2026-11-12 — TODAY banner hides on scroll rather than shrinking — any floating box over scrolling content covers something, which breaks his no-overlap rule.
+- 2026-11-17 (7:08 PM CT) — The floating My Bets / TODAY banner STAYS on screen while scrolling, on every page that shows it (index.html, sports.html), and never sits in the iPhone status bar / Dynamic Island (top = safe-area inset + 10px). Owner: "Banner is not sticking" / "The bets top right move with scroll". Replaces the Nov 12 decision "TODAY banner hides on scroll rather than shrinking" (v278). Rule kept: at rest it must clear the header controls (the header reserves room for it); scrolling content may pass under it while scrolling; fixed UI and sheets are never under it.
 - 2026-11-07 — Each user signs in to their own Kalshi account, not one shared key.
 - 2026-11-16 — Score pop-up sits just above the bottom tab bar and steps above (or waits for) any fixed UI; scrolling content may pass under it for its 5 s — a fixed card cannot avoid scrolling content without moving the page, which he also ruled out (v260).
 - 2026-11-16 — Tapping the My Bets banner opens the Today's bets sheet; the drop-down list under the banner is retired on index.html — it covered tabs and cards (v260).
@@ -70,7 +70,7 @@ Start here if you are a new AI session picking up this repo. Update this file in
 
 ## Open items
 - Upgrade The Odds API plan once Oddable sells.
-- `classic.html` does not have the week filter or the banner tuck-away (only `index.html`, the live look).
+- `classic.html` does not have the week filter (only `index.html`, the live look); its banner never tucked away, and v278 did not change it.
 
 ## v270 — Nov 17 2026: merge of guest mode (v268) onto v269
 
@@ -508,3 +508,14 @@ Revert this commit. Joins already made stay in My Apps; v275 then mints the join
 - `odds-api/golfcourse.js` and `courts.js` User-Agent now https://oddable.onrender.com (`osmfall.test.js` updated to match). `betpush.sw.test.js` still uses steves-pics URLs as plain test data; the service worker is unchanged.
 - Version v277 on the whole bump list: index.html (comment, header pill, footer "Oddable v277 (Oddable now lives at oddable.onrender.com)", `trophy.js`, `alert-frozen.json`, `groups.js`, `gate.js`, `announce.js`, `dash.js`), sports.html (`gate.js`, `groups.js`), pga.html, golfgps.html (incl. leaflet + `golfgps.js`), pickleball.html, sw.js `pics-v277`, groups.js `GDV = '277'`, golfday.js `golfgps.js?v=277`.
 - Tests: all 28 odds-api test files pass; static build command exit 0, no folders in `pics/`; screens at 390 / 820 / 1180 with the hostname faked as steves-pics (card shows on all 5 pages, nothing over it, button URL right, Not now works) and as oddable (no card). Not verified on a real phone.
+
+## v278 — Nov 17 2026: My Bets / TODAY banner stays put, below the status bar
+
+Owner (7:08 PM CT, iPhone screenshot): "Banner is not sticking" / "The bets top right move with scroll". The banner tucked away on scroll (`away` class) and sat up in the status-bar area. Decision recorded above (replaces the Nov 12 one).
+- `#plb` (index.html, sports.html): `top:calc(env(safe-area-inset-top,0px) + 10px)` (10px when there is no inset); both pages already have `viewport-fit=cover`. The `.away` CSS and the scroll listener are gone: the banner never hides on scroll. Tapping still opens Today's bets (index.html) / the list (sports.html, unchanged).
+- `plbFit()` now only measures the banner and sets `--plbr` / `--plbh` on `<html>`; `header .hrow{padding-right:var(--plbr,146px);min-height:var(--plbh,0px)}` (sports.html default 0) keeps every header row clear of it at scroll 0 (ResizeObserver on `#plb` and `.hrow`, plus window resize; when the banner is hidden the old 146px stays on index.html). Tested with three extra buttons added to the header row.
+- z-index unchanged: `#plb` is 40, below `#infosheet` 300, `#teampage` 350, `#spop` 400, Groups 45, `#bnmore` 60, so full-screen sheets cover it (checked: the sheet is the element under the banner's centre).
+- pga / golfgps / pickleball have no banner; `classic.html` untouched.
+- Version v278 on the whole bump list: index.html (comment, header pill, footer "Oddable v278 (My Bets banner stays on screen)", `trophy.js`, `alert-frozen.json`, `gate.js`, `announce.js`, `dash.js`, `groups.js`), sports.html (`gate.js`, `groups.js`), pga.html, golfgps.html (incl. leaflet + `golfgps.js`), pickleball.html, sw.js `pics-v278`, groups.js `GDV = '278'`, golfday.js `golfgps.js?v=278`.
+- Tests: all 28 odds-api test files pass; static build command exit 0, no folders in `pics/`. Playwright (CDP `Emulation.setSafeAreaInsetsOverride` for the inset) at 390 with inset 59 and 0, 820, 1180: banner at scroll 0 and 600 stays at the same spot (top 69 / 10), no header control or bottom bar under it, Today's bets sheet on top of it.
+- NOT verified: a real iPhone / installed Home Screen app; the header with a real signed-in account and live games (tests used the guest-free page with the network blocked and a faked banner and cards).

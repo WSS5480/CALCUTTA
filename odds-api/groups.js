@@ -695,7 +695,7 @@ function cpub(c, g, now, pid) {
 }
 function pub(g, now) {
   return { id: g.id, name: g.name, join: g.join, count: g.members.length, commName: (g.members.find((m) => m.mk === g.comm) || {}).name || '', takeText: takeText(g.money.take), money: { take: g.money.take, msplit: g.money.msplit },
-    start: gStart(g), started: started(g, now), ended: ended(g, now), joinUntil: joinOpenUntil(g), engaged: engaged(g), contests: g.contests.map((c) => cpub(c, g, now)), pots: pots(g) };
+    start: gStart(g), nopicks: !g.contests.some((c) => c.kind === 'picks'), started: started(g, now), ended: ended(g, now), joinUntil: joinOpenUntil(g), engaged: engaged(g), contests: g.contests.map((c) => cpub(c, g, now)), pots: pots(g) };
 }
 function full(g, mk, now) {
   const o = pub(g, now), comm = isComm(g, mk), mine = memberOf(g, mk); o.role = comm ? 'comm' : 'member'; if (comm) o.code = g.code; o.link = g.mcode || ''; o.me = (mine || {}).pid; // round 3: the commissioner's code is theirs alone; members share the link code, which always leads to a request
@@ -830,9 +830,9 @@ async function handle(req, res) {
       send(res, 200, { groups: out, open, pending: pend, now, betLock, canBet: !!sid }); return true;
     }
     if (op === 'create') {
-      rate('create', u.mk, ip); const ak = LIM.keyOf(u.e), join = cleanJoin(b.join, await LIM.maxPeople(ak, '')), C = cleanContest(Object.assign({}, b.contest || {}, { pot: 'main' }), now, join.max), gname = cleanName(b.name, 30);
+      rate('create', u.mk, ip); const ak = LIM.keyOf(u.e), join = cleanJoin(b.join, await LIM.maxPeople(ak, '')), NOC = b.noContest === true /* v284: a Golf group (or any group of games only) starts with NO picks contest */, C = NOC ? null : cleanContest(Object.assign({}, b.contest || {}, { pot: 'main' }), now, join.max), gname = cleanName(b.name, 30);
       if (gname.length < 2) throw bad(400, 'Give the group a name (2+ characters)');
-      const take = cleanTake(b.take, C.rules.entry * join.max);
+      const take = cleanTake(b.take, NOC ? 0 : C.rules.entry * join.max);
       const mi = await D.S.dbGet(MK(u.mk)).catch(() => null), own = (mi && mi.data && mi.data.own) || {};
       if (Object.keys(own).filter((id) => own[id] >= chiDay(now)).length >= MAXMINE) throw bad(400, 'You already run ' + MAXMINE + ' groups');
       const ix = await D.S.dbGet(IDX).catch(() => null); if (ix && ix.data && Object.keys(ix.data.g || {}).length >= MAXG) { const I = ix.data.g; const old = Object.keys(I).filter((id) => I[id].e < dstr(dnum(chiDay(now)) - 60)); if (Object.keys(I).length - old.length >= MAXG) throw bad(503, 'Too many groups right now. Try later.'); try { await rmw(IDX, { g: {} }, async (y) => { old.forEach((id) => delete y.g[id]); return {}; }); } catch (e) {} }
@@ -842,7 +842,7 @@ async function handle(req, res) {
       await D.S.dbPut({ id: CK(code), salt: 'x', pinhash: 'x', data: { id }, updated: now }, true);
       let mcode; do { mcode = newCode(); } while (mcode === code || await D.S.dbGet(CK(mcode)));
       await D.S.dbPut({ id: CK(mcode), salt: 'x', pinhash: 'x', data: { id }, updated: now }, true);
-      const cid = rnd(6), g = { id, name: gname, code, mcode, comm: u.mk, owner: ak, created: now, u: now, engaged: false, members: [], reqs: [], denied: [], join, money: { take, msplit: { kind: 'entry', pct: { [cid]: 100 } } }, contests: [Object.assign({ cid, created: now }, C)] };
+      const cid = rnd(6), g = { id, name: gname, code, mcode, comm: u.mk, owner: ak, created: now, u: now, engaged: false, members: [], reqs: [], denied: [], join, money: { take, msplit: NOC ? cleanMsplit({ kind: 'entry' }, []) : { kind: 'entry', pct: { [cid]: 100 } } }, contests: NOC ? [] : [Object.assign({ cid, created: now }, C)] };
       g.members.push({ pid: newPid(g), mk: u.mk, sid, name: nm, joined: now, paid: false, fixedName: fixed(u.e, sid) });
       await D.S.dbPut({ id: GK(id), salt: 'x', pinhash: 'x', data: g, updated: now }, true);
       await memIdx(u.mk, (y) => { y.g.push(id); y.own[id] = gEnd(g); }); await idxPut(g);
@@ -871,7 +871,7 @@ async function handle(req, res) {
         const pot = add ? (b.contest && b.contest.pot === 'side' ? 'side' : 'main') : old.pot;
         if (b.contest && b.contest.kind === 'calcutta') throw bad(400, 'Calcuttas are coming soon');
         const C = cleanContest(Object.assign({}, b.contest || {}, { pot }), now, g.join.max);
-        if (add && pot === 'main' && engaged(g)) throw bad(409, 'The main pot is locked: people have already joined or asked to join. Add this contest as a side pot.');
+        if (add && pot === 'main' && engaged(g) && (splitOf(g).length || C.rules.entry > 0 || g.money.take.kind !== 'none')) throw bad(409, 'The main pot is locked: people have already joined or asked to join. Add this contest as a side pot.'); // v284: a group made FIRST (no picks contest yet) may add its first main contest after people joined, only with no entry and no take
         if (old && engaged(g)) { const keep = MONEYKEYS.filter((k) => JSON.stringify(C.rules[k]) !== JSON.stringify(old.rules[k])); if (keep.length || C.sport !== old.sport || C.fmt !== old.fmt || DATEKEYS.some((k) => String(C[k]) !== String(old[k]))) throw bad(409, 'Money, bet rules and dates are locked: people have already joined or asked to join. You can still change the name.'); }
         if (add) { const cid = rnd(6); const c = Object.assign({ cid, created: now }, C); if (pot === 'side') { c.inn = [memberOf(g, u.mk).pid]; c.paid = {}; } g.contests.push(c); }
         else { Object.assign(old, C); }

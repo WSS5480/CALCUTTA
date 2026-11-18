@@ -54,7 +54,7 @@
   const tile = (lab, v, a, sub) => '<button type="button" class="ogtile" ' + a + '><small>' + esc(lab) + ' ›</small><b>' + v + '</b>' + (sub ? '<i>' + sub + '</i>' : '') + '</button>';
   const sel = (id, opts, cur) => '<select id="' + id + '" class="ogsel">' + opts.map(([v, l]) => '<option value="' + esc(v) + '"' + (String(v) === String(cur) ? ' selected' : '') + '>' + esc(l) + '</option>').join('') + '</select>';
   const picks = (gr) => (gr.contests || []).filter((c) => c.kind === 'picks');
-  const whenTxt = (gr) => (gr.ended ? 'Final' : gr.started ? 'Running' : 'Starts ' + fmtDay(chiDay(gr.start)));
+  const whenTxt = (gr) => (gr.nopicks ? 'Games' : gr.ended ? 'Final' : gr.started ? 'Running' : 'Starts ' + fmtDay(chiDay(gr.start)));
   const lockCard = () => '<div class="glk big" data-gt="' + (WANT ? 'group:g:' + att(WANT) : 'groups') + '"><span aria-hidden="true">🔒</span><span class="glt">' + esc(ENDED()) + '</span><span class="glb"><button type="button" data-gp="pay">' + esc(window.ODD_PAY || 'Pay now') + '</button><button type="button" class="alt" data-gp="time">Request free time</button></span></div>';
   const cur = () => stack[stack.length - 1];
   const curGroup = () => { for (let i = stack.length - 1; i >= 0; i--) if (stack[i].gr) return stack[i].gr; return null; };
@@ -67,7 +67,7 @@
     s += '<div class="og3">' + tile('My stats', '📊 My record', 'data-a="mstats"', 'Finished contests and Golf days') + '</div>'; // v274
     if (!H) return s + '<div class="ogcard ogmut">Loading your groups…</div>';
     s += '<h3 class="ogh">My groups</h3>';
-    if (!H.groups.length) s += '<div class="ogcard ogmut">No groups yet. Create one, or open an invite link from a friend.</div>';
+    if (!H.groups.length) s += '<div class="ogcard ogmut">No groups yet. Create one, or open an invite link from a friend.<br>Make the group first, then pick its games (Picks contest, ⛳ Golf day, …).</div>';
     s += '<div class="oggrid">' + H.groups.map((gr) => {
       const P = picks(gr);
       return '<button type="button" class="ogcard ogbtn" data-a="hub" data-id="' + att(gr.id) + '"><span class="ogrow"><b class="ogname">' + esc(gr.name) + '</b><span class="ogbadge">' + esc(whenTxt(gr)) + '</span></span>'
@@ -90,12 +90,12 @@
     const gr = cur().gr, comm = gr.role === 'comm', P = picks(gr), c = P[0];
     let s = '<div class="ogrow"><h1>' + esc(gr.name) + '</h1>' + (comm ? '<span class="ogbadge">Commissioner</span>' : '') + '</div><p class="ogsub">' + esc(whenTxt(gr)) + (gr.commName && !comm ? ' · run by ' + esc(gr.commName) : '') + '</p>';
     s += '<div class="og3">' + tile('Members', gr.count + ' of ' + gr.join.max, 'data-a="members"', comm && gr.reqCount ? gr.reqCount + ' asking to join' : '')
-      + tile('Games', GAMES.length + (GAMES.length === 1 ? ' game' : ' games'), 'data-a="games"', esc(GAMES.map((x) => x.title).join(' · '))) // v274: the games catalog (Picks contest, Golf day)
+      + tile('Games', GAMES.length + (GAMES.length === 1 ? ' game' : ' games'), 'data-a="games"', esc(GAMES.filter((x) => !(gr.nopicks && x.key === 'picks')).map((x) => x.title).join(' · '))) // v274: the games catalog (Picks contest, Golf day)
       + (c ? tile('Rules', esc(RUN[c.runs] || 'Dates'), 'data-a="rules" data-cid="' + att(c.cid) + '"', esc(fmtDay(c.startDay) + ' to ' + fmtDay(c.endDay))) : '') + '</div>';
     s += '<div class="oggrid">';
-    if (!gr.ended && Date.now() < gr.joinUntil) s += '<div class="ogcard"><b>Invite people</b><div class="ogmeta">' + (comm ? (gr.join.auto ? 'Anyone who opens your link joins straight away.' : 'People who open your link ask to join. You approve each one.') : 'People who open your link ask to join. The commissioner approves each one.') + ' Joining closes when the contest starts.</div><button type="button" class="ogpri" data-a="invite">Invite</button><div id="ginv"></div></div>';
+    if (!gr.ended && (gr.nopicks || Date.now() < gr.joinUntil)) s += '<div class="ogcard"><b>Invite people</b><div class="ogmeta">' + (comm ? (gr.join.auto ? 'Anyone who opens your link joins straight away.' : 'People who open your link ask to join. You approve each one.') : 'People who open your link ask to join. The commissioner approves each one.') + (gr.nopicks ? '' : ' Joining closes when the contest starts.') + '</div><button type="button" class="ogpri" data-a="invite">Invite</button><div id="ginv"></div></div>';
     else s += '<div class="ogcard ogmut">Joining is closed: the contest has started.</div>';
-    s += '<div class="ogcard ogmut">' + esc(LOCKNOTE) + ' Every new bet you add to My Bets while a contest runs counts for the group.</div>';
+    if (!gr.nopicks) s += '<div class="ogcard ogmut">' + esc(LOCKNOTE) + ' Every new bet you add to My Bets while a contest runs counts for the group.</div>';
     if (gr.started && !gr.ended) s += '<div class="ogcard ogmut">The group has started. Members stay to the end.</div>';
     s += '</div>';
     if (!gr.started) s += comm ? '<button type="button" class="ogdan" data-a="delete">Delete this group</button>' : '<button type="button" class="ogdan" data-a="leave">Leave this group</button>';
@@ -130,30 +130,41 @@
     return h + side + '</div>';
   }
   // ---------- create ----------
-  const draft = () => ({ name: '', sport: 'nfl', day: addDays(chiDay(Date.now()), 1), runs: 'w4', metric: 'units', types: { sp: true, ml: true, ou: true, prop: false, parlay: false }, max: 8, auto: false });
-  function create() {
-    const d = DR, min = addDays(chiDay(Date.now()), 1);
-    return '<h1>Create a group</h1><p class="ogsub">One picks contest, no entry, no payout. You can invite people as soon as it is made.</p><div class="ogcard ogform">'
+  const draft = () => ({ name: '', sport: 'nfl', day: addDays(chiDay(Date.now()), 1), runs: 'w4', metric: 'units', types: { sp: true, ml: true, ou: true, prop: false, parlay: false }, max: 8, auto: false, legs: 4 });
+  function create() { // v284 (owner, Nov 17 10:37 PM CT): the GROUP first (name, size, joining); the games, and the picks contest's sport and dates, are chosen inside it
+    const d = DR;
+    return '<h1>Create a group</h1><p class="ogsub">Make the group first. Next you pick its games: Picks contest, Golf day and more. No entry, no payout.</p><div class="ogcard ogform">'
       + '<label>Group name<input id="gn" class="ogin" maxlength="30" autocomplete="off" placeholder="Sunday crew" value="' + esc(d.name) + '"></label>'
+      + '<label>Most members' + sel('gmx', MAXM.map((n) => [n, n + ' people']), d.max) + '</label></div>'
+      + '<div class="oggrid"><div class="ogcard"><label class="ogck"><input type="checkbox" id="gau"' + (d.auto ? ' checked' : '') + '><span>Anyone with my invite link joins without my approval</span></label><div class="ogmeta">Off: people ask to join and you approve each one.</div></div></div><button type="button" class="ogpri" data-a="docreate">Create the group</button>';
+  }
+  // v284: the old contest fields, now a screen INSIDE the group (Games > Picks contest > Start a picks contest)
+  function pcreate() {
+    const d = DR, min = addDays(chiDay(Date.now()), 1), gr = cur().gr;
+    return '<h1>Start a picks contest</h1><p class="ogsub">' + esc(gr.name) + ' · no entry, no payout. Rules lock when the contest starts.</p><div class="ogcard ogform">'
       + '<label>Sport' + sel('gsp', SPORTS, d.sport) + '</label>'
       + '<label>First day that counts<input id="gd" class="ogin" type="date" min="' + min + '" value="' + esc(d.day) + '"></label>'
       + '<label>Runs for' + sel('gr', RUNS, d.runs) + '</label>'
       + '<label>Ranked by' + sel('gm', METRICS, d.metric) + '</label>'
-      + '<label>Most members' + sel('gmx', MAXM.map((n) => [n, n + ' people']), d.max) + '</label></div>'
+      + '<label>Parlay legs (if parlays count)' + sel('gleg', [2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => [n, n + ' legs']), d.legs) + '</label></div>'
       + '<div class="oggrid"><div class="ogcard"><b>Bets that count</b>' + TYPES.map(([k, l]) => '<label class="ogck"><input type="checkbox" data-ty="' + k + '"' + (d.types[k] ? ' checked' : '') + '><span>' + esc(l) + '</span></label>').join('') + '</div>'
-      + '<div class="ogcard"><label class="ogck"><input type="checkbox" id="gau"' + (d.auto ? ' checked' : '') + '><span>Anyone with my invite link joins without my approval</span></label><div class="ogmeta">Off: people ask to join and you approve each one.</div></div>'
-      + '<div class="ogcard ogmut">Rules lock when the contest starts. ' + esc(LOCKNOTE) + '</div></div><button type="button" class="ogpri" data-a="docreate">Create the group</button>';
+      + '<div class="ogcard ogmut">' + esc(LOCKNOTE) + '</div></div><button type="button" class="ogpri" data-a="dopcreate">Start the picks contest</button>';
   }
-  function readDraft() { const e = el(), v = (id) => { const x = e && e.querySelector('#' + id); return x ? x.value : ''; }; if (!DR || !e || !e.querySelector('#gn')) return;
-    DR.name = v('gn'); DR.sport = v('gsp'); DR.day = v('gd'); DR.runs = v('gr'); DR.metric = v('gm'); DR.max = Number(v('gmx')) || 8; DR.auto = !!(e.querySelector('#gau') || {}).checked; e.querySelectorAll('[data-ty]').forEach((c) => { DR.types[c.getAttribute('data-ty')] = c.checked; }); }
+  function readDraft() { const e = el(), v = (id) => { const x = e && e.querySelector('#' + id); return x ? x.value : ''; }; if (!DR || !e) return;
+    if (e.querySelector('#gn')) { DR.name = v('gn'); DR.max = Number(v('gmx')) || 8; DR.auto = !!(e.querySelector('#gau') || {}).checked; }
+    if (e.querySelector('#gd')) { DR.sport = v('gsp'); DR.day = v('gd'); DR.runs = v('gr'); DR.metric = v('gm'); DR.legs = Number(v('gleg')) || 4; e.querySelectorAll('[data-ty]').forEach((c) => { DR.types[c.getAttribute('data-ty')] = c.checked; }); } }
   function doCreate() {
     readDraft(); const d = DR;
     if (d.name.trim().length < 2) { err = 'Give the group a name (2 or more characters).'; return paint(); }
+    act('create', { name: d.name.trim(), join: { requests: true, open: false, auto: d.auto, max: d.max, late: 'no' }, take: { kind: 'none' }, noContest: true }, // v284: no picks contest yet; the games are picked next
+      async (j) => { DR = null; if (H) H.groups.push(j.group); stack = [{ t: 'home' }, { t: 'hub', gr: j.group }]; gamesOpen(j.group, true); blStatus(); });
+  }
+  function doPcreate() {
+    readDraft(); const d = DR, s = cur(), gr = s.gr;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d.day) || d.day <= chiDay(Date.now())) { err = 'Pick a first day after today.'; return paint(); }
     if (!Object.values(d.types).some(Boolean)) { err = 'Pick at least one kind of bet that counts.'; return paint(); }
-    act('create', { name: d.name.trim(), join: { requests: true, open: false, auto: d.auto, max: d.max, late: 'no' }, take: { kind: 'none' },
-      contest: { cname: 'Picks standings', sport: d.sport, fmt: 'standings', start: chiStart(d.day), runs: d.runs, types: d.types, legs: 4, metric: d.metric, minBets: 0, maxBets: 10, minPaid: 0, cap: 0, maxOdds: 500, entry: 0, split: 'none' } },
-      async (j) => { DR = null; if (H) H.groups.push(j.group); stack = [{ t: 'home' }, { t: 'hub', gr: j.group }]; paint(); blStatus(); });
+    act('contest/add', { id: gr.id, contest: { cname: 'Picks standings', sport: d.sport, fmt: 'standings', start: chiStart(d.day), runs: d.runs, types: d.types, legs: d.legs, metric: d.metric, minBets: 0, maxBets: 10, minPaid: 0, cap: 0, maxOdds: 500, entry: 0, split: 'none' } },
+      async (j) => { setGroup(j.group); const n = j.group; stack.pop(); stack.forEach((x) => { if (x.gr && x.gr.id === n.id) x.gr = n; }); blStatus(); const t = cur(); if (t.t === 'games') gamesState(t); else paint(); });
   }
   // ---------- join with a code or an invite link ----------
   function join() {
@@ -190,15 +201,15 @@
   // ---------- paint ----------
   function paint() {
     const e = el(); if (!e) return; const s = cur();
-    const body = expired() ? '<h1>Groups</h1>' + lockCard() : s.t === 'hub' ? hub() : s.t === 'members' ? members() : s.t === 'contest' ? contest() : s.t === 'rules' ? rules() : s.t === 'create' ? create() : s.t === 'join' ? join() : s.t === 'golf' ? (window.OddGolfDay ? window.OddGolfDay.view(s, GDX) : '<h1>Golf day</h1><div class="ogcard ogmut">Loading…</div>') : s.t === 'games' ? games() : s.t === 'stats' ? statsView() : s.t === 'statsd' ? statsList() : home();
+    const body = expired() ? '<h1>Groups</h1>' + lockCard() : s.t === 'hub' ? hub() : s.t === 'members' ? members() : s.t === 'contest' ? contest() : s.t === 'rules' ? rules() : s.t === 'create' ? create() : s.t === 'pcreate' ? pcreate() : s.t === 'join' ? join() : s.t === 'golf' ? (window.OddGolfDay ? window.OddGolfDay.view(s, GDX) : '<h1>Golf day</h1><div class="ogcard ogmut">Loading…</div>') : s.t === 'games' ? games() : s.t === 'stats' ? statsView() : s.t === 'statsd' ? statsList() : home();
     e.querySelector('.ogin0').innerHTML = top(stack.length > 1 && !expired()) + (err && !expired() ? '<div class="ogerr" role="alert">' + esc(err) + '</div>' : '') + '<div class="ogbody">' + body + '</div>';
   }
   function paintBusy(on) { const e = el(); if (!e) return; e.classList.toggle('ogbusy', !!on); e.querySelectorAll('button[data-a]').forEach((b) => { if (!/^(back|close)$/.test(b.getAttribute('data-a'))) b.disabled = !!on; }); }
-  function back() { err = ''; if (cur().t === 'create') readDraft(); if (cur().t === 'golf' && window.OddGolfDay) { try { window.OddGolfDay.leave(cur(), GDX); } catch (e) {} } if (stack.length > 1) stack.pop(); if (cur().t === 'home' && !H) loadHome(); if (cur().t === 'games' && !expired()) return gamesState(cur()), (el().scrollTop = 0); /* v283: back on the Games screen = its states asked again */ if (cur().t === 'golf' && window.OddGolfDay) { try { window.OddGolfDay.back(cur(), GDX); } catch (e) {} } paint(); el().scrollTop = 0; }
+  function back() { err = ''; if (cur().t === 'create' || cur().t === 'pcreate') readDraft(); if (cur().t === 'golf' && window.OddGolfDay) { try { window.OddGolfDay.leave(cur(), GDX); } catch (e) {} } if (stack.length > 1) stack.pop(); if (cur().t === 'home' && !H) loadHome(); if (cur().t === 'games' && !expired()) return gamesState(cur()), (el().scrollTop = 0); /* v283: back on the Games screen = its states asked again */ if (cur().t === 'golf' && window.OddGolfDay) { try { window.OddGolfDay.back(cur(), GDX); } catch (e) {} } paint(); el().scrollTop = 0; }
   function push(v) { err = ''; stack.push(v); paint(); el().scrollTop = 0; }
   // v273 Golf days (a group game): the screens live in pics/golfday.js, fetched the first time a member opens the Golf day tile. It draws inside this
   // overlay and uses the same stack (Back), the same one-call-at-a-time `act` (so an ended account gets the same lock card) and the same classes.
-  let GDL = null; const GDV = '283';
+  let GDL = null; const GDV = '284';
   const GDX = { esc, att, fmtDay, chiDay, addDays, push, back: () => back(), paint: () => paint(), cur, el, act, post, errText, tile, sel, busy: () => busy, setErr: (m) => { err = m || ''; }, me: () => g('odd-name') || '' };
   function gdOpen(gr) {
     push({ t: 'golf', v: 'home', gr });
@@ -230,8 +241,8 @@
   function addGame(x) { if (!x || !/^[a-z][a-z0-9]{0,15}$/.test(String(x.key || '')) || !x.title || typeof x.open !== 'function') return false; const i = GAMES.findIndex((y) => y.key === x.key); if (i >= 0) GAMES[i] = x; else GAMES.push(x); return true; }
   const span = (c) => esc(SPORT[c.sport] || c.sportName || '') + ' · ' + esc(fmtDay(c.startDay) + ' to ' + fmtDay(c.endDay));
   addGame({ key: 'picks', title: 'Picks contest', blurb: 'Everyone\'s bets on one board, graded by Oddable from final scores. Bragging rights only.',
-    state: (gr) => { const c = picks(gr)[0]; return !c ? { k: 'none', text: 'No picks contest in this group' } : c.ended ? { k: 'finished', text: 'Final · ' + span(c) } : c.started ? { k: 'open', text: 'Running · ' + span(c) } : { k: 'open', text: 'Starts ' + esc(fmtDay(c.startDay)) + ' · ' + span(c) }; },
-    open: (gr) => { const c = picks(gr)[0]; if (!c) { err = 'This group has no picks contest.'; return paint(); } openContest(gr, c.cid); } });
+    state: (gr) => { const c = picks(gr)[0]; return !c ? { k: 'none', text: gr.role === 'comm' ? 'No picks contest yet: start one' : 'No picks contest yet' } : c.ended ? { k: 'finished', text: 'Final · ' + span(c) } : c.started ? { k: 'open', text: 'Running · ' + span(c) } : { k: 'open', text: 'Starts ' + esc(fmtDay(c.startDay)) + ' · ' + span(c) }; },
+    open: (gr) => { const c = picks(gr)[0]; if (!c) { if (gr.role !== 'comm') { err = 'No picks contest yet. The commissioner can start one.'; return paint(); } DR = DR || draft(); return push({ t: 'pcreate', gr }); } openContest(gr, c.cid); } });
   addGame({ key: 'golf', title: 'Golf day', blurb: 'A round at one course: each player logs their own score hole by hole, live leaderboard, Golf GPS for the course.',
     state: (gr) => within(post('/golfday/list', { g: gr.id }), 12000).then((j) => (j.open ? { k: 'open', text: 'Open · ' + esc(j.open.name) + ' · ' + esc(fmtDay(j.open.date)) } : (j.past || []).length ? { k: 'finished', text: 'Last one · ' + esc(j.past[0].name) + ' · ' + esc(fmtDay(j.past[0].date)) } : { k: 'none', text: 'No Golf day yet' + (j.comm ? ': start one' : '') })),
     open: (gr) => gdOpen(gr) });
@@ -254,11 +265,11 @@
   const STN ={ none: 'None yet', open: 'Open', finished: 'Finished' };
   function games() {
     const s = cur(), gr = s.gr, st = s.st || {};
-    return '<h1>Games</h1><p class="ogsub">' + esc(gr.name) + ' · the games this group can play. Tap one to open it.</p><div class="oggrid ogfit">' + GAMES.map((x) => { const v = st[x.key];
+    return '<h1>Games</h1><p class="ogsub">' + (s.pick ? '<b>Pick a game for your group.</b> ' : '') + esc(gr.name) + ' · the games this group can play. Tap one to open it.</p><div class="oggrid ogfit">' + GAMES.map((x) => { const v = st[x.key];
       return '<button type="button" class="ogcard ogbtn" data-a="game" data-k="' + att(x.key) + '"><span class="ogrow"><b class="ogname">' + esc(x.title) + '</b><span class="ogbadge' + (v && v.k === 'open' ? ' ogy' : '') + '">' + esc(v ? STN[v.k] || '–' : 'Checking…') + '</span></span><span class="ogmeta">' + esc(x.blurb || '') + '</span>'
         + '<span class="ogmeta">' + (v ? v.text : 'Checking…') + '</span><span class="oggo">Open ›</span></button>'; }).join('') + '</div>';
   }
-  function gamesOpen(gr) { const s = { t: 'games', gr, st: {} }; push(s); gamesState(s); }
+  function gamesOpen(gr, pick) { const s = { t: 'games', gr, st: {}, pick: !!pick }; push(s); gamesState(s); }
   // v283: the states are asked again when the person comes BACK to the Games screen (from a game's screens: Back in groups.js, or Back on the first
   // Pickleball screen through OddGroups.refresh()), so a game started meanwhile shows Open. The last answer stays on the card until the new one arrives.
   function gamesState(s) {
@@ -328,6 +339,8 @@
     if (a === 'home') { stack = [{ t: 'home' }]; err = ''; paint(); return loadHome(); }
     if (a === 'create') { DR = DR || draft(); return push({ t: 'create' }); }
     if (a === 'docreate') return doCreate();
+    if (a === 'dopcreate') return doPcreate();
+    if (a === 'pcreate') { DR = DR || draft(); return push({ t: 'pcreate', gr }); }
     if (a === 'join') return push({ t: 'join', code: '' });
     if (a === 'lookup') return lookup((el().querySelector('#gcode') || {}).value);
     if (a === 'dojoin') return doJoin();

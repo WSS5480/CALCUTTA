@@ -163,7 +163,7 @@ html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
 .scS{font:800 36px/1 system-ui;font-variant-numeric:tabular-nums;padding:0 2px}.scS.pre{color:var(--bc-dim)}
 .scC{min-width:0}.scC b{display:block;font-size:15px}.scC small{display:block;color:var(--bc-dim);font-size:12.5px;font-weight:600;overflow-wrap:anywhere}
 .scf{margin-top:6px;color:var(--bc-text);font-size:12.5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}.scm{margin-top:4px;color:var(--bc-dim);font-size:12px}
-.mbgrid>.mbc{margin:0 0 12px}@media(min-width:700px){.mbgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;align-items:start}.mbgrid>.mbc{margin:0}}
+.mbopin{border:1px solid var(--line,#2a3550);border-radius:12px;padding:10px 12px;margin:0 0 10px;font-size:15px;overflow-wrap:anywhere}.mbopin button{display:block;width:100%;min-height:44px;margin-top:8px;border-radius:10px;border:0;background:#2f6fed;color:#fff;font:700 15px inherit;cursor:pointer;white-space:normal}@media(min-width:700px){.mbopin{display:flex;align-items:center;gap:12px}.mbopin>div{flex:1}.mbopin button{width:auto;margin:0;padding:8px 16px}}.mbgrid>.mbc{margin:0 0 12px}@media(min-width:700px){.mbgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;align-items:start}.mbgrid>.mbc{margin:0}}
 .mbc.bw{border-color:var(--bc-win-text)}.mbc.bl{border-color:var(--bc-lose-text)}.mbc .sub{color:var(--bc-dim)}.mbc .mbwa{color:var(--bc-win-text)}.mbc .mbag{color:var(--bc-lose-text)}.mbc .mbm{margin-top:8px;font-size:14px;color:var(--bc-text);overflow-wrap:anywhere}.mbc .mbapp{margin-top:4px;font-size:12.5px}.mbc .mbtx{margin:10px 0 4px;font-size:15px;font-weight:600;color:var(--bc-text);overflow-wrap:anywhere}
 .mbc .bbtn,.mbc .legbtn{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;padding:0}.mbc .bbtn button,.mbc .legbtn button{background:transparent;color:var(--bc-text);border:1px solid var(--bc-border);border-radius:10px;min-height:44px;min-width:44px;padding:8px 12px;font:600 14px system-ui;cursor:pointer}.mbc .bbtn .sub{align-self:center}
 .mbc .scdd{text-align:center;font-size:13px;font-weight:700;color:var(--bc-dim);margin-top:2px}.mbc .scf{text-align:center}.mbc .gcx{margin-top:8px;background:var(--panel);color:var(--ink);border-radius:12px;padding:6px}
@@ -277,10 +277,10 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v279 -->
+<!-- Pics v280 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v279</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v280</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
   <div id="arbbar" class="arbbar" hidden onclick="arbBarTap()" role="button" aria-label="Arbitrage alert"><span class="mq" id="arbmq"></span></div>
   <div class="mrow" id="mrow"><label><span>League</span><select id="lgsel" aria-label="League" autocomplete="off"><option value="nfl">🏈 NFL</option><option value="cfb">🎓 NCAA</option><option value="pga">⛳ PGA Tour</option><option value="golfgps">📍 Golf GPS</option><option value="pickleball">🏓 Pickleball</option><option value="nba">🏀 NBA</option><option value="mlb">⚾ MLB</option><option value="nhl">🏒 NHL</option><option value="ncaab">🏀 NCAAB</option></select></label><label id="gvlab"><span>View</span><select id="gvsel" aria-label="View" autocomplete="off" onchange="gvSet(this.value)"></select></label></div>
   <div class="srow"><input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team"><select id="conf" aria-label="Conference"><option value="">All</option></select></div>
@@ -289,7 +289,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v279 (My Bets cards in the Today's bets look)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v280 (cash out on single Kalshi bets)</div>
   <div class="sub nsw" id="nsw"></div>
   <div class="sub" id="spset"><label>Score pop-ups <select id="spsel" aria-label="Score pop-ups" autocomplete="off" onchange="spSet(this.value)"><option value="mine">My bets only</option><option value="all">All live games</option><option value="off">Off</option></select></label><div style="font-size:11px;opacity:.75;margin-top:4px">A card pops up when a live game scores or ends, with where your bets stand right now.</div></div>
   <div class="sub" id="bpset"><label>Phone alerts for my bets: every score, and the final. <select id="bpsel" aria-label="Phone alerts for my bets (app closed)" autocomplete="off" onchange="bpSet(this.value)"><option value="off">Off</option><option value="on">On</option></select></label><div class="bph">For when Oddable is closed. Needs Oddable added to your Home Screen on iPhone or iPad, and notifications allowed.</div><div id="bpbbw" hidden><label style="margin-top:6px">Basketball <select id="bpbb" aria-label="Basketball alerts" autocomplete="off" onchange="bpBB(this.value)"><option value="q">Quarter ends and final</option><option value="all">Every score</option></select></label><div class="bph">Every score in basketball can mean 150+ alerts a game.</div></div><div id="bpmsg" role="status"></div><button type="button" id="bptest" hidden onclick="bpTest()">Send me a test</button></div>
@@ -310,7 +310,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </div>
 <div id="plb" hidden></div>
 <nav class="bn" id="bn"></nav>
-<script src="trophy.js?v=279"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
+<script src="trophy.js?v=280"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
 <script>
 // ================= v268 GUEST MODE (1 of 3): the flag. The rest is in the "v268 GUEST MODE" script block near the end of this file and in gate.js. =================
 // window.__oddLock: '' = signed in and paid up, or no gate (everything shows, exactly as before v268) · 'guest' = no account · 'expired' = signed in, time has ended.
@@ -550,7 +550,7 @@ function navMore(open) {
 let GRPL = 0; const GRPQ = [];
 function grpLoad(then) { // pics/groups.js, fetched the first time it is needed
   if (window.OddGroups) { if (then) then(); return; } if (then) GRPQ.push(then); if (GRPL) return; GRPL = 1;
-  const sc = document.createElement('script'); sc.src = 'groups.js?v=279'; sc.onload = () => { GRPQ.splice(0).forEach((f) => { try { f(); } catch (e) {} }); }; sc.onerror = () => { GRPL = 0; GRPQ.length = 0; sc.remove(); }; document.head.appendChild(sc);
+  const sc = document.createElement('script'); sc.src = 'groups.js?v=280'; sc.onload = () => { GRPQ.splice(0).forEach((f) => { try { f(); } catch (e) {} }); }; sc.onerror = () => { GRPL = 0; GRPQ.length = 0; sc.remove(); }; document.head.appendChild(sc);
 }
 // Invite links: https://<site>/?join=g.<code> (built with window.oddShareUrl, so they also carry ?ref=). The code is kept for this tab and taken out of the address bar.
 // Read ONLY when the server says Groups exists (/acct/status `groups`, kept in 'odd-gsw'); with Groups dark the link is left alone and opens the app as any link does.
@@ -803,6 +803,10 @@ let NFLAB = null;
 const bSport1 = (o) => { const lg = (o.lg || '').toLowerCase(); if (lg === 'cfb') return 'ncaa'; if (lg === 'nfl' || lg === 'ncaa' || BSPN[lg]) return lg; const g = o.gid && ALL[o.gid]; const ab = g ? [g.home.abbr, g.away.abbr] : [o.home, o.away]; if (ab[0] || ab[1]) { if (!NFLAB) NFLAB = new Set(Object.values(NFLD).flat()); return NFLAB.has(ab[0]) || NFLAB.has(ab[1]) ? 'nfl' : 'ncaa'; } return 'other'; };
 const bSports = (b) => new Set(b.kind === 'parlay' ? (b.legs || []).map(bSport1) : [bSport1(b)]);
 function bSportSet(v) { BSP = v || 'all'; try { localStorage.setItem('pics-bsp', BSP); } catch (e) {} BDRILL = null; betsRender(true); }
+// v280: the OWNER-PIN sign-in (owner token from /acct/owner) has no bets row, so My Bets is empty there. Tell him, with a way to the cell + PIN sign-in (gate.js oddOutToPhone). Not shown for phone or email sign-ins.
+function mbOpinCard() { try { if (!window.oddOwnerPin || !window.oddOwnerPin()) return ''; } catch (e) { return ''; } return '<div class="mbopin" id="mbopin" role="note"><div>Owner PIN sign-in has no bets. Sign in with your cell number to see yours.</div><button onclick="mbOpinGo()">Sign in with cell number</button></div>'; }
+function mbOpinGo() { if (window.oddOutToPhone) window.oddOutToPhone(); }
+window.oddMeChanged = function () { try { if (VIEW === 'bets') betsRender(true); } catch (e) {} };
 function betsRender(force) {
   const el = $('#betspage'); if (!el) return; if (SQ.cur && !BF && !SQ.busy) sqReviewEnd(); try { spReconcile(); } catch (e) {} kLegLink(); if (!force && scrolling()) { clearTimeout(window.__bdef); window.__bdef = setTimeout(() => betsRender(), 800); return; } try { betSync(); } catch (e) {}
   const done = BETS.map((b) => ({ b, r: betGrade(b) })), fin = done.filter((x) => ['won', 'lost', 'push'].includes(x.r.st));
@@ -873,7 +877,7 @@ function betsRender(force) {
   }
   const sportSel = Object.keys(spCnt).length > 1 ? `<div class="srow" style="margin:0 0 8px"><select onchange="bSportSet(this.value)" aria-label="Filter bets by sport"><option value="all">All sports (${done.length})</option>${Object.keys(BSPN).filter((k) => spCnt[k]).map((k) => `<option value="${k}" ${BSP === k ? 'selected' : ''}>${BSPN[k]} (${spCnt[k]})</option>`).join('')}</select></div>${BSP !== 'all' ? `<div class="sub" style="margin:-2px 0 8px">Showing ${BSPN[BSP]} only · the TODAY box and daily log still count every sport</div>` : ''}` : '';
   const html = drillHtml || `<div class="lpg"><div class="bh"><h2>My Bets</h2><div class="pillw"><button class="pill" onclick="aiOpen(null,'Analyze all my open bets one by one: for each say keep, hedge or leave alone with a one-line reason using the model numbers, then give an overall risk summary.')">🤖 Analyze</button><button class="pill" onclick="addMenu()">＋ Add bet ▾</button><div id="addmenu" ${window.__addm ? '' : 'hidden'}><button onclick="addMenu(0);betNew()">✍️ Add a bet</button><label>📷 Upload bet screenshots (one or many)<small>Pick several pictures at once. Each picture is one slip.</small><input type="file" accept="image/*" multiple hidden onchange="addMenu(0);betImportFiles(this.files);this.value=''"></label><button onclick="addMenu(0);slipPaste()">📋 Paste slip text</button><button onclick="addMenu(0);aiOpen()">🤖 Ask Claude</button>${lsg('kal-id') ? `<button onclick="addMenu(0);kalshiSync(true)">🔄 Sync Kalshi now</button><button onclick="addMenu(0);kalshiOff()">⛓️‍💥 Disconnect Kalshi</button>` : `<button onclick="addMenu(0);kalshiConnect()">⚡ Connect Kalshi</button>`}</div></div></div>
-    <div class="sums">${stat('Overall', all, stake ? ' · ' + usd(stake) + ' staked' : '', 'all')}${stat('Against the app', agA, '', 'against')}${stat('With the app', withA, '', 'with')}<div class="sum" data-dr="1" onclick="bDrill('open')"><b>${doneV.length - finV.length}</b><span>Open bets</span><small>${doneV.length} total</small></div></div>
+    ${mbOpinCard()}<div class="sums">${stat('Overall', all, stake ? ' · ' + usd(stake) + ' staked' : '', 'all')}${stat('Against the app', agA, '', 'against')}${stat('With the app', withA, '', 'with')}<div class="sum" data-dr="1" onclick="bDrill('open')"><b>${doneV.length - finV.length}</b><span>Open bets</span><small>${doneV.length} total</small></div></div>
     ${KFORM && !(lsg('kal-id') && lsg('kal-pem')) ? kalshiFormHtml() : ''}${sportSel}${perfHtml}<div class="sub" style="margin:0 0 6px"><span id="kst"></span></div><div class="sub" id="impst" style="margin:-4px 0 8px">${IMP}</div><div id="sqbox"></div><div id="bform">${BF ? betFormHtml() : ''}</div>${logHtmlF()}${list ? '<div class="mbgrid">' + list + '</div>' : '<div class="note">No bets yet. Tap “Add a bet”, pick a game, then set your side and the line you got.</div>'}</div>`;
   const kt = lsg('kal-id') ? (KST || 'Kalshi connected') : (KST || '');
   const hh = html.replace('<span id="kst"></span>', '');
@@ -1454,7 +1458,9 @@ function propCard(b, r, money) {
   const lab = g ? escH(b.text) : b.src === 'kalshi' ? 'Kalshi' : 'Prop bet', sub = (g ? 'prop · ' : '') + (/^\d{4}-\d\d-\d\d$/.test(b.day || '') ? dayNice(b.day) : escH(b.day)) + (b.pp ? ' · live tracked' : '');
   const blk = g ? `<div class="mbgb">${scCard(g, { bare: 1 })}</div>${pStatHtml(b)}` : `<div class="mbtx">${escH(b.text)}</div>${pStatHtml(b)}`;
   const btns = b.src === 'kalshi' ? `<div class="sub">From Kalshi · result is set automatically</div><div class="bbtn"><button onclick="betDel('${b.id}')">Hide</button></div>` : `<div class="bbtn"><button onclick="propSet('${b.id}','won')">✓ Won</button><button onclick="propSet('${b.id}','lost')">✗ Lost</button><button onclick="propSet('${b.id}','push')">Push</button>${b.res ? `<button onclick="propSet('${b.id}','')">Reset</button>` : ''}${gLk(b) ? gLkTag : `<button onclick="betEdit('${b.id}')">Edit</button><button onclick="betDel('${b.id}')">Delete</button>`}</div>`;
-  return mbWrap(b, r.st === 'won' ? 'bw' : r.st === 'lost' ? 'bl' : '', mbHead(lab, sub, p) + blk + mbPay(b) + btns);
+  // v280: a single Kalshi market (YES or NO side) gets the same cash-out box as the combos; kcoLoad / kcoPaint / kcoAsk / kcoGo sell side b.ks at that side's bid
+  const kx = b.src === 'kalshi' ? (b.cash !== undefined && b.cash !== null ? `<div class="sub" style="margin:6px 0">💵 Cashed out on Kalshi for <b>$${Number(b.cash).toFixed(2)}</b> (${b.cash >= (b.stake || 0) ? '+' : '-'}$${Math.abs(b.cash - (b.stake || 0)).toFixed(2)})${b.soldN ? ' · ' + b.soldN + ' contracts' : ''}</div>` : !b.res && b.kt && b.kn && (b.ks === 'yes' || b.ks === 'no') ? `<div class="sub" data-kco="${escH(b.id)}" style="margin:6px 0">💵 Checking cash-out value…</div>` : '') : '';
+  return mbWrap(b, r.st === 'won' ? 'bw' : r.st === 'lost' ? 'bl' : '', mbHead(lab, sub, p) + blk + mbPay(b) + kx + btns);
 }
 function legSet(id, i, res) { const b = BETS.find((x) => x.id === id); if (!b) return; b.legs[i].res = res || null; delete b.fin; delete b.finPL; betsSave(); betsRender(); }
 function propSet(id, res) { const b = BETS.find((x) => x.id === id); if (!b) return; b.res = res || null; delete b.fin; delete b.finPL; betsSave(); betsRender(); }
@@ -1956,7 +1962,7 @@ async function alertPush() {
   ASQ = Date.now();
   try { const r = await fetch(ALU, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': alertTok() }, body: JSON.stringify({ week: CUR, rec: { lock: a.lock, dogs: a.dogs, helper: { id: h.g.id, abbr: h.abbr, conf: h.conf } } }) }); if (!r.ok) return; const j = await r.json(); if (j && j.rec && j.week === CUR && alertTake(Object.assign({}, ASV, { [CUR]: j.rec }))) render(); } catch (e) {}
 }
-async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=279')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
+async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=280')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
 const trGrade = (p) => { const g = ALL[p.id]; if (!g || g.state !== 'post') return null; const m = (g.home.abbr === p.abbr ? 1 : -1) * (g.home.score - g.away.score) + p.line; return m === 0 ? 'push' : m > 0 ? 'hit' : 'miss'; };
 function trophyData() {
   if (CFB || !window.Trophy || !Trophy.ready()) return null;
@@ -3656,6 +3662,6 @@ if ('serviceWorker' in navigator) {
 })();
 // ================= end v268 GUEST MODE (3 of 3) =================
 </script>
-<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=279"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="announce.js?v=279"><\/script><script src="dash.js?v=279"><\/script>')</script>
+<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=280"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="announce.js?v=280"><\/script><script src="dash.js?v=280"><\/script>')</script>
 </body>
 </html>

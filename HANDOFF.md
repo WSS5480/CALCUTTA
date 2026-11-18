@@ -56,6 +56,7 @@ Start here if you are a new AI session picking up this repo. Update this file in
 - 2026-11-17 — Oddable's address is https://oddable.onrender.com; the old steves-pics.onrender.com stays running with a moved card (shown on every page, hidden 1 day by Not now) — owner asked for oddable.onrender.com at 5:52 PM CT; deleting the old site would strand phones with Home Screen icons.
 - 2026-11-12 — Week filter is in-memory only (resets to whole season on reload) — the season record is the default view; one week is a quick look.
 - 2026-11-12 — The game-card stat strip (NST) stays season-wide — it describes the model overall, not a week.
+- 2026-11-17 (8:07 PM CT) — MY BETS CARDS USE THE TODAY'S BETS LOOK (v279). Owner, on a screenshot of the Today's bets sheet: "This looks great. Can this be the look in the My Bets for all bets, adding buttons needed there." The 9 build rules are MANAGER DECISIONS the owner may change (listed in "## v279").
 - 2026-11-17 (7:08 PM CT) — The floating My Bets / TODAY banner STAYS on screen while scrolling, on every page that shows it (index.html, sports.html), and never sits in the iPhone status bar / Dynamic Island (top = safe-area inset + 10px). Owner: "Banner is not sticking" / "The bets top right move with scroll". Replaces the Nov 12 decision "TODAY banner hides on scroll rather than shrinking" (v278). Rule kept: at rest it must clear the header controls (the header reserves room for it); scrolling content may pass under it while scrolling; fixed UI and sheets are never under it.
 - 2026-11-07 — Each user signs in to their own Kalshi account, not one shared key.
 - 2026-11-16 — Score pop-up sits just above the bottom tab bar and steps above (or waits for) any fixed UI; scrolling content may pass under it for its 5 s — a fixed card cannot avoid scrolling content without moving the page, which he also ruled out (v260).
@@ -70,6 +71,7 @@ Start here if you are a new AI session picking up this repo. Update this file in
 
 ## Open items
 - Upgrade The Odds API plan once Oddable sells.
+- v279: Kalshi single markets have no cash-out box on My Bets (same as before v279); ask Steve if he wants one.
 - `classic.html` does not have the week filter (only `index.html`, the live look); its banner never tucked away, and v278 did not change it.
 
 ## v270 — Nov 17 2026: merge of guest mode (v268) onto v269
@@ -519,3 +521,35 @@ Owner (7:08 PM CT, iPhone screenshot): "Banner is not sticking" / "The bets top 
 - Version v278 on the whole bump list: index.html (comment, header pill, footer "Oddable v278 (My Bets banner stays on screen)", `trophy.js`, `alert-frozen.json`, `gate.js`, `announce.js`, `dash.js`, `groups.js`), sports.html (`gate.js`, `groups.js`), pga.html, golfgps.html (incl. leaflet + `golfgps.js`), pickleball.html, sw.js `pics-v278`, groups.js `GDV = '278'`, golfday.js `golfgps.js?v=278`.
 - Tests: all 28 odds-api test files pass; static build command exit 0, no folders in `pics/`. Playwright (CDP `Emulation.setSafeAreaInsetsOverride` for the inset) at 390 with inset 59 and 0, 820, 1180: banner at scroll 0 and 600 stays at the same spot (top 69 / 10), no header control or bottom bar under it, Today's bets sheet on top of it.
 - NOT verified: a real iPhone / installed Home Screen app; the header with a real signed-in account and live games (tests used the guest-free page with the network blocked and a faked banner and cards).
+
+## v279 — Nov 17 2026: My Bets cards in the Today's bets look (every bet, every status)
+
+Owner (8:07 PM CT, screenshot of the Today's bets sheet opened from the banner): "This looks great. Can this be the look in the My Bets for all bets, adding buttons needed there." Decision line above.
+
+**Manager decisions, Nov 17 2026 (owner may change them):**
+1. One card per BET (not per game), so totals, filters, counts and every number on My Bets stay exactly as before.
+2. Single-game bet: header + status pill + the full game block as in the sheet. Before kickoff: kickoff day/time in the clock spot, no scores. Final: final score, pill says WON / LOST / PUSH with the P/L.
+3. Parlay: header "<n>-leg parlay · x of n hitting" + overall pill; then one compact game block per leg in the same style (smaller), each with its own ✓/✗/pending mark and the leg's pick.
+4. Bets with no ESPN game (props, futures, Kalshi markets with no game): same card frame, header + pill + the bet text in place of the game block.
+5. Below the game block, on every card, every button the old card had, nothing dropped, same handlers; 44px targets, wraps on a 390 phone, stake / odds / to-win line kept visible.
+6. Wide screens: cards in columns (fill tablet / desktop width).
+7. The floating My Bets banner must not cover any button at rest; sheets / modals stay above it.
+8. sports.html: same look if it renders bet cards itself. CHECKED: it does not (its My Bets tab sends you to index.html), so nothing to change there.
+9. The Today's bets sheet itself is unchanged.
+
+**What was built (`pics/index.html` only):**
+- `scCard(g, o)` gained `o.bare`: returns only the game block (teams with colour bar and timeout dots, big scores, clock / Final / kickoff, a down-and-distance line, last play) for the My Bets cards; in bare mode a team taps through to the team page (`tpAt`, as the old game card did). The default path (sheet, pop-up) builds the same HTML as before (tested: `tbInner()` output identical v278 vs v279 on the fixture).
+- New helpers next to the old ones: `mbFin`, `mbFinP` (final pill = the old badge words: "✓ WON +$75.00" / "✗ LOST −$50.00" / "PUSH +$0.00"), `mbHead`, `mbWrap` (card frame `.scc.mbc` + `bcCls()` so My Apps `card_theme` colours apply and `bcApply` recolours it), `mbPay` (stake · odds or "pays Nx" · to win = stake × `betProfit`), `mbGameBtns`, `mbSingle`. `parlayCard` and `propCard` rewritten in place; `cardHtml` in `betsRender` now calls `mbSingle` for singles. Grading, totals, the banner, the daily log, filters and drill-downs are not touched.
+- Live pills use the sheet's wording (`scPill`: "▲ covering by 3.5 right now", "▼ not covering, 4.5 short right now", "Not started"); a moneyline bet adds "Live NN%" only when ESPN gives the win chance. Parlay overall pill: "▲ winning right now" / "▼ N leg losing right now" / Pending / final. Legs: `legMark` + pick + the leg's own pill ("Leg won", covering …) + compact game block + 📡 View live game.
+- Props: a tracked prop with a game shows its game block + the live stat bar (`pStatHtml`); a prop / Kalshi market with no game shows "Prop bet" / "Kalshi" · day in the header and the bet text in place of the game block.
+- Columns: the list and every drill-down list sit in `.mbgrid` (grid `repeat(auto-fill,minmax(300px,1fr))` from 700px): 1 column at 390, 2 at 820, 3 at 1180.
+
+**Buttons inventory (old → new, every handler the same function):**
+- Single bet: Edit `betEdit`, Delete `betDel` (or the 🔒 group-bet tag when `gLk`), and from the old embedded game card: 📍 Watch `pinToggle`, 🏟 Field view `fvOpen` (live NFL), 📡 View live game `liveOpen` (or `liveBtn` for a game from the other league), team tap → team page. The old "tap the card for the chart" (`gcToggle`) is now a 📈 Win chart button (the card is no longer one big tap target); the chart draws inside the card. The old card's win-probability bars and model panel (`predPanel`) are not in the new card: the "With the app / Against the app · app had …" line stays.
+- Parlay: per manual leg ✓ / ✗ / push / reset `legSet`; per leg 📡 View live game; Edit (not Kalshi) / Delete or the group tag; Kalshi combo "💵 Checking cash-out value…" box (`data-kco`) whose Cash out… button (`kcoAsk`) is painted by `kcoPaint` as before; cashed-out line; "From Kalshi" note.
+- Prop: ✓ Won / ✗ Lost / Push / Reset `propSet`, Edit / Delete or the group tag; Kalshi market: note + Hide (`betDel`).
+- Kalshi single markets had no cash-out box in v278 (only singles without `kind` and Kalshi combos had `data-kco`); v279 keeps that as it was. Open item if Steve wants cash out on single Kalshi markets.
+
+**Tests:** all 28 `odds-api/*.test.js` pass; static build command exit 0, no folders in `pics/`. Playwright, v278 vs v279 served from a local copy of the static build, network blocked, fixture of 12 bets (single pre-game, live covering, live not covering, final won / lost / push, mixed parlay, manual parlay, Kalshi single, Kalshi combo, prop with no game, group-tagged bet) at 390 / 820 / 1180: My Bets tiles, How I'm doing, counts and the TODAY banner text identical v278 vs v279 at every width; 12 cards both; every v278 button present in v279 on the same card (only change: no `event.stopPropagation()` prefix, not needed now) + the Win chart button; 17 handlers clicked and checked (Edit / Delete single and parlay, ✓ Won / ✗ Lost / Push on a prop, leg ✓ / ✗ / push / reset, Kalshi Hide and Delete, Watch, View live game, Field view, Win chart, Kalshi Cash out… opens the sell box after a faked price); no sideways scroll, no button under 44px, nothing under the banner at rest, 0 page errors (v278 and v279 both throw one fixture error on the first load, from the model with fake games, before the fixture is in). Screenshots looked at.
+- NOT verified: a real phone and the live site; real ESPN feeds (fixture games); the light / black / green card presets on the new cards (CSS uses the same `--bc-*` variables as the sheet); the Win chart with real win-probability data; a tracked player prop with a live box score; `classic.html` untouched.
+- Version v279 on the whole bump list: index.html (comment, header pill, footer "Oddable v279 (My Bets cards in the Today's bets look)", `trophy.js`, `alert-frozen.json`, `gate.js`, `announce.js`, `dash.js`, `groups.js`), sports.html (`gate.js`, `groups.js`), pga.html, golfgps.html (incl. leaflet + `golfgps.js`), pickleball.html, sw.js `pics-v279`, groups.js `GDV = '279'`, golfday.js `golfgps.js?v=279`.

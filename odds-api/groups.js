@@ -1090,6 +1090,8 @@ async function attachGame(groupId, e, x) {
 // ---------- for the other engines (Calcutta, golf, events) ----------
 // memberCheck(groupId, accountId) -> { member, comm, pid, name } | null: a game attached to a group lets that group's MEMBERS in (and nobody else).
 // canAttach(groupId, accountId) -> true only for that group's commissioner: an engine must ask this before it ties a game to a group id it was handed.
+// v287: the ids of the groups this account is in or runs (its member index; golfday.js `here` checks each one with memberCheck before using it).
+async function myGroupIds(e) { if (!e) return []; const mi = await D.S.dbGet(MK(mkOf(e))), x = (mi && mi.data) || {}; return [...new Set([...(x.g || []), ...Object.keys(x.own || {})])].slice(-60); }
 async function memberCheck(groupId, e) { const g = await gread(groupId).catch(() => null); if (!g) return null; const mk = mkOf(e), m = memberOf(g, mk); return m ? { member: true, comm: isComm(g, mk), pid: m.pid, name: m.name, group: g.name } : null; } // v273: + the group's name (golfday.js names the group in the owner's Activity event)
 async function canAttach(groupId, e) { const g = await gread(groupId).catch(() => null); return !!g && isComm(g, mkOf(e)); }
 // wire(): called once by server.js. Connects whichever engines are in this build (none of it is needed for picks contests):
@@ -1110,4 +1112,4 @@ function wire(M) {
 // v272 (Groups phase 2): what the switches say for this account id (null = signed out), WITHOUT the ended-account check: an ended account that would
 // otherwise be let in still gets the Groups tab, with the "Your time has ended" lock in it. acct.js puts this on the `me` it already sends (no new call).
 const onFor = (e) => allowed(e || null);
-module.exports = { onFor, enabled: ENABLED, handle, tick, statsFor, memberStats, memberCheck, canAttach, wire, betVoid, voidable, addCheck, cleanBet, memberRules, registerGame, partners, betAdd, LOCKED_MSG, STARTED_MSG, registerInvite, attachGame, cleanCalc, limits: LIM, cleanContest, cleanTake, pots, prizes, rank, score, judge, applyObs, weekOf, chiDay, chiStart, snap, _deps: D, _reset: () => { RL.clear(); QUEUE.clear(); EXTC.clear(); CACHE.clear(); IDS.map = null; IDF.clear(); NAMES = { at: 0, v: {} }; TK.last.clear(); TK.told.clear(); USEM.clear(); GR._reset(); } };
+module.exports = { onFor, enabled: ENABLED, handle, tick, statsFor, memberStats, memberCheck, myGroupIds, canAttach, wire, betVoid, voidable, addCheck, cleanBet, memberRules, registerGame, partners, betAdd, LOCKED_MSG, STARTED_MSG, registerInvite, attachGame, cleanCalc, limits: LIM, cleanContest, cleanTake, pots, prizes, rank, score, judge, applyObs, weekOf, chiDay, chiStart, snap, _deps: D, _reset: () => { RL.clear(); QUEUE.clear(); EXTC.clear(); CACHE.clear(); IDS.map = null; IDF.clear(); NAMES = { at: 0, v: {} }; TK.last.clear(); TK.told.clear(); USEM.clear(); GR._reset(); } };

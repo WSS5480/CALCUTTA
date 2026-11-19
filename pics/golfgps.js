@@ -24,8 +24,17 @@
 //   ggps-flags   { <course id>: { map, def } }   this phone's own colour meanings + default colour, used only while the course has none stored on the server
 //   ggps-marks   { <course id>: { '5:green': {lat, lon} } }   greens / tees marked on this phone when not signed in or with no signal
 //   ggps-recent  last 6 courses opened          ggps-c:<id>  last good copy of a course (3 kept)          ggps-wake  '0' = do not keep the screen on
+// v287 GOLF DAY LINK (owner answers Nov 18 2026, d + e):
+//   GolfGPS.dayHere(courseId, 'G.ID'?) -> { days:[{g, group, day}], offline? }   the open Golf days at this course, today (Chicago), that this player plays in
+//   GolfGPS.saveScore({g, id, name}, hole, strokes|null) -> { day } (sent) | { queued:true } (no signal: kept on the phone)   throws on a refusal
+//   GolfGPS.queued(g, id) -> { <hole>: strokes|null }   GolfGPS.qCount(g?, id?)   GolfGPS.refused() / dismissRefused()   GolfGPS.flush()   GolfGPS.onQ(fn)
+//   GolfGPS.saveDayFlags({g, id}, map|null) -> { day }   (commissioner only; the server refuses anyone else)
+//   course.dayFlags = { map:{red..: short|center|long}, comm, name } set by the page while the player is in a Golf day: flagMap() then answers src:'day'.
+//   ggps-sq   scores not sent yet { '<g>.<id>': { name, h: { <hole>: { s, at } } } } (newest value per hole wins)   ggps-sqx  refused ones (last 20)
+//   ggps-gdctx  the last Golf days found for a course today (so the hole screen still offers "Log my score" with no signal)   ggps-gdpick  the day picked when he is in more than one
 (function (root) {
   'use strict';
+  if (typeof module === 'undefined' && root.GolfGPS) return; // v287: fetched by groups.js (scores waiting on the phone) and by golfday.js: run once
   const MEM = {};
   const D = {
     api: 'https://calcutta-odds.onrender.com/golfcourse',
@@ -150,6 +159,8 @@
   const devFlags = (id) => { const all = jget('ggps-flags', {}), f = all[id]; return f && typeof f === 'object' ? f : {}; };
   function flagMap(course) {
     const full = (m) => Object.assign({}, DEFAULT_MAP, m || {});
+    const dm = course && course.dayFlags && cleanMap(course.dayFlags.map, ['short', 'center', 'long']); // v287: the commissioner's colours for today's Golf day win
+    if (dm) { const m = {}; COLORS.forEach((k) => { if (dm[k]) m[k] = UNWIRE[dm[k]]; }); return { map: full(m), src: 'day', locked: true, canChange: !!course.dayFlags.comm, pending: false, day: String(course.dayFlags.name || 'this Golf day') }; }
     if (course && course.flags) { const m = {}; COLORS.forEach((k) => { if (course.flags.map[k]) m[k] = UNWIRE[course.flags.map[k]]; }); const o = { map: full(m), src: 'course', locked: true, canChange: !!course.flags.canChange, pending: !!(course.flagsPending || course.pendingFlags) }; if (course.pendingFlags) { const pm = {}; COLORS.forEach((k) => { if (course.pendingFlags.flags[k]) pm[k] = UNWIRE[course.pendingFlags.flags[k]]; }); o.review = { map: full(pm), note: course.pendingFlags.note, from: course.pendingFlags.from }; } return o; }
     const d = course ? cleanMap(devFlags(course.id).map, PLACES) : null;
     return { map: full(d), src: d ? 'phone' : 'default', locked: false, canChange: true, pending: false };
@@ -257,7 +268,84 @@
     return { kind: 'ok', acc, text: pm };
   }
 
+
+  // ---------- v287: Golf days on this page (Log my score; scores kept on the phone with no signal; the commissioner's flag colours) ----------
+  const chiDay = (ms) => { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date(ms == null ? D.now() : ms)); } catch (e) { return dayOf(ms == null ? D.now() : ms); } };
+  const GD_ID = /^[A-Z2-9]{10}\.[A-Z2-9]{8}$/;
+  async function gcall(op, body, ms) {
+    let r; const base = D.api.replace(/\/golfcourse\/?$/, '');
+    try { r = await D.fetch(base + '/golfday/' + op, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': token() }, body: JSON.stringify(body || {}), cache: 'no-store', signal: typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(ms || 20000) : undefined }); }
+    catch (e) { throw Object.assign(new Error('No signal'), { keep: true, offline: true }); }
+    let j = null; try { j = await r.json(); } catch (e) {}
+    if (!r.ok || !j || j.ok === false) { const st = r.status; throw Object.assign(new Error((j && j.error) || 'The server did not answer properly (' + st + ').'), { status: st, body: j, expired: !!(j && j.expired), keep: st >= 500 || st === 408 || st === 429 || st === 401 || !j }); }
+    return j;
+  }
+  // the Golf days found here today: from the server, else the copy kept on this phone for this course and today
+  async function dayHere(courseId, gd) {
+    const today = chiDay(), keepCtx = (days) => { jset('ggps-gdctx', { course: courseId, date: today, at: D.now(), days }); return { days }; };
+    const mine = (x) => x && x.day && x.day.joined && !x.day.closed && x.day.date === today && x.day.course && x.day.course.id === courseId;
+    try {
+      let days = [];
+      if (GD_ID.test(String(gd || ''))) { const [g, id] = String(gd).split('.'); try { const j = await gcall('get', { g, id }); days = [{ g, group: '', day: j.day }].filter(mine); } catch (e) { if (e.keep) throw e; } }
+      if (!days.length) { const j = await gcall('here', { course: courseId }); days = (Array.isArray(j.days) ? j.days : []).filter(mine); }
+      return keepCtx(days);
+    } catch (e) {
+      if (!e.keep) { if (e.status && e.status < 500) D.set('ggps-gdctx', null); throw e; }
+      const c = jget('ggps-gdctx', null); return c && c.course === courseId && c.date === today && Array.isArray(c.days) ? { days: c.days.filter(mine), offline: true } : { days: [], offline: true };
+    }
+  }
+  function keepDay(g, day) { const c = jget('ggps-gdctx', null); if (!c || !Array.isArray(c.days)) return; const x = c.days.find((y) => y.g === g && y.day && y.day.id === day.id); if (x) { x.day = day; jset('ggps-gdctx', c); } }
+  // the queue of scores that could not reach the server
+  let QSEQ = 0; // the queue's time stamps are strictly increasing: scores are sent in the order they were typed
+  const qAll = () => jget('ggps-sq', {});
+  const qKey = (g, id) => g + '.' + id;
+  function qPut(g, id, hole, s, name) { const q = qAll(), k = qKey(g, id), e = q[k] && typeof q[k] === 'object' ? q[k] : { name: '', h: {} }; e.h = e.h || {}; e.name = String(name || e.name || 'Golf day').slice(0, 40); e.h[hole] = { s: s == null ? null : s, at: (QSEQ = Math.max(D.now(), QSEQ + 1)) }; q[k] = e; jset('ggps-sq', q); }
+  function qDel(g, id, hole, at) { const q = qAll(), k = qKey(g, id), e = q[k]; if (!e || !e.h || !e.h[hole]) return; if (at != null && e.h[hole].at !== at) return; delete e.h[hole]; if (!Object.keys(e.h).length) delete q[k]; if (Object.keys(q).length) jset('ggps-sq', q); else D.set('ggps-sq', null); }
+  function queued(g, id) { const e = qAll()[qKey(g, id)], o = {}; if (e && e.h) Object.keys(e.h).forEach((h) => { o[h] = e.h[h].s; }); return o; }
+  function qCount(g, id) { const q = qAll(); return Object.keys(q).filter((k) => !g || k === qKey(g, id)).reduce((a, k) => a + Object.keys((q[k] && q[k].h) || {}).length, 0); }
+  const refused = () => { const a = jget('ggps-sqx', []); return Array.isArray(a) ? a : []; };
+  const dismissRefused = () => D.set('ggps-sqx', null);
+  function refuse(g, id, name, hole, s, msg) { const a = refused(); a.push({ g, id, name: String(name || 'Golf day').slice(0, 40), hole, s, error: String(msg || 'Refused').slice(0, 160), at: D.now() }); jset('ggps-sqx', a.slice(-20)); }
+  const QL = [];
+  const onQ = (fn) => { if (typeof fn === 'function') QL.push(fn); };
+  const emit = (ev) => QL.forEach((f) => { try { f(ev); } catch (e) {} });
+  let FLUSHING = null;
+  // Sends every waiting score, oldest first. Sent = removed (unless a newer value was typed meanwhile). Refused by the server = removed and listed in
+  // ggps-sqx with the server's words. No signal / server asleep = kept, and the rest wait for the next try. A score sets a hole (it never adds), so sending twice never counts twice.
+  function flush() {
+    if (FLUSHING) return FLUSHING;
+    FLUSHING = (async () => {
+      let sent = 0, gone = 0;
+      if (!token()) return { sent, gone, left: qCount() };
+      const list = []; const q = qAll(); Object.keys(q).forEach((k) => { const [g, id] = k.split('.'); Object.keys((q[k] && q[k].h) || {}).forEach((h) => list.push({ g, id, name: q[k].name, hole: +h, s: q[k].h[h].s, at: q[k].h[h].at })); });
+      list.sort((a, b) => a.at - b.at);
+      for (const x of list) {
+        if (!GD_ID.test(x.g + '.' + x.id) || !(x.hole >= 1 && x.hole <= 18)) { qDel(x.g, x.id, x.hole); continue; }
+        try { const j = await gcall('score', { g: x.g, id: x.id, hole: x.hole, strokes: x.s }); qDel(x.g, x.id, x.hole, x.at); sent++; keepDay(x.g, j.day); emit({ type: 'sent', g: x.g, id: x.id, hole: x.hole, day: j.day }); }
+        catch (e) { if (e.keep) break; qDel(x.g, x.id, x.hole, x.at); gone++; refuse(x.g, x.id, x.name, x.hole, x.s, e.message); emit({ type: 'refused', g: x.g, id: x.id, hole: x.hole, error: e.message, expired: e.expired }); }
+      }
+      return { sent, gone, left: qCount() };
+    })();
+    return FLUSHING.finally(() => { FLUSHING = null; });
+  }
+  // Save one hole: sent at once when the server answers; with no signal (or the server asleep) kept on this phone and sent later.
+  async function saveScore(day, hole, strokes) {
+    const g = String(day.g), id = String(day.id), s = strokes == null || strokes === 0 ? null : strokes;
+    if (!GD_ID.test(g + '.' + id)) throw new Error('Golf day not found');
+    if (FLUSHING) { try { await FLUSHING; } catch (e) {} } // an older value of the same hole never lands after this one
+    try { const j = await gcall('score', { g, id, hole, strokes: s }); qDel(g, id, hole); keepDay(g, j.day); if (qCount()) setTimeout(flush, 0); return { day: j.day }; }
+    catch (e) { if (!e.keep) throw e; qPut(g, id, hole, s, day.name); emit({ type: 'queued', g, id, hole }); return { queued: true, why: e.offline ? 'offline' : 'server' }; }
+  }
+  async function saveDayFlags(day, map) { const j = await gcall('flags', { g: day.g, id: day.id, flags: map ? wireMap(map) : null }); keepDay(day.g, j.day); return { day: j.day }; }
+  async function dayGet(g, id) { const j = await gcall('get', { g, id }); keepDay(g, j.day); return j.day; }
+  // automatic sending: when the phone is back online, when the app comes back on screen, and every 30 s while something waits
+  if (root.document && root.addEventListener && typeof module === 'undefined') {
+    const go = () => { if (qCount() && token()) flush(); };
+    root.addEventListener('online', go); root.document.addEventListener('visibilitychange', () => { if (!root.document.hidden) go(); });
+    setInterval(() => { if (!root.document.hidden) go(); }, 30000); setTimeout(go, 1500);
+  }
+
   const API = { cfg: CFG, COLORS, PLACES, LABEL, CNAME, DEFAULT_MAP, yards, bearing, toward, inside, fmtYd, ord, okPt, search, loadCourse, hole, recent, flagMap, mapText, saveFlagMap, reportFlags, reviewFlags, defColor, setDefColor,
-    round, selFor, setSel, setAllDay, setPin, clearPin, placePoint, pin, distances, mark, teeWatch, gpsState, signedIn: () => !!token(), _deps: D, _applyMarks: applyMarks, _tidy: tidy, _reset: () => { Object.keys(MEM).forEach((k) => delete MEM[k]); } };
+    round, selFor, setSel, setAllDay, setPin, clearPin, placePoint, pin, distances, mark, teeWatch, gpsState, signedIn: () => !!token(), chiDay, dayHere, dayGet, saveScore, saveDayFlags, queued, qCount, refused, dismissRefused, flush, onQ, wireMap, _deps: D, _applyMarks: applyMarks, _tidy: tidy, _reset: () => { Object.keys(MEM).forEach((k) => delete MEM[k]); } };
   if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.GolfGPS = API;
 })(typeof window !== 'undefined' ? window : globalThis);

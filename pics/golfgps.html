@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<!-- Golf GPS v286 (part of Oddable; your own round: live position on a satellite picture, yards to the pin, flag colour sets the pin. No picks, no bets.) -->
+<!-- Golf GPS v287 (part of Oddable; your own round: live position on a satellite picture, yards to the pin, flag colour sets the pin. No picks, no bets.) -->
 <script>try{if(localStorage.getItem('pics-theme')!=='violet')document.documentElement.classList.add('cb')}catch(e){document.documentElement.classList.add('cb')}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Golf GPS · Oddable</title>
@@ -10,7 +10,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="icon-192.png">
 <meta name="theme-color" content="#041e42">
-<link rel="stylesheet" href="leaflet.css?v=286">
+<link rel="stylesheet" href="leaflet.css?v=287">
 <style>
 :root{--bg:#f6f4fb;--panel:#fff;--panel2:#ece6fb;--line:#d9d0ee;--ink:#2b2b2b;--muted:#5d5873;--blue:#7c3aed;--green:#16915a;--red:#d93a2e;--gold:#b7791f}
 body.dark{--bg:#0a0c10;--panel:#13161d;--panel2:#1b1f29;--line:#272c38;--ink:#eef0f4;--muted:#8b93a3;--blue:#a78bfa;--green:#4fd18b;--red:#ff5a4d;--gold:#f5c542}
@@ -100,6 +100,14 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
 .sgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0}
 .sw{display:inline-block;width:14px;height:14px;border-radius:50%;border:1px solid #888;margin-right:6px;vertical-align:-2px}
 #toast{position:fixed;left:12px;right:12px;bottom:18px;margin:0 auto;max-width:520px;z-index:3000;background:#08111f;color:#fff;border:1px solid var(--gold);border-radius:14px;padding:12px 14px;font-weight:700;text-align:center}
+/* v287: Log my score on the hole screen (only for a player in an open Golf day at this course today) */
+.gdl .lab{font:800 12px/1.2 system-ui;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:2px 0 4px}
+.gdl .gdh{font-weight:800;font-size:16px}.gdl .gdh small{display:block;font-weight:600;font-size:13px;color:var(--muted)}
+.gstep{display:grid;grid-template-columns:64px minmax(0,1fr) 64px;gap:10px;align-items:center;margin:8px 0}
+.gstep button{min-height:56px;border-radius:14px;border:1px solid var(--blue);background:var(--panel2);color:var(--ink);font:800 28px system-ui;cursor:pointer}
+.gstep b{font:900 44px/1 system-ui;text-align:center;font-variant-numeric:tabular-nums}
+.gdq{margin-top:8px;padding:8px 10px;border:2px solid var(--gold);border-radius:12px;font-weight:700;font-size:14px}
+.gdpk{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin-top:8px}.gdpk .btn{flex-direction:column;align-items:flex-start;text-align:left}.gdpk .btn small{display:block;font-weight:600;font-size:12px;color:var(--muted)}
 .foot{color:var(--muted);font-size:12px;margin:24px 0 8px;text-align:center;padding:0 12px}
 [hidden]{display:none!important}
 </style>
@@ -131,7 +139,7 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
       <div class="hnav"><button class="btn" id="prev" type="button">‹ Prev</button><select id="hsel" aria-label="Hole"></select><button class="btn" id="next" type="button">Next ›</button></div>
       <div id="sug" hidden></div>
       <div class="hg">
-        <div class="ga"><div id="dist"></div><div id="flags"></div><div id="gps"></div></div>
+        <div class="ga"><div id="dist"></div><div id="gdlog"></div><div id="flags"></div><div id="gps"></div></div>
         <div class="gm">
           <div id="mmode" hidden></div>
           <div id="mapbox"><div id="maprot"><div id="map"></div></div>
@@ -147,10 +155,10 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
 </main>
 <div class="sheet" id="sheet" hidden><div class="in" id="sheetin"></div></div>
 <div id="toast" hidden role="status"></div>
-<div class="foot">Oddable v286 · Golf GPS · course map © OpenStreetMap contributors · not a rangefinder · no picks, no bets</div>
+<div class="foot">Oddable v287 · Golf GPS · course map © OpenStreetMap contributors · not a rangefinder · no picks, no bets</div>
 <script>try{if(localStorage.getItem('pics-dark')!=='0')document.body.classList.add('dark')}catch(e){document.body.classList.add('dark')}</script>
-<script src="leaflet.js?v=286"></script>
-<script src="golfgps.js?v=286"></script>
+<script src="leaflet.js?v=287"></script>
+<script src="golfgps.js?v=287"></script>
 <script>
 (function () {
   'use strict';
@@ -171,6 +179,8 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
   let HOLEUP = true, ROT = 0, VIEWED = null, USERVIEW = false; // map turned so the line of play points up; its angle; where it was last framed from
   let TEEST = null, SUG = 0, NOSUG = {}, TICK = null, WAKE = null, TOASTT = null, TILEERR = 0, BUSY = false;
   let map = null, LYR = null, MEL = null, ME = null, MEACC = null;
+  // v287 Golf day on this page: the days found (this course, today, he plays in them), the one picked ('G.ID'), the stepper's number and hole, a refresh timer
+  let GDL = [], GDK = null, GDN = null, GDH = 0, GDT = null, GDBUSY = false, GDQ = '';
 
   function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(TOASTT); TOASTT = setTimeout(() => { t.hidden = true; }, 4500); }
 
@@ -196,13 +206,14 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
   document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-course]'); if (b) go(b.getAttribute('data-course'), 0, true); });
 
   // ================= routing: golfgps.html?course=<id>&hole=<n> =================
-  function setUrl(push) { const u = C ? '?course=' + encodeURIComponent(C.id).replace(/%2F/g, '/') + '&hole=' + N : location.pathname; try { history[push ? 'pushState' : 'replaceState'](null, '', u); } catch (e) {} }
-  function showPick() { stopGps(); releaseWake(); clearInterval(TICK); TICK = null; C = null; closeSheet(); $('#hv').hidden = true; $('#pv').hidden = false; document.querySelector('header .sub').hidden = false; showRecent(); }
+  function setUrl(push) { const u = C ? '?course=' + encodeURIComponent(C.id).replace(/%2F/g, '/') + '&hole=' + N + (GDK ? '&gd=' + GDK : '') : location.pathname; try { history[push ? 'pushState' : 'replaceState'](null, '', u); } catch (e) {} }
+  function showPick() { stopGps(); releaseWake(); clearInterval(TICK); TICK = null; gdReset(); C = null; closeSheet(); $('#hv').hidden = true; $('#pv').hidden = false; document.querySelector('header .sub').hidden = false; showRecent(); }
   async function go(id, n, push) {
+    const gdWant = new URLSearchParams(location.search).get('gd') || ''; // v287: read before setUrl rewrites the address
     $('#pv').hidden = true; $('#hv').hidden = false; $('#hole').hidden = true; $('#cname').textContent = ''; document.querySelector('header .sub').hidden = true;
     $('#cmsg').innerHTML = '<div class="card">Loading the course… The free map can take up to a minute the first time.</div>';
     let c; try { c = await G.loadCourse(id); } catch (e) { $('#cmsg').innerHTML = '<div class="card err">' + esc(e.message) + '</div><button class="btn wide" id="retry" type="button">Try again</button>'; $('#retry').onclick = () => go(id, n, false); return; }
-    C = c; R = G.round(C.id); N = n >= 1 && n <= C.holeCount ? n : 1; MODE = 'measure'; MEAS = null; NOSUG = {}; SUG = 0; TEEST = null;
+    gdReset(); C = c; R = G.round(C.id); N = n >= 1 && n <= C.holeCount ? n : 1; MODE = 'measure'; MEAS = null; NOSUG = {}; SUG = 0; TEEST = null;
     $('#cname').textContent = C.name;
     let m = ''; if (C.offline) m += '<div class="card warn">No signal: showing the copy of this course saved on this phone' + (C.savedAt ? ' on ' + esc(new Date(C.savedAt).toLocaleDateString([], { month: 'short', day: 'numeric' })) : '') + '.</div>';
     if (C.note) m += '<div class="note">' + esc(C.note) + '</div>';
@@ -210,6 +221,7 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
     const s = $('#hsel'); s.innerHTML = ''; for (let i = 1; i <= C.holeCount; i++) { const h = G.hole(C, i), o = document.createElement('option'); o.value = i; o.textContent = 'Hole ' + i + (h.par ? ' · Par ' + h.par : '') + (h.green ? '' : ' · not mapped'); s.appendChild(o); }
     setUrl(push); initMap(); setHole(N, true); autoGps(); wantWake();
     if (!TICK) TICK = setInterval(tick, 2000);
+    gdInit(gdWant);
   }
   function setHole(n, first) { N = Math.max(1, Math.min(C.holeCount, n)); MODE = 'measure'; MEAS = null; USERVIEW = false; VIEWED = null; SUG = 0; $('#hsel').value = String(N); $('#prev').disabled = N <= 1; $('#next').disabled = N >= C.holeCount; if (!first) setUrl(false); render(); }
   $('#hsel').addEventListener('change', () => setHole(+$('#hsel').value));
@@ -221,7 +233,7 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
 
   // ================= the hole screen =================
   const hole = () => G.hole(C, N), from = () => FIX || hole().tee || null;
-  function render() { drawDist(); drawFlags(); drawGps(); drawMore(); drawMap(); drawMode(); drawSug(); }
+  function render() { drawDist(); drawLog(); drawFlags(); drawGps(); drawMore(); drawMap(); drawMode(); drawSug(); }
   function drawDist() {
     const h = hole(), P = G.pin(C, N, R), f = from(), d = P ? G.distances(f, h, P.point) : { pin: null, front: null, center: null, back: null }, sel = G.selFor(R, N), off = !P || P.noOutline || P.by === 'you';
     const on = (pl) => (P && P.by !== 'you' && sel && !P.noOutline && P.shown === pl ? ' class="on" aria-pressed="true"' : ' aria-pressed="false"');
@@ -249,12 +261,17 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
     let o = '<div class="card"><div class="opt"><label for="allday">Same colour all day<small style="display:block;font-weight:500;color:var(--muted)">Off = each hole remembers its own colour today</small></label><input type="checkbox" id="allday"' + (R.allDay ? ' checked' : '') + '></div>';
     o += '<div class="row2"><button class="btn" type="button" id="placepin"' + (g ? '' : ' disabled') + '>Tap the green to place the pin</button></div></div>';
     // what the colours mean at this course
+    if (fm.src === 'day') { // v287: the commissioner's colours for today's Golf day (the course's own colours are left as they are)
+      o += '<div class="card" id="dayflags"><div class="cfl">Flag colours today: ' + esc(G.mapText(fm.map)) + ' 🔒<small>Set by the commissioner for ' + esc(fm.day) + '. Everyone in it gets the same.</small></div>' + (fm.canChange ? '<div class="row2"><button class="btn" type="button" id="fday">Change today\'s colours</button></div>' : '<div class="note">Ask the commissioner to change them.</div>') + '</div>';
+    } else {
     o += '<div class="card"><div class="cfl">' + (fm.locked ? 'Course flag colours' : 'Flag colours') + ': ' + esc(G.mapText(fm.map)) + (fm.locked ? ' 🔒' : '') + '<small>' + (fm.locked ? 'Set for this course. Everyone playing here gets the same.' : fm.src === 'phone' ? 'Saved on this phone only.' : 'The usual meaning. Not set for this course yet.') + '</small></div>';
     if (fm.review) o += '<div class="card warn" id="review" style="margin:8px 0 0"><b>Proposed change from ' + esc(fm.review.from) + ':</b> ' + esc(G.mapText(fm.review.map)) + (fm.review.note ? '<div class="note">"' + esc(fm.review.note) + '"</div>' : '') + '<div class="row2"><button class="btn pri" type="button" id="rvacc">Accept</button><button class="btn" type="button" id="rvdis">Dismiss</button></div></div>';
     else if (fm.pending) o += '<div class="note" id="pend">Change reported, waiting for review.</div>';
     o += '<div class="row2">' + (!fm.locked || fm.canChange ? '<button class="btn" type="button" id="fset">' + (fm.locked ? 'Change' : 'This course\'s flag colours') + '</button>' : signed ? '<button class="btn" type="button" id="frep">Report a change</button>' : '') + '</div>';
     if (fm.locked && !fm.canChange) o += '<div class="note">' + (signed ? 'Has the course changed its colours? Report it and the organizer will review it.' : 'Ask the organizer to change it.') + '</div>' + (signed || !lockNow() ? (signed ? '' : '<div class="note">Sign in to Oddable to report a change yourself.</div>') : gkGolf('Sign up free to report a change to this course’s flag colours'));
+    const gdc = gdCur(); if (gdc && gdc.day.comm) o += '<div class="row2"><button class="btn" type="button" id="fday">Set today\'s colours for ' + esc(gdc.day.name) + '</button></div><div class="note">Commissioner: only the players in this Golf day get them. The course\'s colours stay as they are.</div>';
     o += '</div>';
+    }
     // marking
     const needG = !g || g.approx, needT = !h.tee;
     o += '<div class="card' + (needG ? ' warn' : '') + '"><h2>' + (needG ? (g ? 'This green is not drawn on the map' : 'This green is not on the map yet') : 'Green or tee in the wrong place?') + '</h2>' +
@@ -309,6 +326,13 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
     if (t.id === 'sugy') { const n = SUG; SUG = 0; setHole(n); return; }
     if (t.id === 'sugn') { NOSUG[SUG] = 1; SUG = 0; drawSug(); return; }
     if (t.id === 'fset') { openSheet('set'); return; }
+    if (t.id === 'fday') { openSheet('day'); return; }
+    if (t.hasAttribute('data-gdpick')) { gdChoose(t.getAttribute('data-gdpick')); return; }
+    if (t.hasAttribute('data-gdk')) { GDN = Math.max(1, Math.min(20, (GDN || 4) + (+t.getAttribute('data-gdk')))); ['gdn', 'gdn2'].forEach((id) => { const x = document.getElementById(id); if (x) x.textContent = GDN; }); return; }
+    if (t.id === 'gdsave') { gdSave(); return; }
+    if (t.id === 'gdsend') { t.disabled = true; G.flush().then((r) => { if (r && r.left) toast('Still no answer from the server. Your scores stay on this phone and send by themselves.'); drawLog(); }, () => drawLog()); return; }
+    if (t.id === 'gdswitch') { GDK = null; lss('ggps-gdpick', ''); gdFlags(); setUrl(false); render(); return; }
+    if (t.id === 'gdok') { G.dismissRefused(); drawLog(); return; }
     if (t.id === 'frep') { openSheet('report'); return; }
     if (t.id === 'rvacc' || t.id === 'rvdis') { t.disabled = true; try { const r = await G.reviewFlags(C, t.id === 'rvacc' ? 'accept' : 'dismiss'); toast(r.msg); } catch (er) { toast(er.message); } render(); return; }
     if (t.id === 'zin' || t.id === 'zout') { USERVIEW = true; map.setZoom(map.getZoom() + (t.id === 'zin' ? 0.5 : -0.5), { animate: false }); return; }
@@ -328,6 +352,7 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
 
   // ---- sheets: this course's flag colours / report a change ----
   function openSheet(kind) {
+    if (kind === 'day') return daySheet();
     const fm = G.flagMap(C), rep = kind === 'report', def = G.defColor(C.id);
     let h = '<button class="bk" type="button" id="shback">‹ Back</button><h2 style="margin:4px 0">' + (rep ? 'What do the flags mean at this course now?' : 'This course\'s flag colours') + '</h2><div class="note">' + esc(C.name) + '</div>' +
       '<div class="note">' + (rep ? 'Now: ' + esc(G.mapText(fm.map)) + '. Set what they mean today and send it. The organizer reviews it before it changes for everyone.' : 'Short = pin at the front of the green, Long = at the back.' + (G.signedIn() && lockNow() !== 'expired' ? ' Once saved, this is locked for the course and everyone playing here gets it.' : lockNow() ? ' Saved on this phone only.' : ' Not signed in: saved on this phone only.')) + '</div>' + (!rep && lockNow() ? gkGolf('Sign up free to set the flag colours for everyone who plays this course') : '') + '<div class="sgrid">';
@@ -347,6 +372,70 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
     };
   }
   function closeSheet() { $('#sheet').hidden = true; $('#sheetin').innerHTML = ''; }
+  // v287: the commissioner sets what the colours mean today, for his Golf day only (the server refuses anyone else)
+  function daySheet() {
+    const x = gdCur(); if (!x || !x.day.comm) return; const fm = G.flagMap(C), set = !!x.day.flags;
+    let h = '<button class="bk" type="button" id="shback">‹ Back</button><h2 style="margin:4px 0">Today\'s flag colours</h2><div class="note">' + esc(x.day.name) + ' · ' + esc(C.name) + '</div>' +
+      '<div class="note">Short = pin at the front of the green, Long = at the back. Only the players in this Golf day get these colours today; the course\'s own colours stay as they are. Listed under Changes.</div><div class="sgrid">';
+    G.COLORS.forEach((c) => { h += '<label class="f"><span class="sw" style="background:' + FLAGHEX[c] + '"></span>' + G.CNAME[c] + ' flag means<select data-fc="' + c + '">' + G.PLACES.map((p) => '<option value="' + p + '"' + (fm.map[c] === p ? ' selected' : '') + '>' + G.LABEL[p] + '</option>').join('') + '</select></label>'; });
+    h += '</div><div id="shmsg" aria-live="polite"></div><div class="row2"><button class="btn pri" type="button" id="shsave">Save for today</button>' + (set ? '<button class="btn" type="button" id="shclear">Use the course\'s colours</button>' : '') + '<button class="btn" type="button" id="shcancel">Cancel</button></div>';
+    $('#sheetin').innerHTML = h; $('#sheet').hidden = false; $('#sheet').scrollTop = 0;
+    $('#shback').onclick = $('#shcancel').onclick = closeSheet;
+    const save = async (map, btn) => { btn.disabled = true; try { const r = await G.saveDayFlags({ g: x.g, id: x.day.id }, map); x.day = r.day; gdFlags(); closeSheet(); toast(map ? 'Saved. Everyone in ' + x.day.name + ' gets these colours today.' : 'Back to the course\'s colours.'); render(); } catch (e) { $('#shmsg').innerHTML = '<div class="card err">' + esc(e.offline ? 'No signal. Try again when you have signal.' : e.message) + '</div>'; btn.disabled = false; } };
+    $('#shsave').onclick = () => { const m = {}; document.querySelectorAll('#sheet [data-fc]').forEach((s) => { m[s.getAttribute('data-fc')] = s.value; }); save(m, $('#shsave')); };
+    if (set) $('#shclear').onclick = () => save(null, $('#shclear'));
+  }
+
+  // ================= v287: Log my score (a player in an open Golf day at this course, today) =================
+  const gdOk = (want) => !!lsg('odd-tok') && lockNow() !== 'expired' && (lsg('odd-grp') === '1' || /^[A-Z2-9]{10}\.[A-Z2-9]{8}$/.test(want || ''));
+  const gdKey = (x) => x.g + '.' + x.day.id;
+  const gdCur = () => (GDK && GDL.find((x) => gdKey(x) === GDK)) || null;
+  const holesOf = (h) => { const a = []; for (let i = h === 'back' ? 10 : 1; i <= (h === 'front' ? 9 : 18); i++) a.push(i); return a; };
+  function gdReset() { GDL = []; GDK = null; GDN = null; GDH = 0; GDQ = ''; if (GDT) clearInterval(GDT); GDT = null; if (C) delete C.dayFlags; const e = document.getElementById('gdlog'); if (e) e.innerHTML = ''; }
+  function gdFlags() { if (!C) return; const x = gdCur(); if (x && x.day.flags && x.day.flags.map) C.dayFlags = { map: x.day.flags.map, comm: !!x.day.comm, name: x.day.name }; else delete C.dayFlags; }
+  function gdPick(want) {
+    GDK = null; if (!GDL.length) return gdFlags();
+    if (GDL.length === 1) GDK = gdKey(GDL[0]);
+    else { let p = null; try { p = JSON.parse(lsg('ggps-gdpick') || 'null'); } catch (e) {} const today = G.chiDay();
+      if (p && p.course === C.id && p.date === today && GDL.some((x) => gdKey(x) === p.key)) GDK = p.key; else if (want && GDL.some((x) => gdKey(x) === want)) GDK = want; }
+    gdFlags();
+  }
+  function gdChoose(key) { if (!GDL.some((x) => gdKey(x) === key)) return; GDK = key; lss('ggps-gdpick', JSON.stringify({ course: C.id, date: G.chiDay(), key })); GDN = null; gdFlags(); setUrl(false); render(); }
+  function gdInit(want) {
+    if (!C || !gdOk(want)) return; const cid = C.id;
+    G.dayHere(cid, want).then((r) => { if (!C || C.id !== cid) return; GDL = r.days || []; gdPick(want); if (GDK) setUrl(false); render();
+      if (GDL.length && !GDT) GDT = setInterval(gdRefresh, 60000); }, () => {});
+  }
+  // the picked day again (a commissioner's new colours, a correction, a close) every 60 s while the page is on screen
+  function gdRefresh() { const x = gdCur(); if (!x || document.hidden || GDBUSY) return; G.dayGet(x.g, x.day.id).then((d) => { if (gdCur() !== x) return; x.day = d; if (d.closed) { GDL = GDL.filter((y) => y !== x); gdPick(); } else gdFlags(); render(); }, () => {}); }
+  function gdScores(x) { const d = x.day, sc = Object.assign({}, (d.scores && d.scores[d.me]) || {}), q = G.queued(x.g, d.id); Object.keys(q).forEach((h) => { if (q[h] == null) delete sc[h]; else sc[h] = q[h]; }); return { sc, q }; }
+  function refusedHtml() { const a = G.refused(); if (!a.length) return ''; return '<div class="card err" style="margin:8px 0 0"><b>Not saved:</b>' + a.map((r) => '<div class="note">' + esc(r.name) + ', hole ' + esc(r.hole) + (r.s != null ? ' (' + esc(r.s) + ')' : ' (cleared)') + ': ' + esc(r.error) + '</div>').join('') + '<div class="row2"><button class="btn" type="button" id="gdok">OK</button></div></div>'; }
+  function drawLog() {
+    const el = document.getElementById('gdlog'); if (!el) return;
+    if (!C || !GDL.length) { el.innerHTML = GDL.length ? '' : (G.refused().length && gdOk() ? refusedHtml() : ''); return; }
+    if (!GDK) { el.innerHTML = '<div class="card gdl"><div class="lab">⛳ Log my score</div><div class="note">You are in ' + GDL.length + ' Golf days at this course today. Pick the one to log your scores to (asked once today):</div><div class="gdpk">' + GDL.map((x) => '<button class="btn" type="button" data-gdpick="' + esc(gdKey(x)) + '">' + esc(x.day.name) + '<small>' + esc(x.group || x.day.course.name) + '</small></button>').join('') + '</div>' + refusedHtml() + '</div>'; return; }
+    const x = gdCur(), d = x.day, hs = holesOf(d.holes), { sc, q } = gdScores(x), qn = G.qCount(x.g, d.id), me = (d.board || []).find((r) => r.pid === d.me);
+    let h = '<div class="card gdl"><div class="lab">⛳ Log my score · ' + esc(d.name) + '</div>';
+    if (!hs.includes(N)) h += '<div class="note">Hole ' + N + ' is not in this round (' + esc(d.holesName || '') + ').</div>';
+    else {
+      if (GDH !== N || GDN == null) { GDH = N; GDN = sc[N] || d.par[N] || 4; }
+      const has = sc[N] != null, onPhone = Object.prototype.hasOwnProperty.call(q, N);
+      h += '<div class="gdh">Hole ' + N + ' · Par ' + esc(d.par[N]) + '<small id="gdsaved">' + (onPhone ? (q[N] == null ? 'Cleared on this phone, will send' : 'Saved on this phone, will send: ' + esc(q[N])) : has ? 'Saved: ' + esc(sc[N]) : 'Not saved yet') + (me && !me.none ? ' · ' + esc((me.done ? 'Finished' : 'Thru ' + me.thru) + ' · place ' + (me.tied ? 'T' : '') + me.place) : '') + '</small></div>';
+      h += '<div class="gstep"><button type="button" data-gdk="-1" aria-label="One stroke fewer">−</button><b id="gdn" aria-live="polite">' + GDN + '</b><button type="button" data-gdk="1" aria-label="One stroke more">+</button></div>';
+      h += '<button class="btn pri wide" type="button" id="gdsave"' + (GDBUSY ? ' disabled' : '') + '><span>' + (has ? 'Change hole ' + N + ' to ' : 'Save hole ' + N + ': ') + '<span id="gdn2">' + GDN + '</span></span></button>';
+    }
+    if (qn) h += '<div class="gdq" id="gdq">📶 Saved on this phone, will send (' + qn + (qn === 1 ? ' score' : ' scores') + ')<div class="row2"><button class="btn" type="button" id="gdsend">Send now</button></div></div>';
+    if (GDL.length > 1) h += '<div class="row2"><button class="btn" type="button" id="gdswitch">Log to another Golf day</button></div>';
+    el.innerHTML = h + refusedHtml() + '</div>';
+  }
+  async function gdSave() {
+    const x = gdCur(); if (!x || GDBUSY) return; const n = N, v = GDN; GDBUSY = true; drawLog();
+    try { const r = await G.saveScore({ g: x.g, id: x.day.id, name: x.day.name }, n, v); if (r.day) { x.day = r.day; toast('Hole ' + n + ' saved: ' + v + '.'); } else toast('No signal: hole ' + n + ' (' + v + ') is saved on this phone. It sends by itself.'); GDN = null; }
+    catch (e) { if (e.expired) { try { localStorage.setItem('odd-exp', '1'); } catch (er) {} } toast(e.message); if (e.status === 409) gdRefresh(); }
+    GDBUSY = false; drawLog();
+  }
+  G.onQ((ev) => { if (ev.type === 'sent' && ev.day) GDL.forEach((x) => { if (x.g === ev.g && x.day.id === ev.day.id) x.day = ev.day; }); if (ev.type === 'refused') toast('Hole ' + ev.hole + ' was not saved: ' + ev.error); if (C && !$('#hv').hidden) drawLog(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && GDL.length) gdRefresh(); });
 
   // ================= map =================
   function initMap() {
@@ -440,6 +529,6 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
   route();
 })();
 </script>
-<script src="gate.js?v=286"></script>
+<script src="gate.js?v=287"></script>
 </body>
 </html>

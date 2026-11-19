@@ -20,7 +20,10 @@
 //   10 Signed-in members of the group only. No typed-in guests.
 //   11 One open Golf day per group at a time.
 //   12 A member may change his own hole until the day is closed (changes are logged).
-//   13 Course flag colours: NOT touched. golfcourse.js D.organizer still answers false.
+//   13 Course flag colours: the COURSE's colours are NOT touched (golfcourse.js D.organizer still answers false). v287 (owner, Nov 18 2026, answer e):
+//      the commissioner of an open Golf day may set what each flag colour means FOR THAT DAY (`flags`, logged); only the players of that day see it on Golf GPS.
+// v287 (owner answers Nov 18 2026, d): `here` = the open Golf days dated today (Chicago) at one course that the caller PLAYS in, across his groups, so the
+//      Golf GPS hole screen can offer "Log my score". Scores still go through `score` (the same rules); the phone keeps a score it could not send and sends it later.
 //
 // SWITCHES: the same as Groups (groups.js onFor = GROUPS_ENABLED / GROUPS_OWNER_ONLY / GROUPS_TESTERS). A blocked caller gets 403 {off:true} and nothing is read
 // from the database. An account whose time has ended gets 403 {expired:true} (the phone shows the same "Your time has ended" lock as everywhere else).
@@ -128,6 +131,10 @@ const logIt = (d, e) => { d.log = (d.log || []).concat(e).slice(-LOGMAX); };
 
 // ---------- what the phone gets ----------
 const scoreFrom = (d) => d.date; // scoring opens on the day itself (Chicago date)
+// v287: what each flag colour means today, set by the commissioner for this day (the same words golfcourse.js stores: short / center / long)
+const FCOLORS = ['red', 'white', 'blue', 'yellow'], FPLACES = ['short', 'center', 'long'];
+function cleanFlags(f) { if (f == null) return null; if (typeof f !== 'object' || Array.isArray(f)) throw bad(400, 'Pick Short, Center or Long for each colour'); const o = {}; for (const c of FCOLORS) { if (!FPLACES.includes(f[c])) throw bad(400, 'Pick Short, Center or Long for each colour'); o[c] = f[c]; } return o; }
+const flagsOf = (d) => (d.flags && d.flags.map ? { map: Object.assign({}, d.flags.map), by: d.flags.by || '', at: d.flags.at || 0 } : null);
 function summary(d) { return { id: d.id, name: d.name, course: { id: d.course.id, name: d.course.name }, date: d.date, format: d.format, formatName: FNAME[d.format], holes: d.holes, holesName: HNAME[d.holes], players: d.players.length, started: !!d.started, closed: d.closed || 0, short: d.short || '' }; }
 function view(d, m, now) {
   const o = summary(d), mine = d.players.find((p) => p.pid === m.pid);
@@ -140,6 +147,7 @@ function view(d, m, now) {
   o.given = {}; if (d.si) d.players.forEach((p) => { o.given[p.pid] = strokesGiven(d, p.hcp); });
   o.log = (d.log || []).slice(-100).reverse();
   o.canShort = d.closed ? [] : ['front', 'back'].filter((h) => canShort(d, h));
+  o.flags = flagsOf(d); // v287
   return o;
 }
 
@@ -162,6 +170,18 @@ async function handle(req, res) {
   try {
     if (!e) throw bad(401, 'Sign in to use Groups');
     const b = await body(req), now = D.now(), gid = String(b.g || '');
+    if (op === 'here') { // v287: the open Golf days at this course, dated today (Chicago), that this account plays in (any of his groups)
+      const cid = String(b.course || ''); if (!COURSE.test(cid)) throw bad(400, 'Pick the course');
+      if (limit('gd|' + e, 600, 600e3) || limit('gdh|' + e, 120, 600e3)) throw bad(429, 'Too many tries. Wait a few minutes.');
+      const ids = (await D.grp().myGroupIds(e).catch(() => [])).filter((x) => GID.test(x)), today = chiDay(now), found = [];
+      for (let i = 0; i < ids.length; i += 6) await Promise.all(ids.slice(i, i + 6).map(async (id) => {
+        const d = openOf(await read(id).catch(() => [])); if (!d || d.course.id !== cid || d.date !== today) return;
+        const m = await D.grp().memberCheck(id, e).catch(() => null); if (!m || !d.players.some((p) => p.pid === m.pid)) return;
+        found.push({ g: id, group: cleanName(m.group, 40), day: view(d, m, now) });
+      }));
+      found.sort((a, c) => a.group.localeCompare(c.group) || (a.g < c.g ? -1 : 1));
+      send(res, 200, { ok: true, days: found }); return true;
+    }
     if (!GID.test(gid)) throw bad(404, 'Group not found');
     if (limit('gd|' + e, 600, 600e3)) throw bad(429, 'Too many tries. Wait a few minutes.');
     const m = await D.grp().memberCheck(gid, e); if (!m) throw bad(403, 'Golf days are for members of this group');
@@ -221,6 +241,13 @@ async function handle(req, res) {
         if (own) p.name = who; if (!d.started) d.started = now; }));
       return true;
     }
+    if (op === 'flags') { // v287 (owner answer e): the commissioner sets what the flag colours mean today, for this day only (null = back to the course's colours)
+      comm(); const f = cleanFlags(b.flags);
+      out(await mut((d) => { need(d); const was = d.flags && d.flags.map ? JSON.stringify(d.flags.map) : '';
+        if (!f) { if (!was) return; delete d.flags; logIt(d, { at: now, kind: 'flags', by: who, map: null }); return; }
+        if (was === JSON.stringify(f)) return; d.flags = { map: f, by: who, at: now }; logIt(d, { at: now, kind: 'flags', by: who, map: f }); }));
+      return true;
+    }
     if (op === 'close') { // rule 8
       comm(); const half = b.short == null || b.short === '' ? '' : String(b.short);
       out(await rmw(K(gid), (x) => { const d = find(x.days, b.id); need(d); if (!d.started) throw bad(409, 'No score has been logged. Cancel the Golf day instead.');
@@ -237,4 +264,4 @@ async function handle(req, res) {
   } catch (er) { if (!er.status) console.error('golfday:', er.message); send(res, er.status || 500, { error: er.status ? er.message : 'Golf day error, try again' }); }
   return true;
 }
-module.exports = { handle, board, card, strokesGiven, stablefordPts, holesOf, counting, canShort, cleanDay, cleanPar, cleanSi, view, summary, FORMATS, HOLES, NEED_SI, _deps: D, _reset: () => { RL.clear(); QUEUE.clear(); } };
+module.exports = { handle, cleanFlags, board, card, strokesGiven, stablefordPts, holesOf, counting, canShort, cleanDay, cleanPar, cleanSi, view, summary, FORMATS, HOLES, NEED_SI, _deps: D, _reset: () => { RL.clear(); QUEUE.clear(); } };

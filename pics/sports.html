@@ -518,7 +518,7 @@ window.oddGuestChanged = function (isLocked) {
 window.afterSignIn = function () {}; // nothing to continue here: the page unlocks in place (Add bet lives on the card that is now drawn)
 // ================= end v268 GUEST MODE (2 of 2) =================
 </script>
-<script src="gate.js?v=286"></script><script src="ai.js"></script><script src="live.js"></script>
+<script src="gate.js?v=287"></script><script src="ai.js"></script><script src="live.js"></script>
 <script>
 function aiCtx(gid) {
   const pc = (v) => Math.round((v || 0) * 100) + '%';
@@ -529,6 +529,6 @@ function aiCtx(gid) {
   return LG.toUpperCase() + ' GAMES:\n' + (L.join('\n') || 'none loaded') + (gid ? '' : '\n\nMY BETS:\n' + (B.join('\n') || 'none'));
 }
 </script>
-<script src="sync.js"></script><script>/* v272 Groups phase 2: the bet step (pics/groups.js) is fetched ONLY when the server switched Groups on for this signed-in account ('odd-grp', kept by gate.js from /acct/me). Nobody else gets the file or makes a /groups call. */window.oddGroupsChanged=function(){try{if(!window.OddGroups&&!window.__grpl&&localStorage.getItem('odd-grp')==='1'&&localStorage.getItem('odd-tok')){window.__grpl=1;var gs=document.createElement('script');gs.src='groups.js?v=286';document.head.appendChild(gs)}}catch(e){}};window.oddGroupsChanged();/* gate.js calls it again once it has the account */</script>
+<script src="sync.js"></script><script>/* v272 Groups phase 2: the bet step (pics/groups.js) is fetched ONLY when the server switched Groups on for this signed-in account ('odd-grp', kept by gate.js from /acct/me). Nobody else gets the file or makes a /groups call. */window.oddGroupsChanged=function(){try{if(!window.OddGroups&&!window.__grpl&&localStorage.getItem('odd-grp')==='1'&&localStorage.getItem('odd-tok')){window.__grpl=1;var gs=document.createElement('script');gs.src='groups.js?v=287';document.head.appendChild(gs)}}catch(e){}};window.oddGroupsChanged();/* gate.js calls it again once it has the account */</script>
 </body>
 </html>

@@ -33,6 +33,7 @@
       + '#ogrp .ogds{display:grid;grid-template-columns:64px minmax(0,1fr) 64px;gap:10px;align-items:center;margin:10px 0}#ogrp .ogds button{min-height:64px;border-radius:16px;border:1px solid var(--line,#fff3);background:var(--panel2,#1a2340);font-size:30px;font-weight:800}#ogrp .ogds b{font-size:44px;text-align:center;font-variant-numeric:tabular-nums}'
       + '#ogrp .ogdres{display:grid;gap:8px;margin:8px 0}#ogrp .ogdres button{min-height:52px;text-align:left;border-radius:12px;border:1px solid var(--line,#fff3);background:var(--panel2,#1a2340);padding:8px 12px}#ogrp .ogdres small{display:block;color:var(--muted,#9aa6c2)}'
       + '#ogrp .ogdlog{padding:9px 0;border-top:1px solid #8883}#ogrp .ogdlog:first-child{border-top:0}#ogrp .ogdlog small{display:block;color:var(--muted,#9aa6c2)}#ogrp select:disabled,#ogrp option:disabled{opacity:.5}'
+      + '#ogrp .ogdq{border:2px solid #f5c542}#ogrp .ogerr .ogsec{margin:8px 0 0}'
       + '#ogrp .ogd2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;align-items:start}#ogrp .ogd2>.ogcard{margin:0}'
       + '@media (min-width:768px){#ogrp .ogdh{grid-template-columns:repeat(9,minmax(0,1fr))}#ogrp .ogds{max-width:420px}#ogrp .ogbody>.ogda{max-width:420px}}';
     document.head.appendChild(st);
@@ -50,6 +51,18 @@
   const keep = (j) => { if (j && j.day) DAYS[j.day.id] = j.day; return j && j.day; };
   const dayOf = (s) => DAYS[s.id] || null;
   const rowOf = (d, pid) => (d.board || []).find((r) => r.pid === pid) || null;
+  // v287: scores kept on this phone when there was no signal (pics/golfgps.js holds the queue; shared with the Golf GPS hole screen)
+  const GG = () => (window.GolfGPS && window.GolfGPS.queued ? window.GolfGPS : null);
+  const mySc = (s, d) => { const sc = Object.assign({}, (d.scores && d.scores[d.me]) || {}), G = GG(); if (G) { const q = G.queued(s.gr.id, d.id); Object.keys(q).forEach((h) => { if (q[h] == null) delete sc[h]; else sc[h] = q[h]; }); } return sc; };
+  const onPhone = (s, d) => { const G = GG(); return G ? G.queued(s.gr.id, d.id) : {}; };
+  function qHtml(s, d, X) {
+    const G = GG(); if (!G) return ''; const n = G.qCount(s.gr.id, d.id), r = G.refused().filter((x) => x.g === s.gr.id && x.id === d.id); let h = '';
+    if (n) h += '<div class="ogcard ogdq" id="gdq"><b>📶 Saved on this phone, will send (' + n + (n === 1 ? ' score' : ' scores') + ')</b><div class="ogmeta">There was no signal. It sends by itself when the phone is back online, when you open the app, and every 30 seconds.</div><button type="button" class="ogsec" data-a="gdsend">Send now</button></div>';
+    if (r.length) h += '<div class="ogerr" role="alert"><b>Not saved:</b>' + r.map((x) => '<div>Hole ' + X.esc(x.hole) + (x.s != null ? ' (' + X.esc(x.s) + ')' : ' (cleared)') + ': ' + X.esc(x.error) + '</div>').join('') + '<button type="button" class="ogsec" data-a="gdrok">OK</button></div>';
+    return h;
+  }
+  const FLAGN = { short: 'Short', center: 'Center', long: 'Long' }, FCOL = [['red', 'Red'], ['white', 'White'], ['blue', 'Blue'], ['yellow', 'Yellow']];
+  const flagText = (m) => FCOL.map(([c, n]) => n + ' = ' + (FLAGN[m[c]] || '–')).join(', ');
 
   // ---------- home ----------
   function home(s, X) {
@@ -105,7 +118,7 @@
   }
   const gps = (X, then, fail) => { // the Golf GPS data layer (pics/golfgps.js: no screen code in it), fetched once. The SAME course search as the Golf GPS page.
     if (window.GolfGPS) return then(window.GolfGPS);
-    const sc = document.createElement('script'); sc.src = 'golfgps.js?v=286'; sc.onload = () => (window.GolfGPS ? then(window.GolfGPS) : fail()); sc.onerror = () => { sc.remove(); fail(); }; document.head.appendChild(sc);
+    const sc = document.createElement('script'); sc.src = 'golfgps.js?v=287'; sc.onload = () => (window.GolfGPS ? then(window.GolfGPS) : fail()); sc.onerror = () => { sc.remove(); fail(); }; document.head.appendChild(sc);
   };
   function search(X) {
     readDraft(X); const d = DR, q = d.q.trim(); if (SEARCHING) return; X.setErr(''); if (q.length < 2) { d.msg = 'Type a course name or a city.'; return X.paint(); }
@@ -146,7 +159,7 @@
       + X.tile('Players', String(n), 'data-a="gdv" data-v="players"', d.started ? 'Joining is closed' : 'Joining is open')
       + X.tile('Rules', X.esc(d.format === 'stableford' ? 'Stableford' : d.format === 'net' ? 'Net' : 'Gross'), 'data-a="gdv" data-v="rules"', X.esc(HNAME[d.holes] || ''))
       + X.tile('Changes', String((d.log || []).length), 'data-a="gdv" data-v="log"', 'Every correction is listed') + '</div>';
-    h += '<div class="oggrid">';
+    h += qHtml(s, d, X) + '<div class="oggrid">';
     // my part
     if (d.closed) h += '<div class="ogcard">This Golf day is closed. The leaderboard is final' + (d.short ? ': only the ' + (d.short === 'front' ? 'front' : 'back') + ' 9 count.' : '.') + '</div>';
     else if (d.joined) {
@@ -156,10 +169,10 @@
       h += '</div>';
     } else if (d.canJoin) h += '<div class="ogcard"><b>Join this Golf day</b>' + (d.usesHcp ? '<div class="ogform"><label>My playing strokes (0 to 54)<input id="gdhcp" class="ogin" type="number" inputmode="numeric" min="0" max="54" step="1" placeholder="e.g. 12" value="' + X.esc(s.hcp == null ? '' : s.hcp) + '"></label></div><div class="ogmeta">The strokes you get for this round. The commissioner can change the number before the first score; then it is frozen.</div>' : '<div class="ogmeta">Stroke play gross: no playing strokes.</div>') + '<button type="button" class="ogpri" data-a="gdjoin">Join</button></div>';
     else h += '<div class="ogcard ogmut">Joining closed when the first score was logged. You can still follow the leaderboard.</div>';
-    // the course on Golf GPS (the existing page)
-    h += '<div class="ogcard"><b>' + X.esc(d.course.name) + '</b><div class="ogmeta">Yards to the pin on your phone. Come back to Groups to log your score.</div><a class="ogda" href="golfgps.html?course=' + encodeURIComponent(d.course.id).replace(/%2F/g, '/') + '">📍 Open Golf GPS for this course</a></div>';
+    // the course on Golf GPS (the existing page); v287: the link carries the day, and a player logs his score right on the hole screen
+    h += '<div class="ogcard"><b>' + X.esc(d.course.name) + '</b><div class="ogmeta">Yards to the pin on your phone.' + (d.joined && !d.closed ? ' On the day of the round you can log your score right on each hole there.' : '') + '</div>' + (d.flags ? '<div class="ogmeta">Flag colours today: <b>' + X.esc(flagText(d.flags.map)) + '</b> (set by the commissioner)</div>' : '') + '<a class="ogda" href="golfgps.html?course=' + encodeURIComponent(d.course.id).replace(/%2F/g, '/') + '&gd=' + X.att(s.gr.id + '.' + d.id) + '">📍 Open Golf GPS for this course</a></div>';
     if (d.comm && !d.closed) {
-      h += '<div class="ogcard"><b>Commissioner</b>';
+      h += '<div class="ogcard"><b>Commissioner</b><button type="button" class="ogsec" data-a="gdv" data-v="flags">Flag colours today' + (d.flags ? ' (set)' : '') + '</button>';
       if (!d.started) h += '<div class="ogmeta">No score yet. You can cancel this Golf day, or change a player\'s strokes under Players.</div><button type="button" class="ogdan" data-a="gdcancel">Cancel this Golf day</button>';
       else { h += '<div class="ogmeta">Closing makes the leaderboard final. Nobody can change a score after that.</div><button type="button" class="ogsec" data-a="gdclose" data-s="">Close the Golf day</button>';
         (d.canShort || []).forEach((k) => { h += '<button type="button" class="ogsec" data-a="gdclose" data-s="' + k + '">Close as the ' + (k === 'front' ? 'front' : 'back') + ' 9 only</button>'; });
@@ -194,21 +207,31 @@
     return h + '</div></div>';
   }
   // ---------- Log my score ----------
-  function nextHole(d, from) { const hs = holesOf(d.holes), sc = d.scores[d.me] || {}, i = Math.max(0, hs.indexOf(from)); for (let k = 0; k < hs.length; k++) { const n = hs[(i + k) % hs.length]; if (!isInt(sc[n], 1, 20)) return n; } return from || hs[0]; }
+  function nextHole(d, from, sc0) { const hs = holesOf(d.holes), sc = sc0 || d.scores[d.me] || {}, i = Math.max(0, hs.indexOf(from)); for (let k = 0; k < hs.length; k++) { const n = hs[(i + k) % hs.length]; if (!isInt(sc[n], 1, 20)) return n; } return from || hs[0]; }
   function score(s, X) {
     const d = dayOf(s); if (!d) return '<h1>Log my score</h1><div class="ogcard ogmut">Loading…</div>';
     if (!d.joined) return '<h1>Log my score</h1><div class="ogcard">Join this Golf day first.</div>';
     if (d.closed) return '<h1>Log my score</h1><div class="ogcard">This Golf day is closed. Scores can no longer be changed.</div>';
     if (!d.canScore) return '<h1>Log my score</h1><div class="ogcard">Scores open on the day of the round, ' + X.esc(X.fmtDay(d.scoreFrom)) + '.</div>';
-    const hs = holesOf(d.holes), sc = d.scores[d.me] || {}, me = rowOf(d, d.me); if (!hs.includes(s.h)) { s.h = nextHole(d, hs[0]); s.n = null; }
+    const hs = holesOf(d.holes), sc = mySc(s, d), q = onPhone(s, d), me = rowOf(d, d.me); if (!hs.includes(s.h)) { s.h = nextHole(d, hs[0], sc); s.n = null; }
     const has = isInt(sc[s.h], 1, 20); if (!isInt(s.n, 1, 20)) s.n = has ? sc[s.h] : d.par[s.h];
     const g = ((d.given || {})[d.me] || {})[s.h] || 0;
     let h = '<h1>Log my score</h1><p class="ogsub">' + X.esc(d.name + (me && !me.none ? ' · ' + thruOf(me) + ' · ' + valOf(d, me) + ' · place ' + placeOf(me) : ' · no hole yet')) + '</p>';
     h += '<div class="ogcols"><div class="ogdh" role="group" aria-label="Holes">' + hs.map((n) => '<button type="button" data-a="gdhole" data-h="' + n + '" class="' + (n === s.h ? 'on ' : '') + (isInt(sc[n], 1, 20) ? 'has' : '') + '" aria-label="Hole ' + n + (isInt(sc[n], 1, 20) ? ', ' + sc[n] + ' strokes' : ', no score') + '">' + n + '<small>' + (isInt(sc[n], 1, 20) ? sc[n] : '–') + '</small></button>').join('') + '</div>';
-    h += '<div class="ogcard"><b>Hole ' + s.h + '</b><div class="ogmeta">Par ' + d.par[s.h] + (d.si ? ' · stroke index ' + d.si[s.h] : '') + (d.usesHcp ? ' · you get ' + g + (g === 1 ? ' stroke' : ' strokes') : '') + (has ? ' · saved: ' + sc[s.h] : '') + '</div>'
+    h += '<div class="ogcard"><b>Hole ' + s.h + '</b><div class="ogmeta">Par ' + d.par[s.h] + (d.si ? ' · stroke index ' + d.si[s.h] : '') + (d.usesHcp ? ' · you get ' + g + (g === 1 ? ' stroke' : ' strokes') : '') + (Object.prototype.hasOwnProperty.call(q, s.h) ? ' · saved on this phone, will send' + (q[s.h] == null ? ' (cleared)' : ': ' + q[s.h]) : has ? ' · saved: ' + sc[s.h] : '') + '</div>'
       + '<div class="ogds"><button type="button" data-a="gdstep" data-k="-1" aria-label="One stroke fewer">−</button><b id="gdnum" aria-live="polite">' + s.n + '</b><button type="button" data-a="gdstep" data-k="1" aria-label="One stroke more">+</button></div>'
       + '<button type="button" class="ogpri" data-a="gdsave">' + (has ? 'Change hole ' + s.h + ' to ' : 'Save hole ' + s.h + ': ') + '<span id="gdnum2">' + s.n + '</span></button>' + (has ? '<button type="button" class="ogdan" data-a="gdclear">Clear hole ' + s.h + '</button>' : '') + '</div></div>';
-    return h + '<div class="ogmeta">Your score counts at once. You can change a hole until the commissioner closes the day; every change is listed under Changes.</div>';
+    return h + qHtml(s, d, X) + '<div class="ogmeta">Your score counts at once. You can change a hole until the commissioner closes the day; every change is listed under Changes. With no signal it is kept on this phone and sent later.</div>';
+  }
+  // v287 (owner answer e): the commissioner sets what the flag colours mean today, for this Golf day only
+  function flags(s, X) {
+    const d = dayOf(s); if (!d) return '<h1>Flag colours today</h1><div class="ogcard ogmut">Loading…</div>';
+    if (!d.comm || d.closed) return '<h1>Flag colours today</h1><div class="ogcard">' + (d.flags ? X.esc(flagText(d.flags.map)) : 'Not set: Golf GPS uses the course\'s colours.') + '</div>';
+    const m = (d.flags && d.flags.map) || { red: 'short', white: 'center', blue: 'long', yellow: 'long' };
+    let h = '<h1>Flag colours today</h1><p class="ogsub">' + X.esc(d.name + ' · ' + d.course.name) + '</p><div class="ogcard ogdw"><div class="ogmeta">What each flag colour means today. Short = pin at the front of the green, Long = at the back. Only the players in this Golf day get these on Golf GPS; the course\'s own colours stay as they are. Listed under Changes.</div><div class="ogform">';
+    FCOL.forEach(([c, n]) => { h += '<label>' + n + ' flag means' + X.sel('gdfc' + c, [['short', 'Short'], ['center', 'Center'], ['long', 'Long']], m[c]) + '</label>'; });
+    h += '</div>' + (d.flags ? '<div class="ogmeta">Now: ' + X.esc(flagText(d.flags.map)) + '</div>' : '<div class="ogmeta">Not set yet: Golf GPS uses the course\'s colours.</div>') + '</div><button type="button" class="ogpri" data-a="gdflags">Save for today</button>' + (d.flags ? '<button type="button" class="ogsec" data-a="gdflagsclear">Use the course\'s colours</button>' : '');
+    return h;
   }
   function players(s, X) {
     const d = dayOf(s); if (!d) return '<h1>Players</h1><div class="ogcard ogmut">Loading…</div>';
@@ -235,6 +258,7 @@
     if (x.kind === 'clear') return x.who + ' cleared hole ' + x.hole + ' (was ' + st(x.old) + ')';
     if (x.kind === 'fix') return x.by + ' (commissioner) corrected ' + x.who + ', hole ' + x.hole + ': ' + st(x.old) + ' → ' + st(x.new);
     if (x.kind === 'remove') return x.by + ' (commissioner) removed ' + x.who + ' before the first score';
+    if (x.kind === 'flags') return x.map ? x.by + ' (commissioner) set today\'s flag colours: ' + flagText(x.map) : x.by + ' (commissioner) went back to the course\'s flag colours';
     if (x.kind === 'close') return x.by + ' closed the Golf day' + (x.short ? ' as the ' + x.short + ' 9 only' : '');
     return 'Change';
   }
@@ -244,7 +268,7 @@
   }
 
   // ---------- what groups.js calls ----------
-  function view(s, X) { css(); hook(X); const v = s.v; return v === 'new' ? setup(s, X) : v === 'day' ? day(s, X) : v === 'board' ? board(s, X) : v === 'card' ? card(s, X) : v === 'score' ? score(s, X) : v === 'players' ? players(s, X) : v === 'rules' ? rules(s, X) : v === 'log' ? log(s, X) : home(s, X); }
+  function view(s, X) { css(); hook(X); const v = s.v; return v === 'new' ? setup(s, X) : v === 'day' ? day(s, X) : v === 'board' ? board(s, X) : v === 'card' ? card(s, X) : v === 'score' ? score(s, X) : v === 'players' ? players(s, X) : v === 'rules' ? rules(s, X) : v === 'log' ? log(s, X) : v === 'flags' ? flags(s, X) : home(s, X); }
   function hook(X) { const e = X.el(); if (!e || e.__gd) return; e.__gd = 1; const f = (ev) => { try { typed(ev, X); } catch (x) {} }; e.addEventListener('input', f); e.addEventListener('change', f); poll(X); }
   // A quiet refresh of the open day every 30 s while its page or its leaderboard is on screen (no spinner, nothing typed is lost: those screens have no boxes
   // except the join box, which is kept). Stops with the overlay.
@@ -252,7 +276,10 @@
     const a = document.activeElement; if (a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)) return;
     X.post('/golfday/get', { g: s.gr.id, id: s.id }).then((j) => { if (X.cur() !== s || X.busy()) return; const b = document.activeElement; if (b && /^(INPUT|SELECT|TEXTAREA)$/.test(b.tagName)) return; keep(j); X.paint(); }, () => {}); }, 30000); }
   function stop() { if (TIMER) clearInterval(TIMER); TIMER = 0; }
-  function open(s, X) { css(); LIST = null; load(s, X); }
+  // v287: the queue lives in golfgps.js; loading it here also starts the automatic sending, and a sent score repaints the Golf screen on view
+  let QHOOK = false;
+  function qhook(X) { gps(X, (G) => { if (QHOOK || !G.onQ) return; QHOOK = true; G.onQ((ev) => { if (ev.type === 'sent' && ev.day) DAYS[ev.day.id] = ev.day; const s = X.el() && X.cur(); if (!s || s.t !== 'golf' || X.busy()) return; const a = document.activeElement; if (a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)) return; X.paint(); }); if (G.qCount()) G.flush(); }, () => {}); }
+  function open(s, X) { css(); LIST = null; load(s, X); qhook(X); }
   function leave(s, X) { if (s.v === 'new') readDraft(X); }
   // ‹ Back landed on this Golf screen: the home list is read again quietly (a day may have been made, closed or joined meanwhile)
   function back(s, X) { if (s.v !== 'home') return; X.post('/golfday/list', { g: s.gr.id }).then((j) => { LIST = { g: s.gr.id, comm: !!j.comm, open: j.open || null, past: j.past || [] }; if (X.cur() === s && !X.busy()) X.paint(); }, () => {}); }
@@ -279,8 +306,20 @@
     if (a === 'gdfix') { const hole = num('#gdfh'), st = num('#gdfs'); s.fh = hole; s.fs = (e.querySelector('#gdfs') || {}).value; if (!isInt(st, 1, 20)) { X.setErr('Type the correct strokes: a whole number from 1 to 20.'); return X.paint(); } return send('score', { pid: s.pid, hole, strokes: st }, () => { s.fs = null; }); }
     if (a === 'gdhole') { s.h = +b.getAttribute('data-h'); s.n = null; X.setErr(''); return X.paint(); }
     if (a === 'gdstep') { s.n = Math.min(20, Math.max(1, (isInt(s.n, 1, 20) ? s.n : 4) + (+b.getAttribute('data-k')))); const n1 = e.querySelector('#gdnum'), n2 = e.querySelector('#gdnum2'); if (n1) n1.textContent = s.n; if (n2) n2.textContent = s.n; return; }
-    if (a === 'gdsave') { const hole = s.h; return send('score', { hole, strokes: s.n }, (j) => { s.h = nextHole(j.day, hole); s.n = null; }); }
-    if (a === 'gdclear') { if (!confirm('Clear your score on hole ' + s.h + '?')) return; return send('score', { hole: s.h, strokes: null }, () => { s.n = null; }); }
+    if (a === 'gdsave') { const hole = s.h; return saveHole(s, X, hole, s.n, () => { const dd = dayOf(s); s.h = nextHole(dd, hole, mySc(s, dd)); s.n = null; }); }
+    if (a === 'gdclear') { if (!confirm('Clear your score on hole ' + s.h + '?')) return; return saveHole(s, X, s.h, null, () => { s.n = null; }); }
+    if (a === 'gdsend') { const G = GG(); if (!G) return; b.disabled = true; return G.flush().then((r) => { if (r && r.left) X.setErr('Still no answer from the server. Your scores stay on this phone and send by themselves.'); X.paint(); }, () => X.paint()); }
+    if (a === 'gdrok') { const G = GG(); if (G) G.dismissRefused(); return X.paint(); }
+    if (a === 'gdflags' || a === 'gdflagsclear') { let map = null; if (a === 'gdflags') { map = {}; FCOL.forEach(([c]) => { const x = e.querySelector('#gdfc' + c); map[c] = x ? x.value : ''; }); } return send('flags', { flags: map }, () => { X.back(); }); }
+  }
+  // v287: a score goes through golfgps.js saveScore: sent at once, or kept on this phone when there is no signal (sent later by itself). A refusal is shown.
+  let SAVING = false;
+  function saveHole(s, X, hole, strokes, then) {
+    if (SAVING || X.busy()) return; SAVING = true; X.setErr('');
+    const fallback = () => { SAVING = false; X.act('/golfday/score', { g: s.gr.id, id: s.id, hole, strokes }, async (j) => { keep(j); then(); X.paint(); }); };
+    gps(X, (G) => { if (!G.saveScore) return fallback(); qhook(X);
+      G.saveScore({ g: s.gr.id, id: s.id, name: (dayOf(s) || {}).name }, hole, strokes).then((r) => { SAVING = false; if (r.day) keep(r); then(); X.paint(); },
+        (e) => { SAVING = false; if (e && e.expired) { try { localStorage.setItem('odd-exp', '1'); } catch (x) {} } X.setErr((e && e.message) || 'Could not save'); X.paint(); }); }, fallback);
   }
   window.OddGolfDay = { view, click, open, leave, back, stop, _logText: logText };
 })();

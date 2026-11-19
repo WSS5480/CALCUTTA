@@ -209,7 +209,7 @@
   function push(v) { err = ''; stack.push(v); paint(); el().scrollTop = 0; }
   // v273 Golf days (a group game): the screens live in pics/golfday.js, fetched the first time a member opens the Golf day tile. It draws inside this
   // overlay and uses the same stack (Back), the same one-call-at-a-time `act` (so an ended account gets the same lock card) and the same classes.
-  let GDL = null; const GDV = '286';
+  let GDL = null; const GDV = '287';
   const GDX = { esc, att, fmtDay, chiDay, addDays, push, back: () => back(), paint: () => paint(), cur, el, act, post, errText, tile, sel, busy: () => busy, setErr: (m) => { err = m || ''; }, me: () => g('odd-name') || '' };
   function gdOpen(gr) {
     push({ t: 'golf', v: 'home', gr });
@@ -459,5 +459,7 @@
   window.OddGroups = { open, close, join: openJoin, gate, poke, lockChanged, isOpen: () => !!el(), active: () => BL.n > 0 && !!g('odd-tok') && !expired(), locked: (b) => !!(b && Number(b.gl) > 0), LOCKNOTE, addGame, games: () => GAMES.map((x) => ({ key: x.key, title: x.title, blurb: x.blurb })), openGame, openGames, refresh }; // v274: addGame = the games catalog registry; v283: openGame(key) opens a registered game for the group on screen (pics/local.js's games list uses it), openGames() = Groups at the Games catalog (the what's-new pop-up), refresh() = the Games screen asks its states again (pics/local.js Back)
   window.oddGroups = () => open();
   if (g('odd-tok')) setTimeout(poke, 3000);
+  // v287: Golf day scores kept on this phone with no signal (pics/golfgps.js, key ggps-sq) are sent when the app opens: the queue's file is fetched only when one waits
+  try { const q = JSON.parse(localStorage.getItem('ggps-sq') || 'null'); if (q && typeof q === 'object' && Object.keys(q).length && g('odd-tok') && !window.GolfGPS) { const sc = document.createElement('script'); sc.src = 'golfgps.js?v=' + GDV; document.head.appendChild(sc); } } catch (x) {}
   document.addEventListener('visibilitychange', () => { if (!document.hidden && g('odd-tok')) poke(); });
 })();

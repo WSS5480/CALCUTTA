@@ -114,7 +114,10 @@
     } else if (ev) {
       h += '<div class="cline"><span>Bundle long shots<small>Teams marked Field are sold as one lot ("the field")</small></span>' + sw(d.bundle, 'data-a="bundle"') + '</div>';
       if (ev.needsRef && !hasRef(d, ev)) h += '<div class="cwarn"><b>Start from the event</b>Open the ' + (ev.needsRef === 'evtId' ? 'local event or pickleball event whose pairs or teams' : 'golf day whose teams') + ' you want to auction and tap Calcutta there. Its teams and their players come over by themselves.</div>';
-      else if (!d.teams.length) h += '<div class="ccard cmut">Loading teams…</div>';
+      else if (!d.teams.length) { // v286: loading / failed / loaded-but-empty are three different cards (was "Loading teams…" for all three)
+        if (d.tl === 'failed') h += '<div class="cwarn"><b>Couldn\'t load the teams.</b>' + esc(d.tmsg || '') + '<button class="csec cfull" data-a="teamsretry">Try again</button></div>';
+        else if (d.tl === 'loaded') h += '<div class="cnote"><b>' + esc(d.tmsg || 'This event has no teams yet.') + '</b> Pick another event, or use your own teams.</div>';
+        else h += '<div class="ccard cmut">Loading teams…</div>'; }
       else {
         const nLot = Object.values(d.pick).filter((v) => v === 'lot').length, nF = d.bundle ? Object.values(d.pick).filter((v) => v === 'field').length : 0;
         h += '<div class="cnote"><b>' + (nLot + (nF ? 1 : 0)) + ' lots</b> · ' + nLot + ' teams on their own' + (nF ? ' · ' + nF + ' in the field' : '') + (ev.teams ? ' · this event usually has ' + ev.teams + ' teams' : '') + '</div>';
@@ -169,9 +172,17 @@
     if (v('ctake') !== null) { const t = v('ctake'); if (t === 'none') d.takeKind = 'none'; else if (t === 'flat') { if (d.takeKind !== 'flat') d.takeV = ''; d.takeKind = 'flat'; } else if (t === 'pc') { if (d.takeKind !== 'pct' || [5, 10, 15, 20, 25].includes(Number(d.takeV))) d.takeV = ''; d.takeKind = 'pct'; } else { d.takeKind = 'pct'; d.takeV = +t.slice(1); } }
   }
   function payload() { const d = DR; return { id: d.id, name: d.name.trim(), ev: d.ev, golf: d.golf || undefined, evtId: d.evtId || undefined, lots: lotsOut(), rows: d.rows.map((x) => ({ k: x.k, r: x.r || undefined, n: Number(x.n), pct: Number(x.pct), label: x.label || undefined })), minBid: d.minBid, inc: d.inc, timer: d.timer, unsold: d.unsold || 'roll', buyBack: !!(evOf(d.ev) || {}).local && d.buyBack, main: d.main, take: { kind: d.takeKind, v: d.takeKind === 'none' ? 0 : Number(d.takeV) }, order: d.order, mode: d.mode }; }
-  async function pickEv(k) { const d = DR, ev = evOf(k); d.ev = k; d.teams = []; d.pick = {}; d.rows = ev ? ev.rows.map((x) => Object.assign({}, x)) : []; paint(); if (!ev || !ev.on || ev.manualOnly) return;
+  // v286: one teams load for New and Edit. d.tl = 'loading' | 'loaded' | 'failed' (a late answer for another draft / event is dropped); 20 s at most.
+  async function loadTeams(d, k, evtGolfRef, onTeams) {
+    d.tl = 'loading'; d.tmsg = ''; let to;
+    try { const j = await Promise.race([post('teams', evtGolfRef), new Promise((_, rej) => { to = setTimeout(() => rej(Object.assign(new Error('timeout'), { name: 'TimeoutError' })), 20000); })]);
+      if (DR !== d || d.ev !== k) return; onTeams(j); d.tl = 'loaded'; d.tmsg = j && j.code === 'underway' && j.msg ? String(j.msg) : '';
+    } catch (e) { if (DR !== d || d.ev !== k) return; d.tl = 'failed'; d.tmsg = errText(e); err = ''; } finally { clearTimeout(to); }
+    paint(); }
+  async function pickEv(k) { const d = DR, ev = evOf(k); d.ev = k; d.teams = []; d.pick = {}; d.tl = ''; d.tmsg = ''; d.rows = ev ? ev.rows.map((x) => Object.assign({}, x)) : []; paint(); if (!ev || !ev.on || ev.manualOnly) return;
     if (ev.needsRef && !hasRef(d, ev)) return; // a golf day's / local event's Calcutta is started from that screen (it sends which one)
-    try { const j = await post('teams', { ev: k, golf: d.golf || undefined, evtId: d.evtId || undefined }); if (ev.needsRef && DR === d && d.ev === k) j.teams.forEach((t) => { d.pick[t.id] = 'lot'; }); /* a golf day's / local event's teams: all in by default */ if (DR !== d || d.ev !== k) return; d.teams = j.teams; if (k === 'nfl_season') d.teams.forEach((t) => { d.pick[t.id] = 'lot'; }); } catch (e) { err = errText(e); } paint(); }
+    d.tl = 'loading'; paint();
+    await loadTeams(d, k, { ev: k, golf: d.golf || undefined, evtId: d.evtId || undefined }, (j) => { if (ev.needsRef) j.teams.forEach((t) => { d.pick[t.id] = 'lot'; }); /* a golf day's / local event's teams: all in by default */ d.teams = j.teams; if (k === 'nfl_season') d.teams.forEach((t) => { d.pick[t.id] = 'lot'; }); }); }
 
   // ---------- auction (live) ----------
   const left = (c) => (c.a.paused ? (c.a.left != null ? c.a.left : null) : c.a.endsAt ? Math.max(0, c.a.endsAt - (Date.now() + OFF)) : null);
@@ -468,7 +479,8 @@
     if (a === 'allteams') { readDraft(); const all = DR.teams.every((x) => DR.pick[x.id] === 'lot'); DR.teams.forEach((x) => { DR.pick[x.id] = all ? 'out' : 'lot'; }); paint(); return; }
     if (a === 'cadd') { readDraft(); const i = document.getElementById('cadd'), v = (i && i.value || '').trim(); const pp = ((document.getElementById('caddp') || {}).value || '').split(',').map((x) => x.trim()).filter((x) => x.length >= 2).slice(0, 8).map((x) => ({ name: x.slice(0, 24) })); if (v && DR.custom.length < 80) DR.custom.push({ n: v.slice(0, 40), por: pp }); paint(); const n = document.getElementById('cadd'); if (n) n.focus(); return; }
     if (a === 'cdel') { readDraft(); DR.custom.splice(+t.getAttribute('data-i'), 1); paint(); return; }
-    if (a === 'next') { readDraft(); if (DR.name.trim().length < 2) { err = 'Give it a name (2+ characters).'; paint(); return; } if (!DR.ev) { err = 'Pick an event.'; paint(); return; } if (lotsOut().length < 2) { err = 'Put at least 2 lots up for auction.'; paint(); return; } push({ t: 'create2' }); return; }
+    if (a === 'next') { readDraft(); if (DR.name.trim().length < 2) { err = 'Give it a name (2+ characters).'; paint(); return; } if (!DR.ev) { err = 'Pick an event.'; paint(); return; } if (lotsOut().length < 2) { const ev1 = evOf(DR.ev); err = ev1 && ev1.manualOnly ? 'Put at least 2 lots up for auction.' : DR.tl === 'loading' || (DR.tl === undefined && !DR.teams.length && ev1 && ev1.on) ? 'The teams are still loading. Wait for them, then pick at least 2.' : DR.tl === 'failed' ? 'The teams did not load. Tap Try again, then pick at least 2 teams.' : 'Pick at least 2 teams first.'; paint(); return; } push({ t: 'create2' }); return; }
+    if (a === 'teamsretry') { readDraft(); const ev2 = evOf(DR.ev); if (ev2 && ev2.on && !ev2.manualOnly) { err = ''; const k2 = DR.ev, d2 = DR; if (d2.id) { d2.tl = 'loading'; paint(); loadTeams(d2, k2, { ev: k2, golf: d2.golf || undefined, evtId: d2.evtId || undefined }, (j) => { d2.teams = j.teams; }); } /* Edit: keep the lots picked, only reload the list */ else pickEv(k2); } return; }
     if (a === 'bb') { readDraft(); DR.buyBack = !DR.buyBack; paint(); return; }
     if (a === 'redit') { readDraft(); DR.editRows = true; paint(); return; }
     if (a === 'rdone') { readDraft(); DR.editRows = false; paint(); return; }
@@ -478,7 +490,7 @@
       act(DR.id ? 'edit' : 'create', Object.assign(payload(), DR.id ? {} : { g: GR.id }), async (j) => { DR = null; stack = [{ t: 'home' }]; loadHome(); const o = { t: 'members', id: j.calc.id, c: j.calc }; push(o); note = 'Created. Members of the group join from its Calcutta tile; start the auction when they are in.'; paint(); }); return; }
     if (a === 'editrules') { const c = cur().c; DR = draftNew(); Object.assign(DR, { id: c.id, name: c.name, ev: c.ev, golf: c.golf || null, evtId: c.evtId || null, mode: c.rules.mode, minBid: c.rules.minBid, inc: c.rules.inc, timer: c.rules.timer, unsold: c.rules.unsold || 'roll', buyBack: c.rules.buyBack, main: c.rules.main, order: c.rules.order, takeKind: c.rules.take.kind, takeV: c.rules.take.v, rows: c.rules.rows.map((r) => ({ k: r.k, r: r.r, n: r.n, pct: r.bp / 100, label: r.label })) });
       c.lots.forEach((l) => l.teams.forEach((x) => { DR.pick[x.id] = l.field ? 'field' : 'lot'; })); DR.custom = c.ev === 'custom' ? c.lots.map((l) => ({ n: l.name, por: (l.por || []).map((p) => ({ pid: p.pid, name: p.name, guest: p.guest || null })) })) : []; // a guest of this Calcutta stays that guest through an edit
-      push({ t: 'create1' }); const go = () => { if (c.ev !== 'custom') post('teams', { ev: c.ev, golf: c.golf || undefined, evtId: c.evtId || undefined }).then((j) => { DR.teams = j.teams; paint(); }).catch((e) => { err = errText(e); paint(); }); }; if (!EV) post('events', {}).then((j) => { EV = j; paint(); go(); }); else go(); return; }
+      push({ t: 'create1' }); const go = () => { if (c.ev !== 'custom') { const d0 = DR; d0.tl = 'loading'; loadTeams(d0, c.ev, { ev: c.ev, golf: c.golf || undefined, evtId: c.evtId || undefined }, (j) => { d0.teams = j.teams; }); } }; if (!EV) post('events', {}).then((j) => { EV = j; paint(); go(); }); else go(); return; }
     if (a === 'delete') { if (!confirm('Delete this Calcutta for everyone?')) return; act('delete', { id: idOf() }, async () => { stack = [{ t: 'home' }]; await loadHome(); paint(); }); return; }
     // auction
     if (a === 'bid') { bid(+t.getAttribute('data-amt'), t.getAttribute('data-lot')); return; } // L2: never a different amount from the one under the finger

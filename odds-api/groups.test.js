@@ -147,7 +147,7 @@ srv.listen(0, async () => {
     r = await call('ann', 'edit', { id: g2.id, name: 'X', join: { requests: true, open: true, max: 3, late: 'no' } }); assert.strictEqual(r.s, 409); assert.match(r.j.error, /locked/);
     r = await call('ann', 'contest/edit', { id: g2.id, cid: C1(g2), contest: Object.assign({}, CDEF, { start: START + 7 * DAY }) }); assert.strictEqual(r.s, 409);
     r = await call('owner', 'edit', { id: g2.id }); assert.ok(r.s === 404 || r.s === 403);
-    r = await call('ann', 'requests', { id: g2.id, on: true }); assert.strictEqual(r.s, 409); r = await call('cat', 'leave', { id: g2.id }); assert.strictEqual(r.s, 409); r = await call('ann', 'delete', { id: g2.id }); assert.strictEqual(r.s, 409);
+    r = await call('ann', 'requests', { id: g2.id, on: true }); assert.strictEqual(r.s, 409); r = await call('cat', 'leave', { id: g2.id }); assert.strictEqual(r.s, 409); /* v288: delete of a started group is now allowed; checked at the end */
     r = await call('ann', 'get', { id: g2.id }); assert.strictEqual(r.j.group.contests[0].locked, true);
     t('after start: edit / requests toggle / leave / delete refused for everyone, owner has no override');
     r = await call('dan', 'join', { code: g1.code }); assert.strictEqual(r.s, 409);
@@ -421,6 +421,7 @@ srv.listen(0, async () => {
     t('no sync ids, phone hashes, member keys or tokens in any response');
     assert.ok(urls.every((u) => /^https:\/\/site\.api\.espn\.com\/apis\/site\/v2\/sports\/(football\/nfl|football\/college-football|basketball\/nba|baseball\/mlb|hockey\/nhl|basketball\/mens-college-basketball)\/(scoreboard\?dates=\d{8}&limit=400|summary\?event=[A-Za-z0-9]+$)/.test(u)), 'only free ESPN paths: the scoreboards the app already uses and, round 3, the same API\'s summary by event id (to follow a moved game)');
     assert.ok(!urls.some((u) => /odds-api|the-odds/.test(u)), 'never the Odds API'); t('only free ESPN paths are fetched: scoreboards and summary by event id (' + urls.length + ' calls)');
+    { const rd = await call('ann', 'delete', { id: g2.id }); assert.strictEqual(rd.s, 200, 'v288: the commissioner may delete a started group'); t('v288: commissioner deletes a started group'); }
     console.log('\nALL ' + pass + ' GROUP TESTS PASSED');
   } catch (e) { console.error('FAIL', e); process.exitCode = 1; }
   srv.close();

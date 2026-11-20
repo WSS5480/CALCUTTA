@@ -964,7 +964,7 @@ async function handle(req, res) {
       await memIdx(u.mk, (y) => { y.g = y.g.filter((i) => i !== String(b.id)); }); send(res, 200, { ok: true }); return true;
     }
     if (op === 'delete') {
-      let g0 = null; await gmut(String(b.id || ''), (g) => { if (!isComm(g, u.mk)) throw bad(403, 'Only the commissioner can delete the group'); if (started(g, now)) throw bad(409, 'The group has started and cannot be deleted'); g0 = clone(g); g.id = ''; g.deleted = now; return {}; });
+      let g0 = null; await gmut(String(b.id || ''), (g) => { if (!isComm(g, u.mk)) throw bad(403, 'Only the commissioner can delete the group'); /* v288 (owner, Nov 19): the commissioner may delete his group at any time; bets stay with each player as personal bets */ g0 = clone(g); g.id = ''; g.deleted = now; return {}; });
       await idxPut(g0, true); await memIdx(u.mk, (y) => { y.g = y.g.filter((i) => i !== g0.id); delete y.own[g0.id]; }); for (const cd of [g0.code, g0.mcode].filter(Boolean)) { try { await rmw(CK(cd), { id: null }, async (x) => { x.id = null; return {}; }, 4); } catch (e) {} }
       send(res, 200, { ok: true }); return true;
     }

@@ -98,7 +98,7 @@
     if (!gr.nopicks) s += '<div class="ogcard ogmut">' + esc(LOCKNOTE) + ' Every new bet you add to My Bets while a contest runs counts for the group.</div>';
     if (gr.started && !gr.ended) s += '<div class="ogcard ogmut">The group has started. Members stay to the end.</div>';
     s += '</div>';
-    if (!gr.started) s += comm ? '<button type="button" class="ogdan" data-a="delete">Delete this group</button>' : '<button type="button" class="ogdan" data-a="leave">Leave this group</button>';
+    if (comm) s += '<button type="button" class="ogdan" data-a="delete">Delete this group</button>'; else if (!gr.started) s += '<button type="button" class="ogdan" data-a="leave">Leave this group</button>';
     return s;
   }
   // ---------- members ----------
@@ -209,7 +209,7 @@
   function push(v) { err = ''; stack.push(v); paint(); el().scrollTop = 0; }
   // v273 Golf days (a group game): the screens live in pics/golfday.js, fetched the first time a member opens the Golf day tile. It draws inside this
   // overlay and uses the same stack (Back), the same one-call-at-a-time `act` (so an ended account gets the same lock card) and the same classes.
-  let GDL = null; const GDV = '287';
+  let GDL = null; const GDV = '288';
   const GDX = { esc, att, fmtDay, chiDay, addDays, push, back: () => back(), paint: () => paint(), cur, el, act, post, errText, tile, sel, busy: () => busy, setErr: (m) => { err = m || ''; }, me: () => g('odd-name') || '' };
   function gdOpen(gr) {
     push({ t: 'golf', v: 'home', gr });
@@ -372,7 +372,7 @@
     if (a === 'invite') return invite();
     if (a === 'decide') return act('decide', { id: gr.id, pid: b.getAttribute('data-pid'), ok: b.getAttribute('data-ok') === '1' }, async (j) => { setGroup(j.group); paint(); });
     if (a === 'leave') { if (!confirm('Leave "' + gr.name + '"? You can ask to join again before it starts.')) return; return act('leave', { id: gr.id }, async () => { stack = [{ t: 'home' }]; H = null; paint(); loadHome(); blStatus(); }); }
-    if (a === 'delete') { if (!confirm('Delete "' + gr.name + '" for everyone? This cannot be undone.')) return; return act('delete', { id: gr.id }, async () => { stack = [{ t: 'home' }]; H = null; paint(); loadHome(); blStatus(); }); }
+    if (a === 'delete') { if (!confirm('Delete "' + gr.name + '" for everyone? This cannot be undone. Bets already placed stay in each player\'s My Bets.')) return; return act('delete', { id: gr.id }, async () => { stack = [{ t: 'home' }]; H = null; paint(); loadHome(); blStatus(); }); }
   }
   // The overlay sits beside the tab bar, never over it: above it on a phone, to its right where the bar is a rail (900 px and wider). It covers the page's
   // own header and the floating My Bets banner (z-index 40), so the banner can never sit on a Groups button. Sign-up / pay sheets (z 200+) open above it.
@@ -418,11 +418,11 @@
     try { const j = await within(post('bet/status', id ? { id: id } : {}), 6000); blSet(j.betLock); return { n: BL.n, known: true, saved: !!j.saved, bet: j.bet || null }; } catch (e) { return { n: BL.n, known: false, auth: !!(e && e.status === 401) }; }
   }
   let PK = 0; const poke = () => { if (Date.now() - PK < 60000 || document.hidden) return; PK = Date.now(); blStatus(); }; // a quiet refresh (page open, back to the app, the bet form opens): at most once a minute
-  function ask() { // the confirm step: Add (and lock), or Cancel. There is no "just for me": every bet counts for the group (B2).
+  function ask() { // the step: Save my bet (personal), Add to my group (locks), or Cancel. v288: B2 ("every bet counts for the group") overridden by the owner Nov 18-19.
     css(); return new Promise((done) => {
       const o = document.createElement('div'); o.id = 'oglock'; o.setAttribute('role', 'dialog'); o.setAttribute('aria-modal', 'true'); o.setAttribute('aria-label', 'Add this bet to your group');
-      o.innerHTML = '<div class="ogq"><h2>Add this bet to your group?</h2><p><b>Bets lock when you add them.</b> You are in a group contest, so this bet is saved to Oddable now and counts for your group. You cannot edit or delete it, even before kickoff.</p><button type="button" class="ogpri" data-k="group">Add to my group · lock it</button><button type="button" data-k="">Cancel</button></div>';
-      o.addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b && ev.target !== o) return; o.remove(); done(b && b.getAttribute('data-k') === 'group'); });
+      o.innerHTML = '<div class="ogq"><h2>Where does this bet go?</h2><p>Save it as your own bet, or add it to your group contest. <b>Group bets lock:</b> no edits or deletes, even before kickoff.</p><button type="button" class="ogpri" data-k="me">Save my bet</button><button type="button" data-k="group">Add to my group · lock it</button><button type="button" data-k="">Cancel</button></div>';
+      o.addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b && ev.target !== o) return; o.remove(); done(b ? (b.getAttribute('data-k') || false) : false); });
       document.body.appendChild(o);
     });
   }
@@ -450,10 +450,10 @@
   async function gate(bet) {
     if (!g('odd-tok') || expired() || !(BL.n > 0)) return true; // B1: this phone never knew, or knew "not in a group": a personal bet, kept at once, nothing asked
     const st = await blStatus(); if (!st.known) return st.auth ? true : NOREACH; if (!st.n) return true; // the contest is over or the player left: personal
-    if (!(Number(bet.stake) > 0)) return 'You are in a group contest: every new bet needs a stake. Enter it and save again.';
-    if (!(await ask())) return false;
+    const pick = await ask(); if (!pick) return false; if (pick === 'me') return true; // v288: a personal bet, kept like any non-group player's
+    if (!(Number(bet.stake) > 0)) return 'Group bets need a stake. Enter it and save again.';
     const r = await place(bet); if (!r.ok) return r.error;
-    if (r.personal) { try { alert(r.text); } catch (e) {} return true; }
+    if (r.personal) return true; // no contest counts this kind of bet: it stays a personal bet (no pop-up)
     bet.gl = r.gl; bet.sa = r.sa; if (r.text) { try { alert(r.text); } catch (e) {} } return true;
   }
   window.OddGroups = { open, close, join: openJoin, gate, poke, lockChanged, isOpen: () => !!el(), active: () => BL.n > 0 && !!g('odd-tok') && !expired(), locked: (b) => !!(b && Number(b.gl) > 0), LOCKNOTE, addGame, games: () => GAMES.map((x) => ({ key: x.key, title: x.title, blurb: x.blurb })), openGame, openGames, refresh }; // v274: addGame = the games catalog registry; v283: openGame(key) opens a registered game for the group on screen (pics/local.js's games list uses it), openGames() = Groups at the Games catalog (the what's-new pop-up), refresh() = the Games screen asks its states again (pics/local.js Back)

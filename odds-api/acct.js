@@ -146,6 +146,35 @@ async function handle(req, res) {
       if (a.length !== w.length || !crypto.timingSafeEqual(a, w)) { send(res, 401, { error: 'Wrong PIN' }); return true; }
       send(res, 200, { token: mint('owner'), me: gFlag(OWNER_ME, 'owner') }); return true;
     }
+    if (path === '/acct/admin/player') {
+      // v293 (owner, Nov 21): My Apps (People) adds an Oddable player by cell number + name + PIN, or resets a player's PIN. Called server-to-server with the shared
+      // app secret (MYAPPS_SECRET = APP_SECRET_ODDABLE on My Apps), the same check as /sync/admin. A reset changes only the PIN (salt + pinhash): bets untouched;
+      // every device of that player is signed out (revoke). Owner phones are never created or reset here.
+      const want = String(process.env.MYAPPS_SECRET || '').trim(), got = String(b.secret || '');
+      if (!want || got.length !== want.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(want))) { send(res, 401, { error: 'no' }); return true; }
+      const ph = syncMod.normPhone(b.phone), pin = String(b.pin || '').trim(), mode = b.mode === 'reset' ? 'reset' : 'add';
+      if (ph.length !== 10) { send(res, 400, { error: 'Enter a 10-digit cell number' }); return true; }
+      if (!/^\d{6,10}$/.test(pin)) { send(res, 400, { error: 'The PIN must be 6 to 10 digits' }); return true; }
+      if (OWNER_PHONES().includes(ph)) { send(res, 403, { error: 'That is an owner number: change it in Oddable, not here' }); return true; }
+      const id = syncMod.idOf(ph), pe = phoneEmail(id);
+      if (mode === 'reset') {
+        let row = null; try { row = await syncMod.dbGet(id); } catch (er) { send(res, 502, { error: 'Could not read the player' }); return true; }
+        if (!row) { send(res, 404, { error: 'No Oddable player has that cell number' }); return true; }
+        let ok = false; try { ok = await syncMod.setPin(id, pin); } catch (er) { ok = false; }
+        if (!ok) { send(res, 502, { error: 'The PIN was not changed. Try again.' }); return true; }
+        try { await revoke(pe); } catch (er) {} CACHE.delete(pe);
+        send(res, 200, { ok: true, mode, account: pe }); return true;
+      }
+      const nm0 = cleanName(b.name); if (nm0.length < 2) { send(res, 400, { error: 'Enter a name or handle (2+ characters)' }); return true; }
+      let v; try { v = await syncMod.verifyLogin(ph, pin, 'myapps-admin:' + Date.now(), true); } catch (er) { send(res, er.status || 500, { error: er.message }); return true; }
+      const pw = crypto.createHmac('sha256', KEY()).update('phone|' + v.id).digest('hex').slice(0, 32);
+      syncMod.noteRow(pe, v.id);
+      let r = await ma('/api/v1/auth/register', { email: pe, password: pw, name: nm0 });
+      try { await namesSet(String(v.id).slice(0, 8), nm0); } catch (er) {}
+      if (!r.ok && r.status === 409) r = { ok: true, j: {} };
+      if (!r.ok) { send(res, 502, { error: (r.j && r.j.error) || 'The player was made in Oddable but My Apps did not answer. They can still sign in.' }); return true; }
+      CACHE.delete(pe); send(res, 200, { ok: true, mode, account: pe, name: nm0 }); return true;
+    }
     if (path === '/acct/phone') {
       // Existing Oddable users keep their cell number + PIN. It maps to a My Apps account (7-day trial, then Cash App renewal).
       if (b.create && OWNER_PHONES().includes(syncMod.normPhone(b.phone))) { send(res, 403, { error: 'This number cannot be created here' }); return true; } // an owner phone is never created by a stranger

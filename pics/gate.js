@@ -149,8 +149,8 @@
       if (F.gref == null) F.gref = refOf();
       h = '<form id="gfu" novalidate><div class="g2">' +
         '<div>' + fld('gname', 'Name or handle', 'autocomplete="nickname" maxlength="24" placeholder="How you show up in Oddable"') +
-        fld('gemail', 'Email', EMAIL_AT + ' autocomplete="email" placeholder="you@example.com"') +
-        fld('gpw', 'Password', 'type="password" autocomplete="new-password" maxlength="200" placeholder="8 or more characters"', { pw: 1 }) + '</div>' +
+        fld('gemail', 'Email <span class="opt">(optional)</span>', EMAIL_AT + ' autocomplete="email" placeholder="you@example.com"') +
+        fld('gpw', 'Password <span class="opt">(optional)</span>', 'type="password" autocomplete="new-password" maxlength="200" placeholder="8 or more characters"', { pw: 1 }) + '</div>' +
         '<div>' + fld('gph', 'Cell number', 'type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="(956) 555-1234"') +
         fld('gpn', 'PIN', NEWPIN_AT + ' placeholder="6 to 10 digits"', { msk: 1, pw: 1, what: 'PIN', hint: WHY }) +
         fld('gref', 'Have a code? <span class="opt">(optional)</span>', 'autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="24" placeholder="Friend or influencer code"') + '</div>' +
@@ -164,11 +164,11 @@
         fld('gph', 'Cell number', 'type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="(956) 555-1234"') +
         fld('gpn', 'PIN', 'type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="10"') +
         '<button id="gdo" data-go="1" type="submit">Sign in</button><button type="button" class="lnk" id="glpin">Lost my PIN</button></form>';
-      h = '<div class="g2 g2b">' + (way() === 'email' ? fe_ + fp : fp + fe_) + '</div><div class="er" id="gerr" role="alert"></div>';
+      h = (way() === 'email' ? '<div class="g2 g2b">' + fe_ + '</div><button type="button" class="lnk" id="gwph">Sign in with cell number and PIN instead</button>' : '<div class="g2 g2b">' + fp + '</div><button type="button" class="lnk" id="gwem">Have an email and password? Sign in with them</button>') + '<div class="er" id="gerr" role="alert"></div>'; // v292 (owner Nov 21): cell + PIN first and only; email is optional
     }
     el.innerHTML = '<div class="gb gw">' + back + HEAD() + tabs + note + h + DEVNOTE + OWNERBOX + '</div>';
     $('gt-in').onclick = () => { mode = 'in'; FE = {}; draw(); }; $('gt-up').onclick = () => { mode = 'up'; FE = {}; draw(); };
-    if (up) $('gdo').onclick = signUp; else { $('gdo').onclick = () => signIn('phone'); $('gdoe').onclick = () => signIn('email'); $('glpw').onclick = () => lostOpen('password'); $('glpin').onclick = () => lostOpen('pin'); }
+    if (up) $('gdo').onclick = signUp; else { const _q = (i) => document.getElementById(i); if (_q('gdo')) _q('gdo').onclick = () => signIn('phone'); if (_q('gdoe')) _q('gdoe').onclick = () => signIn('email'); if (_q('glpw')) _q('glpw').onclick = () => lostOpen('password'); if (_q('glpin')) _q('glpin').onclick = () => lostOpen('pin'); if (_q('gwem')) _q('gwem').onclick = () => { s('odd-way', 'email'); FE = {}; draw(); }; if (_q('gwph')) _q('gwph').onclick = () => { s('odd-way', 'phone'); FE = {}; draw(); }; }
     $('gown').onclick = ownerIn; $('gpin').onkeydown = (e) => { if (e.key === 'Enter') ownerIn(); }; wireBack(); wireF();
   }
   const btnBusy = (id, t) => { const b = $(id); if (b) { if (t) { b.dataset.t = b.dataset.t || b.textContent; b.textContent = t; b.disabled = true; } else { if (b.dataset.t) b.textContent = b.dataset.t; b.disabled = false; } } };
@@ -209,8 +209,7 @@
     const nm = String(F.gname || '').trim(), em = String(F.gemail || '').trim(), pw = String(F.gpw || ''), ph = digits(F.gph).replace(/^1(\d{10})$/, '$1'), pn = String(F.gpn || '').trim(), rc = String(F.gref || '').trim();
     const bad = {};
     if (nm.length < 2) bad.gname = 'Enter a name or handle (2+ characters).';
-    if (!EM_RE.test(em)) bad.gemail = 'Enter a valid email address.';
-    if (pw.length < 8) bad.gpw = 'Use 8 or more characters.';
+    if (em || pw) { if (!EM_RE.test(em)) bad.gemail = 'Enter a valid email address, or leave email and password empty.'; if (pw.length < 8) bad.gpw = 'Use 8 or more characters, or leave email and password empty.'; } // v292: email optional
     if (ph.length !== 10) bad.gph = 'Enter your 10-digit cell number.';
     if (!/^\d{6,10}$/.test(pn)) bad.gpn = 'Pick a PIN of 6 to 10 digits.';
     if (rc && !REF_RE.test(rc)) bad.gref = 'A code is letters and numbers only. Leave it empty if you have none.';
@@ -222,6 +221,7 @@
     catch (e) { busy = false; btnBusy('gdo'); const m = netMsg(e), k = !e.status ? '' : /name or handle/i.test(m) ? 'gname' : /PIN/.test(m) ? 'gpn' : /number/i.test(m) ? 'gph' : ''; return k ? fe({ [k]: m }) : err(m); }
     const acct = String((j.me && j.me.email) || '').toLowerCase();
     s('odd-tok', j.token); // the next call is made as this new account
+    if (!em) { busy = false; signedIn(j, ph, { way: 'phone', phone: ph, pin: pn }); return; } // v292: no email given: signed in with cell + PIN, nothing else to do
     let st = 'todo', hint = '', emsg = '';
     try { const l = await call('/link', { email: em, password: pw }); if (l && l.ok && l.pending) { st = 'code'; hint = l.hint || ''; } else if (l && l.ok && l.verified) { st = 'done'; hint = l.hint || ''; } else if (l && l.code === 'nomail') st = 'nomail'; else emsg = (l && l.error) || ''; }
     catch (e) { if (e.code === 'taken' || e.code === 'email') { st = 'taken'; emsg = e.message; } else emsg = netMsg(e); }

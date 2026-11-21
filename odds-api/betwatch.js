@@ -81,8 +81,13 @@ async function rebuild(pl, now) {
     try { const r = await D.S().dbGet(M.p[acct].rid), bets = ((r && r.data && Array.isArray(r.data.bets) && r.data.bets) || []).filter((b) => B.isOpen(b) && B.gids(b).some((id) => M.games.has(id))).slice(0, 200); M.pb[acct] = { at: now, bets }; } catch (e) {} // a failed read keeps the last list
   }));
   const idx = new Map(); Object.keys(M.pb).forEach((acct) => { if (!pl.includes(acct)) { delete M.pb[acct]; return; } const seen = new Set(); M.pb[acct].bets.forEach((b) => B.gids(b).forEach((id) => { if (seen.has(id) || !M.games.has(id)) return; seen.add(id); if (!idx.has(id)) idx.set(id, []); idx.get(id).push(acct); })); });
+  // v298: followed teams (the phone's ⭐ Follow, sent with /betpush/fav) get the same alerts on their games, bet or no bet
+  pl.forEach((acct) => { const p = M.p[acct]; if (!p || !p.fav) return; M.games.forEach((g, id) => { const st = starOf(p, g.lg); if (!st.size || !(st.has(g.home.abbr) || st.has(g.away.abbr))) return; if (!idx.has(id)) idx.set(id, []); if (!idx.get(id).includes(acct)) idx.get(id).push(acct); }); });
   M.idx = idx; M.idxAt = now;
 }
+const FAVLG = { nfl: 'nfl', ncaaf: 'cfb', nba: 'nba', ncaab: 'ncaab', mlb: 'mlb', nhl: 'nhl' };
+function starOf(p, lg) { const a = p && p.fav && p.fav[FAVLG[lg] || lg]; return new Set(Array.isArray(a) ? a : []); }
+function cleanFav(f) { const out = {}; if (!f || typeof f !== 'object' || Array.isArray(f)) return out; Object.values(FAVLG).forEach((k) => { const a = f[k]; if (Array.isArray(a)) { const v = [...new Set(a.filter((x) => typeof x === 'string' && /^[A-Za-z0-9&.'-]{1,8}$/.test(x)))].slice(0, 30); if (v.length) out[k] = v; } }); return out; }
 
 // ---- the sender: My Apps delivers; this server only asks ----
 async function send(acct, msg, now) {
@@ -127,7 +132,7 @@ async function tick() {
     if (M.here[acct] && now - M.here[acct] < HERE) { M.stats.skipped++; return; } // the app is open on a phone of his: the in-app pop-up shows this score
     if ((n[acct] || 0) >= DAYCAP) { M.stats.skipped++; return; }
     if (jobs.length >= TICKCAP) { M.stats.skipped++; return; }
-    const m = B.compose(kind, g, (M.pb[acct] && M.pb[acct].bets) || [], gameOf); if (!m.lines) return;
+    const m = B.compose(kind, g, (M.pb[acct] && M.pb[acct].bets) || [], gameOf, starOf(p, g.lg)); if (!m.lines && !m.fav) return; // v298: a followed team's game alerts with no bet on it
     n[acct] = (n[acct] || 0) + 1; M.dirty = true; jobs.push({ acct, msg: { title: m.title, body: m.body, tag: ('bet-' + g.id).replace(/[^A-Za-z0-9:_-]/g, '').slice(0, 64), url: APP_URL() } });
   }));
   for (let i = 0; i < jobs.length; i += 5) await Promise.all(jobs.slice(i, i + 5).map(async (j) => {
@@ -159,7 +164,7 @@ async function rowOf(acct, now) { // the player's own bets row (phone + PIN acco
 }
 async function handle(req, res) {
   const path = req.url.split('?')[0]; if (!path.startsWith('/betpush/')) return false;
-  const get = path === '/betpush/status'; if (!get && !['/betpush/set', '/betpush/test', '/betpush/here'].includes(path)) return false;
+  const get = path === '/betpush/status'; if (!get && !['/betpush/set', '/betpush/test', '/betpush/here', '/betpush/fav'].includes(path)) return false;
   if (req.method !== (get ? 'GET' : 'POST')) { sendJ(res, 405, { error: get ? 'GET only' : 'POST only' }); return true; }
   if (!enabled()) { sendJ(res, 200, get ? OFF : Object.assign({ ok: false, error: 'Alerts are not switched on at the server yet' }, OFF)); return true; }
   const acct = D.A().who(req); if (!acct) { sendJ(res, 401, { error: 'Sign in again' }); return true; }
@@ -170,6 +175,10 @@ async function handle(req, res) {
     const P = await loadPlayers(now);
     if (get) { sendJ(res, 200, view(P[acct])); return true; }
     let b; try { b = await readBody(req); } catch (e) { sendJ(res, 400, { error: 'bad request' }); return true; }
+    if (path === '/betpush/fav') { // v298 { fav: { nfl:['DAL'], cfb:['TEX'], nba:[...], ... } } = the phone's followed teams, the whole list each time
+      const fav = cleanFav(b.fav), cur = await savePlayer(acct, (p) => { const q = p || { on: 0, mode: 'off' }; if (Object.keys(fav).length) q.fav = fav; else delete q.fav; return q; }); M.idxAt = 0;
+      sendJ(res, 200, { ok: true, fav: (cur && cur.fav) || {}, alerts: !!(cur && cur.on && cur.mode !== 'off' && cur.dev) }); return true;
+    }
     if (path === '/betpush/test') {
       const p = P[acct]; if (!p || !p.dev) { sendJ(res, 400, { error: 'Turn alerts on for this phone first' }); return true; }
       if (await lapsed(acct)) { sendJ(res, 403, { ok: false, expired: true, error: LAPSED_MSG }); return true; } // v268
@@ -200,4 +209,4 @@ async function handle(req, res) {
     sendJ(res, 200, Object.assign({ ok: true }, view(cur))); return true;
   } catch (e) { sendJ(res, 502, { error: 'Could not save, try again in a moment' }); return true; }
 }
-module.exports = { handle, start, tick, enabled, _deps: D, _reset: reset, _m: () => M, FAST, SLOW, REBUILD, DAYCAP, LGS };
+module.exports = { handle, start, tick, enabled, _cleanFav: cleanFav, _starOf: starOf, _deps: D, _reset: reset, _m: () => M, FAST, SLOW, REBUILD, DAYCAP, LGS };

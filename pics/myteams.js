@@ -7,7 +7,16 @@
   const all = () => { try { const o = JSON.parse(localStorage.getItem('odd-fav') || '{}'); return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; } catch (e) { return {}; } };
   const favs = (lg) => { const a = all()[lg]; return Array.isArray(a) ? a.filter((x) => typeof x === 'string' && /^[A-Za-z0-9&.'-]{1,8}$/.test(x)).slice(0, 30) : []; };
   const isFav = (lg, abbr) => !!abbr && favs(lg).includes(abbr);
-  function toggle(lg, abbr) { if (!LGP[Object.keys(LGP).find((k) => LGP[k] === lg)] || !abbr) return false; const o = all(), a = favs(lg); o[lg] = a.includes(abbr) ? a.filter((x) => x !== abbr) : a.concat(abbr).slice(-30); try { localStorage.setItem('odd-fav', JSON.stringify(o)); } catch (e) {} try { window.dispatchEvent(new CustomEvent('oddfav', { detail: { lg, abbr } })); } catch (e) {} return o[lg].includes(abbr); }
+  // v298: the follows also go to the account (/betpush/fav), so the phone alerts cover followed teams' games, bet or no bet. Signed-in only; the whole
+  // list each time; quiet on failure (tried again on the next load). Nothing is sent for a guest or a phone with no follows ever.
+  function syncFav(force) {
+    let tk = ''; try { tk = localStorage.getItem('odd-tok') || ''; } catch (e) {} if (!tk || window.__oddLock) return;
+    const body = JSON.stringify({ fav: all() }); let last = null; try { last = localStorage.getItem('odd-fav-sent'); } catch (e) {}
+    if (!force && (last === body || (last === null && body === '{"fav":{}}'))) return;
+    fetch('https://calcutta-odds.onrender.com/betpush/fav', { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': tk }, body }).then((r) => { if (r.ok) try { localStorage.setItem('odd-fav-sent', body); } catch (e) {} }).catch(() => {});
+  }
+  setTimeout(() => syncFav(false), 4000);
+  function toggle(lg, abbr) { if (!LGP[Object.keys(LGP).find((k) => LGP[k] === lg)] || !abbr) return false; const o = all(), a = favs(lg); o[lg] = a.includes(abbr) ? a.filter((x) => x !== abbr) : a.concat(abbr).slice(-30); try { localStorage.setItem('odd-fav', JSON.stringify(o)); } catch (e) {} try { window.dispatchEvent(new CustomEvent('oddfav', { detail: { lg, abbr } })); } catch (e) {} syncFav(true); return o[lg].includes(abbr); }
   function tv(c) { const n = []; ((c && c.broadcasts) || []).forEach((b) => (b.names || []).forEach((x) => n.push(x))); ((c && c.geoBroadcasts) || []).forEach((b) => b && b.media && b.media.shortName && n.push(b.media.shortName)); return [...new Set(n.filter((x) => typeof x === 'string' && x))].slice(0, 3); }
   // ---------- v297 team sheet (college football and the NBA / NHL / MLB / NCAAB pages; the NFL has its own team page in index.html) ----------
   // OddFav.teamOpen(lg, teamId, abbr): record, standing, ☆ Follow, next game (where to watch), points for / against, last 5, the season's games

@@ -17,7 +17,12 @@ function parseEvent(e, lg) {
     const side = (x) => { const raw = clean(x.team && x.team.abbreviation).slice(0, 8), sc = parseInt(x.score, 10); return { raw, abbr: lg === 'nfl' ? FIX[raw] || raw : raw, score: Number.isFinite(sc) ? sc : 0 }; };
     const state = t.state === 'pre' || t.state === 'in' || t.state === 'post' ? t.state : ''; if (!state) return null;
     const start = Date.parse(e.date || c.date || '');
-    return { id: String(e.id), lg: lg || '', start: Number.isFinite(start) ? start : 0, state, detail: clean(t.shortDetail || t.detail || '').slice(0, 40), per: Number((e.status && e.status.period) || 0) || 0, away: side(A), home: side(H) };
+    // v298 (ESPN-style alerts): football down & distance and the game's leader, from the same scoreboard read (nothing extra is fetched)
+    const si = c.situation || {}, poss = si.possession ? [A, H].find((x) => x.team && String(x.team.id) === String(si.possession)) : null;
+    const sit = state === 'in' ? clean(si.downDistanceText || si.shortDownDistanceText || '').slice(0, 40) + (poss && (si.downDistanceText || si.shortDownDistanceText) ? ' · ' + side(poss).abbr + ' ball' : '') : '';
+    const LD = Array.isArray(c.leaders) ? c.leaders : [], pick = ['rushingLeader', 'passingLeader', 'points', 'pointsLeader', 'goals', 'receivingLeader'].map((n) => LD.find((x) => x && x.name === n)).find((x) => x && x.leaders && x.leaders[0]) || LD.find((x) => x && x.leaders && x.leaders[0]);
+    const lp = pick && pick.leaders[0], lead = lp && lp.athlete ? clean(String(pick.shortDisplayName || pick.displayName || '').replace(/ ?Leader$/i, '') + ': ' + clean(lp.athlete.shortName || lp.athlete.displayName) + ' ' + clean(lp.displayValue)).slice(0, 60) : '';
+    return { id: String(e.id), lg: lg || '', start: Number.isFinite(start) ? start : 0, state, detail: clean(t.shortDetail || t.detail || '').slice(0, 40), per: Number((e.status && e.status.period) || 0) || 0, away: side(A), home: side(H), sit, lead };
   } catch (x) { return null; }
 }
 const isTeam = (t, s) => !!s && (s === t.abbr || s === t.raw || FIX[s] === t.abbr);
@@ -98,17 +103,22 @@ function betLines(bets, gid, gameOf) {
   return [...one, ...par, ...pr];
 }
 const clock = (d) => String(d || '').replace(/^(\d{1,2}:\d\d) - (.+)$/, '$2 $1'); // ESPN's "1:56 - 2nd" reads "2nd 1:56"
-const scoreLine = (g) => g.away.abbr + ' ' + g.away.score + ', ' + g.home.abbr + ' ' + g.home.score;
+const scoreLine = (g, star) => g.away.abbr + (star && star.has(g.away.abbr) ? '⭐' : '') + ' ' + g.away.score + ' – ' + g.home.score + ' ' + g.home.abbr + (star && star.has(g.home.abbr) ? '⭐' : ''); // v298: ESPN's look, "ARK 3 – 17 TEX⭐"
 const SEP = '; ';
 // The notification for one player on one game. kind: 'score' | 'fix' | 'period' | 'final'. Body: at most 3 bets on one line, then "+N more".
-function compose(kind, g, bets, gameOf) {
+// v298: star = the teams this player follows (a Set of abbreviations, may be empty); the body starts with down & distance and the game's leader
+// (when the scoreboard has them), then the bets. A followed team with no bet: the score, situation and leader only (lines 0, fav true).
+function compose(kind, g, bets, gameOf, star) {
   const L = betLines(bets, g.id, gameOf), d = clock(g.detail);
-  const title = kind === 'final' ? 'Final: ' + scoreLine(g) : (kind === 'fix' ? 'Score corrected: ' : '') + scoreLine(g) + (d && !/^final/i.test(d) ? ' · ' + d : '');
+  const title = kind === 'final' ? 'Final: ' + scoreLine(g, star) : (kind === 'fix' ? 'Score corrected: ' : '') + scoreLine(g, star) + (d && !/^final/i.test(d) ? ' · ' + d : '');
   // My Apps' limits (API contract 4a): title 80, body 240, plain text, line breaks become spaces. So the bets are joined with "; " and only whole bets are kept.
-  let body = '', used = 0;
-  for (let i = 0; i < L.length && i < 3; i++) { const cand = (body ? body + SEP : '') + L[i]; if ((cand + (i + 1 < L.length ? SEP + '+' + (L.length - i - 1) + ' more' : '')).length > 240) break; body = cand; used = i + 1; }
+  const head = [kind === 'final' ? '' : g.sit, g.lead].filter(Boolean).join(' · '); let body = L.length ? '' : head, used = 0;
+  if (L.length && head && head.length < 120) body = head;
+  const fill = () => { for (let i = 0; i < L.length && i < 3; i++) { const cand = (body ? body + SEP : '') + L[i]; if ((cand + (i + 1 < L.length ? SEP + '+' + (L.length - i - 1) + ' more' : '')).length > 240) break; body = cand; used = i + 1; } };
+  fill(); if (L.length && !used && body) { body = ''; fill(); } // the bets come before the situation line when both do not fit
   if (used < L.length) body = body ? body + SEP + '+' + (L.length - used) + ' more' : String(L[0]).slice(0, 240);
-  return { title: title.slice(0, 80), body, lines: L.length };
+  if (!body) body = kind === 'final' ? 'Final score.' : 'Score update.';
+  return { title: title.slice(0, 80), body: body.slice(0, 240), lines: L.length, fav: !!(star && (star.has(g.away.abbr) || star.has(g.home.abbr))) };
 }
 // What changed between two looks at one game (the phone's spScan rules). o = the last look, c = this one; both { a, h, st, d, per }.
 // -> { all, bb }: `all` = the alert for a player who gets every score; `bb` = the alert for a basketball bet followed by quarters ('period' at

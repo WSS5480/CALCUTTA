@@ -60,17 +60,17 @@ const call = (method, path, body, tok) => new Promise((done, fail) => { const r 
     eq(await W.tick(), W.FAST); eq(sent.length, 0, 'first look silent'); eq(espnCalls.length, 6, 'one look at each league'); ok(W._m().live && W._m().active);
     espn[NFL][0] = ev('1', 'in', 14, 0, '1:56 - 2nd', 2); eq(await step(), W.FAST); eq(sent.length, 2);
     const a1 = sent.find((x) => x.account === acctOf('r1')), a2 = sent.find((x) => x.account === acctOf('r2'));
-    eq(a1.title, 'LAC 14, BAL 0 · 2nd 1:56'); eq(a1.body, 'LAC +4.5: covering by 18.5 right now; Over 44.5: needs 31 more right now'); eq(a1.tag, 'bet-1'); eq(a1.url, '/?open=bets');
+    eq(a1.title, 'LAC 14 – 0 BAL · 2nd 1:56'); eq(a1.body, 'LAC +4.5: covering by 18.5 right now; Over 44.5: needs 31 more right now'); eq(a1.tag, 'bet-1'); eq(a1.url, '/?open=bets');
     eq(a2.body, 'BAL +4.5: not covering, 9.5 short right now'); eq(Object.keys(a1).sort(), ['account', 'body', 'tag', 'title', 'url']); ok(a1.title.length <= 80 && a1.body.length <= 240 && /^[A-Za-z0-9:_-]{1,64}$/.test(a1.tag) && /^\/[^/\s]/.test(a1.url), 'inside My Apps limits');
     eq(espnCalls.slice(6), [NFL], 'while live only the board with a watched game is read');
     await step(); await step(); eq(sent.length, 2, 'no change = no alert');
     // every score is its own alert when the polls see them apart; two scores inside one poll = one alert with the new score
-    espn[NFL][0] = ev('1', 'in', 14, 7, '0:40 - 2nd', 2); await step(); eq(sent.length, 4); espn[NFL][0] = ev('1', 'in', 21, 10, '12:00 - 3rd', 3); await step(); eq(sent.length, 6); eq(sent[5].title.slice(0, 15), 'LAC 21, BAL 10 ');
+    espn[NFL][0] = ev('1', 'in', 14, 7, '0:40 - 2nd', 2); await step(); eq(sent.length, 4); espn[NFL][0] = ev('1', 'in', 21, 10, '12:00 - 3rd', 3); await step(); eq(sent.length, 6); eq(sent[5].title.slice(0, 15), 'LAC 21 – 10 BAL');
     // correction
-    espn[NFL][0] = ev('1', 'in', 20, 10, '11:00 - 3rd', 3); await step(); eq(sent.length, 8); ok(sent[7].title.startsWith('Score corrected: LAC 20, BAL 10'));
+    espn[NFL][0] = ev('1', 'in', 20, 10, '11:00 - 3rd', 3); await step(); eq(sent.length, 8); ok(sent[7].title.startsWith('Score corrected: LAC 20 – 10 BAL'));
     // final: one alert each, result words, never again
     espn[NFL][0] = ev('1', 'post', 27, 20, 'Final', 4); await step(); eq(sent.length, 10); const f1 = sent.slice(8).find((x) => x.account === acctOf('r1'));
-    eq(f1.title, 'Final: LAC 27, BAL 20'); eq(f1.body, 'LAC +4.5 won; Over 44.5 won'); ok(!/right now/.test(f1.body));
+    eq(f1.title, 'Final: LAC 27 – 20 BAL'); eq(f1.body, 'LAC +4.5 won; Over 44.5 won'); ok(!/right now/.test(f1.body));
     const after = await step(); eq(sent.length, 10); ok(after !== W.FAST, 'nothing live: slow again (' + after + ')'); ok(!W._m().live);
     espn[NFL][0] = ev('1', 'post', 28, 20, 'Final', 4); await step(W.SLOW); await step(W.SLOW); eq(sent.length, 10, 'a final game never alerts again');
     eq(sent.filter((x) => x.account === acctOf('r3')).length, 0, 'a bet on another (finished) game gets nothing');
@@ -81,9 +81,9 @@ const call = (method, path, body, tok) => new Promise((done, fail) => { const r 
     espn[NBA] = [ev('9', 'in', 20, 18, '5:00 - 1st', 1, 'LAL', 'BOS')]; espn[NHL] = [ev('7', 'in', 0, 0, '10:00 - 1st', 1, 'DAL', 'COL')]; espn[MLB] = [ev('8', 'in', 0, 0, 'Top 1st', 1, 'NYY', 'BOS')]; espn[CFB] = [ev('6', 'in', 0, 0, '10:00 - 1st', 1, 'TEX', 'OU')];
     await W.tick(); eq(sent.length, 0);
     espn[NBA][0] = ev('9', 'in', 22, 18, '4:40 - 1st', 1, 'LAL', 'BOS'); await step(); eq(sent.map((x) => x.account), [acctOf('r2')], 'a basket: only the every-score player');
-    espn[NBA][0] = ev('9', 'in', 30, 28, 'End of 1st', 1, 'LAL', 'BOS'); await step(); eq(sent.length, 3); eq(sent.find((x, i) => i > 0 && x.account === acctOf('r1')).title, 'LAL 30, BOS 28 · End of 1st');
+    espn[NBA][0] = ev('9', 'in', 30, 28, 'End of 1st', 1, 'LAL', 'BOS'); await step(); eq(sent.length, 3); eq(sent.find((x, i) => i > 0 && x.account === acctOf('r1')).title, 'LAL 30 – 28 BOS · End of 1st');
     await step(); eq(sent.length, 3); espn[NBA][0] = ev('9', 'in', 32, 28, '11:30 - 2nd', 2, 'LAL', 'BOS'); await step(); eq(sent.length, 4, 'after the break only the every-score player');
-    espn[NBA][0] = ev('9', 'in', 60, 55, '11:00 - 3rd', 3, 'LAL', 'BOS'); await step(); eq(sent.length, 6, 'a missed break is reported once'); espn[NBA][0] = ev('9', 'post', 110, 100, 'Final', 4, 'LAL', 'BOS'); await step(); eq(sent.length, 8); ok(sent.slice(6).every((x) => x.title === 'Final: LAL 110, BOS 100'));
+    espn[NBA][0] = ev('9', 'in', 60, 55, '11:00 - 3rd', 3, 'LAL', 'BOS'); await step(); eq(sent.length, 6, 'a missed break is reported once'); espn[NBA][0] = ev('9', 'post', 110, 100, 'Final', 4, 'LAL', 'BOS'); await step(); eq(sent.length, 8); ok(sent.slice(6).every((x) => x.title === 'Final: LAL 110 – 100 BOS'));
     const before = sent.length; espn[NHL][0] = ev('7', 'in', 1, 0, '9:00 - 1st', 1, 'DAL', 'COL'); await step(); espn[MLB][0] = ev('8', 'in', 0, 2, 'Bot 1st', 1, 'NYY', 'BOS'); await step(); espn[CFB][0] = ev('6', 'in', 7, 0, '8:00 - 1st', 1, 'TEX', 'OU'); await step();
     eq(sent.slice(before).map((x) => x.body), ['DAL ML: winning by 1 right now', 'NYY ML: losing by 2 right now', 'TEX ML: winning by 7 right now']); eq(sent.slice(before).map((x) => x.tag), ['bet-7', 'bet-8', 'bet-6']);
 
@@ -165,6 +165,19 @@ const call = (method, path, body, tok) => new Promise((done, fail) => { const r 
     // no account id, token or key ever in an answer; database down = 502 with CORS, never a crash
     const save = D.S; D.S = () => ({ dbGet: async () => { throw new Error('db down secret-k'); }, dbIds: async () => { throw new Error('x'); } }); W._reset(); r = await call('GET', '/betpush/status', undefined, me); eq(r.status, 502); ok(!/secret/.test(JSON.stringify(r.j))); eq(r.headers['access-control-allow-origin'], '*'); D.S = save;
     env.SUPABASE_KEY = ''; W._reset(); r = await call('GET', '/betpush/status', undefined, me); eq(r.status, 503); eq(await W.tick(), W.SLOW);
+    // v298: followed teams. /betpush/fav saves the list; a followed team's game alerts with no bet; the star is on the team; bets still come first
+    fresh(); player('r1', []); player('r2', [sp('1')]); espn[NFL] = [ev('1', 'in', 7, 0, '9:10 - 1st')]; espn[CFB] = [ev('5', 'in', 3, 10, '5:21 - 2nd', 2, 'ARK', 'TEX')];
+    let fr = await call('POST', '/betpush/fav', { fav: { cfb: ['TEX', '<b>'], nfl: ['BAL'], junk: ['X'] } }, acctOf('r1')); eq(fr.status, 200); eq(fr.j.fav, { cfb: ['TEX'], nfl: ['BAL'] }); eq(fr.j.alerts, true);
+    eq(rows['lock:betpush'].data.p[acctOf('r1')].fav, { cfb: ['TEX'], nfl: ['BAL'] });
+    fr = await call('POST', '/betpush/fav', { fav: {} }, acctOf('nobody@x')); eq(fr.j.alerts, false, 'a player with alerts off can still save follows');
+    await W.tick(); eq(sent.length, 0, 'first look silent');
+    espn[CFB][0] = ev('5', 'in', 3, 17, '5:21 - 2nd', 2, 'ARK', 'TEX'); espn[CFB][0].competitions[0].situation = { downDistanceText: '1st & 10 at TEX 30', possession: 'idARK' }; espn[CFB][0].competitions[0].leaders = [{ name: 'rushingLeader', shortDisplayName: 'Rushing Leader', leaders: [{ displayValue: '7 CAR, 34 YDS', athlete: { shortName: 'C. Settles' } }] }];
+    espn[NFL][0] = ev('1', 'in', 14, 0, '1:56 - 2nd', 2); await step();
+    const fa = sent.filter((x) => x.account === acctOf('r1')), fb = sent.filter((x) => x.account === acctOf('r2'));
+    eq(fa.length, 2, 'both followed games (no bets)'); const tx = fa.find((x) => /TEX/.test(x.title)); eq(tx.title, 'ARK 3 – 17 TEX⭐ · 2nd 5:21'); ok(/^1st & 10 at TEX 30/.test(tx.body) && /Rushing: C\. Settles 7 CAR, 34 YDS/.test(tx.body), tx.body); eq(tx.tag, 'bet-5');
+    ok(fa.some((x) => x.title === 'LAC 14 – 0 BAL⭐ · 2nd 1:56'), 'NFL follow');
+    eq(fb.length, 1, 'r2: his bet only (he follows nobody)'); ok(/covering/.test(fb[0].body));
+    eq(W._cleanFav({ nfl: 'DAL', cfb: ['TEX', 'TEX', 'x'.repeat(9)] }), { cfb: ['TEX'] });
     console.log('betwatch.test.js: ' + n + ' checks passed');
   } finally { srv.close(); }
 })().catch((e) => { console.error(e); process.exit(1); });

@@ -74,19 +74,19 @@ L = B.betLines([{ kind: 'prop', pp: { gid: '1', name: 'A' } }, { kind: 'parlay',
 
 // 6. compose: title, three lines then "+N more", correction, final ("right now" never on a final)
 const five = [{ gid: '1', side: 'LAC', type: 'sp', line: 4.5 }, { gid: '1', side: 'O', type: 'ou', line: 44.5 }, { gid: '1', side: 'BAL', type: 'ml' }, { gid: '1', side: 'LAC', type: 'ml' }, { gid: '1', side: 'U', type: 'ou', line: 50 }];
-let m = B.compose('score', gameOf('1'), five, gameOf); eq(m.title, 'LAC 17, BAL 7 · 2nd 1:56'); eq(m.body, 'LAC +4.5: covering by 14.5 right now; Over 44.5: needs 21 more right now; BAL ML: losing by 10 right now; +2 more'); eq(m.lines, 5);
+let m = B.compose('score', gameOf('1'), five, gameOf); eq(m.title, 'LAC 17 – 7 BAL · 2nd 1:56'); eq(m.body, 'LAC +4.5: covering by 14.5 right now; Over 44.5: needs 21 more right now; BAL ML: losing by 10 right now; +2 more'); eq(m.lines, 5);
 eq(B.compose('score', gameOf('1'), five.slice(0, 3), gameOf).body.split('; ').length, 3); ok(!/more/.test(B.compose('score', gameOf('1'), five.slice(0, 3), gameOf).body.replace('needs 21 more', '')));
-eq(B.compose('fix', gameOf('1'), five.slice(0, 1), gameOf).title, 'Score corrected: LAC 17, BAL 7 · 2nd 1:56');
+eq(B.compose('fix', gameOf('1'), five.slice(0, 1), gameOf).title, 'Score corrected: LAC 17 – 7 BAL · 2nd 1:56');
 eq(B.compose('score', gameOf('1'), [], gameOf).lines, 0);
 put(ev('1', 'post', 27, 20, 'Final')); m = B.compose('final', gameOf('1'), [{ gid: '1', side: 'LAC', type: 'sp', line: 4.5 }, { gid: '1', side: 'BAL', type: 'ml' }, { gid: '1', side: 'BAL', type: 'sp', line: 7 }, { kind: 'parlay', legs: [{ gid: '1', side: 'LAC', type: 'ml' }, { gid: 'W', side: 'LAC', type: 'ml' }] }], gameOf);
-eq(m.title, 'Final: LAC 27, BAL 20'); eq(m.body, 'LAC +4.5 won; BAL ML lost; BAL +7 push; +1 more'); ok(!/right now/.test(m.title + m.body));
+eq(m.title, 'Final: LAC 27 – 20 BAL'); eq(m.body, 'LAC +4.5 won; BAL ML lost; BAL +7 push; +1 more'); ok(!/right now/.test(m.title + m.body));
 eq(B.betLines([{ kind: 'parlay', legs: [{ gid: '1', side: 'LAC', type: 'ml' }, { gid: 'W', side: 'LAC', type: 'ml' }] }], '1', gameOf), ['LAC ML (2-leg parlay): leg won · parlay won']);
 // My Apps' limits: title <= 80, body <= 240, no line breaks, whole bets only
 { put(ev('1', 'in', 17, 7)); const long = Array.from({ length: 6 }, (_, i) => ({ kind: 'parlay', legs: Array.from({ length: 9 }, (_, k) => ({ gid: k ? 'W' : '1', side: 'LAC', type: 'sp', line: -(i + 1.5) })) }));
   const mm = B.compose('score', gameOf('1'), long, gameOf); ok(mm.body.length <= 240 && mm.title.length <= 80 && !/[\n\r]/.test(mm.title + mm.body), 'limits: ' + mm.body.length); ok(/; \+\d more$/.test(mm.body), mm.body);
   const props = Array.from({ length: 5 }, (_, i) => ({ kind: 'prop', pp: { gid: '1', name: 'Player Number ' + i + ' ' + 'x'.repeat(40) } })); const m2 = B.compose('score', gameOf('1'), props, gameOf); ok(m2.body.length <= 240 && m2.lines === 5);
   const big = B.parseEvent(ev('B', 'in', 100, 100, 'x'.repeat(40), 1, 'ABCDEFGH', 'IJKLMNOP'), 'nba'); ok(B.compose('fix', big, [{ gid: 'B', side: 'ABCDEFGH', type: 'ml' }], () => big).title.length <= 80); }
-put(ev('H', 'in', 14, 10, 'Halftime')); eq(B.compose('period', gameOf('H'), [{ gid: 'H', side: 'LAC', type: 'ml' }], gameOf).title, 'LAC 14, BAL 10 · Halftime');
+put(ev('H', 'in', 14, 10, 'Halftime')); eq(B.compose('period', gameOf('H'), [{ gid: 'H', side: 'LAC', type: 'ml' }], gameOf).title, 'LAC 14 – 10 BAL · Halftime');
 ok(!/[<>]/.test(B.compose('score', B.parseEvent(ev('X', 'in', 1, 0, '<b>x</b>', 1, '<i>', 'BAL'), 'nhl'), [{ gid: 'X', side: '<i>', type: 'ml' }], (id) => null).title));
 
 // 7. change(): the phone's spScan rules

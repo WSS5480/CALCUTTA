@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<!-- Golf GPS v294 (part of Oddable; your own round: live position on a satellite picture, yards to the pin, flag colour sets the pin. No picks, no bets.) -->
+<!-- Golf GPS v295 (part of Oddable; v295 My round scorecard; your own round: live position on a satellite picture, yards to the pin, flag colour sets the pin. No picks, no bets.) -->
 <script>try{if(localStorage.getItem('pics-theme')!=='violet')document.documentElement.classList.add('cb')}catch(e){document.documentElement.classList.add('cb')}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Golf GPS · Oddable</title>
@@ -10,7 +10,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="icon-192.png">
 <meta name="theme-color" content="#041e42">
-<link rel="stylesheet" href="leaflet.css?v=294">
+<link rel="stylesheet" href="leaflet.css?v=295">
 <style>
 :root{--bg:#f6f4fb;--panel:#fff;--panel2:#ece6fb;--line:#d9d0ee;--ink:#2b2b2b;--muted:#5d5873;--blue:#7c3aed;--green:#16915a;--red:#d93a2e;--gold:#b7791f}
 body.dark{--bg:#0a0c10;--panel:#13161d;--panel2:#1b1f29;--line:#272c38;--ink:#eef0f4;--muted:#8b93a3;--blue:#a78bfa;--green:#4fd18b;--red:#ff5a4d;--gold:#f5c542}
@@ -108,6 +108,21 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
 .gstep b{font:900 44px/1 system-ui;text-align:center;font-variant-numeric:tabular-nums}
 .gdq{margin-top:8px;padding:8px 10px;border:2px solid var(--gold);border-radius:12px;font-weight:700;font-size:14px}
 .gdpk{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin-top:8px}.gdpk .btn{flex-direction:column;align-items:flex-start;text-align:left}.gdpk .btn small{display:block;font-weight:600;font-size:12px;color:var(--muted)}
+/* v295: My round (your own scorecard at any course, up to 4 players) */
+.myr .lab{font:800 12px/1.2 system-ui;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:2px 0 4px}
+.myh{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-weight:800;font-size:16px}.myh select{min-height:40px;border-radius:10px;font:700 15px system-ui;padding:0 6px;background:var(--panel2);color:var(--ink);border:1px solid var(--line,#8886)}
+.myh small{flex-basis:100%;font-weight:600;font-size:13px;color:var(--muted)}
+.mypl{display:grid;grid-template-columns:minmax(0,1fr) 52px 54px 52px;gap:8px;align-items:center;margin:8px 0}
+.mypl .nm{font-weight:800;overflow-wrap:anywhere}.mypl .nm small{display:block;font-weight:600;font-size:12px;color:var(--muted)}
+.mypl button{min-height:50px;border-radius:12px;border:1px solid var(--blue);background:var(--panel2);color:var(--ink);font:800 24px system-ui;cursor:pointer}
+.mypl b{font:900 34px/1 system-ui;text-align:center;font-variant-numeric:tabular-nums}.mypl b.un{color:var(--muted)}
+.mych{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0}.mych span{font-weight:700;font-size:13px;color:var(--muted);min-width:64px}
+.mych button{min-height:40px;min-width:44px;border-radius:10px;border:1px solid var(--line,#8886);background:var(--panel2);color:var(--ink);font:800 15px system-ui;cursor:pointer;padding:0 10px}.mych button.on{border-color:var(--gold);background:#d4a01733}
+.mynames input{width:100%;box-sizing:border-box;min-height:44px;border-radius:10px;border:1px solid var(--line,#8886);background:var(--panel2);color:var(--ink);font:600 16px system-ui;padding:0 10px;margin:4px 0}
+.mysc{display:grid;gap:4px 6px;align-items:center;font-size:14px;font-variant-numeric:tabular-nums;margin:6px 0 12px}.mysc span{text-align:right;overflow-wrap:anywhere}.mysc span.l{text-align:left}
+.mysc .hd{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}.mysc .t{font-weight:900;border-top:1px solid #8886;padding-top:4px}
+.mysc .bd{color:#1a9b4b;font-weight:900}.mysc .bg{color:#c0392b}
+.myrl{display:block;width:100%;text-align:left;margin:6px 0}.myrl small{display:block;font-weight:600;font-size:13px;color:var(--muted)}
 .foot{color:var(--muted);font-size:12px;margin:24px 0 8px;text-align:center;padding:0 12px}
 [hidden]{display:none!important}
 </style>
@@ -129,6 +144,7 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
     </div>
     <div id="smsg" aria-live="polite"></div>
     <div id="sres"></div>
+    <div id="myhome"></div>
     <div id="recent"></div>
     <div class="note">Phone GPS is usually within 3 to 5 yards. Not a rangefinder. Course map from OpenStreetMap contributors: volunteers draw it, so a course can be missing greens. You can mark them yourself as you play.</div>
   </section>
@@ -139,7 +155,7 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
       <div class="hnav"><button class="btn" id="prev" type="button">‹ Prev</button><select id="hsel" aria-label="Hole"></select><button class="btn" id="next" type="button">Next ›</button></div>
       <div id="sug" hidden></div>
       <div class="hg">
-        <div class="ga"><div id="dist"></div><div id="gdlog"></div><div id="flags"></div><div id="gps"></div></div>
+        <div class="ga"><div id="dist"></div><div id="myr"></div><div id="gdlog"></div><div id="flags"></div><div id="gps"></div></div>
         <div class="gm">
           <div id="mmode" hidden></div>
           <div id="mapbox"><div id="maprot"><div id="map"></div></div>
@@ -155,10 +171,10 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
 </main>
 <div class="sheet" id="sheet" hidden><div class="in" id="sheetin"></div></div>
 <div id="toast" hidden role="status"></div>
-<div class="foot">Oddable v294 · Golf GPS · course map © OpenStreetMap contributors · not a rangefinder · no picks, no bets</div>
+<div class="foot">Oddable v295 · Golf GPS · course map © OpenStreetMap contributors · not a rangefinder · no picks, no bets</div>
 <script>try{if(localStorage.getItem('pics-dark')!=='0')document.body.classList.add('dark')}catch(e){document.body.classList.add('dark')}</script>
-<script src="leaflet.js?v=294"></script>
-<script src="golfgps.js?v=294"></script>
+<script src="leaflet.js?v=295"></script>
+<script src="golfgps.js?v=295"></script>
 <script>
 (function () {
   'use strict';
@@ -207,7 +223,7 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
 
   // ================= routing: golfgps.html?course=<id>&hole=<n> =================
   function setUrl(push) { const u = C ? '?course=' + encodeURIComponent(C.id).replace(/%2F/g, '/') + '&hole=' + N + (GDK ? '&gd=' + GDK : '') : location.pathname; try { history[push ? 'pushState' : 'replaceState'](null, '', u); } catch (e) {} }
-  function showPick() { stopGps(); releaseWake(); clearInterval(TICK); TICK = null; gdReset(); C = null; closeSheet(); $('#hv').hidden = true; $('#pv').hidden = false; document.querySelector('header .sub').hidden = false; showRecent(); }
+  function showPick() { stopGps(); releaseWake(); clearInterval(TICK); TICK = null; gdReset(); C = null; closeSheet(); $('#hv').hidden = true; $('#pv').hidden = false; document.querySelector('header .sub').hidden = false; showRecent(); drawMyHome(); }
   async function go(id, n, push) {
     const gdWant = new URLSearchParams(location.search).get('gd') || ''; // v287: read before setUrl rewrites the address
     $('#pv').hidden = true; $('#hv').hidden = false; $('#hole').hidden = true; $('#cname').textContent = ''; document.querySelector('header .sub').hidden = true;
@@ -233,7 +249,7 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
 
   // ================= the hole screen =================
   const hole = () => G.hole(C, N), from = () => FIX || hole().tee || null;
-  function render() { drawDist(); drawLog(); drawFlags(); drawGps(); drawMore(); drawMap(); drawMode(); drawSug(); }
+  function render() { drawDist(); drawMy(); drawLog(); drawFlags(); drawGps(); drawMore(); drawMap(); drawMode(); drawSug(); }
   function drawDist() {
     const h = hole(), P = G.pin(C, N, R), f = from(), d = P ? G.distances(f, h, P.point) : { pin: null, front: null, center: null, back: null }, sel = G.selFor(R, N), off = !P || P.noOutline || P.by === 'you';
     const on = (pl) => (P && P.by !== 'you' && sel && !P.noOutline && P.shown === pl ? ' class="on" aria-pressed="true"' : ' aria-pressed="false"');
@@ -300,7 +316,7 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
   // numbers only (called on every GPS reading): never rebuilds the buttons under a finger
   function tick() {
     if (!C || $('#hv').hidden) return;
-    if (FIX) { const w = G.teeWatch(TEEST, FIX, C, N, Date.now()); TEEST = w.st; if (!w.st) NOSUG = {}; const s = w.suggest && !NOSUG[w.suggest] ? w.suggest : 0; if (s !== SUG) { SUG = s; drawSug(); } }
+    if (FIX) { const w = G.teeWatch(TEEST, FIX, C, N, Date.now()); TEEST = w.st; if (!w.st) NOSUG = {}; const s = w.suggest && !NOSUG[w.suggest] ? w.suggest : 0; if (s && myAt() && s <= MY.holes) { NOSUG[s] = 1; SUG = 0; setHole(s); toast('On the ' + G.ord(s) + ' tee: your card moved to hole ' + s + '.'); return; } /* v295: a round going = the card follows you */ if (s !== SUG) { SUG = s; drawSug(); } }
     const h = hole(), P = G.pin(C, N, R), f = from(), d = P ? G.distances(f, h, P.point) : null, set = (id, v) => { const e = document.getElementById(id); if (e && e.textContent !== v) e.textContent = v; };
     set('dpin', G.fmtYd(d && d.pin)); G.PLACES.forEach((pl) => set('d' + pl, G.fmtYd(d && d[pl]))); set('dfrom', FIX ? 'from you' : h.tee ? 'from the tee' : 'no starting point yet');
     const s = G.gpsState(FIX, GERR, C), gt = document.getElementById('gpst'); if (gt && (WANT || FIX || GERR)) { gt.textContent = s.text; gt.closest('.gps').className = 'gps ' + (s.kind === 'ok' ? 'ok' : 'bad'); }
@@ -415,6 +431,7 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
     if (!C || !GDL.length) { el.innerHTML = GDL.length ? '' : (G.refused().length && gdOk() ? refusedHtml() : ''); return; }
     if (!GDK) { el.innerHTML = '<div class="card gdl"><div class="lab">⛳ Log my score</div><div class="note">You are in ' + GDL.length + ' Golf days at this course today. Pick the one to log your scores to (asked once today):</div><div class="gdpk">' + GDL.map((x) => '<button class="btn" type="button" data-gdpick="' + esc(gdKey(x)) + '">' + esc(x.day.name) + '<small>' + esc(x.group || x.day.course.name) + '</small></button>').join('') + '</div>' + refusedHtml() + '</div>'; return; }
     const x = gdCur(), d = x.day, hs = holesOf(d.holes), { sc, q } = gdScores(x), qn = G.qCount(x.g, d.id), me = (d.board || []).find((r) => r.pid === d.me);
+    if (myAt()) { el.innerHTML = '<div class="note">⛳ Your scores in My round also go to <b>' + esc(d.name) + '</b>' + (me && !me.none ? ' · ' + esc((me.done ? 'Finished' : 'Thru ' + me.thru) + ' · place ' + (me.tied ? 'T' : '') + me.place) : '') + '.</div>' + (qn ? '<div class="gdq" id="gdq">📶 Saved on this phone, will send (' + qn + (qn === 1 ? ' score' : ' scores') + ')<div class="row2"><button class="btn" type="button" id="gdsend">Send now</button></div></div>' : '') + refusedHtml(); return; }
     let h = '<div class="card gdl"><div class="lab">⛳ Log my score · ' + esc(d.name) + '</div>';
     if (!hs.includes(N)) h += '<div class="note">Hole ' + N + ' is not in this round (' + esc(d.holesName || '') + ').</div>';
     else {
@@ -436,6 +453,103 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
   }
   G.onQ((ev) => { if (ev.type === 'sent' && ev.day) GDL.forEach((x) => { if (x.g === ev.g && x.day.id === ev.day.id) x.day = ev.day; }); if (ev.type === 'refused') toast('Hole ' + ev.hole + ' was not saved: ' + ev.error); if (C && !$('#hv').hidden) drawLog(); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && GDL.length) gdRefresh(); });
+
+  // ================= v295 My round: your own scorecard at any course =================
+  // Pars come from the course map (and players' fixes). Up to 4 players on one card. Kept on the phone while you play; finished rounds go to your
+  // account when signed in (guests: this phone). With GPS on, the card moves to the next hole when you reach its tee. A Golf day you are in at this
+  // course gets your (the first player's) scores too.
+  let MY = null, MYSET = null, MYV = {}, MYVH = 0, MYFIN = 0, MYLIST = null, MYBUSY = false;
+  const myAt = () => !!(MY && C && MY.course.id === C.id);
+  const tp = (v) => (v === 0 ? 'E' : v > 0 ? '+' + v : String(v));
+  const thru = (r, i) => { const t = G.myTotals(r, i); return t.holes ? tp(t.toPar) + ' thru ' + t.holes : 'no holes yet'; };
+  function drawMy() {
+    const el = $('#myr'); if (!el) return; MY = G.myRound(); if (!C) { el.innerHTML = ''; return; }
+    if (!myAt()) {
+      if (MY) { el.innerHTML = '<div class="card myr"><div class="lab">⛳ My round</div><div class="note">You have a round going at <b>' + esc(MY.course.name) + '</b> (' + esc(thru(MY, 0)) + ').</div><div class="row2"><button class="btn pri" type="button" id="mygo">Go to that round</button><button class="btn" type="button" id="myquit">' + (MYFIN === -1 ? 'Tap again to delete it' : 'Delete that round') + '</button></div></div>'; return; }
+      if (MYSET) { el.innerHTML = '<div class="card myr mynames"><div class="lab">⛳ Start my round · ' + esc(C.name) + '</div><div class="note">Who is playing? You first. Up to 3 friends: you keep their score on this card.</div>' + [0, 1, 2, 3].map((i) => '<input type="text" maxlength="30" autocapitalize="words" data-myname="' + i + '" placeholder="' + (i ? 'Friend ' + i + ' (optional)' : 'Your name') + '" value="' + esc(MYSET[i] || '') + '">').join('') + '<div class="row2"><button class="btn pri" type="button" id="mygo2">Start round</button><button class="btn" type="button" id="mycan">Cancel</button></div></div>'; return; }
+      el.innerHTML = '<div class="card myr"><button class="btn pri wide" type="button" id="mystart">⛳ Start my round</button><div class="note">The scorecard fills in from this course: holes and par. Add up to 3 friends to keep their score too.' + (G.signedIn() ? ' Finished rounds are saved to your account.' : ' Not signed in: your rounds stay on this phone.') + '</div><div class="row2"><button class="btn" type="button" id="mygd">🏆 Start a Golf day here</button></div></div>'; return;
+    }
+    const n = N, par = MY.par[n] || 4, P0 = MY.players[0];
+    if (MYVH !== n) { MYVH = n; MYV = {}; }
+    let h = '<div class="card myr"><div class="lab">⛳ My round · ' + esc(thru(MY, 0)) + '</div>';
+    if (n > MY.holes) { h += '<div class="note">Hole ' + n + ' is not on your card (' + MY.holes + ' holes).</div>'; }
+    else {
+      const fixed = G.hole(C, n).parFixed;
+      h += '<div class="myh"><span>Hole ' + n + '</span><label>Par <select id="mypar" aria-label="Par of hole ' + n + '">' + [3, 4, 5, 6].map((p) => '<option' + (p === par ? ' selected' : '') + '>' + p + '</option>').join('') + '</select></label><small>' + (fixed === 'course' ? 'Par fixed by a player for this course.' : fixed === 'phone' ? 'Par fixed on this phone.' : G.hole(C, n).par ? 'Par from the course map. Wrong? Change it: it is fixed for everyone.' : 'The course map has no par here: set it and it is fixed for everyone.') + '</small></div>';
+      MY.players.forEach((p, i) => { const has = Number.isInteger(p.s[n]), v = MYV[i] != null ? MYV[i] : has ? p.s[n] : par;
+        h += '<div class="mypl"><div class="nm">' + esc(p.name) + '<small>' + (has ? 'Saved: ' + p.s[n] + ' · ' : '') + esc(thru(MY, i)) + '</small></div><button type="button" data-myk="-1" data-myi="' + i + '" aria-label="One stroke fewer for ' + esc(p.name) + '">−</button><b class="' + (has || MYV[i] != null ? '' : 'un') + '" id="myv' + i + '">' + v + '</b><button type="button" data-myk="1" data-myi="' + i + '" aria-label="One stroke more for ' + esc(p.name) + '">+</button></div>'; });
+      const pu = MY.putts[n], fw = MY.fw[n];
+      h += '<div class="mych"><span>' + esc(P0.name) + ' putts</span>' + [0, 1, 2, 3, 4].map((x) => '<button type="button" data-myputt="' + x + '" class="' + (pu === x ? 'on' : '') + '">' + (x === 4 ? '4+' : x) + '</button>').join('') + '</div>';
+      if (par >= 4) h += '<div class="mych"><span>Fairway</span><button type="button" data-myfw="1" class="' + (fw === 1 ? 'on' : '') + '">Hit</button><button type="button" data-myfw="0" class="' + (fw === 0 ? 'on' : '') + '">Missed</button></div>';
+      h += '<button class="btn pri wide" type="button" id="mysave"' + (MYBUSY ? ' disabled' : '') + '>Save hole ' + n + (n < MY.holes ? ' · next hole ›' : '') + '</button>';
+    }
+    h += '<div class="row2"><button class="btn" type="button" id="mycard">Scorecard</button><button class="btn" type="button" id="myfin">' + (MYFIN === 1 ? 'Tap again to finish' : 'Finish round') + '</button><button class="btn" type="button" id="myquit">' + (MYFIN === -1 ? 'Tap again to delete' : 'Delete round') + '</button></div>';
+    if (!gdCur()) h += '<div class="row2"><button class="btn" type="button" id="mygd">🏆 Start a Golf day here</button></div>';
+    el.innerHTML = h + '</div>';
+  }
+  // the card as a table that never scrolls sideways: Out (1-9) and In (10-18), a column per player (one player: putts and fairway too)
+  function cardHtml2(r) {
+    const one = r.players.length === 1, cols = 2 + r.players.length + (one ? 2 : 0), gt = 'grid-template-columns:minmax(0,.9fr) minmax(0,.8fr)' + ' minmax(0,1fr)'.repeat(cols - 2);
+    const block = (a, lab) => { let o = '<div class="mysc" style="' + gt + '"><span class="l hd">' + lab + '</span><span class="hd">Par</span>' + r.players.map((p) => '<span class="hd">' + esc(p.name.slice(0, 8)) + '</span>').join('') + (one ? '<span class="hd">Putts</span><span class="hd">FW</span>' : '');
+      const tot = r.players.map(() => 0), has = r.players.map(() => 0); let tpar = 0, tpu = 0;
+      a.forEach((n) => { const par = r.par[n] || 4; tpar += par; o += '<span class="l">' + n + '</span><span>' + par + '</span>' + r.players.map((p, i) => { const v = p.s[n]; if (!Number.isInteger(v)) return '<span>–</span>'; tot[i] += v; has[i]++; return '<span class="' + (v < par ? 'bd' : v > par ? 'bg' : '') + '">' + v + '</span>'; }).join('');
+        if (one) { const pu = r.putts[n], fw = r.fw[n]; if (Number.isInteger(pu)) tpu += pu; o += '<span>' + (Number.isInteger(pu) ? pu : '–') + '</span><span>' + (fw === 1 ? '✓' : fw === 0 ? '✗' : par >= 4 ? '–' : '') + '</span>'; } });
+      o += '<span class="l t">' + (lab === 'Hole' ? 'Total' : lab) + '</span><span class="t">' + tpar + '</span>' + tot.map((t, i) => '<span class="t">' + (has[i] ? t : '–') + '</span>').join('') + (one ? '<span class="t">' + (tpu || '–') + '</span><span class="t"></span>' : '');
+      return o + '</div>'; };
+    const all = []; for (let n = 1; n <= (r.holes || Object.keys(r.par).length || 18); n++) all.push(n);
+    let h = all.length > 9 ? block(all.slice(0, 9), 'Out') + block(all.slice(9), 'In') : block(all, 'Hole');
+    h += '<div class="card">' + r.players.map((p, i) => { const t = G.myTotals(r, i); return '<div><b>' + esc(p.name) + '</b>: ' + (t.holes ? t.strokes + ' (' + tp(t.toPar) + ')' + (t.holes < all.length ? ' thru ' + t.holes : '') : 'no scores') + '</div>'; }).join('') + '</div>';
+    return h;
+  }
+  function mySheet(r, past) {
+    $('#sheetin').innerHTML = '<button class="bk" type="button" id="shback">‹ Back</button><h2 style="margin:4px 0">' + esc(r.course.name) + '</h2><div class="note">' + esc(new Date(r.date + 'T12:00:00').toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })) + (past && past.unsent ? ' · saved on this phone, will send to your account' : '') + '</div>' + cardHtml2(r) +
+      (past ? '<div class="row2"><button class="btn" type="button" data-mydel="' + esc(r.id) + '">' + (MYFIN === r.id ? 'Tap again to delete' : 'Delete this round') + '</button></div>' : '');
+    $('#shback').onclick = closeSheet; $('#sheet').hidden = false; $('#sheet').scrollTop = 0;
+  }
+  async function mySaveHole() {
+    if (!myAt() || MYBUSY) return; const n = N; if (n > MY.holes) return;
+    MY.players.forEach((p, i) => { const v = MYV[i] != null ? MYV[i] : Number.isInteger(p.s[n]) ? p.s[n] : MY.par[n] || 4; p.s[n] = v; });
+    G.mySave(MY); MYV = {}; const v0 = MY.players[0].s[n];
+    const x = gdCur(); if (x && holesOf(x.day.holes).includes(n)) { MYBUSY = true; drawMy(); try { const r = await G.saveScore({ g: x.g, id: x.day.id, name: x.day.name }, n, v0); if (r.day) x.day = r.day; } catch (e) { toast('Saved on your card. ' + x.day.name + ' did not take it: ' + e.message); } MYBUSY = false; }
+    toast('Hole ' + n + ' saved' + (MY.players.length > 1 ? ' for everyone' : ': ' + v0) + '.');
+    if (n < MY.holes) setHole(n + 1); else { MYFIN = 0; render(); }
+  }
+  async function drawMyHome() {
+    const el = $('#myhome'); if (!el) return; const cur = G.myRound();
+    let h = cur ? '<div class="card"><div class="lab" style="font:800 12px system-ui;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">⛳ Round going</div><button class="btn wide myrl" type="button" data-course="' + esc(cur.course.id) + '"><b>' + esc(cur.course.name) + '</b><small>' + esc(thru(cur, 0)) + ' · tap to keep playing</small></button></div>' : '';
+    h += '<button class="btn wide" type="button" id="myall">📋 My rounds</button><div id="mylist"></div>';
+    el.innerHTML = h; if (MYLIST) myListDraw();
+  }
+  function myListDraw() {
+    const e = $('#mylist'); if (!e || !MYLIST) return;
+    if (MYLIST.loading) { e.innerHTML = '<div class="card">Loading your rounds…</div>'; return; }
+    const a = MYLIST.rounds || [];
+    e.innerHTML = (MYLIST.note ? '<div class="note">' + esc(MYLIST.note) + '</div>' : '') + (a.length ? a.map((r, k) => { const t = G.myTotals(r, 0); return '<button class="btn myrl" type="button" data-myr="' + k + '"><b>' + esc(r.course.name) + '</b><small>' + esc(new Date(r.date + 'T12:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })) + ' · ' + esc(r.players[0].name) + ' ' + (t.holes ? t.strokes + ' (' + tp(t.toPar) + ')' : '–') + (r.players.length > 1 ? ' · +' + (r.players.length - 1) + ' more' : '') + (r.unsent ? ' · will send' : '') + '</small></button>'; }).join('') : '<div class="card">No finished rounds yet. Open a course and tap Start my round.</div>') + (MYLIST.where === 'phone' && !G.signedIn() ? '<div class="note">Not signed in: these rounds are on this phone only.</div>' : '');
+  }
+  function golfDayHere() { const c = C.center || {}; location.href = 'index.html?gdat=' + encodeURIComponent([C.id, String(C.name).slice(0, 80), c.lat != null ? (+c.lat).toFixed(5) : '', c.lon != null ? (+c.lon).toFixed(5) : ''].join('~')); }
+  document.addEventListener('change', async (e) => {
+    const t = e.target; if (!t || t.id !== 'mypar' || !myAt()) return; const n = N, v = +t.value; t.disabled = true;
+    try { const r = await G.savePar(C, n, v); G.myPar(MY, n, v); const o = $('#hsel').options[n - 1]; if (o) o.textContent = 'Hole ' + n + ' · Par ' + v; toast('Hole ' + n + ' is par ' + v + '. ' + r.msg); } catch (er) { toast(er.message); }
+    render();
+  });
+  document.addEventListener('click', async (e) => {
+    const t = e.target.closest && e.target.closest('button'); if (!t) return;
+    if (t.id === 'mystart') { MYSET = [lsg('odd-name') || '']; MYFIN = 0; drawMy(); const i = document.querySelector('[data-myname="0"]'); if (i && !i.value) i.focus(); return; }
+    if (t.id === 'mycan') { MYSET = null; drawMy(); return; }
+    if (t.id === 'mygo2') { const names = [...document.querySelectorAll('[data-myname]')].map((x) => x.value.trim()); if (!names[0]) names[0] = lsg('odd-name') || 'Me'; MYSET = null; MY = G.myStart(C, names); MYV = {}; MYVH = 0; toast('Round started. ' + MY.holes + ' holes, par ' + Object.values(MY.par).reduce((a, b) => a + b, 0) + '. Check each par as you go.'); setHole(1); return; }
+    if (t.id === 'mygo') { if (MY) go(MY.course.id, 0, true); return; }
+    if (t.id === 'mygd') { golfDayHere(); return; }
+    if (t.hasAttribute('data-myk') && myAt()) { const i = +t.getAttribute('data-myi'), p = MY.players[i], n = N, cur = MYV[i] != null ? MYV[i] : Number.isInteger(p.s[n]) ? p.s[n] : MY.par[n] || 4; MYV[i] = Math.max(1, Math.min(20, cur + (+t.getAttribute('data-myk')))); const b = document.getElementById('myv' + i); if (b) { b.textContent = MYV[i]; b.className = ''; } return; }
+    if (t.hasAttribute('data-myputt') && myAt()) { const v = +t.getAttribute('data-myputt'); if (MY.putts[N] === v) delete MY.putts[N]; else MY.putts[N] = v; G.mySave(MY); drawMy(); return; }
+    if (t.hasAttribute('data-myfw') && myAt()) { const v = +t.getAttribute('data-myfw'); if (MY.fw[N] === v) delete MY.fw[N]; else MY.fw[N] = v; G.mySave(MY); drawMy(); return; }
+    if (t.id === 'mysave') { mySaveHole(); return; }
+    if (t.id === 'mycard' && MY) { mySheet(MY, null); return; }
+    if (t.id === 'myfin' && MY) { if (MYFIN !== 1) { MYFIN = 1; drawMy(); setTimeout(() => { if (MYFIN === 1) { MYFIN = 0; drawMy(); } }, 5000); return; } MYFIN = 0; const r = await G.myFinish(MY); MY = null; MYLIST = null; toast(r.saved === 'account' ? 'Round saved to your account. See it under My rounds.' : r.saved === 'phone-later' ? 'Round saved on this phone. It goes to your account when you have signal.' : 'Round saved on this phone. Sign up free to keep your rounds in your account.'); render(); return; }
+    if (t.id === 'myquit' && MY) { if (MYFIN !== -1) { MYFIN = -1; drawMy(); setTimeout(() => { if (MYFIN === -1) { MYFIN = 0; drawMy(); } }, 5000); return; } MYFIN = 0; G.myQuit(); MY = null; toast('Round deleted.'); render(); return; }
+    if (t.id === 'myall') { MYLIST = { loading: true }; myListDraw(); const r = await G.myRounds(); MYLIST = r; myListDraw(); return; }
+    if (t.hasAttribute('data-myr') && MYLIST) { const r = (MYLIST.rounds || [])[+t.getAttribute('data-myr')]; if (r) { MYFIN = 0; mySheet(r, r); } return; }
+    if (t.hasAttribute('data-mydel')) { const id = t.getAttribute('data-mydel'); if (MYFIN !== id) { MYFIN = id; t.textContent = 'Tap again to delete'; return; } MYFIN = 0; await G.myDelete(id); closeSheet(); MYLIST = await G.myRounds(); myListDraw(); toast('Round deleted.'); return; }
+  });
 
   // ================= map =================
   function initMap() {
@@ -529,6 +643,6 @@ button.cc b{display:block;font-size:16px;line-height:1.25}button.cc span{display
   route();
 })();
 </script>
-<script src="gate.js?v=294"></script>
+<script src="gate.js?v=295"></script>
 </body>
 </html>

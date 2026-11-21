@@ -66,6 +66,7 @@
     s += '<div class="og2"><button type="button" class="ogpri" data-a="create">Create a group</button><button type="button" class="ogsec" data-a="join">Join with a code</button></div>';
     s += '<div class="og3">' + tile('My stats', '📊 My record', 'data-a="mstats"', 'Finished contests and Golf days') + '</div>'; // v274
     if (!H) return s + '<div class="ogcard ogmut">Loading your groups…</div>';
+    if (window.__gdPref && window.__gdPref.name) s += '<div class="ogcard">⛳ Golf day at <b>' + esc(window.__gdPref.name) + '</b>: open your group, then Golf day → Start a Golf day. The course is filled in.</div>'; // v295
     s += '<h3 class="ogh">My groups</h3>';
     if (!H.groups.length) s += '<div class="ogcard ogmut">No groups yet. Create one, or open an invite link from a friend.<br>Make the group first, then pick its games (Picks contest, ⛳ Golf day, …).</div>';
     s += '<div class="oggrid">' + H.groups.map((gr) => {
@@ -78,11 +79,15 @@
     if (H.pending.length) s += '<h3 class="ogh">Waiting for an answer</h3><div class="oggrid">' + H.pending.map((p) => '<div class="ogcard"><b class="ogname">' + esc(p.name) + '</b><div class="ogmeta">Request sent. The commissioner approves who joins.</div><button type="button" class="ogsec" data-a="cancel" data-id="' + att(p.id) + '">Cancel my request</button></div>').join('') + '</div>';
     return s;
   }
-  function loadHome() { act('mine', {}, async (j) => { H = { groups: j.groups || [], pending: j.pending || [] }; blSet(j.betLock); const s = cur(); if (s.t === 'hub' && s.gr) { const n = H.groups.find((x) => x.id === s.gr.id); if (n) s.gr = n; } paint(); if (WANTG) gamesGo(); }); }
+  function loadHome() { act('mine', {}, async (j) => { H = { groups: j.groups || [], pending: j.pending || [] }; blSet(j.betLock); const s = cur(); if (s.t === 'hub' && s.gr) { const n = H.groups.find((x) => x.id === s.gr.id); if (n) s.gr = n; } paint(); if (WANTG) gamesGo(); if (WANTGD) gdGo(); }); }
   // v283: the what's-new pop-up's "Golf days" / "Group pickleball" items open the Games catalog: straight to a group's Games screen when the person is in
   // exactly ONE group, else My groups (pick a group, then Games). WANTG is cleared by any other way into Groups (open() without keep, a join link).
-  let WANTG = false;
+  let WANTG = false, WANTGD = false;
   function gamesGo() { WANTG = false; const s = cur(); if (expired() || !H || s.t !== 'home' || stack.length !== 1 || H.groups.length !== 1) return; const gr = H.groups[0]; stack.push({ t: 'hub', gr }); gamesOpen(gr); }
+  // v295: Golf GPS "Start a Golf day here" (index.html ?gdat=): the course waits in window.__gdPref; one group you run (or one group) opens its Golf day
+  // screen, where "Start a Golf day" has the course filled in. Several groups: the home list with a note; the course waits until a Golf day is started.
+  function golfAt(c) { window.__gdPref = c; open(); if (expired()) return; WANTGD = true; if (H && !busy) gdGo(); }
+  function gdGo() { WANTGD = false; const s = cur(); if (expired() || !H || s.t !== 'home' || stack.length !== 1) return paint(); const mine = H.groups.filter((x) => x.role === 'comm'), list = mine.length ? mine : H.groups; if (list.length !== 1) return paint(); stack.push({ t: 'hub', gr: list[0] }); gdOpen(list[0]); }
   function openGames() { open(); if (expired()) return; WANTG = true; if (H && !busy) gamesGo(); }
 
   // ---------- group page ----------
@@ -209,7 +214,7 @@
   function push(v) { err = ''; stack.push(v); paint(); el().scrollTop = 0; }
   // v273 Golf days (a group game): the screens live in pics/golfday.js, fetched the first time a member opens the Golf day tile. It draws inside this
   // overlay and uses the same stack (Back), the same one-call-at-a-time `act` (so an ended account gets the same lock card) and the same classes.
-  let GDL = null; const GDV = '294';
+  let GDL = null; const GDV = '295';
   const GDX = { esc, att, fmtDay, chiDay, addDays, push, back: () => back(), paint: () => paint(), cur, el, act, post, errText, tile, sel, busy: () => busy, setErr: (m) => { err = m || ''; }, me: () => g('odd-name') || '' };
   function gdOpen(gr) {
     push({ t: 'golf', v: 'home', gr });
@@ -456,7 +461,7 @@
     if (r.personal) return true; // no contest counts this kind of bet: it stays a personal bet (no pop-up)
     bet.gl = r.gl; bet.sa = r.sa; if (r.text) { try { alert(r.text); } catch (e) {} } return true;
   }
-  window.OddGroups = { open, close, join: openJoin, gate, poke, lockChanged, isOpen: () => !!el(), active: () => BL.n > 0 && !!g('odd-tok') && !expired(), locked: (b) => !!(b && Number(b.gl) > 0), LOCKNOTE, addGame, games: () => GAMES.map((x) => ({ key: x.key, title: x.title, blurb: x.blurb })), openGame, openGames, refresh }; // v274: addGame = the games catalog registry; v283: openGame(key) opens a registered game for the group on screen (pics/local.js's games list uses it), openGames() = Groups at the Games catalog (the what's-new pop-up), refresh() = the Games screen asks its states again (pics/local.js Back)
+  window.OddGroups = { open, close, join: openJoin, gate, poke, lockChanged, isOpen: () => !!el(), active: () => BL.n > 0 && !!g('odd-tok') && !expired(), locked: (b) => !!(b && Number(b.gl) > 0), LOCKNOTE, addGame, games: () => GAMES.map((x) => ({ key: x.key, title: x.title, blurb: x.blurb })), openGame, openGames, refresh, golfAt }; // v274: addGame = the games catalog registry; v283: openGame(key) opens a registered game for the group on screen (pics/local.js's games list uses it), openGames() = Groups at the Games catalog (the what's-new pop-up), refresh() = the Games screen asks its states again (pics/local.js Back)
   window.oddGroups = () => open();
   if (g('odd-tok')) setTimeout(poke, 3000);
   // v287: Golf day scores kept on this phone with no signal (pics/golfgps.js, key ggps-sq) are sent when the app opens: the queue's file is fetched only when one waits

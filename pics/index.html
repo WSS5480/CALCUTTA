@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<script>/* what's new pop-up: did this open come by a link that opens its own screen? Read before gate.js / announce.js / the page clean the address. ?pay= ?open= ?add= slip= always open a screen. ?join= opens one only where Groups exists: a launch when this device knows Groups exists (odd-gsw), or, when it has never heard from the server (no odd-gate yet), on the first load of this tab only; a ?join= left in the address while Groups is dark does not block later opens. ?ref= opens nothing. v283: their v280 owner-PIN card's "Sign in with cell number" signs out and reloads with sessionStorage odd-goin, and gate.js then opens the cell + PIN sign-in: that open counts as a launch too, so the pop-up never races it. */ (function(){var L=false;try{var q=location.search+location.hash;L=/[?&#](pay|open|add|slip)=/.test(q);if(!L&&/[?&]join=/.test(location.search)){var gs=null,gt=null;try{gs=localStorage.getItem('odd-gsw');gt=localStorage.getItem('odd-gate')}catch(e){}if(gs==='1')L=true;else if(gt===null){var k='odd-new-j'+location.search,first=true;try{first=!sessionStorage.getItem(k);sessionStorage.setItem(k,'1')}catch(e){}L=first}}if(!L){try{L=sessionStorage.getItem('odd-goin')==='1'}catch(e){}}}catch(e){L=false}window.__oddLaunch=L})()</script>
+<script>/* what's new pop-up: did this open come by a link that opens its own screen? Read before gate.js / announce.js / the page clean the address. ?pay= ?open= ?add= slip= always open a screen. ?join= opens one only where Groups exists: a launch when this device knows Groups exists (odd-gsw), or, when it has never heard from the server (no odd-gate yet), on the first load of this tab only; a ?join= left in the address while Groups is dark does not block later opens. ?ref= opens nothing. v283: their v280 owner-PIN card's "Sign in with cell number" signs out and reloads with sessionStorage odd-goin, and gate.js then opens the cell + PIN sign-in: that open counts as a launch too, so the pop-up never races it. */ (function(){var L=false;try{var q=location.search+location.hash;L=/[?&#](pay|open|add|slip|gdat)=/.test(q);if(!L&&/[?&]join=/.test(location.search)){var gs=null,gt=null;try{gs=localStorage.getItem('odd-gsw');gt=localStorage.getItem('odd-gate')}catch(e){}if(gs==='1')L=true;else if(gt===null){var k='odd-new-j'+location.search,first=true;try{first=!sessionStorage.getItem(k);sessionStorage.setItem(k,'1')}catch(e){}L=first}}if(!L){try{L=sessionStorage.getItem('odd-goin')==='1'}catch(e){}}}catch(e){L=false}window.__oddLaunch=L})()</script>
 <script>try{if(localStorage.getItem('pics-theme')!=='violet')document.documentElement.classList.add('cb')}catch(e){document.documentElement.classList.add('cb')}function themeSet(v){try{localStorage.setItem('pics-theme',v)}catch(e){}location.reload()}document.addEventListener('DOMContentLoaded',()=>{if(document.documentElement.classList.contains('cb')){const m=document.querySelector('meta[name=theme-color]');if(m)m.content='#041e42'}})</script>
 
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -280,10 +280,10 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v294 -->
+<!-- Pics v295 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v294</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v295</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
   <div id="arbbar" class="arbbar" hidden onclick="arbBarTap()" role="button" aria-label="Arbitrage alert"><span class="mq" id="arbmq"></span></div>
   <div class="mrow" id="mrow"><label><span>League</span><select id="lgsel" aria-label="League" autocomplete="off"><option value="nfl">🏈 NFL</option><option value="cfb">🎓 NCAA</option><option value="pga">⛳ PGA Tour</option><option value="golfgps">📍 Golf GPS</option><option value="pickleball">🏓 Pickleball</option><option value="nba">🏀 NBA</option><option value="mlb">⚾ MLB</option><option value="nhl">🏒 NHL</option><option value="ncaab">🏀 NCAAB</option></select></label><label id="gvlab"><span>View</span><select id="gvsel" aria-label="View" autocomplete="off" onchange="gvSet(this.value)"></select></label></div>
   <div class="srow"><input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team"><select id="conf" aria-label="Conference"><option value="">All</option></select></div>
@@ -292,7 +292,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v294 (name Change button answers fast) (v293: name or handle required for every player, change it in the Account box) (v292: sign in with cell + PIN only; email optional) (v291: hotfix: My Bets crashed on a parlay with a stored result) (v290: one-team slips only match a game today or live; Western Illinois is not Illinois) (v289: screenshot slips that name one team find that team's game) (v288: Save my bet or add it to your group; commissioner can delete a group any time) (v287: Golf days: log my score on Golf GPS, scores kept with no signal, commissioner flag colours)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v295 (Golf GPS My round: scorecard from the course, friends on one card, My rounds, Golf day button) (v294: name Change button answers fast) (v293: name or handle required for every player, change it in the Account box) (v292: sign in with cell + PIN only; email optional) (v291: hotfix: My Bets crashed on a parlay with a stored result) (v290: one-team slips only match a game today or live; Western Illinois is not Illinois) (v289: screenshot slips that name one team find that team's game) (v288: Save my bet or add it to your group; commissioner can delete a group any time) (v287: Golf days: log my score on Golf GPS, scores kept with no signal, commissioner flag colours)</div>
   <div class="sub nsw" id="nsw"></div>
   <div class="sub" id="spset"><label>Score pop-ups <select id="spsel" aria-label="Score pop-ups" autocomplete="off" onchange="spSet(this.value)"><option value="mine">My bets only</option><option value="all">All live games</option><option value="off">Off</option></select></label><div style="font-size:11px;opacity:.75;margin-top:4px">A card pops up when a live game scores or ends, with where your bets stand right now.</div></div>
   <div class="sub" id="bpset"><label>Phone alerts for my bets: every score, and the final. <select id="bpsel" aria-label="Phone alerts for my bets (app closed)" autocomplete="off" onchange="bpSet(this.value)"><option value="off">Off</option><option value="on">On</option></select></label><div class="bph">For when Oddable is closed. Needs Oddable added to your Home Screen on iPhone or iPad, and notifications allowed.</div><div id="bpbbw" hidden><label style="margin-top:6px">Basketball <select id="bpbb" aria-label="Basketball alerts" autocomplete="off" onchange="bpBB(this.value)"><option value="q">Quarter ends and final</option><option value="all">Every score</option></select></label><div class="bph">Every score in basketball can mean 150+ alerts a game.</div></div><div id="bpmsg" role="status"></div><button type="button" id="bptest" hidden onclick="bpTest()">Send me a test</button></div>
@@ -313,7 +313,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </div>
 <div id="plb" hidden></div>
 <nav class="bn" id="bn"></nav>
-<script src="trophy.js?v=294"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
+<script src="trophy.js?v=295"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
 <script>
 // ================= v268 GUEST MODE (1 of 3): the flag. The rest is in the "v268 GUEST MODE" script block near the end of this file and in gate.js. =================
 // window.__oddLock: '' = signed in and paid up, or no gate (everything shows, exactly as before v268) · 'guest' = no account · 'expired' = signed in, time has ended.
@@ -555,12 +555,22 @@ function navMore(open) {
 let GRPL = 0; const GRPQ = [];
 function grpLoad(then) { // pics/groups.js, fetched the first time it is needed
   if (window.OddGroups) { if (then) then(); return; } if (then) GRPQ.push(then); if (GRPL) return; GRPL = 1;
-  const sc = document.createElement('script'); sc.src = 'groups.js?v=294'; sc.onload = () => { GRPQ.splice(0).forEach((f) => { try { f(); } catch (e) {} }); }; sc.onerror = () => { GRPL = 0; GRPQ.length = 0; sc.remove(); }; document.head.appendChild(sc);
+  const sc = document.createElement('script'); sc.src = 'groups.js?v=295'; sc.onload = () => { GRPQ.splice(0).forEach((f) => { try { f(); } catch (e) {} }); }; sc.onerror = () => { GRPL = 0; GRPQ.length = 0; sc.remove(); }; document.head.appendChild(sc);
 }
 // Invite links: https://<site>/?join=g.<code> (built with window.oddShareUrl, so they also carry ?ref=). The code is kept for this tab and taken out of the address bar.
 // Read ONLY when the server says Groups exists (/acct/status `groups`, kept in 'odd-gsw'); with Groups dark the link is left alone and opens the app as any link does.
 const grpPend = (v) => { try { if (v === undefined) return sessionStorage.getItem('odd-join') || ''; if (v) sessionStorage.setItem('odd-join', v); else sessionStorage.removeItem('odd-join'); } catch (e) {} return ''; };
 function grpCapture() { try { const u = new URL(location.href), m = /^g\.([A-Za-z0-9-]{4,40})$/.exec(u.searchParams.get('join') || ''); if (!u.searchParams.has('join')) return; if (m) grpPend(m[1]); u.searchParams.delete('join'); history.replaceState(history.state, '', u.pathname + (u.searchParams.toString() ? '?' + u.searchParams.toString() : '') + u.hash); } catch (e) {} }
+// v295 Golf GPS "Start a Golf day here": ?gdat=<course id>~<name>~<lat>~<lon>. Kept for this tab, taken out of the address; Groups opens at that group's Golf day.
+(function gdatCapture() { try { const u = new URL(location.href), v = u.searchParams.get('gdat'); if (v == null) return; const a = v.split('~'); if (/^(way|relation|node)\/[1-9]\d{0,14}$/.test(a[0] || '')) sessionStorage.setItem('odd-gdat', JSON.stringify({ id: a[0], name: String(a[1] || 'Golf course').slice(0, 100), lat: +a[2] || null, lon: +a[3] || null })); u.searchParams.delete('gdat'); history.replaceState(history.state, '', u.pathname + (u.searchParams.toString() ? '?' + u.searchParams.toString() : '') + u.hash); } catch (e) {} })();
+let GDATASK = false;
+setTimeout(() => { if (!lsg('odd-tok')) gdatRun(); }, 2500); // a guest: the sign-up sheet (Golf days need a free account)
+function gdatRun() {
+  let c = null; try { c = JSON.parse(sessionStorage.getItem('odd-gdat') || 'null'); } catch (e) {} if (!c) return;
+  if (!lsg('odd-tok')) { if (!GDATASK && window.oddSignUp) { GDATASK = true; try { window.oddSignUp('groups'); } catch (e) {} } return; }
+  if (!grpOn()) return; if (!window.OddGroups) return grpLoad(gdatRun);
+  try { sessionStorage.removeItem('odd-gdat'); } catch (e) {} navMore(false); if (window.OddGroups.golfAt) window.OddGroups.golfAt(c); else window.OddGroups.open();
+}
 // Signed in with an invite waiting: Groups on for this account -> the join screen (an ended account gets the "Your time has ended" lock there and continues
 // after paying). Groups not on for this account (the owner-only test) -> one sheet that says so, with "Ask to be let in" (POST /groups/access/request, only on the tap).
 let GRPLAST = ''; // the invite code this page already acted on (gate.js reports a sign-in twice: the account, then afterSignIn)
@@ -581,6 +591,7 @@ window.oddGroupsSw = function () { grpCapture(); if (!grpPend()) return; setTime
 window.oddGroupsChanged = function () {
   const on = grpOn(), bar = grpBar(); if (bar !== GRPWAS) { GRPWAS = bar; if (!bar) { navMore(false); try { if (window.OddGroups) window.OddGroups.close(); } catch (e) {} } try { navRender(); } catch (e) {} }
   if (on) grpLoad(grpJoinRun); else if (lsg('odd-gsw') === '1') grpJoinRun();
+  if (on) setTimeout(gdatRun, 300); else if (!lsg('odd-tok')) setTimeout(gdatRun, 1500); // v295
 };
 if (grpOn()) setTimeout(() => grpLoad(), 1500); // a known Groups account: the file is ready before the first bet (the bet step lives in it)
 // ================= end v272 Groups (switch, bar, invites) =================
@@ -1968,7 +1979,7 @@ async function alertPush() {
   ASQ = Date.now();
   try { const r = await fetch(ALU, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': alertTok() }, body: JSON.stringify({ week: CUR, rec: { lock: a.lock, dogs: a.dogs, helper: { id: h.g.id, abbr: h.abbr, conf: h.conf } } }) }); if (!r.ok) return; const j = await r.json(); if (j && j.rec && j.week === CUR && alertTake(Object.assign({}, ASV, { [CUR]: j.rec }))) render(); } catch (e) {}
 }
-async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=294')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
+async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=295')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
 const trGrade = (p) => { const g = ALL[p.id]; if (!g || g.state !== 'post') return null; const m = (g.home.abbr === p.abbr ? 1 : -1) * (g.home.score - g.away.score) + p.line; return m === 0 ? 'push' : m > 0 ? 'hit' : 'miss'; };
 function trophyData() {
   if (CFB || !window.Trophy || !Trophy.ready()) return null;
@@ -3668,7 +3679,7 @@ if ('serviceWorker' in navigator) {
 })();
 // ================= end v268 GUEST MODE (3 of 3) =================
 </script>
-<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=294"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="announce.js?v=294"><\/script><script src="dash.js?v=294"><\/script>')</script>
+<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=295"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="announce.js?v=295"><\/script><script src="dash.js?v=295"><\/script>')</script>
 <script>
 // ================= WHAT'S NEW POP-UP (Nov 17 2026, branch whats-new; read "## What's new pop-up" in HANDOFF.md) =================
 // A "Look what's new" card listing the LIVE items this device has not been shown yet (guests included). It shows when at least one such item exists,

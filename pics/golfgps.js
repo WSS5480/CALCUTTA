@@ -115,7 +115,7 @@
     const c = { id: String(j.id || ''), name: String(j.name || 'Golf course'), center: okPt(j.center) ? j.center : null, holes: [], holeCount: 18, holesMapped: +j.holesMapped || 0, note: j.note ? String(j.note) : '', stale: !!j.stale };
     (Array.isArray(j.holes) ? j.holes : []).forEach((h) => {
       if (!h || !Number.isInteger(h.n) || h.n < 1 || h.n > 36) return; const o = { n: h.n, mapped: !!h.mapped, hazards: [] };
-      if (h.par >= 3 && h.par <= 6) o.par = h.par; if (h.handicap >= 1 && h.handicap <= 18) o.handicap = h.handicap;
+      if (h.par >= 3 && h.par <= 6) { o.par = h.par; if (h.parFixed) o.parFixed = 'course'; } if (h.handicap >= 1 && h.handicap <= 18) o.handicap = h.handicap;
       if (okPt(h.tee)) o.tee = h.tee; if (h.teeMarked) o.teeMarked = 'course';
       if (Array.isArray(h.line)) o.line = h.line.filter((p) => Array.isArray(p) && okPt({ lat: p[0], lon: p[1] }));
       if (h.green && okPt(h.green.center)) { const g = { center: h.green.center }; if (okPt(h.green.front) && okPt(h.green.back)) { g.front = h.green.front; g.back = h.green.back; } if (Array.isArray(h.green.outline)) { const ol = h.green.outline.filter((p) => Array.isArray(p) && okPt({ lat: p[0], lon: p[1] })); if (ol.length >= 3) g.outline = ol; } if (h.green.marked) g.marked = 'course'; if (h.green.approx) g.approx = true; o.green = g; }
@@ -146,7 +146,7 @@
     let raw, offline = false, at = D.now();
     try { raw = await call('/holes?id=' + id); keep(id, raw); }
     catch (e) { const c = jget('ggps-c:' + id, null); if (!c || !c.j || (e.status && e.status < 500)) throw e; raw = c.j; offline = true; at = c.at; }
-    const course = applyMarks(tidy(raw), devMarks(id), 'phone'); course.id = id;
+    const course = applyPars(applyMarks(tidy(raw), devMarks(id), 'phone'), devPars(id)); course.id = id;
     if (offline) { course.offline = true; course.savedAt = at; }
     addRecent(course);
     return course;
@@ -233,6 +233,54 @@
   function distances(from, h, pinPoint) {
     const g = h && h.green; return { pin: yards(from, pinPoint), front: g ? yards(from, g.front) : null, center: g ? yards(from, g.center) : null, back: g ? yards(from, g.back) : null };
   }
+
+  // ---------- v295 par fixes (the map often has no par, or a wrong one) ----------
+  const devPars = (id) => { const all = jget('ggps-pars', {}), m = all[id]; return m && typeof m === 'object' ? m : {}; };
+  function applyPars(course, pars) {
+    Object.keys(pars || {}).forEach((k) => { const n = +k, p = pars[k]; if (!(n >= 1 && n <= 36) || !Number.isInteger(p) || p < 3 || p > 6) return; let h = course.holes.find((x) => x.n === n); if (!h) { h = { n, mapped: false, hazards: [] }; course.holes.push(h); course.holes.sort((a, b) => a.n - b.n); } h.par = p; h.parFixed = 'phone'; });
+    return course;
+  }
+  async function savePar(course, n, par) {
+    if (!(n >= 1 && n <= 36) || !Number.isInteger(par) || par < 3 || par > 6) throw new Error('Par must be 3, 4, 5 or 6.');
+    const m = {}; m[n] = par;
+    const phone = (why) => { const all = jget('ggps-pars', {}); all[course.id] = Object.assign({}, devPars(course.id), m); jset('ggps-pars', all); applyPars(course, m); return { where: 'phone', msg: 'Saved on this phone only' + (why ? ' (' + why + ')' : '') + '.' }; };
+    if (!token()) return phone('not signed in');
+    try { await call('/mark', { body: { id: course.id, n, what: 'par', par }, ms: 20000 }); const all = jget('ggps-pars', {}); if (all[course.id]) { delete all[course.id][n]; jset('ggps-pars', all); } applyPars(course, m); const h = course.holes.find((x) => x.n === n); if (h) h.parFixed = 'course'; return { where: 'course', msg: 'Fixed for everyone who plays this course.' }; }
+    catch (e) { if (e.status === 400 || e.status === 429) throw e; return phone(e.offline ? 'no signal' : e.status === 401 ? 'not signed in' : 'the server could not save it'); }
+  }
+
+  // ---------- v295 My round: your own scorecard at any course (up to 4 players on one card) ----------
+  // Kept on this phone while you play ('ggps-myr'). Finished rounds: 'ggps-myrh' on this phone (last 30) and, signed in, /golfcourse/rounds.
+  const MYR_MAX = 30;
+  const rid = () => Math.random().toString(36).slice(2, 10) + D.now().toString(36).slice(-6);
+  function myRound() { const r = jget('ggps-myr', null); return r && r.course && Array.isArray(r.players) && r.players.length ? r : null; }
+  function myStart(course, names) {
+    const holes = Math.min(18, Math.max(9, course.holeCount || 18)), par = {};
+    for (let n = 1; n <= holes; n++) { const h = hole(course, n); par[n] = h.par >= 3 && h.par <= 6 ? h.par : 4; }
+    const ps = (names || []).map((x) => String(x || '').trim().slice(0, 30)).filter(Boolean).slice(0, 4);
+    const r = { id: rid(), course: { id: course.id, name: String(course.name || 'Golf course').slice(0, 100) }, date: dayOf(D.now()), at: D.now(), holes, par, players: (ps.length ? ps : ['Me']).map((name) => ({ name, s: {} })), putts: {}, fw: {} };
+    jset('ggps-myr', r); return r;
+  }
+  function mySave(r) { r.edited = D.now(); jset('ggps-myr', r); return r; }
+  function myQuit() { D.set('ggps-myr', null); }
+  // A par fixed during the round goes on the card too (holes already scored keep the par they were played at only if not fixed: the fix wins)
+  function myPar(r, n, par) { if (r && r.par) { r.par[n] = par; mySave(r); } }
+  function myTotals(r, i) { let st = 0, pr = 0, nh = 0; Object.keys(r.players[i].s).forEach((k) => { const v = r.players[i].s[k]; if (Number.isInteger(v)) { st += v; pr += r.par[k] || 4; nh++; } }); return { strokes: st, par: pr, toPar: st - pr, holes: nh }; }
+  const myHist = () => { const a = jget('ggps-myrh', []); return Array.isArray(a) ? a.filter((x) => x && x.id && x.course) : []; };
+  const wire = (r) => ({ id: r.id, course: r.course, date: r.date, at: r.at, par: r.par, players: r.players, putts: r.putts, fw: r.fw });
+  async function mySend(r) { if (!token()) return false; try { await call('/rounds', { body: { round: wire(r) }, ms: 20000 }); return true; } catch (e) { return false; } }
+  async function myFinish(r) {
+    const h = myHist().filter((x) => x.id !== r.id); const done = Object.assign({}, wire(r), { unsent: !!token() }); h.unshift(done); jset('ggps-myrh', h.slice(0, MYR_MAX)); myQuit();
+    const ok = await mySend(done); if (ok) { const a = myHist(); a.forEach((x) => { if (x.id === done.id) delete x.unsent; }); jset('ggps-myrh', a); }
+    return { saved: ok ? 'account' : token() ? 'phone-later' : 'phone' };
+  }
+  async function myRounds() {
+    let a = myHist(); if (!token()) return { rounds: a, where: 'phone' };
+    const un = a.filter((x) => x.unsent); for (const x of un) { if (await mySend(x)) delete x.unsent; } if (un.length) jset('ggps-myrh', a);
+    try { const j = await call('/rounds', { ms: 20000 }); const ids = new Set((j.rounds || []).map((x) => x.id)); const out = (j.rounds || []).concat(a.filter((x) => !ids.has(x.id))); out.sort((x, y) => (y.at || 0) - (x.at || 0)); return { rounds: out, where: 'account' }; }
+    catch (e) { return { rounds: a, where: 'phone', note: e.offline ? 'No signal: showing the rounds saved on this phone.' : 'Could not load your rounds from your account.' }; }
+  }
+  async function myDelete(id) { jset('ggps-myrh', myHist().filter((x) => x.id !== id)); if (token()) { try { await call('/rounds', { body: { del: id }, ms: 20000 }); } catch (e) {} } }
 
   // ---------- marking a green / tee ----------
   async function mark(course, n, what, point) {
@@ -346,6 +394,6 @@
   }
 
   const API = { cfg: CFG, COLORS, PLACES, LABEL, CNAME, DEFAULT_MAP, yards, bearing, toward, inside, fmtYd, ord, okPt, search, loadCourse, hole, recent, flagMap, mapText, saveFlagMap, reportFlags, reviewFlags, defColor, setDefColor,
-    round, selFor, setSel, setAllDay, setPin, clearPin, placePoint, pin, distances, mark, teeWatch, gpsState, signedIn: () => !!token(), chiDay, dayHere, dayGet, saveScore, saveDayFlags, queued, qCount, refused, dismissRefused, flush, onQ, wireMap, _deps: D, _applyMarks: applyMarks, _tidy: tidy, _reset: () => { Object.keys(MEM).forEach((k) => delete MEM[k]); } };
+    round, selFor, setSel, setAllDay, setPin, clearPin, placePoint, pin, distances, mark, teeWatch, gpsState, signedIn: () => !!token(), chiDay, dayHere, dayGet, saveScore, savePar, myRound, myStart, mySave, myQuit, myPar, myTotals, myFinish, myRounds, myDelete, saveDayFlags, queued, qCount, refused, dismissRefused, flush, onQ, wireMap, _deps: D, _applyMarks: applyMarks, _tidy: tidy, _reset: () => { Object.keys(MEM).forEach((k) => delete MEM[k]); } };
   if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.GolfGPS = API;
 })(typeof window !== 'undefined' ? window : globalThis);

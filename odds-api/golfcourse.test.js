@@ -277,6 +277,24 @@ srv.listen(0, async () => {
     const tried = new Set(asked.filter((u) => /interpreter/.test(u))); eq(tried.size, 2, 'the map step stops after two servers; then Overpass is left alone for 10 minutes');
     eq(asked.filter((u) => /interpreter/.test(u)).length, a2 + 4, 'two servers, each asked again once after "busy" (504), for the FIRST request only: the next three went straight to the fallbacks');
     ok(asked.some((u) => /api\.openstreetmap\.org\/api\/0\.6\/map\.json/.test(u)) && asked.some((u) => /api\.openstreetmap\.org\/api\/0\.6\/way\/101\/full\.json/.test(u)), 'the OSM API was tried for the holes (it is down in this part)'); ok(asked.some((u) => /nominatim.*viewbox=/.test(u)), 'the Nominatim course list was tried (down in this part)');
+    // v295: a par fix is shared with the next player; finished rounds are kept per account
+    { const hd = hasDb, od = osmDown; hasDb = true; osmDown = false; NOW += 61000;
+      r = await post({ id: 'way/100', n: 9, what: 'par', par: 5 }); eq([r.s, r.j.n, r.j.par], [200, 9, 5], 'par fix saved');
+      r = await post({ id: 'way/100', n: 9, what: 'par', par: 7 }); eq(r.s, 400, 'par 7 refused'); r = await post({ id: 'way/100', n: 0, what: 'par', par: 4 }); eq(r.s, 400, 'hole 0 refused');
+      r = await post({ id: 'way/100', n: 9, what: 'par', par: 4 }, null); eq(r.s, 401, 'a guest cannot fix a par for everyone');
+      NOW += 31000; r = await get('/golfcourse/holes?id=way/100'); const h9 = r.j.holes.find((h) => h.n === 9); eq([h9.par, h9.parFixed], [5, true], 'the next player gets par 5');
+      r = await post({ id: 'way/100', n: 2, what: 'tee', point: at(0, 2) }); eq(r.s, 200); NOW += 31000; r = await get('/golfcourse/holes?id=way/100'); eq(r.j.holes.find((h) => h.n === 9).par, 5, 'a later mark keeps the par fixes');
+      const rp = async (b, tok, m) => { const h = { 'content-type': 'application/json' }; if (tok) h['x-token'] = tok; const x = await fetch('http://127.0.0.1:' + P + '/golfcourse/rounds', m === 'GET' ? { headers: h } : { method: 'POST', headers: h, body: JSON.stringify(b) }); return { s: x.status, j: await x.json() }; };
+      const round = { id: 'abcd1234', course: { id: 'way/100', name: 'Test Links' }, date: '2026-11-21', at: NOW, par: { 1: 4, 2: 3, 99: 4 }, players: [{ name: 'Steve', s: { 1: 5, 2: 3, 3: 99 } }, { name: 'Bo', s: { 1: 4 } }], putts: { 1: 2 }, fw: { 1: 1, 2: 7 } };
+      r = await rp({ round }, null); eq(r.s, 401, 'rounds need an account');
+      r = await rp({ round }, 'ann'); eq(r.s, 200); eq([r.j.round.par, r.j.round.players[0].s, r.j.round.fw], [{ 1: 4, 2: 3 }, { 1: 5, 2: 3 }, { 1: 1 }], 'bad holes and values dropped');
+      r = await rp({ round: Object.assign({}, round, { id: 'x' }) }, 'ann'); eq(r.s, 400, 'a bad id refused');
+      r = await rp({ round: Object.assign({}, round, { players: [{ name: 'Steve', s: { 1: 4 } }] }) }, 'ann'); eq(r.s, 200, 'same id again = replaced');
+      r = await rp(null, 'ann', 'GET'); eq([r.s, r.j.rounds.length, r.j.rounds[0].players[0].s[1]], [200, 1, 4], 'one round, the edited one');
+      r = await rp(null, 'bob', 'GET'); eq(r.j.rounds.length, 0, 'another account sees none');
+      ok(!Object.keys(db).some((k) => /ann/.test(k)), 'the account is not in the row id');
+      r = await rp({ del: 'abcd1234' }, 'ann'); eq(r.s, 200); r = await rp(null, 'ann', 'GET'); eq(r.j.rounds.length, 0, 'deleted');
+      hasDb = hd; osmDown = od; }
     await fallbacks(get);
     console.log('golfcourse.test.js: ' + n + ' checks passed');
   } catch (e) { console.error('FAILED', e); process.exitCode = 1; }

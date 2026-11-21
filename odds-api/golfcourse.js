@@ -349,6 +349,12 @@ function cleanMarks(m) {
   Object.keys(m).slice(0, MARK_MAX * 2).forEach((k) => { const x = /^([1-9]\d?):(green|tee)$/.exec(k), v = m[k]; if (!x || +x[1] > HOLE_MAX || !v || !okPt(v) || Object.keys(out).length >= MARK_MAX) return; out[k] = { lat: r6(v.lat), lon: r6(v.lon), by: txt(v.by, 80), at: Number(v.at) || 0 }; });
   return out;
 }
+// v295: a player's par fix for a hole ('5' -> { par, by, at }). Shared like the marks: the next player at the course gets the fixed par.
+function cleanPars(m) {
+  const out = {}; if (!m || typeof m !== 'object') return out;
+  Object.keys(m).slice(0, HOLE_MAX * 2).forEach((k) => { const v = m[k]; if (!/^[1-9]\d?$/.test(k) || +k > HOLE_MAX || !v || !Number.isInteger(v.par) || v.par < 3 || v.par > 6) return; out[k] = { par: v.par, by: txt(v.by, 80), at: Number(v.at) || 0 }; });
+  return out;
+}
 // Strict: only the four colours, only the three placements, at least one colour. Returns the cleaned map, or a string saying what is wrong.
 function cleanFlags(f) {
   if (!f || typeof f !== 'object' || Array.isArray(f)) return 'Send the flag colours.';
@@ -372,7 +378,7 @@ const storedFlags = (f) => { if (!f || typeof f !== 'object') return null; const
 async function rowFor(id, fresh) {
   if (!D.hasDb()) return { marks: {}, flags: null, pending: null };
   const c = ROWS.get(id), now = D.now(); if (!fresh && c && now - c.t < ROW_TTL) return c.v;
-  try { const row = await D.S.dbGet(rowId(id)), d = (row && row.data) || {}, v = { marks: cleanMarks(d.marks), flags: storedFlags(d.flags), pending: storedPending(d.pendingFlags) }; ROWS.set(id, { t: now, v }); if (ROWS.size > C_MAX) ROWS.delete(ROWS.keys().next().value); return v; }
+  try { const row = await D.S.dbGet(rowId(id)), d = (row && row.data) || {}, v = { marks: cleanMarks(d.marks), pars: cleanPars(d.pars), flags: storedFlags(d.flags), pending: storedPending(d.pendingFlags) }; ROWS.set(id, { t: now, v }); if (ROWS.size > C_MAX) ROWS.delete(ROWS.keys().next().value); return v; }
   catch (e) { log('marks read failed'); return c ? c.v : { marks: {}, flags: null, pending: null }; }
 }
 // Who may change a course's locked flag colours: the owner, the account that set them, or (hook) the organizer of a group playing there.
@@ -384,7 +390,7 @@ async function mayChangeFlags(req, id, cur) {
   try { return !!(await D.organizer(req, id)); } catch (e) { return false; }
 }
 // Lays the marks over the map data. A marked green keeps the map's outline only if the mark is inside it (a correction of the centre); otherwise the mark stands alone.
-function merge(course, marks) {
+function merge(course, marks, pars) {
   const holes = course.holes.map((h) => JSON.parse(JSON.stringify(h))), by = new Map(holes.map((h) => [h.n, h]));
   Object.keys(marks || {}).forEach((k) => {
     const [ns, what] = k.split(':'), n = +ns, p = pt(marks[k]); let h = by.get(n);
@@ -393,11 +399,12 @@ function merge(course, marks) {
     else if (h.green && h.green.outline && inside(p, h.green.outline.map((q) => ({ lat: q[0], lon: q[1] })))) { h.green.center = p; h.green.marked = true; }
     else { h.green = { center: p, marked: true }; h.mapped = false; }
   });
+  Object.keys(pars || {}).forEach((k) => { const n = +k; let h = by.get(n); if (!h) { h = { n, mapped: false, hazards: [] }; by.set(n, h); holes.push(h); } h.par = pars[k].par; h.parFixed = true; }); // v295
   holes.sort((a, b) => a.n - b.n);
   return holes;
 }
 function holesAnswer(v, row, canChange) {
-  const marks = (row && row.marks) || {}, holes = merge(v, marks), o = { ok: true, id: v.id, name: v.name, center: v.center, holes, holeCount: Math.max(v.holeCount, holes.length ? holes[holes.length - 1].n : 0), holesMapped: v.holesMapped, marks: Object.keys(marks).length };
+  const marks = (row && row.marks) || {}, holes = merge(v, marks, row && row.pars), o = { ok: true, id: v.id, name: v.name, center: v.center, holes, holeCount: Math.max(v.holeCount, holes.length ? holes[holes.length - 1].n : 0), holesMapped: v.holesMapped, marks: Object.keys(marks).length };
   if (row && row.flags) o.flags = { map: row.flags.map, locked: true, at: row.flags.at, canChange: !!canChange };
   if (row && row.flags && row.pending) { if (canChange) o.pendingFlags = { flags: row.pending.flags, at: row.pending.at, note: row.pending.note, from: txt(D.handle(row.pending.by), 40) }; else o.flagsPending = true; }
   Object.assign(o, { source: SRC, asOf: new Date(v.at).toISOString() });
@@ -408,7 +415,7 @@ function holesAnswer(v, row, canChange) {
   if (notes.length) o.note = notes.join(' ');
   return o;
 }
-function body(req) { return new Promise((res, rej) => { let n = 0; const c = []; req.on('data', (d) => { n += d.length; if (n > 4000) rej(Object.assign(new Error('too big'), { status: 413 })); else c.push(d); }); req.on('end', () => { try { res(JSON.parse(Buffer.concat(c).toString() || '{}')); } catch (e) { rej(Object.assign(new Error('bad json'), { status: 400 })); } }); req.on('error', rej); }); }
+function body(req, max) { return new Promise((res, rej) => { let n = 0; const c = []; req.on('data', (d) => { n += d.length; if (n > (max || 4000)) rej(Object.assign(new Error('too big'), { status: 413 })); else c.push(d); }); req.on('end', () => { try { res(JSON.parse(Buffer.concat(c).toString() || '{}')); } catch (e) { rej(Object.assign(new Error('bad json'), { status: 400 })); } }); req.on('error', rej); }); }
 // Returns { n, what, point } or a string saying what is wrong. center = the course centre.
 function cleanMark(b, center) {
   if (!b || typeof b !== 'object') return 'Nothing to save.';
@@ -426,16 +433,18 @@ async function mark(req, res) {
   if (!D.hasDb()) return send(res, 503, { ok: false, error: 'Shared marks are not set up on this server.' });
   const b = await body(req), id = b && typeof b.id === 'string' ? b.id : '';
   if (!ID_RE.test(id)) return send(res, 400, { ok: false, error: 'Unknown course.' });
-  const isFlags = b.what === 'flags'; let m;
-  if (isFlags) { m = cleanFlags(b.flags); if (typeof m === 'string') return send(res, 400, { ok: false, error: m }); }
+  const isFlags = b.what === 'flags', isPar = b.what === 'par'; let m;
+  if (isPar) { if (!Number.isInteger(b.n) || b.n < 1 || b.n > HOLE_MAX) return send(res, 400, { ok: false, error: 'Hole number must be 1 to ' + HOLE_MAX + '.' }); if (!Number.isInteger(b.par) || b.par < 3 || b.par > 6) return send(res, 400, { ok: false, error: 'Par must be 3, 4, 5 or 6.' }); m = { n: b.n, par: b.par }; }
+  else if (isFlags) { m = cleanFlags(b.flags); if (typeof m === 'string') return send(res, 400, { ok: false, error: m }); }
   let course; try { course = await holesFor(id); } catch (e) { return send(res, e.status === 404 ? 404 : 502, { ok: false, error: e.status === 404 ? 'That course is not on the map.' : 'The course map is not answering right now. Try again in a minute.' }); }
-  if (!isFlags) { m = cleanMark(b, course.center); if (typeof m === 'string') return send(res, 400, { ok: false, error: m }); }
+  if (!isFlags && !isPar) { m = cleanMark(b, course.center); if (typeof m === 'string') return send(res, 400, { ok: false, error: m }); }
   let by = ''; try { by = txt(D.who(req) || '', 80); } catch (e) {}
   const rid = rowId(id);
   for (let tries = 0; tries < 4; tries++) {
     let row = await D.S.dbGet(rid); if (!row) { await D.S.dbPut({ id: rid, salt: 'x', pinhash: 'x', data: { course: id, marks: {} }, updated: 1 }, true); row = await D.S.dbGet(rid); if (!row) continue; }
-    const d = row.data || {}, marks = cleanMarks(d.marks), now = D.now(); let flags = storedFlags(d.flags), pending = storedPending(d.pendingFlags), out;
-    if (isFlags) {
+    const d = row.data || {}, marks = cleanMarks(d.marks), pars = cleanPars(d.pars), now = D.now(); let flags = storedFlags(d.flags), pending = storedPending(d.pendingFlags), out;
+    if (isPar) { pars[m.n] = { par: m.par, by, at: now }; out = { ok: true, n: m.n, par: m.par }; }
+    else if (isFlags) {
       if (!(await mayChangeFlags(req, id, flags))) return send(res, 403, { ok: false, locked: true, error: 'Ask the organizer to change it', flags: { map: flags.map, locked: true, at: flags.at, canChange: false } });
       flags = { map: m, by: flags && flags.by && !by ? flags.by : by, at: now }; pending = null; out = { ok: true, flags: { map: m, locked: true, at: now, canChange: true } };
     } else {
@@ -443,8 +452,46 @@ async function mark(req, res) {
       if (!marks[key] && Object.keys(marks).length >= MARK_MAX) return send(res, 409, { ok: false, error: 'This course already has ' + MARK_MAX + ' marks.' });
       marks[key] = { lat: m.point.lat, lon: m.point.lon, by, at: now }; out = { ok: true, n: m.n, what: m.what, point: m.point };
     }
-    const data = { course: id, marks }; if (flags) data.flags = flags; if (pending) data.pendingFlags = pending;
+    const data = { course: id, marks }; if (Object.keys(pars).length) data.pars = pars; if (flags) data.flags = flags; if (pending) data.pendingFlags = pending;
     if (await D.S.dbPatchIf(rid, row.updated, data, Math.max(now, Number(row.updated || 0) + 1))) { ROWS.delete(id); return send(res, 200, out); }
+  }
+  return send(res, 503, { ok: false, error: 'Busy, try again.' });
+}
+
+// ---------- v295 My rounds: a signed-in player's finished rounds (Golf GPS "My round"), one row per account ----------
+//   GET  /golfcourse/rounds  (x-token)            -> { ok, rounds:[round, newest first] }
+//   POST /golfcourse/rounds  (x-token) { round }  -> { ok, round }   same id again = replaced (a round edited after it was saved)
+//   POST /golfcourse/rounds  (x-token) { del:id } -> { ok }
+//   round = { id, course:{id,name}, date:'YYYY-MM-DD', at, par:{ '1':4 }, players:[{ name, s:{ '1':5 } }], putts:{ '1':2 }, fw:{ '1':1|0 } }  (putts / fw = the first player's)
+//   Row 'lock:golfrounds:<sha of the account>' in oddable_sync: data { rounds:[...] } (last ROUNDS_MAX kept). The account itself is not stored in the row id.
+const ROUNDS_MAX = 60;
+const roundsRow = (who) => 'lock:golfrounds:' + require('crypto').createHash('sha256').update('gr:' + String(who)).digest('hex').slice(0, 24);
+const holeMap = (o, lo, hi) => { const out = {}; if (!o || typeof o !== 'object') return out; Object.keys(o).slice(0, 40).forEach((k) => { const v = o[k]; if (/^[1-9]\d?$/.test(k) && +k <= HOLE_MAX && Number.isInteger(v) && v >= lo && v <= hi) out[k] = v; }); return out; };
+function cleanRound(r) {
+  if (!r || typeof r !== 'object') return 'Nothing to save.';
+  const id = typeof r.id === 'string' && /^[A-Za-z0-9-]{4,24}$/.test(r.id) ? r.id : null; if (!id) return 'That round has no id.';
+  const c = r.course || {}; if (typeof c.id !== 'string' || !ID_RE.test(c.id)) return 'Unknown course.';
+  const date = typeof r.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.date) ? r.date : null; if (!date) return 'That round has no date.';
+  const players = (Array.isArray(r.players) ? r.players : []).slice(0, 4).map((p, i) => ({ name: txt(p && p.name, 30) || (i ? 'Player ' + (i + 1) : 'Me'), s: holeMap(p && p.s, 1, 20) }));
+  if (!players.length) return 'A round needs a player.';
+  return { id, course: { id: c.id, name: txt(c.name, 100) || 'Golf course' }, date, at: Number(r.at) || D.now(), par: holeMap(r.par, 3, 6), players, putts: holeMap(r.putts, 0, 10), fw: holeMap(r.fw, 0, 1) };
+}
+async function rounds(req, res) {
+  if (!(await D.check(req))) return send(res, 401, { ok: false, error: 'Sign in again' });
+  if (!D.hasDb()) return send(res, 503, { ok: false, error: 'Saving rounds is not set up on this server.' });
+  let who = ''; try { who = String(D.who(req) || ''); } catch (e) {} if (!who) return send(res, 401, { ok: false, error: 'Sign in again' });
+  const rid = roundsRow(who), list = (row) => (Array.isArray(row && row.data && row.data.rounds) ? row.data.rounds : []).map(cleanRound).filter((x) => typeof x !== 'string');
+  if (req.method === 'GET') { const row = await D.S.dbGet(rid); return send(res, 200, { ok: true, rounds: list(row).sort((a, b) => b.at - a.at) }); }
+  if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'GET or POST' });
+  const ip = require('./ip').clientIp(req), rk = 'r' + ip + ':' + Math.floor(D.now() / 6e4); RL.set(rk, (RL.get(rk) || 0) + 1); if (RL.size > 5000) RL.clear();
+  if (RL.get(rk) > 30) return send(res, 429, { ok: false, error: 'Too many saves. Wait a minute and try again.' });
+  const b = await body(req, 12000); let r = null, del = null;
+  if (b && typeof b.del === 'string') del = b.del; else { r = cleanRound(b && b.round); if (typeof r === 'string') return send(res, 400, { ok: false, error: r }); }
+  for (let tries = 0; tries < 4; tries++) {
+    let row = await D.S.dbGet(rid); if (!row) { await D.S.dbPut({ id: rid, salt: 'x', pinhash: 'x', data: { rounds: [] }, updated: 1 }, true); row = await D.S.dbGet(rid); if (!row) continue; }
+    let a = list(row).filter((x) => x.id !== (del || r.id)); if (r) a.unshift(r); a = a.sort((x, y) => y.at - x.at).slice(0, ROUNDS_MAX);
+    const now = D.now();
+    if (await D.S.dbPatchIf(rid, row.updated, { rounds: a }, Math.max(now, Number(row.updated || 0) + 1))) return send(res, 200, r ? { ok: true, round: r } : { ok: true });
   }
   return send(res, 503, { ok: false, error: 'Busy, try again.' });
 }
@@ -469,7 +516,7 @@ async function flagReport(req, res) {
   for (let tries = 0; tries < 4; tries++) {
     const row = await D.S.dbGet(rid), d = (row && row.data) || {}, flags = storedFlags(d.flags), pending = storedPending(d.pendingFlags), now = D.now();
     if (!row || !flags) return send(res, 409, { ok: false, error: 'This course has no flag colours set yet.' });
-    const data = { course: id, marks: cleanMarks(d.marks), flags }; let out, tell = null;
+    const data = { course: id, marks: cleanMarks(d.marks), flags }; let out, tell = null; { const pp = cleanPars(d.pars); if (Object.keys(pp).length) data.pars = pp; } // v295: keep the par fixes
     if (review) {
       if (!(await mayChangeFlags(req, id, flags))) return send(res, 403, { ok: false, error: 'Ask the organizer to change it' });
       if (!pending) return send(res, 409, { ok: false, error: 'There is no report waiting.' });
@@ -494,8 +541,9 @@ async function flagReport(req, res) {
 }
 
 async function handle(req, res) {
-  const path = req.url.split('?')[0]; if (path !== '/golfcourse/search' && path !== '/golfcourse/holes' && path !== '/golfcourse/mark' && path !== '/golfcourse/flagreport') return false;
+  const path = req.url.split('?')[0]; if (path !== '/golfcourse/search' && path !== '/golfcourse/holes' && path !== '/golfcourse/mark' && path !== '/golfcourse/flagreport' && path !== '/golfcourse/rounds') return false;
   try {
+    if (path === '/golfcourse/rounds') { await rounds(req, res); return true; }
     if (path === '/golfcourse/flagreport') { if (req.method !== 'POST') { send(res, 405, { ok: false, error: 'POST only' }); return true; } await flagReport(req, res); return true; }
     if (path === '/golfcourse/mark') { if (req.method !== 'POST') { send(res, 405, { ok: false, error: 'POST only' }); return true; } await mark(req, res); return true; }
     if (req.method !== 'GET') { send(res, 405, { ok: false, error: 'GET only' }); return true; }
@@ -522,4 +570,4 @@ async function handle(req, res) {
   } catch (e) { log('error (' + String(e && e.message).slice(0, 80) + ')'); send(res, e.status || 500, { ok: false, error: e.status ? e.message : 'Golf course error.' }); }
   return true;
 }
-module.exports = { handle, geom: GEOM, mayChangeFlags, notifyOwner, _deps: D, _reset: reset, _parse: parse, _build: build, _courseList: courseList, _merge: merge, _cleanMark: cleanMark, _cleanMarks: cleanMarks, _cleanFlags: cleanFlags, _rowId: rowId, _OVERPASS: OVERPASS, _nomiCourse: nomiCourse };
+module.exports = { handle, geom: GEOM, mayChangeFlags, notifyOwner, _deps: D, _reset: reset, _parse: parse, _build: build, _courseList: courseList, _merge: merge, _cleanMark: cleanMark, _cleanMarks: cleanMarks, _cleanFlags: cleanFlags, _cleanPars: cleanPars, _cleanRound: cleanRound, _roundsRow: roundsRow, _rowId: rowId, _OVERPASS: OVERPASS, _nomiCourse: nomiCourse };

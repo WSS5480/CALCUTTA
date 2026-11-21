@@ -70,7 +70,7 @@
     if (!LIST || LIST.g !== gr.id) return h + '<div class="ogcard ogmut">Loading…</div><button type="button" class="ogsec" data-a="gdreload">Try again</button>';
     const cardOf = (d) => '<button type="button" class="ogcard ogbtn" data-a="gdopen" data-id="' + X.att(d.id) + '"><span class="ogrow"><b class="ogname">' + X.esc(d.name) + '</b><span class="ogbadge">' + X.esc(statusOf(d)) + '</span></span><span class="ogmeta">' + X.esc(d.course.name + ' · ' + X.fmtDay(d.date)) + '</span><span class="ogmeta">' + X.esc((FNAME[d.format] || '') + ' · ' + (HNAME[d.holes] || '') + ' · ' + d.players + (d.players === 1 ? ' player' : ' players')) + '</span><span class="oggo">Open ›</span></button>';
     if (LIST.open) h += '<h3 class="ogh">Open now</h3><div class="oggrid">' + cardOf(LIST.open) + '</div>';
-    else h += LIST.comm ? '<div class="ogcard">No Golf day is open. Pick the course, the date and the format, then your members join from here.</div><button type="button" class="ogpri" data-a="gdnew">Start a Golf day</button>' : '<div class="ogcard ogmut">No Golf day is open. The commissioner starts one, then you join from here.</div>';
+    else h += LIST.comm ? (window.__gdPref && window.__gdPref.name ? '<div class="ogcard">⛳ From Golf GPS: <b>' + X.esc(window.__gdPref.name) + '</b> is filled in when you tap Start.</div>' : '') + '<div class="ogcard">No Golf day is open. Pick the course, the date and the format, then your members join from here.</div><button type="button" class="ogpri" data-a="gdnew">Start a Golf day</button>' : '<div class="ogcard ogmut">No Golf day is open. The commissioner starts one, then you join from here.</div>';
     if (LIST.past.length) h += '<h3 class="ogh">Earlier Golf days</h3><div class="oggrid">' + LIST.past.map(cardOf).join('') + '</div>';
     return h;
   }
@@ -118,7 +118,7 @@
   }
   const gps = (X, then, fail) => { // the Golf GPS data layer (pics/golfgps.js: no screen code in it), fetched once. The SAME course search as the Golf GPS page.
     if (window.GolfGPS) return then(window.GolfGPS);
-    const sc = document.createElement('script'); sc.src = 'golfgps.js?v=294'; sc.onload = () => (window.GolfGPS ? then(window.GolfGPS) : fail()); sc.onerror = () => { sc.remove(); fail(); }; document.head.appendChild(sc);
+    const sc = document.createElement('script'); sc.src = 'golfgps.js?v=295'; sc.onload = () => (window.GolfGPS ? then(window.GolfGPS) : fail()); sc.onerror = () => { sc.remove(); fail(); }; document.head.appendChild(sc);
   };
   function search(X) {
     readDraft(X); const d = DR, q = d.q.trim(); if (SEARCHING) return; X.setErr(''); if (q.length < 2) { d.msg = 'Type a course name or a city.'; return X.paint(); }
@@ -288,7 +288,7 @@
     const send = (op, body, then) => X.act('/golfday/' + op, Object.assign({ g: gid, id: s.id }, body), async (j) => { keep(j); if (then) then(j); X.paint(); });
     if (a === 'gdreload') return load(s, X);
     if (a === 'gdopen') return openDay(s, X, b.getAttribute('data-id'));
-    if (a === 'gdnew') { DR = DR || draft(X); return X.push({ t: 'golf', v: 'new', gr: s.gr }); }
+    if (a === 'gdnew') { DR = DR || draft(X); X.push({ t: 'golf', v: 'new', gr: s.gr }); const pc = window.__gdPref; if (pc && !DR.course && /^(way|relation|node)\/[1-9]\d{0,14}$/.test(String(pc.id))) { window.__gdPref = null; DR.res = [{ id: String(pc.id), name: String(pc.name || 'Golf course'), lat: pc.lat, lon: pc.lon }]; pick(X, 0); } return; } // v295: from Golf GPS, the course is filled in
     if (a === 'gdsearch') return search(X);
     if (a === 'gdpick') return pick(X, +b.getAttribute('data-i'));
     if (a === 'gdrecourse') { readDraft(X); DR.course = null; DR.note = ''; DR.msg = ''; return X.paint(); }

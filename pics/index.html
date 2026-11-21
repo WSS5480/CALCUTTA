@@ -185,7 +185,7 @@ html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
 .tpw{display:flex;flex-direction:column;height:100%;max-width:820px;margin:0 auto}
 .tph{display:flex;align-items:center;gap:8px;padding:calc(10px + env(safe-area-inset-top)) 12px 10px;color:#fff}
 .tph button{min-width:44px;min-height:44px;padding:0 12px;border:1px solid #ffffff66;border-radius:12px;background:#0006;color:#fff;font:700 15px system-ui;white-space:nowrap}
-.tpn{flex:1;min-width:0;text-align:center;text-shadow:0 1px 3px #000a}.tpn b{display:block;font-size:19px;overflow-wrap:anywhere}.tpn small{display:block;font-size:13px;opacity:.95}
+.tpn{flex:1;min-width:0;text-align:center;text-shadow:0 1px 3px #000a}.tpn b{display:block;font-size:19px;overflow-wrap:anywhere}.tpn small{display:block;font-size:13px;opacity:.95}.tpfv{margin:6px auto 0;display:block;min-height:36px;border-radius:999px;border:1px solid #fff8;background:#0006;color:#fff;font:700 13px system-ui;padding:0 14px;cursor:pointer}.tpfv[aria-pressed="true"]{border-color:#f5c542;background:#f5c54233}
 .tpt{display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px;border-bottom:1px solid var(--line)}
 .tpt button{flex:1 1 30%;min-height:44px;padding:6px 8px;border:1px solid var(--line);border-radius:999px;background:none;color:inherit;font:600 14px system-ui}.tpt button.on{background:rgba(124,58,237,.3);border-color:rgba(124,58,237,.9);font-weight:800}
 .tpb{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:8px 12px calc(28px + env(safe-area-inset-bottom));line-height:1.35}
@@ -280,10 +280,10 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v296 -->
+<!-- Pics v297 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v296</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v297</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
   <div id="arbbar" class="arbbar" hidden onclick="arbBarTap()" role="button" aria-label="Arbitrage alert"><span class="mq" id="arbmq"></span></div>
   <div class="mrow" id="mrow"><label><span>League</span><select id="lgsel" aria-label="League" autocomplete="off"><option value="nfl">🏈 NFL</option><option value="cfb">🎓 NCAA</option><option value="pga">⛳ PGA Tour</option><option value="golfgps">📍 Golf GPS</option><option value="pickleball">🏓 Pickleball</option><option value="nba">🏀 NBA</option><option value="mlb">⚾ MLB</option><option value="nhl">🏒 NHL</option><option value="ncaab">🏀 NCAAB</option></select></label><label id="gvlab"><span>View</span><select id="gvsel" aria-label="View" autocomplete="off" onchange="gvSet(this.value)"></select></label></div>
   <div class="srow"><input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team"><select id="conf" aria-label="Conference"><option value="">All</option></select></div>
@@ -292,7 +292,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v296 (Gamecast for every game, where to watch, ⭐ My teams) (v295: Golf GPS My round) (v294: name Change button answers fast) (v293: name or handle required for every player, change it in the Account box) (v292: sign in with cell + PIN only; email optional) (v291: hotfix: My Bets crashed on a parlay with a stored result) (v290: one-team slips only match a game today or live; Western Illinois is not Illinois) (v289: screenshot slips that name one team find that team's game) (v288: Save my bet or add it to your group; commissioner can delete a group any time) (v287: Golf days: log my score on Golf GPS, scores kept with no signal, commissioner flag colours)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v297 (tap a team: team page for college + NBA/NHL/MLB/NCAAB, ☆ Follow there and on the NFL team page) (v296: Gamecast, where to watch, My teams) (v295: Golf GPS My round) (v294: name Change button answers fast) (v293: name or handle required for every player, change it in the Account box) (v292: sign in with cell + PIN only; email optional) (v291: hotfix: My Bets crashed on a parlay with a stored result) (v290: one-team slips only match a game today or live; Western Illinois is not Illinois) (v289: screenshot slips that name one team find that team's game) (v288: Save my bet or add it to your group; commissioner can delete a group any time) (v287: Golf days: log my score on Golf GPS, scores kept with no signal, commissioner flag colours)</div>
   <div class="sub nsw" id="nsw"></div>
   <div class="sub" id="spset"><label>Score pop-ups <select id="spsel" aria-label="Score pop-ups" autocomplete="off" onchange="spSet(this.value)"><option value="mine">My bets only</option><option value="all">All live games</option><option value="off">Off</option></select></label><div style="font-size:11px;opacity:.75;margin-top:4px">A card pops up when a live game scores or ends, with where your bets stand right now.</div></div>
   <div class="sub" id="bpset"><label>Phone alerts for my bets: every score, and the final. <select id="bpsel" aria-label="Phone alerts for my bets (app closed)" autocomplete="off" onchange="bpSet(this.value)"><option value="off">Off</option><option value="on">On</option></select></label><div class="bph">For when Oddable is closed. Needs Oddable added to your Home Screen on iPhone or iPad, and notifications allowed.</div><div id="bpbbw" hidden><label style="margin-top:6px">Basketball <select id="bpbb" aria-label="Basketball alerts" autocomplete="off" onchange="bpBB(this.value)"><option value="q">Quarter ends and final</option><option value="all">Every score</option></select></label><div class="bph">Every score in basketball can mean 150+ alerts a game.</div></div><div id="bpmsg" role="status"></div><button type="button" id="bptest" hidden onclick="bpTest()">Send me a test</button></div>
@@ -313,7 +313,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </div>
 <div id="plb" hidden></div>
 <nav class="bn" id="bn"></nav>
-<script src="trophy.js?v=296"></script><script src="model.js"></script><script src="myteams.js?v=296"></script><script src="live.js"></script><script src="lines.js"></script>
+<script src="trophy.js?v=297"></script><script src="model.js"></script><script src="myteams.js?v=297"></script><script src="live.js"></script><script src="lines.js"></script>
 <script>
 // ================= v268 GUEST MODE (1 of 3): the flag. The rest is in the "v268 GUEST MODE" script block near the end of this file and in gate.js. =================
 // window.__oddLock: '' = signed in and paid up, or no gate (everything shows, exactly as before v268) · 'guest' = no account · 'expired' = signed in, time has ended.
@@ -336,6 +336,7 @@ const pct = (x, d = 0) => (x * 100).toFixed(d) + '%';
 const LG = (() => { try { return localStorage.getItem('pics-lg') === 'cfb' ? 'cfb' : 'nfl'; } catch (e) { return 'nfl'; } })();
 const CFB = LG === 'cfb';
 const SB = 'https://site.api.espn.com/apis/site/v2/sports/football/' + (CFB ? 'college-football' : 'nfl') + '/';
+const TID = {}; // v297: team abbreviation -> ESPN team id (college team sheet)
 const SCX = CFB ? '&groups=80&limit=400' : ''; // FBS games only
 const NWEEKS = CFB ? 15 : 18;
 const NAMES = {}, RAT = {}, EFF = {}, TEAMID = {}, PL = {}, INJ = {};
@@ -373,7 +374,7 @@ function parseLine(text, home, away) {
 function parseEvents(j, week) {
   return (j.events || []).map((e) => {
     const c = e.competitions[0], t = e.status.type;
-    const cs = c.competitors.map((x) => ({ abbr: ab(x.team.abbreviation), name: x.team.displayName || x.team.location || '', score: parseInt(x.score, 10) || 0, home: x.homeAway === 'home', record: (x.records && x.records[0] && x.records[0].summary) || '', color: x.team.color ? '#' + x.team.color : '', logo: x.team.logo || '', rank: x.curatedRank && x.curatedRank.current > 0 && x.curatedRank.current <= 25 ? x.curatedRank.current : 0, cid: x.team.conferenceId || '' }));
+    const cs = c.competitors.map((x) => { if (x.team && x.team.id) TID[ab(x.team.abbreviation)] = String(x.team.id); return x; }).map((x) => ({ abbr: ab(x.team.abbreviation), name: x.team.displayName || x.team.location || '', score: parseInt(x.score, 10) || 0, home: x.homeAway === 'home', record: (x.records && x.records[0] && x.records[0].summary) || '', color: x.team.color ? '#' + x.team.color : '', logo: x.team.logo || '', rank: x.curatedRank && x.curatedRank.current > 0 && x.curatedRank.current <= 25 ? x.curatedRank.current : 0, cid: x.team.conferenceId || '' }));
     c.competitors.forEach((x) => { TEAMID[x.team.id] = ab(x.team.abbreviation); NAMES[ab(x.team.abbreviation)] = x.team.shortDisplayName || x.team.displayName || x.team.abbreviation; });
     cs.sort((a, b) => a.home - b.home);
     const o = c.odds && c.odds[0];
@@ -558,7 +559,7 @@ function navMore(open) {
 let GRPL = 0; const GRPQ = [];
 function grpLoad(then) { // pics/groups.js, fetched the first time it is needed
   if (window.OddGroups) { if (then) then(); return; } if (then) GRPQ.push(then); if (GRPL) return; GRPL = 1;
-  const sc = document.createElement('script'); sc.src = 'groups.js?v=296'; sc.onload = () => { GRPQ.splice(0).forEach((f) => { try { f(); } catch (e) {} }); }; sc.onerror = () => { GRPL = 0; GRPQ.length = 0; sc.remove(); }; document.head.appendChild(sc);
+  const sc = document.createElement('script'); sc.src = 'groups.js?v=297'; sc.onload = () => { GRPQ.splice(0).forEach((f) => { try { f(); } catch (e) {} }); }; sc.onerror = () => { GRPL = 0; GRPQ.length = 0; sc.remove(); }; document.head.appendChild(sc);
 }
 // Invite links: https://<site>/?join=g.<code> (built with window.oddShareUrl, so they also carry ?ref=). The code is kept for this tab and taken out of the address bar.
 // Read ONLY when the server says Groups exists (/acct/status `groups`, kept in 'odd-gsw'); with Groups dark the link is left alone and opens the app as any link does.
@@ -1982,7 +1983,7 @@ async function alertPush() {
   ASQ = Date.now();
   try { const r = await fetch(ALU, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': alertTok() }, body: JSON.stringify({ week: CUR, rec: { lock: a.lock, dogs: a.dogs, helper: { id: h.g.id, abbr: h.abbr, conf: h.conf } } }) }); if (!r.ok) return; const j = await r.json(); if (j && j.rec && j.week === CUR && alertTake(Object.assign({}, ASV, { [CUR]: j.rec }))) render(); } catch (e) {}
 }
-async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=296')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
+async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=297')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
 const trGrade = (p) => { const g = ALL[p.id]; if (!g || g.state !== 'post') return null; const m = (g.home.abbr === p.abbr ? 1 : -1) * (g.home.score - g.away.score) + p.line; return m === 0 ? 'push' : m > 0 ? 'hit' : 'miss'; };
 function trophyData() {
   if (CFB || !window.Trophy || !Trophy.ready()) return null;
@@ -2103,7 +2104,7 @@ function piTrack(i) {
 // Oddable's own layout: Games (with the record against the spread), Our picks, Stats, Standings, Roster, News. ESPN public endpoints, fetched per tab, kept 10 minutes.
 const TPTTL = 6e5, TPTABS = [['games', 'Games'], ['picks', 'Our picks'], ['stats', 'Stats'], ['stand', 'Standings'], ['roster', 'Roster'], ['news', 'News']];
 let TPS = [], TPT = 'games', TPC = {}, TPST = null;
-const tpAt = (a) => (CFB || !a ? '' : ` data-team="${escH(a)}"`);
+const tpAt = (a) => (!a ? '' : CFB ? (TID[a] ? ` data-team="${escH(a)}"` : '') : ` data-team="${escH(a)}"`); // v297: college teams open the shared team sheet (myteams.js)
 const tmA = (a, inner) => (CFB || !a ? (inner === undefined ? a : inner) : `<span class="tmt" data-team="${escH(a)}">${inner === undefined ? a : inner}</span>`);
 const tpId = (a) => Object.keys(TEAMID).find((k) => TEAMID[k] === a) || '';
 const tpTeam = (a) => { for (const g of Object.values(ALL)) { if (g.home.abbr === a) return g.home; if (g.away.abbr === a) return g.away; } return { abbr: a, name: NAMES[a] || a, color: '' }; };
@@ -2134,6 +2135,7 @@ function tpStAll() { const j = TPST && TPST.j; if (!j) return null; return (j.ch
 function tpDiv(a) { let out = null; (tpStAll() || []).forEach((c) => c.divs.forEach((d) => { const i = d.rows.findIndex((e) => e.abbr === a); if (i >= 0) out = { name: d.name, rows: d.rows, place: i + 1 }; })); return out; }
 const tpOrd = (n) => n + (['th', 'st', 'nd', 'rd'][n % 100 > 10 && n % 100 < 14 ? 0 : n % 10] || 'th');
 function tpOpen(a) { if (CFB || !a) return; a = ab(String(a)); if (TPS[TPS.length - 1] !== a) TPS.push(a); TPT = 'games'; const sh = document.getElementById('infosheet'); if (sh) sh.style.zIndex = ''; tpPaint(true); }
+function tpFav(a) { if (window.OddFav) window.OddFav.toggle('nfl', a); tpPaint(); }
 function tpBack() { TPS.pop(); if (!TPS.length) return tpClose(); TPT = 'games'; tpPaint(true); }
 function tpClose() { TPS = []; const e = document.getElementById('teampage'); if (e) e.hidden = true; }
 function tpTab(k) { TPT = k; tpPaint(true); }
@@ -2197,7 +2199,7 @@ function tpPaint(top) {
   const t = tpTeam(a), col = /^#[0-9a-f]{6}$/i.test(t.color || '') ? t.color : '#3b1a8c', rec = tpRec(tpGames(a).map((g) => tpRow(g, a))).su, st = tpStand(), d = tpDiv(a), dn = d ? d.name : (Object.keys(NFLD).find((k) => NFLD[k].includes(a)) || '');
   const body = TPT === 'picks' ? tpPicksHtml(a) : TPT === 'stats' ? tpStatsHtml(a) : TPT === 'stand' ? tpStandHtml(a) : TPT === 'roster' ? tpRosterHtml(a) : TPT === 'news' ? tpNewsHtml(a) : tpGamesHtml(a);
   const old = e.querySelector('.tpb'), y = old && !top ? old.scrollTop : 0;
-  e.innerHTML = `<div class="tpw"><div class="tph" style="background:linear-gradient(135deg,${col},#0b0f17 140%)"><button onclick="tpBack()" aria-label="Back">‹ Back</button><div class="tpn"><b>${escH(t.name || NAMES[a] || a)}</b><small>${tpWL(rec)}${d ? ' · ' + tpOrd(d.place) + ' ' + escH(dn) : dn ? ' · ' + escH(dn) : ''}${st.busy && !d ? ' · …' : ''}</small></div><button onclick="tpClose()" aria-label="Close">✕</button></div><div class="tpt">${TPTABS.map(([k, l]) => `<button class="${TPT === k ? 'on' : ''}" onclick="tpTab('${k}')">${l}</button>`).join('')}</div><div class="tpb">${body}</div></div>`;
+  e.innerHTML = `<div class="tpw"><div class="tph" style="background:linear-gradient(135deg,${col},#0b0f17 140%)"><button onclick="tpBack()" aria-label="Back">‹ Back</button><div class="tpn"><b>${escH(t.name || NAMES[a] || a)}</b><button type="button" class="tpfv" onclick="tpFav('${escH(a)}')" aria-pressed="${FAVT(a)}">${FAVT(a) ? '⭐ Following' : '☆ Follow'}</button><small>${tpWL(rec)}${d ? ' · ' + tpOrd(d.place) + ' ' + escH(dn) : dn ? ' · ' + escH(dn) : ''}${st.busy && !d ? ' · …' : ''}</small></div><button onclick="tpClose()" aria-label="Close">✕</button></div><div class="tpt">${TPTABS.map(([k, l]) => `<button class="${TPT === k ? 'on' : ''}" onclick="tpTab('${k}')">${l}</button>`).join('')}</div><div class="tpb">${body}</div></div>`;
   e.hidden = false; const nb = e.querySelector('.tpb'); if (nb) nb.scrollTop = y;
 }
 // --- v258: Standings / Team stats / Season, three views in the View menu (NFL only). They draw into #list like Stats / Results do.
@@ -2273,7 +2275,7 @@ function nvSeasonHtml() {
   return head + tPick + wPick + `<div class="nvgrid nvgg">${W.map(game).join('')}</div>` + (bye.length ? `<div class="nvc" style="margin:8px 0;padding:10px 12px"><b>Bye:</b> ${bye.map((a) => escH(a)).join(', ')}</div>` : '') + '<div class="sub" style="margin-top:8px">Scores for games played, kickoff time (your time) and the spread for games to come. Closing line and who covered are facts about results, not picks. Tap a game to open it. For this week\'s picks use the Games view.</div>';
 }
 // One listener for every wired team name: it runs before the card's own tap, so the card does not also open its chart / drill / bet form.
-document.addEventListener('click', (e) => { const t = e.target && e.target.closest ? e.target.closest('[data-team]') : null; if (!t || CFB) return; e.preventDefault(); e.stopPropagation(); tpOpen(t.getAttribute('data-team')); }, true);
+document.addEventListener('click', (e) => { const t = e.target && e.target.closest ? e.target.closest('[data-team]') : null; if (!t) return; if (CFB) { const a = t.getAttribute('data-team'); if (!TID[a] || !window.OddFav) return; e.preventDefault(); e.stopPropagation(); window.OddFav.teamOpen('cfb', TID[a], a); return; } e.preventDefault(); e.stopPropagation(); tpOpen(t.getAttribute('data-team')); }, true);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && TPS.length) { const sh = document.getElementById('infosheet'); if (sh && !sh.hidden && +sh.style.zIndex > 350) return; tpBack(); } });
 // alertDrill(): the season list, opened from the Alert box. alertDrill(wk, mode): opened from a Stats/Results season tile (v252): wk = 0 for the season or one week, mode 'su' (won outright) or 'ats', with a ‹ Back button to the tiles.
 function alertDrill(wk, mode) {
@@ -3682,7 +3684,7 @@ if ('serviceWorker' in navigator) {
 })();
 // ================= end v268 GUEST MODE (3 of 3) =================
 </script>
-<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=296"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="announce.js?v=296"><\/script><script src="dash.js?v=296"><\/script>')</script>
+<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=297"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="announce.js?v=297"><\/script><script src="dash.js?v=297"><\/script>')</script>
 <script>
 // ================= WHAT'S NEW POP-UP (Nov 17 2026, branch whats-new; read "## What's new pop-up" in HANDOFF.md) =================
 // A "Look what's new" card listing the LIVE items this device has not been shown yet (guests included). It shows when at least one such item exists,

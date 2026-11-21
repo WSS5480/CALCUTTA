@@ -220,7 +220,7 @@ async function handle(req, res) {
       send(res, 200, { dash: dmint(e) }); return true;
     }
     if (path === '/acct/myname') { // a signed-in player sets or reads their own name / handle (phone accounts; email accounts gave a name at sign-up)
-      if (!/@phone\.oddable$/.test(e)) { send(res, 200, { ok: true, name: e === 'owner' ? OWNER_NAME() : '' }); return true; }
+      if (!/@phone\.oddable$/.test(e)) { let nm1 = e === 'owner' ? OWNER_NAME() : ''; if (!nm1) { try { const m1 = await shape(e); nm1 = (m1 && m1.name) || String(e).split('@')[0]; } catch (er) { nm1 = String(e).split('@')[0]; } } send(res, 200, { ok: true, name: nm1 }); return true; } // v293: an email-only account named itself at sign-up: answer a name so the required-name box never loops for it
       const us = await require('./sync').adminUsers(phoneEmail), u = us.find((x) => phoneEmail(x.id) === e); if (!u) { send(res, 404, { error: 'Account not found' }); return true; }
       const k = String(u.id).slice(0, 8), nm = await namesGet().catch(() => ({})), nn = cleanName(b.name);
       if (isOwnerPhone(e)) { send(res, 200, { ok: true, name: OWNER_NAME() }); return true; }

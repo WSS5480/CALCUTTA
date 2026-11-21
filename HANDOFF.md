@@ -695,6 +695,11 @@ No deploy: unset `GROUPS_ENABLED` (Groups, Golf days, Pickleball and Calcutta go
 - Tests: all `odds-api/*.test.js` exit 0 and `local.calcutta.check.js` exit 0; `node --check` all `pics/*.js` and `odds-api/*.js`; static build command exit 0 (no folder in `pics/`). Playwright (harness in scratch, mocked `/calcutta/teams`) at 390 / 820 / 1180: slow (Loading, then Couldn't load after the 6 s timeout, Next says still loading), error (card + 48 px Try again, retry loads 14 teams), empty (message + hint, Next says "Pick at least 2 teams first."), normal (14 teams, Next goes to step 2; screenshots byte-identical to v285 at all three widths). No sideways scroll, no button under 44 px.
 - NOT done: a real phone; a live call to `/calcutta/teams` for nfl_po (so whether the owner's case was a timeout, a 502 or an empty list is not proven; the card now says which).
 
+## v294 — Nov 21 2026: name "Change" button works (manager session, direct)
+- OWNER (12:21 PM CT, screenshot: "Name or handle: — [Change]"): "Change button won't work". Cause: /acct/myname read EVERY player's bets (sync.adminUsers) to find the caller's row: 15+ s, so the box never opened. Now: owner phones answer OWNER_NAME first (no DB read); others use sync.rowIdFor (row ids only).
+- Owner phone accounts show "Name or handle: <OWNER_NAME> (owner name)" with no Change (it is the OWNER_NAME env on ODDABLE). The Account line fetches the name when the phone has none cached.
+- Tests: odds-api pass except calcutta.main (pre-existing); Playwright mocked: box / save / account line / Change + Cancel.
+
 ## v293 — Nov 21 2026: name or handle required for EVERY signed-in player + change it in the Account box (manager session, direct)
 - OWNER (Nov 21 12:02-12:03 PM CT): "Can they add their name? Require it?" / "Yes" (to: change it later + ask every player, not only cell + PIN sign-ins).
 - pics/gate.js namePrompt(force): runs for any signed-in player (was: only when sync-phone was stored on the device, so email sign-ins slipped past); still no skip. force = Account box "Change" (pre-filled, with Cancel). Account box gets "Name or handle: <name> [Change]" (not for the owner-PIN sign-in).

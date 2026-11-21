@@ -280,10 +280,10 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v295 -->
+<!-- Pics v296 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v295</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v296</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
   <div id="arbbar" class="arbbar" hidden onclick="arbBarTap()" role="button" aria-label="Arbitrage alert"><span class="mq" id="arbmq"></span></div>
   <div class="mrow" id="mrow"><label><span>League</span><select id="lgsel" aria-label="League" autocomplete="off"><option value="nfl">🏈 NFL</option><option value="cfb">🎓 NCAA</option><option value="pga">⛳ PGA Tour</option><option value="golfgps">📍 Golf GPS</option><option value="pickleball">🏓 Pickleball</option><option value="nba">🏀 NBA</option><option value="mlb">⚾ MLB</option><option value="nhl">🏒 NHL</option><option value="ncaab">🏀 NCAAB</option></select></label><label id="gvlab"><span>View</span><select id="gvsel" aria-label="View" autocomplete="off" onchange="gvSet(this.value)"></select></label></div>
   <div class="srow"><input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team"><select id="conf" aria-label="Conference"><option value="">All</option></select></div>
@@ -292,7 +292,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v295 (Golf GPS My round: scorecard from the course, friends on one card, My rounds, Golf day button) (v294: name Change button answers fast) (v293: name or handle required for every player, change it in the Account box) (v292: sign in with cell + PIN only; email optional) (v291: hotfix: My Bets crashed on a parlay with a stored result) (v290: one-team slips only match a game today or live; Western Illinois is not Illinois) (v289: screenshot slips that name one team find that team's game) (v288: Save my bet or add it to your group; commissioner can delete a group any time) (v287: Golf days: log my score on Golf GPS, scores kept with no signal, commissioner flag colours)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v296 (Gamecast for every game, where to watch, ⭐ My teams) (v295: Golf GPS My round) (v294: name Change button answers fast) (v293: name or handle required for every player, change it in the Account box) (v292: sign in with cell + PIN only; email optional) (v291: hotfix: My Bets crashed on a parlay with a stored result) (v290: one-team slips only match a game today or live; Western Illinois is not Illinois) (v289: screenshot slips that name one team find that team's game) (v288: Save my bet or add it to your group; commissioner can delete a group any time) (v287: Golf days: log my score on Golf GPS, scores kept with no signal, commissioner flag colours)</div>
   <div class="sub nsw" id="nsw"></div>
   <div class="sub" id="spset"><label>Score pop-ups <select id="spsel" aria-label="Score pop-ups" autocomplete="off" onchange="spSet(this.value)"><option value="mine">My bets only</option><option value="all">All live games</option><option value="off">Off</option></select></label><div style="font-size:11px;opacity:.75;margin-top:4px">A card pops up when a live game scores or ends, with where your bets stand right now.</div></div>
   <div class="sub" id="bpset"><label>Phone alerts for my bets: every score, and the final. <select id="bpsel" aria-label="Phone alerts for my bets (app closed)" autocomplete="off" onchange="bpSet(this.value)"><option value="off">Off</option><option value="on">On</option></select></label><div class="bph">For when Oddable is closed. Needs Oddable added to your Home Screen on iPhone or iPad, and notifications allowed.</div><div id="bpbbw" hidden><label style="margin-top:6px">Basketball <select id="bpbb" aria-label="Basketball alerts" autocomplete="off" onchange="bpBB(this.value)"><option value="q">Quarter ends and final</option><option value="all">Every score</option></select></label><div class="bph">Every score in basketball can mean 150+ alerts a game.</div></div><div id="bpmsg" role="status"></div><button type="button" id="bptest" hidden onclick="bpTest()">Send me a test</button></div>
@@ -313,7 +313,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </div>
 <div id="plb" hidden></div>
 <nav class="bn" id="bn"></nav>
-<script src="trophy.js?v=295"></script><script src="model.js"></script><script src="live.js"></script><script src="lines.js"></script>
+<script src="trophy.js?v=296"></script><script src="model.js"></script><script src="myteams.js?v=296"></script><script src="live.js"></script><script src="lines.js"></script>
 <script>
 // ================= v268 GUEST MODE (1 of 3): the flag. The rest is in the "v268 GUEST MODE" script block near the end of this file and in gate.js. =================
 // window.__oddLock: '' = signed in and paid up, or no gate (everything shows, exactly as before v268) · 'guest' = no account · 'expired' = signed in, time has ended.
@@ -484,6 +484,9 @@ function gvMenu() { const s = $('#gvsel'); if (!s) return; if (!s.options.length
 const gvHide = (sel) => STYLE === 'new' && (sel === '#rail' || sel === '#dots' || (sel === '#nb' && GV !== 'games') || (sel === '#sums' && GV !== 'stats' && GV !== 'results') || (sel === '#list' && GV === 'games'));
 function nGo(n) { WKV = (WKV == null ? CUR : WKV) + n; render(); }
 function nSet(f) { NFILT = f; render(); }
+// v296 My teams (myteams.js): followed teams first on the boards, a star by the name, and a ⭐ My teams chip. Follow from any game's 📡 Live page.
+const favLg = () => (CFB ? 'cfb' : 'nfl'), FAVT = (ab) => !!(window.OddFav && window.OddFav.isFav(favLg(), ab)), favG = (g) => !!g && (FAVT(g.away.abbr) || FAVT(g.home.abbr)), favFirst = (a) => a.filter(favG).concat(a.filter((g) => !favG(g)));
+window.addEventListener('oddfav', () => { try { renderBg(); } catch (e) {} });
 function takeHtml(g, p) {
   if (g.state === 'post') return '';
   const lk = g.state === 'in' ? lkLoad(g.id) : null, I = ''; // live games show the pick that was LOCKED before kickoff, with a lock on the line
@@ -497,7 +500,7 @@ function nCard(g) {
   if (GUEST()) return gNCard(g); // v268 guest: no pick is worked out or drawn
   const p = pred(g), live = g.state === 'in', pre = g.state === 'pre', pinned = PIN.includes(g.id);
   const when = live ? `<span class="nlv">● LIVE</span> ${g.detail || ''}` : pre ? new Date(g.start).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : (g.detail || 'Final');
-  const side = (t) => `<div class="t"${tpAt(t.abbr)}>${t.logo ? `<img src="${t.logo}" alt="">` : ''}<div>${t.abbr}<div class="nrec">${t.record || ''}</div></div></div>`;
+  const side = (t) => `<div class="t"${tpAt(t.abbr)}>${t.logo ? `<img src="${t.logo}" alt="">` : ''}<div>${FAVT(t.abbr) ? '⭐ ' : ''}${t.abbr}<div class="nrec">${t.record || ''}</div></div></div>`;
   const pk = p.su || (p.ph >= 0.5 ? g.home : g.away), pc = Math.max(p.ph, p.pa);
   const ats = p.ats ? `<div class="npk nrec">Spread: <b>${p.ats.side.abbr} ${sp(p.ats.line)}</b> · covers ${pct(p.ats.cover)}</div>` : '';
   const bits = []; if (g.line !== null && g.line !== undefined) bits.push('Line ' + byText(g, g.line)); if (p.mh !== undefined && p.mh !== null) bits.push('Model ' + byText(g, p.mh));
@@ -518,10 +521,10 @@ function newBoard(games) {
   const grp = { live: wg.filter((g) => g.state === 'in'), pre: wg.filter((g) => g.state === 'pre'), post: wg.filter((g) => g.state === 'post') };
   const chip = (k, l, n) => `<button class="${NFILT === k ? 'on' : ''}" onclick="nSet('${k}')"><b>${n}</b>${l}</button>`;
   const watch = games.filter(isW).sort((a, b) => (b.state === 'in') - (a.state === 'in') || a.start - b.start);
-  const isArb = (g) => { try { const x = g.state === 'pre' && arbOf(g); return x && x.arb ? 1 : 0; } catch (e) { return 0; } }; const list = (NFILT === 'watch' ? watch : NFILT === 'all' ? wg : grp[NFILT]).slice().sort((x, y) => isArb(y) - isArb(x));
+  const isArb = (g) => { try { const x = g.state === 'pre' && arbOf(g); return x && x.arb ? 1 : 0; } catch (e) { return 0; } }; const list = favFirst((NFILT === 'watch' ? watch : NFILT === 'all' ? wg : NFILT === 'fav' ? wg.filter(favG) : grp[NFILT] || []).slice().sort((x, y) => isArb(y) - isArb(x)));
   return (GUEST() ? gTop() /* v268 guest: locked cards in the Alert and prop-ideas slots */ : alertBox(wk) + propIdeasBox()) + `<div class="nbar"><button onclick="nGo(-1)" ${wk <= weeks[0] ? 'disabled style="opacity:.35"' : ''}>◀</button><b>${wk === CUR ? 'This week · ' : ''}Week ${wk}</b><button onclick="nGo(1)" ${wk >= weeks[weeks.length - 1] ? 'disabled style="opacity:.35"' : ''}>▶</button></div>
-  <div class="nchips">${chip('all', 'All', wg.length)}${chip('live', 'Live', grp.live.length)}${chip('pre', 'Upcoming', grp.pre.length)}${chip('post', 'Final', grp.post.length)}${chip('watch', '📌 Watch', watch.length)}</div>
-  ${list.map(nCard).join('') || '<div class="note">' + (NFILT === 'watch' ? 'Nothing watched yet. Tap 📍 Watch on any game.' : 'No games here.') + '</div>'}`;
+  <div class="nchips">${chip('all', 'All', wg.length)}${chip('live', 'Live', grp.live.length)}${chip('pre', 'Upcoming', grp.pre.length)}${chip('post', 'Final', grp.post.length)}${chip('watch', '📌 Watch', watch.length)}${chip('fav', '⭐ My teams', wg.filter(favG).length)}</div>
+  ${list.map(nCard).join('') || '<div class="note">' + (NFILT === 'watch' ? 'Nothing watched yet. Tap 📍 Watch on any game.' : NFILT === 'fav' ? 'No followed teams this week. Open any game with 📡 Live and tap ☆ Follow.' : 'No games here.') + '</div>'}`;
 }
 function swRender() { const e = $('#nsw'); if (e) e.innerHTML = STYLE === 'new' ? '<a onclick="styleSet(\'classic\')">Use classic view</a> · <a href="classic.html">frozen classic build</a>' : '<a onclick="styleSet(\'new\')">Use new look</a>'; if (e) e.innerHTML += ' · <a onclick="themeSet(document.documentElement.classList.contains(\'cb\') ? \'violet\' : \'cowboys\')">' + (document.documentElement.classList.contains('cb') ? 'Original violet colors' : 'Cowboys colors') + '</a>'; }
 function navRender() { swRender();
@@ -555,7 +558,7 @@ function navMore(open) {
 let GRPL = 0; const GRPQ = [];
 function grpLoad(then) { // pics/groups.js, fetched the first time it is needed
   if (window.OddGroups) { if (then) then(); return; } if (then) GRPQ.push(then); if (GRPL) return; GRPL = 1;
-  const sc = document.createElement('script'); sc.src = 'groups.js?v=295'; sc.onload = () => { GRPQ.splice(0).forEach((f) => { try { f(); } catch (e) {} }); }; sc.onerror = () => { GRPL = 0; GRPQ.length = 0; sc.remove(); }; document.head.appendChild(sc);
+  const sc = document.createElement('script'); sc.src = 'groups.js?v=296'; sc.onload = () => { GRPQ.splice(0).forEach((f) => { try { f(); } catch (e) {} }); }; sc.onerror = () => { GRPL = 0; GRPQ.length = 0; sc.remove(); }; document.head.appendChild(sc);
 }
 // Invite links: https://<site>/?join=g.<code> (built with window.oddShareUrl, so they also carry ?ref=). The code is kept for this tab and taken out of the address bar.
 // Read ONLY when the server says Groups exists (/acct/status `groups`, kept in 'odd-gsw'); with Groups dark the link is left alone and opens the app as any link does.
@@ -676,7 +679,7 @@ function livePageRender(games) {
   const grp = { live: wk.filter((g) => g.state === 'in'), pre: wk.filter((g) => g.state === 'pre').sort((a, b) => a.start - b.start), post: wk.filter((g) => g.state === 'post').sort((a, b) => b.start - a.start) };
   const BG = betGids(); const pins = games.filter((g) => PIN.includes(g.id) || BG.has(String(g.id))).sort((a, b) => (b.state === 'in') - (a.state === 'in') || a.start - b.start); 
   const bestFirst = (a, b) => (BG.has(String(b.id)) - BG.has(String(a.id))) || (GUEST() ? 0 /* v268 guest: no pick is worked out */ : pred(b).conf - pred(a).conf); grp.live.sort(bestFirst); grp.pre.sort((a, b) => (BG.has(String(b.id)) - BG.has(String(a.id))) || a.start - b.start); grp.post.sort((a, b) => (BG.has(String(b.id)) - BG.has(String(a.id))) || b.start - a.start);
-  const list = LF === 'all' ? [...grp.live, ...grp.pre, ...grp.post] : LF === 'live' ? grp.live : LF === 'pre' ? grp.pre : LF === 'watch' ? [] : grp.post;
+  const list = favFirst(LF === 'all' ? [...grp.live, ...grp.pre, ...grp.post] : LF === 'live' ? grp.live : LF === 'pre' ? grp.pre : LF === 'watch' ? [] : grp.post);
   const chip = (k, l, n) => `<button class="${LF === k ? 'on' : ''}" onclick="setLF('${k}')"><b>${n}</b>${l}</button>`;
   el.innerHTML = `<div class="lpg"><h2>Live <button onclick="mvOpen()" style="float:right;font:700 13px system-ui;padding:6px 10px;border:1px solid var(--line);border-radius:9px;background:none;color:inherit">🔲 Multiview</button></h2><div class="lchips">${chip('all', 'All', wk.length)}${chip('live', 'Live', grp.live.length)}${chip('pre', 'Upcoming', grp.pre.length)}${chip('post', 'Final', grp.post.length)}${chip('watch', '📌 Watching', pins.length + [...BG].filter((id) => !games.some((g) => String(g.id) === id) && XL[id]).length)}</div>${LF === 'watch' ? (pins.map((g) => gameCard(g)).join('') + [...BG].filter((id) => !games.some((g) => String(g.id) === id) && XL[id]).map((id) => miniGame(XL[id])).join('') || '<div class="note">Nothing watched yet. Tap 📍 Watch on any game.</div>') : ''}${LF === 'watch' ? '' : (list.map((g) => gameCard(g)).join('') || '<div class="note">No games here.</div>')}</div>`;
 }
@@ -1979,7 +1982,7 @@ async function alertPush() {
   ASQ = Date.now();
   try { const r = await fetch(ALU, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': alertTok() }, body: JSON.stringify({ week: CUR, rec: { lock: a.lock, dogs: a.dogs, helper: { id: h.g.id, abbr: h.abbr, conf: h.conf } } }) }); if (!r.ok) return; const j = await r.json(); if (j && j.rec && j.week === CUR && alertTake(Object.assign({}, ASV, { [CUR]: j.rec }))) render(); } catch (e) {}
 }
-async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=295')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
+async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=296')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
 const trGrade = (p) => { const g = ALL[p.id]; if (!g || g.state !== 'post') return null; const m = (g.home.abbr === p.abbr ? 1 : -1) * (g.home.score - g.away.score) + p.line; return m === 0 ? 'push' : m > 0 ? 'hit' : 'miss'; };
 function trophyData() {
   if (CFB || !window.Trophy || !Trophy.ready()) return null;
@@ -3572,7 +3575,7 @@ if ('serviceWorker' in navigator) {
   window.gNCard = function (g) {
     const live = g.state === 'in', pre = g.state === 'pre';
     const when = live ? `<span class="nlv">● LIVE</span> ${g.detail || ''}` : pre ? whenOf(g) : (g.detail || 'Final');
-    const side = (t) => `<div class="t"${tpAt(t.abbr)}>${t.logo ? `<img src="${t.logo}" alt="">` : ''}<div>${t.abbr}<div class="nrec">${t.record || ''}</div></div></div>`;
+    const side = (t) => `<div class="t"${tpAt(t.abbr)}>${t.logo ? `<img src="${t.logo}" alt="">` : ''}<div>${FAVT(t.abbr) ? '⭐ ' : ''}${t.abbr}<div class="nrec">${t.record || ''}</div></div></div>`;
     return `<div class="ng ${live ? 'lv' : ''}" data-ga="g${g.id}"><div class="ngt">${side(g.away)}<div class="ngm">${when}</div>${side(g.home)}</div>
     <div class="ngt" style="margin-top:2px"><span>${pre ? '' : g.away.score}</span><span></span><span>${pre ? '' : g.home.score}</span></div>
     ${gk(pickLine(g), 'pick:' + g.id, { one: 1 })}
@@ -3679,7 +3682,7 @@ if ('serviceWorker' in navigator) {
 })();
 // ================= end v268 GUEST MODE (3 of 3) =================
 </script>
-<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=295"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="announce.js?v=295"><\/script><script src="dash.js?v=295"><\/script>')</script>
+<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=296"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="announce.js?v=296"><\/script><script src="dash.js?v=296"><\/script>')</script>
 <script>
 // ================= WHAT'S NEW POP-UP (Nov 17 2026, branch whats-new; read "## What's new pop-up" in HANDOFF.md) =================
 // A "Look what's new" card listing the LIVE items this device has not been shown yet (guests included). It shows when at least one such item exists,

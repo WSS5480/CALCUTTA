@@ -36,6 +36,7 @@ main{max-width:720px;margin:0 auto;padding:0 16px}
 .ft{display:flex;align-items:center;gap:8px;justify-content:space-between;color:var(--muted);font-size:12px;margin-top:6px}
 .gpin{position:absolute;top:6px;right:8px;border:1px solid rgba(124,58,237,.5);background:rgba(124,58,237,.12);color:inherit;border-radius:999px;font:600 11px inherit;padding:3px 9px}.gpin.on{background:#7c3aed;color:#fff}
 .botd{border:2px solid #f5c542;border-radius:16px;padding:8px 8px 2px;margin:6px 0 12px;background:linear-gradient(135deg,rgba(245,197,66,.22),rgba(255,226,140,.08));box-shadow:0 0 18px rgba(245,197,66,.35)}.botd>.bh2{font:800 13px inherit;letter-spacing:.08em;text-transform:uppercase;color:#b8860b;margin:2px 4px 6px}.botd>.bh2 small{font-weight:600;letter-spacing:0;text-transform:none;opacity:.8;display:block;margin-top:2px}html.cb .botd>.bh2,.botd>.bh2{color:#d4a017}.upset{border:3px double #f5c542;border-radius:16px;padding:8px 8px 2px;margin:6px 0 12px;background:linear-gradient(135deg,rgba(255,200,40,.3),rgba(255,120,40,.08));box-shadow:0 0 22px rgba(245,170,30,.5),inset 0 0 0 2px rgba(245,197,66,.35)}.upset>.bh2{font:800 13px inherit;letter-spacing:.08em;text-transform:uppercase;color:#d4a017;margin:2px 4px 6px}.upset>.bh2 small{font-weight:600;letter-spacing:0;text-transform:none;opacity:.85;display:block;margin-top:2px}.upset .bmoney{margin:0 4px;font-size:17px}.upset .bmoney span{font-size:12px;opacity:.85}.upset .gc{border-color:#f5c542!important}.botd .bmoney{margin:0 4px;font-size:17px}.botd .bmoney span{font-size:12px;opacity:.85}.botd .gc{border-color:#f5c542!important}.pinhd{font:700 12px inherit;letter-spacing:.08em;text-transform:uppercase;opacity:.75;margin:12px 4px 6px}
+.gcr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:8px}.gcr button{min-height:42px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);font:700 14px system-ui;padding:0 8px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bet{display:block;width:100%;margin-top:8px;border:1px dashed var(--blue);background:none;color:var(--blue);border-radius:12px;padding:9px;font:700 14px inherit}
 .bf{border-top:1px solid var(--line);margin-top:8px;padding-top:8px}.bf label{display:block;margin:6px 0;font-size:13px;color:var(--muted)}.bf input,.bf select{display:block;width:100%;margin-top:4px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel2);color:var(--ink);font:16px inherit}
 .bf .row{display:flex;gap:8px}.bf .row>*{flex:1}.bf button{border:1px solid var(--blue);background:var(--blue);color:#0a0c10;border-radius:12px;padding:10px;font:800 15px inherit}.bf button.x{background:none;color:var(--blue)}
@@ -136,6 +137,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </main>
 </div>
 <nav class="bn" id="bn"></nav>
+<script src="myteams.js?v=296"></script>
 <script>
 // ================= v268 GUEST MODE (1 of 2): the flag and the locked card. Same rule and same card as index.html; gate.js owns window.__oddLock after it loads. =================
 if (window.__oddLock === undefined) window.__oddLock = (() => { try { const q = (k) => localStorage.getItem(k); if (q('odd-gate') === '0' || q('odd-guest') === '0') return ''; return q('odd-tok') ? (q('odd-exp') === '1' ? 'expired' : '') : q('sync-phone') && q('sync-pin') && !q('odd-noauto') ? '' : 'guest'; } catch (e) { return ''; } })();
@@ -213,7 +215,7 @@ function parseEvents(j) {
       if (o.spread != null && !isNaN(+o.spread) && o.homeTeamOdds && o.homeTeamOdds.favorite != null) { const s = Math.abs(+o.spread); line = o.homeTeamOdds.favorite ? s : -s; }
       else if (o.details) { const m = /^([A-Z]{2,4})\s+(-\d+(?:\.\d+)?)$/.exec(o.details.trim()); if (m && SPREADY) { const s = Math.abs(+m[2]); line = m[1] === cs[1].abbr ? s : m[1] === cs[0].abbr ? -s : null; } }
     }
-    return window.oddsFill({ id: e.id, start: +new Date(e.date), state: t.state, detail: t.shortDetail || '', away: cs[0], home: cs[1], line, total, mlA, mlH, completed: t.completed });
+    return window.oddsFill({ id: e.id, start: +new Date(e.date), state: t.state, detail: t.shortDetail || '', away: cs[0], home: cs[1], line, total, mlA, mlH, completed: t.completed, tv: window.OddFav ? window.OddFav.tv(c) : [] });
   });
 }
 
@@ -354,11 +356,17 @@ function stBadge() {
   Object.values(LKM).forEach((k) => { if (!k.r) return; const m = k.r[0] - k.r[1]; if (m !== 0) { wn++; if ((m > 0) === (k.su === 'h')) wh++; } if (k.ats && k.L !== null && m !== k.L) { an++; if ((m > k.L) === (k.ats === 'h')) ah++; } });
   return `<div class="nst">Win <b>${BT ? Math.round(BT.hit / BT.n * 100) + '%' : '–'}</b> · Spread <b>–</b><br>🔒 Win <b>${f(wh, wn)}</b> · 🔒 Spread <b>${f(ah, an)}</b></div>`;
 }
+// v296 Gamecast (live.js, now for every game incl. before tip-off) + My teams (myteams.js): followed teams first with a star, where to watch
+const FAV = (abbr) => !!(window.OddFav && window.OddFav.isFav(LG, abbr));
+const isFavG = (g) => FAV(g.away.abbr) || FAV(g.home.abbr);
+function gcOpen(id) { const g = GAMES.find((x) => String(x.id) === String(id)) || (UP || []).find((x) => String(x.id) === String(id)); if (window.liveOpen) window.liveOpen(CFG.path, String(id), '', { tv: (g && g.tv) || [] }); }
+const gcRow = (g) => `<div class="gcr"><button type="button" onclick="gcOpen('${esc(g.id)}')">${g.state === 'in' ? '📡 Gamecast' : '📊 Gamecast'}</button><button type="button" onclick="gcOpen('${esc(g.id)}')">📺 ${g.tv && g.tv.length ? esc(g.tv.slice(0, 2).join(' · ')) : g.state === 'post' ? 'Box score' : 'Where to watch'}</button></div>`;
+window.addEventListener('oddfav', () => { try { draw(); } catch (e) {} });
 function card(g) {
   if (GUEST()) return gCard(g); // v268 guest: no pick is worked out, drawn or saved
   const p = pred(g); lockSnapS(g, p); const live = g.state === 'in', pre = g.state === 'pre', pinned = PIN.includes(g.id);
   const when = live ? `<span class="lvtag">● LIVE</span> ${esc(g.detail)}` : pre ? new Date(g.start).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : esc(g.detail || 'Final');
-  const side = (t) => `<div class="t">${t.logo ? `<img src="${esc(t.logo)}" alt="">` : ''}<div>${esc(t.abbr)}<div class="rec">${esc(t.record)}</div></div></div>`;
+  const side = (t) => `<div class="t">${t.logo ? `<img src="${esc(t.logo)}" alt="">` : ''}<div>${FAV(t.abbr) ? '⭐ ' : ''}${esc(t.abbr)}<div class="rec">${esc(t.record)}</div></div></div>`;
   const pickT = p.ph >= 0.5 ? g.home : g.away, pk = Math.max(p.ph, p.pa);
   const pickLine = p.has ? `<div class="pick">Pick: <b>${esc(pickT.abbr)}</b> ${pct(pk)}${p.live !== null ? ` <span class="rec">· now ${pct(pickT === g.home ? p.live : 1 - p.live)}</span>` : ''}${SPREADY && p.margin !== null ? ` <span class="rec">· expected margin ${p.margin >= 0 ? g.home.abbr : g.away.abbr} by ${Math.abs(p.margin).toFixed(1)}</span>` : ''}</div>` : '<div class="pick rec">Not enough data yet for a pick</div>';
   const o = OPEN === g.id;
@@ -367,8 +375,8 @@ function card(g) {
     <div class="bar"><i style="width:${p.pa * 100}%;background:#7c6ad8"></i><i style="width:${p.ph * 100}%;background:#4fd18b"></i></div>
     <div class="pr"><span>${esc(g.away.abbr)} ${pct(p.pa)}</span><span>${pct(p.ph)} ${esc(g.home.abbr)}</span></div>
     ${g.state === 'post' || !p.has ? '' : pk >= 0.57 ? `<div class="ntk n">Model leans ${esc(pickT.abbr)} to win <small>${pct(pk)} · info only</small></div>` : `<div class="ntk n">Toss-up on the winner <small>${pct(pk)}</small></div>`}
-    ${pickLine}${p.tl ? `<div class="pick rec">Total: model ${p.tl.model.toFixed(1)} vs line ${p.tl.mkt}${p.tl.lean ? ` · lean <b style="color:var(--blue)">${p.tl.lean}</b>` : ' · no edge'}</div>` : ''}${LG === 'mlb' && (g.away.pit || g.home.pit) ? `<div class="pick rec">Starters: ${esc(g.away.abbr)} ${esc(g.away.pit ? g.away.pit.name + (g.away.pit.era !== null ? ' ' + g.away.pit.era + ' ERA' : '') : 'TBD')} · ${esc(g.home.abbr)} ${esc(g.home.pit ? g.home.pit.name + (g.home.pit.era !== null ? ' ' + g.home.pit.era + ' ERA' : '') : 'TBD')}</div>` : ''}<div class="ft"><span>${esc(lineText(g))}</span>${betGids().has(String(g.id)) ? '<button class="fwatch on" disabled>📌 My bet</button>' : `<button class="fwatch ${pinned ? 'on' : ''}" onclick="pinToggle('${g.id}')">${pinned ? '📌 Watching' : '📍 Watch'}</button>`}${g.state === 'pre' ? '' : `<button class="fwatch livebtn" onclick="liveOpen(CFG.path,'${g.id}')">📡 Live</button>`}</div>
-    <button class="bet" onclick="betOpen('${g.id}')">${g.state === 'post' ? '＋ Add past bet' : '＋ Add bet'}</button>${o ? betForm(g) : ''}</div>`;
+    ${pickLine}${p.tl ? `<div class="pick rec">Total: model ${p.tl.model.toFixed(1)} vs line ${p.tl.mkt}${p.tl.lean ? ` · lean <b style="color:var(--blue)">${p.tl.lean}</b>` : ' · no edge'}</div>` : ''}${LG === 'mlb' && (g.away.pit || g.home.pit) ? `<div class="pick rec">Starters: ${esc(g.away.abbr)} ${esc(g.away.pit ? g.away.pit.name + (g.away.pit.era !== null ? ' ' + g.away.pit.era + ' ERA' : '') : 'TBD')} · ${esc(g.home.abbr)} ${esc(g.home.pit ? g.home.pit.name + (g.home.pit.era !== null ? ' ' + g.home.pit.era + ' ERA' : '') : 'TBD')}</div>` : ''}<div class="ft"><span>${esc(lineText(g))}</span>${betGids().has(String(g.id)) ? '<button class="fwatch on" disabled>📌 My bet</button>' : `<button class="fwatch ${pinned ? 'on' : ''}" onclick="pinToggle('${g.id}')">${pinned ? '📌 Watching' : '📍 Watch'}</button>`}</div>
+    ${gcRow(g)}<button class="bet" onclick="betOpen('${g.id}')">${g.state === 'post' ? '＋ Add past bet' : '＋ Add bet'}</button>${o ? betForm(g) : ''}</div>`;
 }
 function betForm(g) {
   const opts = [`<option value="${g.away.abbr}|ml">${g.away.abbr} to win</option>`, `<option value="${g.home.abbr}|ml">${g.home.abbr} to win</option>`];
@@ -455,9 +463,10 @@ function draw() {
   const d = dayDate(); $('#dl').textContent = OFF === 0 ? 'Today · ' + d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
   const BG = betGids(); const isW = (g) => PIN.includes(g.id) || BG.has(String(g.id)); const grp = { live: GAMES.filter((g) => g.state === 'in'), pre: GAMES.filter((g) => g.state === 'pre'), post: GAMES.filter((g) => g.state === 'post') };
   const chip = (k, l, n) => `<button class="${FILTER === k ? 'on' : ''}" onclick="setF('${k}')"><b>${n}</b>${l}</button>`;
-  setH($('#chips'), chip('all', 'All', GAMES.length) + chip('live', 'Live', grp.live.length) + chip('pre', 'Upcoming', grp.pre.length) + chip('post', 'Final', grp.post.length) + chip('watch', '📌 Watching', GAMES.filter(isW).length));
+  setH($('#chips'), chip('all', 'All', GAMES.length) + chip('live', 'Live', grp.live.length) + chip('pre', 'Upcoming', grp.pre.length) + chip('post', 'Final', grp.post.length) + chip('watch', '📌 Watching', GAMES.filter(isW).length) + chip('fav', '⭐ My teams', GAMES.filter(isFavG).length));
   const pins = GAMES.filter(isW).sort((a, b) => (b.state === 'in') - (a.state === 'in') || a.start - b.start);
-  let list = FILTER === 'all' ? [...grp.live, ...grp.pre, ...grp.post] : FILTER === 'watch' ? [] : grp[FILTER];
+  let list = FILTER === 'all' ? [...grp.live, ...grp.pre, ...grp.post] : FILTER === 'watch' ? [] : FILTER === 'fav' ? GAMES.filter(isFavG) : grp[FILTER] || [];
+  list = list.filter(isFavG).concat(list.filter((g) => !isFavG(g))); // v296: followed teams first
   const bo = (g) => { const p = pred(g); if (!p.has) return null; const home = p.ph >= 0.5, conf = Math.max(p.ph, p.pa), ml = home ? g.mlH : g.mlA; let dec, am = null; if (ml !== null && ml !== undefined && +ml) { am = +ml; dec = am > 0 ? 1 + am / 100 : 1 + 100 / -am; } else dec = 1 / Math.min(0.97, conf + 0.024); if (am === null) am = dec >= 2 ? Math.round((dec - 1) * 100) : -Math.round(100 / (dec - 1)); return { g, p, t: home ? g.home : g.away, conf, dec, am, real: ml !== null && ml !== undefined && !!+ml, ev: conf * dec - 1 }; };
   const cand = GAMES.filter((g) => g.state !== 'post').map(bo).filter(Boolean), good = cand.filter((x) => x.conf >= 0.55 && x.dec >= 1.4);
   const bp = FILTER === 'watch' ? null : (good.length ? good : cand).sort((a, c) => c.ev - a.ev)[0];
@@ -466,7 +475,7 @@ function draw() {
   const ucand = FILTER === 'watch' ? [] : GAMES.filter((g) => g.state !== 'post').map(uo).filter((x) => x && x.pm < 0.45), ur = ucand.filter((x) => x.gap > 0).sort((a, c) => c.gap - a.gap)[0] || ucand.sort((a, c) => c.pb - a.pb)[0];
   const upset = ur && !(bp && ur.g === bp.g) ? `<div class="upset"><div class="bh2">🏆🏆 Biggest Upset Pick<small>${esc(ur.t.abbr)} to win outright · the books give them ${pct(ur.pm)}, the model says ${pct(ur.pmod)}</small></div><div class="bmoney"><b>$100 bet → $${(100 * ur.dec).toFixed(0)} back</b> <span>(+$${(100 * (ur.dec - 1)).toFixed(0)} profit) · ${ur.dec.toFixed(2)}x · ${ur.am > 0 ? '+' : ''}${ur.am}${ur.real ? '' : ' (estimated)'}</span></div><div class="pick rec" style="margin:2px 4px 6px">Long shot: expect to lose most of the time. Check your book for the exact price.</div>${card(ur.g)}</div>` : '';
   const uc = `<div class="note" style="border:1px dashed #f5c542;border-radius:12px;padding:8px 12px;margin:6px 0">🚧 <b>Live lines: under construction for ${CFG.name}.</b> Real moneylines are on for football only for now. Prices here are ESPN's snapshot, or marked estimated. Check your book.</div>`;
-  setH($('#list'), uc + botd + upset + (FILTER === 'watch' ? (pins.map(card).join('') || '<div class="note">Nothing watched yet. Tap 📍 Watch on any game.</div>') : '') + (FILTER === 'watch' ? '' : (list.filter((g) => !((bp && g === bp.g) || (ur && g === ur.g))).map(card).join('') || `<div class="note">No ${CFG.name} games ${OFF === 0 ? 'today' : 'this day'}.${LG === 'mlb' ? ' MLB is in its offseason.' : ''}</div>`)));
+  setH($('#list'), uc + botd + upset + (FILTER === 'watch' ? (pins.map(card).join('') || '<div class="note">Nothing watched yet. Tap 📍 Watch on any game.</div>') : '') + (FILTER === 'watch' ? '' : (list.filter((g) => !((bp && g === bp.g) || (ur && g === ur.g))).map(card).join('') || `<div class="note">${FILTER === 'fav' ? 'No followed teams play this day. Open any game with 📊 Gamecast and tap ☆ Follow. ' : ''}No ${CFG.name} games ${OFF === 0 ? 'today' : 'this day'}.${LG === 'mlb' ? ' MLB is in its offseason.' : ''}</div>`)));
 }
 async function load() {
   try { GAMES = parseEvents(await getJson(SB + '?dates=' + ymd(dayDate()) + '&limit=400' + CFG.q)).sort((a, b) => a.start - b.start); LASTAT = Date.now(); $('#upd').textContent = upText(); }
@@ -483,11 +492,11 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && !O
 function gCard(g) {
   const live = g.state === 'in', pre = g.state === 'pre';
   const when = live ? `<span class="lvtag">● LIVE</span> ${esc(g.detail)}` : pre ? new Date(g.start).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : esc(g.detail || 'Final');
-  const side = (t) => `<div class="t">${t.logo ? `<img src="${esc(t.logo)}" alt="">` : ''}<div>${esc(t.abbr)}<div class="rec">${esc(t.record)}</div></div></div>`;
+  const side = (t) => `<div class="t">${t.logo ? `<img src="${esc(t.logo)}" alt="">` : ''}<div>${FAV(t.abbr) ? '⭐ ' : ''}${esc(t.abbr)}<div class="rec">${esc(t.record)}</div></div></div>`;
   return `<div class="gc ${live ? 'lv' : ''}" data-ga="g${esc(g.id)}"><div class="gtop">${side(g.away)}<div class="gmid">${when}</div>${side(g.home)}</div>
     <div class="gtop" style="margin-top:2px"><span>${pre ? '' : g.away.score}</span><span></span><span>${pre ? '' : g.home.score}</span></div>
     ${gk(g.state === 'post' ? "Sign up free to see how Oddable's pick did on this game" : "Sign up free to see Oddable's pick for this game", 'pick:' + g.id, { one: 1 })}
-    ${LG === 'mlb' && (g.away.pit || g.home.pit) ? `<div class="pick rec">Starters: ${esc(g.away.abbr)} ${esc(g.away.pit ? g.away.pit.name + (g.away.pit.era !== null ? ' ' + g.away.pit.era + ' ERA' : '') : 'TBD')} · ${esc(g.home.abbr)} ${esc(g.home.pit ? g.home.pit.name + (g.home.pit.era !== null ? ' ' + g.home.pit.era + ' ERA' : '') : 'TBD')}</div>` : ''}<div class="ft"><span>${esc(lineText(g))}</span>${pre ? '' : `<button class="fwatch livebtn" onclick="liveOpen(CFG.path,'${g.id}')">📡 Live</button>`}</div></div>`;
+    ${LG === 'mlb' && (g.away.pit || g.home.pit) ? `<div class="pick rec">Starters: ${esc(g.away.abbr)} ${esc(g.away.pit ? g.away.pit.name + (g.away.pit.era !== null ? ' ' + g.away.pit.era + ' ERA' : '') : 'TBD')} · ${esc(g.home.abbr)} ${esc(g.home.pit ? g.home.pit.name + (g.home.pit.era !== null ? ' ' + g.home.pit.era + ' ERA' : '') : 'TBD')}</div>` : ''}<div class="ft"><span>${esc(lineText(g))}</span></div>${gcRow(g)}</div>`;
 }
 function gDraw() {
   { const s = $('#gvsel'); if (s) { if (!s.options.length) s.innerHTML = GVS.map(([k, l]) => `<option value="${k}">${l}</option>`).join(''); if (s.value !== GV) s.value = GV; } }
@@ -504,7 +513,7 @@ function gDraw() {
   const grp = { live: GAMES.filter((g) => g.state === 'in'), pre: GAMES.filter((g) => g.state === 'pre'), post: GAMES.filter((g) => g.state === 'post') }; if (FILTER === 'watch') FILTER = 'all';
   const chip = (k, l, n) => `<button class="${FILTER === k ? 'on' : ''}" onclick="setF('${k}')"><b>${n}</b>${l}</button>`;
   setH($('#chips'), chip('all', 'All', GAMES.length) + chip('live', 'Live', grp.live.length) + chip('pre', 'Upcoming', grp.pre.length) + chip('post', 'Final', grp.post.length));
-  const list = FILTER === 'all' ? [...grp.live, ...grp.pre, ...grp.post] : grp[FILTER] || [];
+  let list = FILTER === 'all' ? [...grp.live, ...grp.pre, ...grp.post] : grp[FILTER] || []; list = list.filter(isFavG).concat(list.filter((g) => !isFavG(g)));
   setH($('#list'), gk('Sign up free to see the Bet of the Day and the Upset Pick', 'picks') + (list.map(gCard).join('') || `<div class="note">No ${CFG.name} games ${OFF === 0 ? 'today' : 'this day'}.${LG === 'mlb' ? ' MLB is in its offseason.' : ''}</div>`));
 }
 // Sign-in / payment / time running out, without a reload (gate.js calls this when window.__oddLock changes).
@@ -518,7 +527,7 @@ window.oddGuestChanged = function (isLocked) {
 window.afterSignIn = function () {}; // nothing to continue here: the page unlocks in place (Add bet lives on the card that is now drawn)
 // ================= end v268 GUEST MODE (2 of 2) =================
 </script>
-<script src="gate.js?v=295"></script><script src="ai.js"></script><script src="live.js"></script>
+<script src="gate.js?v=296"></script><script src="ai.js"></script><script src="live.js"></script>
 <script>
 function aiCtx(gid) {
   const pc = (v) => Math.round((v || 0) * 100) + '%';
@@ -529,6 +538,6 @@ function aiCtx(gid) {
   return LG.toUpperCase() + ' GAMES:\n' + (L.join('\n') || 'none loaded') + (gid ? '' : '\n\nMY BETS:\n' + (B.join('\n') || 'none'));
 }
 </script>
-<script src="sync.js"></script><script>/* v272 Groups phase 2: the bet step (pics/groups.js) is fetched ONLY when the server switched Groups on for this signed-in account ('odd-grp', kept by gate.js from /acct/me). Nobody else gets the file or makes a /groups call. */window.oddGroupsChanged=function(){try{if(!window.OddGroups&&!window.__grpl&&localStorage.getItem('odd-grp')==='1'&&localStorage.getItem('odd-tok')){window.__grpl=1;var gs=document.createElement('script');gs.src='groups.js?v=295';document.head.appendChild(gs)}}catch(e){}};window.oddGroupsChanged();/* gate.js calls it again once it has the account */</script>
+<script src="sync.js"></script><script>/* v272 Groups phase 2: the bet step (pics/groups.js) is fetched ONLY when the server switched Groups on for this signed-in account ('odd-grp', kept by gate.js from /acct/me). Nobody else gets the file or makes a /groups call. */window.oddGroupsChanged=function(){try{if(!window.OddGroups&&!window.__grpl&&localStorage.getItem('odd-grp')==='1'&&localStorage.getItem('odd-tok')){window.__grpl=1;var gs=document.createElement('script');gs.src='groups.js?v=296';document.head.appendChild(gs)}}catch(e){}};window.oddGroupsChanged();/* gate.js calls it again once it has the account */</script>
 </body>
 </html>

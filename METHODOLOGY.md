@@ -90,3 +90,19 @@ Walk-forward test on 538 games with a posted closing line (2023 to 2026 week 9),
 | Model alone (current / with new inputs) | 13.03 / 12.98 | 0.2199 / 0.2189 | 0.6322 / 0.6289 | 64.2% / 64.4% |
 
 Findings: the new inputs add almost nothing, and any model blend is slightly worse than the line alone, so the line stays the anchor. The line's win chance is best calibrated with a spread of about 12.5, not 13.5. Applied: NFL market weight 0.9 (was 0.8) and NFL spread 12.5 (was 13.5). College is unchanged and was not retested.
+
+## 11. Sir Oddable's Edge: angle search, Nov 2026 (v301)
+
+Source for every number below: NFL regular season 2006 to Nov 19 2026, closing lines, nflverse data. An angle was kept only if it won in BOTH halves (2006-2018 and 2019-2026). About 45 angles were tried, so some of what passed can be luck. Our own model against the spread was 50% in the same test and is not an edge (it is not one of the angles).
+
+| Angle | Rule | Record | 2006-2018 | 2019-2026 |
+|---|---|---|---|---|
+| A. Short dogs, moved up 6 | Underdog +1.5 to +2.5, spread moved up 6 (to +7.5 / +8.5), two per ticket | Legs 510 of 671 covered (76.0%); pairs 156-100 (60.9%), +31.9 units, winning seasons 15 of 21 | 74.6% of legs | 77.4% of legs |
+| B. Division road dogs under a touchdown | Road underdog in a division game getting less than 7, against the spread | 420-326 (56.3%), +77.5 units at -110, winning seasons 15 of 21 | 55.1% | 58.5% |
+| C. Windy unders | Outdoor game, wind 10 mph or more at kickoff, under the total | 692-564 (55.1%), +91.8 units, winning seasons 14 of 21 | 53.7% | 58.0% |
+
+- A: a two-team 6-point teaser at the usual -120 needs 54.6% of tickets; the pairs won 60.9%, so it pays off only at about 1.65x or better for two.
+- B: division road dogs of +7 or more went 223-227 and are not part of the angle.
+- C: the backtest used wind MEASURED at the game; the app can only use a FORECAST (National Weather Service, at kickoff), which adds error the backtest did not have. Domes, fixed roofs, retractable roofs and neutral sites are not counted.
+- College: the same search on college, 2013-2026, found no angle that held up. The Edge is NFL only.
+- In the app these are labelled "edges" with their record, source and period, never as picks or a Lock. The live "This season" lines use the closing spreads the app keeps (the same as the Alert) and, for C, only games whose forecast was stored before kickoff.

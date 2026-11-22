@@ -280,10 +280,10 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </head>
 <body>
 <div id="sc">
-<!-- Pics v300 -->
+<!-- Pics v301 -->
 <header>
   <button class="thm" id="thm" aria-label="Theme">🌙 Dark</button>
-  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v300</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
+  <div class="hrow"><h1>Oddable</h1><div class="hbt"><button class="aibtn" onclick="setView('bets');setTimeout(function(){addMenu(true);if(!document.getElementById('addmenu')||document.getElementById('addmenu').hidden)betsRender()},150)">➕ Add bet</button><button class="aibtn" onclick="aiOpen()">🤖 Ask AI</button><div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;min-height:24px"><span style="align-self:center;font:700 12px system-ui;color:#fff;opacity:.85;padding:3px 8px;border:1px solid rgba(255,255,255,.4);border-radius:999px">v301</span><span id="kdot" class="kdot" hidden title="Kalshi" role="img" aria-label="Kalshi status" onclick="setView('bets')"></span><span id="odiag" style="font-size:11px;opacity:.85;margin-left:6px">acct: not checked</span></div></div></div>
   <div id="arbbar" class="arbbar" hidden onclick="arbBarTap()" role="button" aria-label="Arbitrage alert"><span class="mq" id="arbmq"></span></div>
   <div class="mrow" id="mrow"><label><span>League</span><select id="lgsel" aria-label="League" autocomplete="off"><option value="nfl">🏈 NFL</option><option value="cfb">🎓 NCAA</option><option value="pga">⛳ PGA Tour</option><option value="golfgps">📍 Golf GPS</option><option value="pickleball">🏓 Pickleball</option><option value="nba">🏀 NBA</option><option value="mlb">⚾ MLB</option><option value="nhl">🏒 NHL</option><option value="ncaab">🏀 NCAAB</option></select></label><label id="gvlab"><span>View</span><select id="gvsel" aria-label="View" autocomplete="off" onchange="gvSet(this.value)"></select></label></div>
   <div class="srow"><input id="tsearch" type="search" placeholder="Search team…" autocomplete="off" aria-label="Search team"><select id="conf" aria-label="Conference"><option value="">All</option></select></div>
@@ -292,7 +292,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
   <details class="dsc"><summary>ⓘ Disclosures</summary>
   <div id="acct" style="margin:8px 0"></div>
   <div class="sub" id="upd">Loading…</div>
-  <div class="sub" style="font-size:11px;opacity:.7">Oddable v300 (⭐ My teams picker: More menu + Pick teams chip, every team of 6 leagues) (v299: slip legs with a full team name match tomorrow's game: Saturday slip, Sunday NFL) (v298: ESPN-style score alerts: ARK 3 – 17 TEX⭐ · down &amp; distance · leader; alerts for ⭐ followed teams too) (v297: tap a team: team page for college + NBA/NHL/MLB/NCAAB, ☆ Follow there and on the NFL team page) (v296: Gamecast, where to watch, My teams) (v295: Golf GPS My round) (v294: name Change button answers fast) (v293: name or handle required for every player, change it in the Account box) (v292: sign in with cell + PIN only; email optional) (v291: hotfix: My Bets crashed on a parlay with a stored result) (v290: one-team slips only match a game today or live; Western Illinois is not Illinois) (v289: screenshot slips that name one team find that team's game) (v288: Save my bet or add it to your group; commissioner can delete a group any time) (v287: Golf days: log my score on Golf GPS, scores kept with no signal, commissioner flag colours)</div>
+  <div class="sub" style="font-size:11px;opacity:.7">Oddable v301 (⚡ Sir Oddable's Edge: three NFL angles with their 20-season records) (v300: ⭐ My teams picker: More menu + Pick teams chip, every team of 6 leagues) (v299: slip legs with a full team name match tomorrow's game: Saturday slip, Sunday NFL) (v298: ESPN-style score alerts: ARK 3 – 17 TEX⭐ · down &amp; distance · leader; alerts for ⭐ followed teams too) (v297: tap a team: team page for college + NBA/NHL/MLB/NCAAB, ☆ Follow there and on the NFL team page) (v296: Gamecast, where to watch, My teams) (v295: Golf GPS My round) (v294: name Change button answers fast) (v293: name or handle required for every player, change it in the Account box) (v292: sign in with cell + PIN only; email optional) (v291: hotfix: My Bets crashed on a parlay with a stored result) (v290: one-team slips only match a game today or live; Western Illinois is not Illinois) (v289: screenshot slips that name one team find that team's game) (v288: Save my bet or add it to your group; commissioner can delete a group any time) (v287: Golf days: log my score on Golf GPS, scores kept with no signal, commissioner flag colours)</div>
   <div class="sub nsw" id="nsw"></div>
   <div class="sub" id="spset"><label>Score pop-ups <select id="spsel" aria-label="Score pop-ups" autocomplete="off" onchange="spSet(this.value)"><option value="mine">My bets only</option><option value="all">All live games</option><option value="off">Off</option></select></label><div style="font-size:11px;opacity:.75;margin-top:4px">A card pops up when a live game scores or ends, with where your bets stand right now.</div></div>
   <div class="sub" id="bpset"><label>Phone alerts for my bets and ⭐ followed teams: every score, and the final. <select id="bpsel" aria-label="Phone alerts for my bets (app closed)" autocomplete="off" onchange="bpSet(this.value)"><option value="off">Off</option><option value="on">On</option></select></label><div class="bph">For when Oddable is closed. Needs Oddable added to your Home Screen on iPhone or iPad, and notifications allowed.</div><div id="bpbbw" hidden><label style="margin-top:6px">Basketball <select id="bpbb" aria-label="Basketball alerts" autocomplete="off" onchange="bpBB(this.value)"><option value="q">Quarter ends and final</option><option value="all">Every score</option></select></label><div class="bph">Every score in basketball can mean 150+ alerts a game.</div></div><div id="bpmsg" role="status"></div><button type="button" id="bptest" hidden onclick="bpTest()">Send me a test</button></div>
@@ -313,7 +313,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </div>
 <div id="plb" hidden></div>
 <nav class="bn" id="bn"></nav>
-<script src="trophy.js?v=300"></script><script src="model.js"></script><script src="myteams.js?v=300"></script><script src="live.js"></script><script src="lines.js"></script>
+<script src="trophy.js?v=301"></script><script src="edge.js?v=301"></script><script src="model.js"></script><script src="myteams.js?v=301"></script><script src="live.js"></script><script src="lines.js"></script>
 <script>
 // ================= v268 GUEST MODE (1 of 3): the flag. The rest is in the "v268 GUEST MODE" script block near the end of this file and in gate.js. =================
 // window.__oddLock: '' = signed in and paid up, or no gate (everything shows, exactly as before v268) · 'guest' = no account · 'expired' = signed in, time has ended.
@@ -523,7 +523,7 @@ function newBoard(games) {
   const chip = (k, l, n) => `<button class="${NFILT === k ? 'on' : ''}" onclick="nSet('${k}')"><b>${n}</b>${l}</button>`;
   const watch = games.filter(isW).sort((a, b) => (b.state === 'in') - (a.state === 'in') || a.start - b.start);
   const isArb = (g) => { try { const x = g.state === 'pre' && arbOf(g); return x && x.arb ? 1 : 0; } catch (e) { return 0; } }; const list = favFirst((NFILT === 'watch' ? watch : NFILT === 'all' ? wg : NFILT === 'fav' ? wg.filter(favG) : grp[NFILT] || []).slice().sort((x, y) => isArb(y) - isArb(x)));
-  return (GUEST() ? gTop() /* v268 guest: locked cards in the Alert and prop-ideas slots */ : alertBox(wk) + propIdeasBox()) + `<div class="nbar"><button onclick="nGo(-1)" ${wk <= weeks[0] ? 'disabled style="opacity:.35"' : ''}>◀</button><b>${wk === CUR ? 'This week · ' : ''}Week ${wk}</b><button onclick="nGo(1)" ${wk >= weeks[weeks.length - 1] ? 'disabled style="opacity:.35"' : ''}>▶</button></div>
+  return (GUEST() ? gTop() /* v268 guest: locked cards in the Alert and prop-ideas slots */ : alertBox(wk) + (window.OddEdge ? window.OddEdge.tile(wk) /* v301 ⚡ Sir Oddable's Edge (edge.js), NFL only */ : '') + propIdeasBox()) + `<div class="nbar"><button onclick="nGo(-1)" ${wk <= weeks[0] ? 'disabled style="opacity:.35"' : ''}>◀</button><b>${wk === CUR ? 'This week · ' : ''}Week ${wk}</b><button onclick="nGo(1)" ${wk >= weeks[weeks.length - 1] ? 'disabled style="opacity:.35"' : ''}>▶</button></div>
   <div class="nchips">${chip('all', 'All', wg.length)}${chip('live', 'Live', grp.live.length)}${chip('pre', 'Upcoming', grp.pre.length)}${chip('post', 'Final', grp.post.length)}${chip('watch', '📌 Watch', watch.length)}${chip('fav', '⭐ My teams', wg.filter(favG).length)}<button onclick="OddFav.pickOpen(favLg())"><b>＋</b>Pick teams</button></div>
   ${list.map(nCard).join('') || '<div class="note">' + (NFILT === 'watch' ? 'Nothing watched yet. Tap 📍 Watch on any game.' : NFILT === 'fav' ? 'No followed teams this week. Open any game with 📡 Live and tap ☆ Follow.' : 'No games here.') + '</div>'}`;
 }
@@ -559,7 +559,7 @@ function navMore(open) {
 let GRPL = 0; const GRPQ = [];
 function grpLoad(then) { // pics/groups.js, fetched the first time it is needed
   if (window.OddGroups) { if (then) then(); return; } if (then) GRPQ.push(then); if (GRPL) return; GRPL = 1;
-  const sc = document.createElement('script'); sc.src = 'groups.js?v=300'; sc.onload = () => { GRPQ.splice(0).forEach((f) => { try { f(); } catch (e) {} }); }; sc.onerror = () => { GRPL = 0; GRPQ.length = 0; sc.remove(); }; document.head.appendChild(sc);
+  const sc = document.createElement('script'); sc.src = 'groups.js?v=301'; sc.onload = () => { GRPQ.splice(0).forEach((f) => { try { f(); } catch (e) {} }); }; sc.onerror = () => { GRPL = 0; GRPQ.length = 0; sc.remove(); }; document.head.appendChild(sc);
 }
 // Invite links: https://<site>/?join=g.<code> (built with window.oddShareUrl, so they also carry ?ref=). The code is kept for this tab and taken out of the address bar.
 // Read ONLY when the server says Groups exists (/acct/status `groups`, kept in 'odd-gsw'); with Groups dark the link is left alone and opens the app as any link does.
@@ -1985,7 +1985,7 @@ async function alertPush() {
   ASQ = Date.now();
   try { const r = await fetch(ALU, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': alertTok() }, body: JSON.stringify({ week: CUR, rec: { lock: a.lock, dogs: a.dogs, helper: { id: h.g.id, abbr: h.abbr, conf: h.conf } } }) }); if (!r.ok) return; const j = await r.json(); if (j && j.rec && j.week === CUR && alertTake(Object.assign({}, ASV, { [CUR]: j.rec }))) render(); } catch (e) {}
 }
-async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=300')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
+async function trophyLoad() { if (CFB || TRL || !window.Trophy) return; TRL = true; try { const m = await getJson('trophy-model.json'), h = await getJson('trophy-hist.json'); try { TRS = await getJson('trophy-season.json'); } catch (e) {} try { AFS = (await getJson('alert-frozen.json?v=301')).weeks || {}; } catch (e) {} Trophy.init(m, h); TRF = false; TRC = null; ['trk26-w', 'hlp26-w', 'ddp26-'].forEach((pre) => { try { Object.keys(localStorage).filter((k) => k.indexOf(pre) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) {} }); /* old per-phone freezes: no longer read */ render(); alertPull(true); } catch (e) { TRL = false; TRF = true; render(); } } // TRF: the model files failed to load, so the NFL season tiles fall back to the every-game tiles instead of waiting
 const trGrade = (p) => { const g = ALL[p.id]; if (!g || g.state !== 'post') return null; const m = (g.home.abbr === p.abbr ? 1 : -1) * (g.home.score - g.away.score) + p.line; return m === 0 ? 'push' : m > 0 ? 'hit' : 'miss'; };
 function trophyData() {
   if (CFB || !window.Trophy || !Trophy.ready()) return null;
@@ -3612,7 +3612,7 @@ if ('serviceWorker' in navigator) {
   </div>`;
   };
   // The Alert and the prop-ideas slots at the top of the Games list.
-  window.gTop = function () { return CFB ? '' : gk("Sign up free to see the Lock and this week's Alert", 'alert', { ga: 'alert' }) + gk("Sign up free to see this week's prop ideas", 'props', { ga: 'props', one: GEXP() /* an ended account: the full pay card once, then the short one */ }); };
+  window.gTop = function () { return CFB ? '' : gk("Sign up free to see the Lock and this week's Alert", 'alert', { ga: 'alert' }) + gk("Sign up free to see Sir Oddable's Edge", 'edge', { ga: 'edge', one: GEXP() }) /* v301 */ + gk("Sign up free to see this week's prop ideas", 'props', { ga: 'props', one: GEXP() /* an ended account: the full pay card once, then the short one */ }); };
   // "Best odds" for a guest: this week's games with the market line, the total and, where the books are listed, the best price on each side. No ranking by a pick.
   function gBest(games) {
     const wk = games.filter((g) => g.week === CUR || g.state === 'in').sort((a, b) => (b.state === 'in') - (a.state === 'in') || (a.state === 'post') - (b.state === 'post') || a.start - b.start);
@@ -3641,7 +3641,7 @@ if ('serviceWorker' in navigator) {
   // ---- 5. sign-in / payment / time running out, WITHOUT a reload. Called by gate.js when window.__oddLock changes. ----
   const styleSaved = () => { try { return localStorage.getItem('pics-style') === 'classic' ? 'classic' : 'new'; } catch (e) { return 'new'; } };
   let HOLD = null; // the card the person tapped: kept at the same place on the screen while the unlocked page fills in
-  const cardOf = (k) => { if (!k) return null; const m = /^([glb])(.+)$/.exec(k), q = (sel) => { try { return document.querySelector(sel); } catch (e) { return null; } }; let el = q('[data-ga="' + k + '"]'); if (el || !m) return el || (k === 'alert' || k === 'props' ? $('#nb') : null);
+  const cardOf = (k) => { if (!k) return null; const m = /^([glb])(.+)$/.exec(k), q = (sel) => { try { return document.querySelector(sel); } catch (e) { return null; } }; let el = q('[data-ga="' + k + '"]'); if (el || !m) return el || (k === 'alert' || k === 'props' || k === 'edge' ? $('#nb') : null);
     const hit = q((m[1] === 'l' ? '#livepage' : '#nb') + ' [onclick*="\'' + m[2] + '\'"]'); return hit ? hit.closest('.ng,.gc') : null; };
   function hold() { if (!HOLD || !HOLD.until) return; if (Date.now() > HOLD.until || (window.__touch || 0) > HOLD.at) { HOLD = null; return; } const el = cardOf(HOLD.k); if (!el) return; const d = el.getBoundingClientRect().top - HOLD.top; if (Math.abs(d) > 1) SC.scrollTop += d; }
   document.addEventListener('click', (e) => { const c = e.target && e.target.closest ? e.target.closest('[data-gt]') : null; if (!c) return; const a = c.closest('[data-ga]'); HOLD = a ? { k: a.getAttribute('data-ga'), top: a.getBoundingClientRect().top, at: 0, until: 0 } : null; }, true);
@@ -3652,7 +3652,7 @@ if ('serviceWorker' in navigator) {
       const wipe = (sel) => { const e = $(sel); if (e) { e.innerHTML = ''; e.__h = null; } };
       if (VIEW !== 'live') wipe('#livepage'); if (VIEW !== 'surv') wipe('#survpage'); // pages that are only redrawn while they are showing: never leave the other state's copy behind
       if (isLocked) { // signed out of time while the app is open: whatever was drawn with picks or bets is taken out of the page, not just hidden
-        HOLD = null; try { spFlush(); } catch (e) {} try { sheetClose(); tpClose(); mvClose(); } catch (e) {} ['#infosheet', '#teampage', '#mvg', '#aiout', '#rail', '#dots', '#sums', '#plb'].forEach(wipe); const pb = $('#plb'); if (pb) pb.hidden = true; const ai = document.getElementById('aisheet'); if (ai) ai.hidden = true;
+        HOLD = null; try { spFlush(); } catch (e) {} try { sheetClose(); tpClose(); mvClose(); } catch (e) {} try { if (window.OddEdge) window.OddEdge.close(); } catch (e) {} /* v301 */ ['#infosheet', '#teampage', '#mvg', '#aiout', '#rail', '#dots', '#sums', '#plb'].forEach(wipe); const pb = $('#plb'); if (pb) pb.hidden = true; const ai = document.getElementById('aisheet'); if (ai) ai.hidden = true;
       }
       else {
         try { BETS = JSON.parse(localStorage.getItem('bets26')) || []; window.betsSeed(); PIN = JSON.parse(localStorage.getItem('pinned26')) || []; } catch (e) {}
@@ -3679,6 +3679,7 @@ if ('serviceWorker' in navigator) {
       else if (k === 'surv') { if (VIEW !== 'surv') setView('surv'); }
       else if (k === 'group') { const m = /^g:([A-Za-z0-9-]{4,40})$/.exec(id); if (m && m[1] !== GRPLAST) { grpPend(m[1]); if (grpOn()) grpLoad(grpJoinRun); else setTimeout(grpJoinRun, 50); } } // v272: back to the group invite after the sign-up / payment (id = 'g:<code>')
       else if (k === 'groups') { if (grpOn()) grpLoad(() => window.OddGroups.open()); }
+      else if (k === 'edge') { if (window.OddEdge && !CFB) setTimeout(() => window.OddEdge.open(CUR), 150); } // v301: the Edge's locked card -> its full view after the sign-up
       // Everything else ('pick:<id>', 'alert', 'props', 'view:<name>', 'team:<abbr>', 'fv:<id>'): nothing to do, it unlocked in place.
     } catch (e) {}
   };
@@ -3686,7 +3687,7 @@ if ('serviceWorker' in navigator) {
 })();
 // ================= end v268 GUEST MODE (3 of 3) =================
 </script>
-<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=300"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="announce.js?v=300"><\/script><script src="dash.js?v=300"><\/script>')</script>
+<script>window.MIRROR=/[?&]mirror=1/.test(location.search);if(!MIRROR)document.write('<script src="gate.js?v=301"><\/script><script src="ai.js"><\/script><script src="sync.js"><\/script><script src="announce.js?v=301"><\/script><script src="dash.js?v=301"><\/script>')</script>
 <script>
 // ================= WHAT'S NEW POP-UP (Nov 17 2026, branch whats-new; read "## What's new pop-up" in HANDOFF.md) =================
 // A "Look what's new" card listing the LIVE items this device has not been shown yet (guests included). It shows when at least one such item exists,

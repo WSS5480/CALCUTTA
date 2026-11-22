@@ -230,4 +230,6 @@ async function handle(req, res) {
   if (req.url.startsWith('/cfbd/current')) { try { if (!CU || Date.now() - CU.t > 3600e3) CU = { t: Date.now(), v: await runCurrent() }; res.end(JSON.stringify(CU.v, null, 1)); } catch (e) { res.statusCode = 502; res.end(JSON.stringify({ error: e.message })); } return true; }
   res.statusCode = 404; res.end('{"error":"not found"}'); return true;
 }
-module.exports = { handle, run, feats, fit, collegeLegs, nflLegs, buildReport, weekMap, rankStats, parseCsv, weekKeyMs };
+// One-off run at boot when PARLAYBT_RUN=1 (manager reads the PARLAYBT lines in the Render logs, then removes the variable; each boot with it set spends ~15 CFBD calls).
+function bootParlay() { if (process.env.PARLAYBT_RUN !== '1' || !KEY()) return; setTimeout(() => { runParlay().then((v) => { CP = { t: Date.now(), v }; console.log('PARLAYBT done'); }).catch((e) => console.log('PARLAYBT error ' + String(e && e.message || e).slice(0, 200))); }, 20000); }
+module.exports = { bootParlay, handle, run, feats, fit, collegeLegs, nflLegs, buildReport, weekMap, rankStats, parseCsv, weekKeyMs };

@@ -119,4 +119,4 @@ http.createServer(async (req, res) => {
     if (cache) return res.end(JSON.stringify({ updated: cache.updated, book: cache.book, odds: cache.odds, stale: true }));
     res.end(JSON.stringify({ error: e.message }));
   }
-}).listen(process.env.PORT || 10000, () => console.log('odds proxy up'));
+}).listen(process.env.PORT || 10000, () => { console.log('odds proxy up'); try { require('./cfbd.js').bootParlay(); } catch (e) {} });

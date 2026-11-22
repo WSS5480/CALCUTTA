@@ -17,7 +17,10 @@ async function lines(year) {
     const ml = (v) => { const n = Number(v); return v !== null && v !== undefined && v !== '' && isFinite(n) && Math.abs(n) >= 100 ? n : null; };
     let hml = ml(pick.homeMoneyline), aml = ml(pick.awayMoneyline); // price: the spread provider's moneyline, else the first other provider that has both sides
     if (hml === null || aml === null) { hml = aml = null; for (const l of L.concat((g.lines || []).filter((x) => !L.includes(x)))) { const h = ml(l.homeMoneyline), a = ml(l.awayMoneyline); if (h !== null && a !== null) { hml = h; aml = a; break; } } }
-    out.push({ y: year, wk: g.week, hml, aml, t: Date.parse(g.startDate) || 0, h: g.homeTeam, a: g.awayTeam, hc: g.homeConference || '', ac: g.awayConference || '', hp: g.homeScore, ap: g.awayScore, line: -sp }); // line>0: home favored
+    const tn = (v) => { const n = Number(v); return v !== null && v !== undefined && v !== '' && isFinite(n) && n > 0 ? n : null; };
+    let tot = tn(pick.overUnder); if (tot === null) { for (const l of g.lines || []) { const v = tn(l.overUnder); if (v !== null) { tot = v; break; } } } // total: the spread provider's, else the first provider that has one
+    const neutral = typeof g.neutralSite === 'boolean' ? g.neutralSite : null; // CFBD /lines rows may not carry it; null = unknown
+    out.push({ y: year, wk: g.week, hml, aml, tot, neutral, t: Date.parse(g.startDate) || 0, h: g.homeTeam, a: g.awayTeam, hc: g.homeConference || '', ac: g.awayConference || '', hp: g.homeScore, ap: g.awayScore, line: -sp }); // line>0: home favored
   }
   out.sort((x, y) => x.wk - y.wk || x.t - y.t);
   CACHE[year] = { t: Date.now(), v: out }; return out;
@@ -227,7 +230,127 @@ async function runParlay() {
   let rows = null, err = ''; try { rows = await nflRows(); } catch (e) { err = String(e.message || e).slice(0, 80); }
   const rep = buildReport(by, ys.filter((y) => y >= PB.cfbFrom), rows, err); parlayLog(rep).forEach((l) => console.log(l)); return rep;
 }
-let CT = null, CU = null, CC = null, CS = null, CP = null;
+
+// ---- /cfbd/edge: STATS REPORT ONLY. College port of the NFL edge.py angle scan (walk-forward model gap, situational ATS, totals, moneyline buckets, teaser legs). Two periods reported separately.
+const EB = { from: 2013, split: 2019, minGames: 300, p: 100 / 110, teaserPrices: [-110, -120, -130] };
+const PNAME = ['2013-2019', '2020-current'];
+const isConf = (g) => !!(g.hc && g.hc === g.ac && !/independent/i.test(g.hc));
+const isNeu = (g) => g.neutral === true;
+// profit of a spread side at -110 (win 100/110, lose 1, push 0); side 'h' or 'a'
+function atsP(g, side) { const m = g.hp - g.ap - g.line; if (m === 0) return 0; return (side === 'h' ? m > 0 : m < 0) ? EB.p : -1; }
+function totP(g, side) { if (g.tot === null || g.tot === undefined) return null; const m = g.hp + g.ap - g.tot; if (m === 0) return 0; return (side === 'o' ? m > 0 : m < 0) ? EB.p : -1; }
+function mlP(g, side) { const ml = side === 'h' ? g.hml : g.aml; if (ml === null || ml === undefined || g.hp === g.ap) return null; const d = decOdds(ml); return (side === 'h' ? g.hp > g.ap : g.ap > g.hp) ? d - 1 : -1; }
+const dogSide = (g) => (g.line > 0 ? 'a' : 'h'), favSide = (g) => (g.line > 0 ? 'h' : 'a');
+function ANGLES() {
+  const A = [], add = (fam, id, f) => A.push({ fam, id, f }), one = (v) => (v === null || v === undefined ? [] : [v]);
+  // 1 model gap (bet the side the model likes), week 4+
+  [1, 2, 3, 4, 5, 6, 8, 10].forEach((th) => add('gap', 'model-vs-spread gap >= ' + th, (g) => (g.wk >= 4 && g.mh !== undefined && Math.abs(g.mh - g.line) >= th ? [atsP(g, g.mh > g.line ? 'h' : 'a')] : [])));
+  // 2 situational ATS
+  add('ats', 'home dogs', (g) => (g.line < 0 && !isNeu(g) ? [atsP(g, 'h')] : []));
+  add('ats', 'home dogs +3.5..+7', (g) => (g.line <= -3.5 && g.line >= -7 && !isNeu(g) ? [atsP(g, 'h')] : []));
+  add('ats', 'road favorites', (g) => (g.line < 0 && !isNeu(g) ? [atsP(g, 'a')] : []));
+  [10, 14, 21, 28].forEach((k) => add('ats', 'favorites ' + k + '+ (lay)', (g) => (Math.abs(g.line) >= k ? [atsP(g, favSide(g))] : [])));
+  [10, 14, 21, 28].forEach((k) => add('ats', 'dogs ' + k + '+ (take)', (g) => (Math.abs(g.line) >= k ? [atsP(g, dogSide(g))] : [])));
+  add('ats', 'conference dogs', (g) => (isConf(g) && g.line !== 0 ? [atsP(g, dogSide(g))] : []));
+  add('ats', 'conference road dogs', (g) => (isConf(g) && g.line > 0 && !isNeu(g) ? [atsP(g, 'a')] : []));
+  add('ats', 'conference road dogs +3..+7.5', (g) => (isConf(g) && g.line >= 3 && g.line <= 7.5 && !isNeu(g) ? [atsP(g, 'a')] : []));
+  add('ats', 'conference road dogs 7+', (g) => (isConf(g) && g.line >= 7 && !isNeu(g) ? [atsP(g, 'a')] : []));
+  add('ats', 'non-conference road dogs', (g) => (!isConf(g) && g.line > 0 && !isNeu(g) ? [atsP(g, 'a')] : []));
+  add('ats', 'conference road dogs before wk 8', (g) => (isConf(g) && g.line > 0 && !isNeu(g) && g.wk < 8 ? [atsP(g, 'a')] : []));
+  add('ats', 'conference road dogs wk 8+', (g) => (isConf(g) && g.line > 0 && !isNeu(g) && g.wk >= 8 ? [atsP(g, 'a')] : []));
+  // 3 totals (pushes 0; no total = skipped)
+  add('tot', 'total >= 60 under', (g) => (g.tot >= 60 ? one(totP(g, 'u')) : []));
+  add('tot', 'total >= 65 under', (g) => (g.tot >= 65 ? one(totP(g, 'u')) : []));
+  add('tot', 'total <= 45 over', (g) => (g.tot !== null && g.tot !== undefined && g.tot <= 45 ? one(totP(g, 'o')) : []));
+  add('tot', 'total <= 40 over', (g) => (g.tot !== null && g.tot !== undefined && g.tot <= 40 ? one(totP(g, 'o')) : []));
+  add('tot', 'conference game under', (g) => (isConf(g) ? one(totP(g, 'u')) : []));
+  add('tot', 'non-conference over', (g) => (!isConf(g) ? one(totP(g, 'o')) : []));
+  // 4 moneyline by closing decimal price bucket, both sides
+  [[1, 1.15], [1.15, 1.3], [1.3, 1.5], [1.5, 1.8], [1.8, 2.2], [2.2, 3], [3, 4.5], [4.5, 1e9]].forEach(([lo, hi]) => add('mlb', 'ML price ' + lo + (hi > 1e8 ? '+' : '-' + hi), (g) => { const o = []; for (const s of ['h', 'a']) { const ml = s === 'h' ? g.hml : g.aml, d = decOdds(ml), p = mlP(g, s); if (p !== null && d >= lo && d < hi) o.push(p); } return o; }));
+  // 5 moneyline dogs
+  add('mld', 'home dog ML', (g) => (g.line < 0 && !isNeu(g) ? one(mlP(g, 'h')) : []));
+  add('mld', 'conference dog ML', (g) => (isConf(g) && g.line !== 0 ? one(mlP(g, dogSide(g))) : []));
+  add('mld', 'dog +1..+3 ML', (g) => (Math.abs(g.line) >= 1 && Math.abs(g.line) <= 3 ? one(mlP(g, dogSide(g))) : []));
+  add('mld', 'model likes dog by 3+ ML', (g) => (g.wk >= 4 && g.mh !== undefined && g.line !== 0 && ((g.line > 0 && g.mh < g.line - 3) || (g.line < 0 && g.mh > g.line + 3)) ? one(mlP(g, dogSide(g))) : []));
+  return A;
+}
+// teaser legs: margin of the leg's team after teasing; > 0 covers, 0 pushes
+const TLEGS = [
+  { id: 'dog +1.5..+2.5 teased +6', pts: 6, f: (g) => (Math.abs(g.line) >= 1.5 && Math.abs(g.line) <= 2.5 ? dogSide(g) : null) },
+  { id: 'dog +1.5..+2.5 teased +7', pts: 7, f: (g) => (Math.abs(g.line) >= 1.5 && Math.abs(g.line) <= 2.5 ? dogSide(g) : null) },
+  { id: 'favorite -7.5..-8.5 teased 6', pts: 6, f: (g) => (Math.abs(g.line) >= 7.5 && Math.abs(g.line) <= 8.5 ? favSide(g) : null) },
+  { id: 'home dog +1.5..+2.5 teased +6', pts: 6, f: (g) => (g.line <= -1.5 && g.line >= -2.5 && !isNeu(g) ? 'h' : null) },
+  { id: 'every favorite teased 6 (baseline)', pts: 6, f: (g) => (g.line !== 0 ? favSide(g) : null) },
+];
+function teaserM(g, side, pts) { const m = g.hp - g.ap - g.line; return (side === 'h' ? m : -m) + pts; } // side's cover margin + tease points
+function seasonGames(by, years, minGames) {
+  const out = [], seasons = [], skipped = [];
+  for (const y of years) {
+    const gs = by[y] || []; if (gs.length < minGames) { if (gs.length) skipped.push(y); continue; }
+    seasons.push(y); const prev = finalRatings(by[y - 1] || []), wks = [...new Set(gs.map((g) => g.wk))].sort((a, b) => a - b);
+    for (const wk of wks) { // ratings once per season-week, from EARLIER weeks only + last season's finals
+      const RAT = weekRatings(prev, gs.filter((g) => g.wk < wk), wk);
+      for (const g of gs) if (g.wk === wk) out.push(Object.assign({}, g, { mh: (RAT[g.h] || 0) - (RAT[g.a] || 0) + (isNeu(g) ? 0 : HFA) }));
+    }
+  }
+  return { games: out, seasons, skipped };
+}
+function acc() { return { p: [{ w: 0, l: 0, u0: 0, u: 0, q: 0, n: 0 }, { w: 0, l: 0, u0: 0, u: 0, q: 0, n: 0 }], s: {} }; }
+function addBet(a, y, v) { const x = a.p[y <= EB.split ? 0 : 1]; x.n++; x.u += v; x.q += v * v; if (v > 0) x.w++; else if (v < 0) x.l++; a.s[y] = (a.s[y] || 0) + v; }
+function fin(x) { const n = x.n, mean = n ? x.u / n : 0, sd = n > 1 ? Math.sqrt(Math.max(0, (x.q / n - mean * mean) * n / (n - 1))) : 0, se = sd / Math.sqrt(n || 1); return { won: x.w, lost: x.l, pushed: x.n - x.w - x.l, winPct: x.w + x.l ? r1((x.w / (x.w + x.l)) * 100) : null, units: r2(x.u), roiPct: n ? r1(mean * 100) : null, z: se > 0 ? r2(mean / se) : null }; }
+function angleRow(fam, id, a) {
+  const c = { w: 0, l: 0, u: 0, q: 0, n: 0 }; a.p.forEach((x) => { c.w += x.w; c.l += x.l; c.u += x.u; c.q += x.q; c.n += x.n; });
+  const ys = Object.values(a.s);
+  return { fam, id, p1: fin(a.p[0]), p2: fin(a.p[1]), all: fin(c), winningSeasons: ys.filter((v) => v > 0).length + ' of ' + ys.length };
+}
+function tracc() { return [{ c: 0, l: 0, p: 0 }, { c: 0, l: 0, p: 0 }]; }
+function simTeasers(games) {
+  const wk = new Map();
+  for (const g of games) { if (Math.abs(g.line) < 1.5 || Math.abs(g.line) > 2.5) continue; const k = weekKeyMs(g.t); if (k === null) continue; if (!wk.has(k)) wk.set(k, []); wk.get(k).push(g); }
+  const legsWk = [...wk.entries()].sort((a, b) => a[0] - b[0]).map(([, ls]) => ls.sort((a, b) => a.t - b.t || (a.h < b.h ? -1 : a.h > b.h ? 1 : 0)));
+  return EB.teaserPrices.map((price) => {
+    const dec = 1 + 100 / -price; let n = 0, w = 0, l = 0, pu = 0, u = 0, since = 0; const per = {};
+    for (const ls of legsWk) for (let i = 0; i + 1 < ls.length; i += 2) {
+      const a = ls[i], b = ls[i + 1], ma = teaserM(a, dogSide(a), 6), mb = teaserM(b, dogSide(b), 6); let r;
+      if (ma < 0 || mb < 0) { r = -1; l++; } else if (ma === 0 || mb === 0) { r = 0; pu++; } else { r = dec - 1; w++; } // a tied leg voids the ticket (pushes the whole bet)
+      n++; u += r; per[a.y] = (per[a.y] || 0) + r; if (a.y >= 2020) since += r;
+    }
+    const ys = Object.values(per);
+    return { price, decimal: r3(dec), tickets: n, won: w, lost: l, pushed: pu, winPct: w + l ? r1((w / (w + l)) * 100) : null, neededPct: r1(100 / dec), units: r2(u), roiPct: n ? r1((u / n) * 100) : null, winningSeasons: ys.filter((v) => v > 0).length + ' of ' + ys.length, unitsSince2020: r2(since) };
+  });
+}
+function edgeReport(by, years, opts) {
+  const o = Object.assign({ minGames: EB.minGames }, opts || {}), sg = seasonGames(by, years, o.minGames), AN = ANGLES(), accs = AN.map(() => acc());
+  for (const g of sg.games) AN.forEach((A, i) => A.f(g).forEach((v) => addBet(accs[i], g.y, v)));
+  const rows = AN.map((A, i) => angleRow(A.fam, A.id, accs[i]));
+  const tl = TLEGS.map((T) => { const t = tracc(); for (const g of sg.games) { const s = T.f(g); if (!s) continue; const m = teaserM(g, s, T.pts), x = t[g.y <= EB.split ? 0 : 1]; if (m > 0) x.c++; else if (m < 0) x.l++; else x.p++; } const f = (x) => ({ covered: x.c, missed: x.l, pushed: x.p, coverPct: x.c + x.l ? r1((x.c / (x.c + x.l)) * 100) : null }); return { id: T.id, p1: f(t[0]), p2: f(t[1]) }; });
+  const hasTot = sg.games.filter((g) => g.tot !== null && g.tot !== undefined).length, hasMl = sg.games.filter((g) => g.hml !== null && g.aml !== null).length;
+  const fams = { gap: [], ats: [], tot: [], mlb: [], mld: [] }; rows.forEach((r) => fams[r.fam].push(r));
+  const notes = ['Walk-forward: every game is rated by the college replica built only from EARLIER weeks of that season plus last season\'s final ratings; the game\'s own result never touches its own pick. Gap angles start in week 4.',
+    'Spread and total bets are priced at -110 (win 0.909 units, lose 1, push 0); moneyline bets at the real closing moneyline of the row, skipped when missing. Closing lines (a bettor cannot always get them). Regular season, FBS vs FBS, 2013 on; the current season is partial.',
+    'z = mean profit per bet / its standard error. Periods are reported separately (' + PNAME[0] + ' and ' + PNAME[1] + '); winning seasons counts seasons with at least one bet and positive units.',
+    'Conference game = both teams list the same conference (FBS Independents never count). The neutral-site flag is used only if the CFBD row carries it; ' + sg.games.filter((g) => g.neutral !== null).length + ' of ' + sg.games.length + ' rows had it. Totals present on ' + hasTot + ' games, both moneylines on ' + hasMl + '.',
+    'Teaser legs: cover rate only (a tie after teasing is a push, left out of the rate). Teaser simulation: short-dog (+1.5..+2.5) legs paired two at a time in kickoff order inside a Tuesday-Monday Central week, 6 points; a leftover odd leg is not bet; a tied leg voids the whole ticket.'];
+  if (sg.skipped.length) notes.push('Seasons skipped for fewer than ' + o.minGames + ' games with lines: ' + sg.skipped.join(', ') + '.');
+  const nd = sg.games.filter((g) => !g.t).length; if (nd) notes.push(nd + ' games had no kickoff time and are left out of the teaser simulation only.');
+  return { ok: true, built: new Date().toISOString(), periods: PNAME, seasons: sg.seasons, games: sg.games.length, families: fams, teaserLegs: tl, teaserSim: simTeasers(sg.games), notes };
+}
+const ECOLS = 'id,w1,l1,pct1,u1,roi1,z1,w2,l2,pct2,u2,roi2,z2,w,l,u,roi,z,winSeasons (1=2013-2019, 2=2020-current, none = combined)';
+function edgeLog(rep) {
+  const out = [], put = (obj) => out.push('EDGEBT' + (out.length + 1) + ' ' + JSON.stringify(obj)), lim = 3300;
+  const flush = (head, rows) => { let cur = []; const mk = (r) => Object.assign({}, head, { rows: r }); for (const r of rows) { if (cur.length && JSON.stringify(mk(cur.concat([r]))).length > lim) { put(mk(cur)); cur = []; } cur.push(r); } if (cur.length) put(mk(cur)); };
+  put({ meta: 'college edge scan', periods: rep.periods, seasons: rep.seasons.length ? rep.seasons[0] + '-' + rep.seasons[rep.seasons.length - 1] : '', games: rep.games, pricing: 'spread/total -110, ML real closing price', note: 'walk-forward model; closing lines; teaser sim ties void ticket' });
+  Object.keys(rep.families).forEach((fam) => flush({ fam, cols: ECOLS }, rep.families[fam].map((r) => [r.id, r.p1.won, r.p1.lost, r.p1.winPct, r.p1.units, r.p1.roiPct, r.p1.z, r.p2.won, r.p2.lost, r.p2.winPct, r.p2.units, r.p2.roiPct, r.p2.z, r.all.won, r.all.lost, r.all.units, r.all.roiPct, r.all.z, r.winningSeasons])));
+  flush({ fam: 'teaserLegs', cols: 'id,cov1,miss1,push1,pct1,cov2,miss2,push2,pct2' }, rep.teaserLegs.map((t) => [t.id, t.p1.covered, t.p1.missed, t.p1.pushed, t.p1.coverPct, t.p2.covered, t.p2.missed, t.p2.pushed, t.p2.coverPct]));
+  flush({ fam: 'teaserSim', cols: 'price,tickets,won,lost,push,winPct,neededPct,units,roi,winSeasons,unitsSince2020' }, rep.teaserSim.map((s) => [s.price, s.tickets, s.won, s.lost, s.pushed, s.winPct, s.neededPct, s.units, s.roiPct, s.winningSeasons, s.unitsSince2020]));
+  return out;
+}
+async function runEdge() {
+  const y1 = new Date().getUTCFullYear(), by = {}, ys = []; for (let y = EB.from - 1; y <= y1; y++) ys.push(y);
+  for (let i = 0; i < ys.length; i += 4) await Promise.all(ys.slice(i, i + 4).map(async (y) => { try { by[y] = await lines(y); } catch (e) { if (y < EB.from) by[y] = []; else throw e; } }));
+  const rep = edgeReport(by, ys.filter((y) => y >= EB.from)); edgeLog(rep).forEach((l) => console.log(l)); return rep;
+}
+let CE = null, CT = null, CU = null, CC = null, CS = null, CP = null;
 async function handle(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json');
   if (!require('./acct').ownerOk(req)) { res.statusCode = 401; res.end('{"error":"Owner sign-in needed"}'); return true; } // owner only: every call spends the CFBD quota
@@ -237,9 +360,12 @@ async function handle(req, res) {
   if (req.url.startsWith('/cfbd/slices')) { try { if (!CS || Date.now() - CS.t > 3600e3) CS = { t: Date.now(), v: await runSlices() }; res.end(JSON.stringify(CS.v)); } catch (e) { res.statusCode = 502; res.end(JSON.stringify({ error: e.message })); } return true; }
   if (req.url.startsWith('/cfbd/conf')) { try { if (!CC || Date.now() - CC.t > 3600e3) CC = { t: Date.now(), v: await runConf() }; res.end(JSON.stringify(CC.v)); } catch (e) { res.statusCode = 502; res.end(JSON.stringify({ error: e.message })); } return true; }
   if (req.url.startsWith('/cfbd/parlay')) { try { if (!CP || Date.now() - CP.t > 3600e3) CP = { t: Date.now(), v: await runParlay() }; res.end(JSON.stringify(CP.v)); } catch (e) { res.statusCode = 502; res.end(JSON.stringify({ error: e.message })); } return true; }
+  if (req.url.startsWith('/cfbd/edge')) { try { if (!CE || Date.now() - CE.t > 3600e3) CE = { t: Date.now(), v: await runEdge() }; res.end(JSON.stringify(CE.v)); } catch (e) { res.statusCode = 502; res.end(JSON.stringify({ error: e.message })); } return true; }
   if (req.url.startsWith('/cfbd/current')) { try { if (!CU || Date.now() - CU.t > 3600e3) CU = { t: Date.now(), v: await runCurrent() }; res.end(JSON.stringify(CU.v, null, 1)); } catch (e) { res.statusCode = 502; res.end(JSON.stringify({ error: e.message })); } return true; }
   res.statusCode = 404; res.end('{"error":"not found"}'); return true;
 }
 // One-off run at boot when PARLAYBT_RUN=1 (manager reads the PARLAYBT lines in the Render logs, then removes the variable; each boot with it set spends ~15 CFBD calls).
 function bootParlay() { if (process.env.PARLAYBT_RUN !== '1' || !KEY()) return; setTimeout(() => { runParlay().then((v) => { CP = { t: Date.now(), v }; console.log('PARLAYBT done'); }).catch((e) => console.log('PARLAYBT error ' + String(e && e.message || e).slice(0, 200))); }, 20000); }
-module.exports = { bootParlay, handle, run, feats, fit, collegeLegs, nflLegs, buildReport, weekMap, rankStats, parseCsv, weekKeyMs };
+// One-off run at boot when EDGEBT_RUN=1 (read the EDGEBT lines in the Render logs, then set it back to 0).
+function bootEdge() { if (process.env.EDGEBT_RUN !== '1' || !KEY()) return; setTimeout(() => { runEdge().then((v) => { CE = { t: Date.now(), v }; console.log('EDGEBT done'); }).catch((e) => console.log('EDGEBT error ' + String(e && e.message || e).slice(0, 200))); }, 25000); }
+module.exports = { lines, seasonGames, bootEdge, runEdge, edgeReport, edgeLog, bootParlay, handle, run, feats, fit, collegeLegs, nflLegs, buildReport, weekMap, rankStats, parseCsv, weekKeyMs };

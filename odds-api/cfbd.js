@@ -182,10 +182,19 @@ function rankStats(wm, rank, ok) {
   const avg = n ? pay / n : null;
   return { rank, parlays: n, won: w, lost: l, pushed: pu, winPct: w + l ? r1((w / (w + l)) * 100) : null, units: r2(u), roiPct: n ? r1((u / n) * 100) : null, avgPayoutMultiple: r2(avg), breakEvenPct: avg ? r1(100 / avg) : null, bySeason: Object.values(per).sort((a, b) => a.season - b.season).map((s) => ({ season: s.season, record: s.won + '-' + s.lost, parlays: s.parlays, won: s.won, lost: s.lost, units: r2(s.units) })) };
 }
+// Top-N parlay (one per week from the N most likely legs), for the owner's 3 / 6 / 9 question. Same pricing rules as rankStats.
+function sizeStats(wm, N) {
+  const per = {}; let n = 0, w = 0, l = 0, u = 0, pay = 0;
+  for (const ls of wm.values()) {
+    if (ls.length < N) continue; const sl = ls.slice(0, N), y = sl[0].y, mult = sl.reduce((a, x) => a * (x.push ? 1 : x.o), 1), lost = sl.some((x) => !x.won && !x.push), un = lost ? -1 : mult - 1, s = per[y] || (per[y] = { w: 0, l: 0, u: 0 });
+    n++; pay += mult; u += un; s.u += un; if (lost) { l++; s.l++; } else { w++; s.w++; }
+  }
+  return { size: N, parlays: n, won: w, lost: l, winPct: n ? r1((w / n) * 100) : null, units: r2(u), roiPct: n ? r1((u / n) * 100) : null, avgPayoutMultiple: n ? r2(pay / n) : null, bySeason: Object.keys(per).sort().map((y) => y + ':' + per[y].w + '-' + per[y].l + ' ' + (per[y].u >= 0 ? '+' : '') + r1(per[y].u)).join('  ') };
+}
 function poolReport(legs, seasons) {
   const set = new Set(seasons), ls = legs.filter((l) => set.has(l.y)), wm = weekMap(ls), last5 = new Set(seasons.slice(-5)), rk = [];
   for (let r = 1; r <= PB.ranks; r++) rk.push(r);
-  return { seasons, legs: legStats(ls), ranks: rk.map((r) => rankStats(wm, r)), last5Seasons: seasons.slice(-5), last5: rk.map((r) => rankStats(wm, r, (y) => last5.has(y))) };
+  return { seasons, sizes: [3, 6, 9].map((N) => sizeStats(wm, N)), legs: legStats(ls), ranks: rk.map((r) => rankStats(wm, r)), last5Seasons: seasons.slice(-5), last5: rk.map((r) => rankStats(wm, r, (y) => last5.has(y))) };
 }
 function buildReport(by, years, nflRows, nflErr) {
   const col = collegeLegs(by, years), notes = [], pools = { college: poolReport(col.legs, col.seasons) }, seasons = { college: col.seasons, nfl: [], mix: [] };
@@ -207,6 +216,7 @@ function buildReport(by, years, nflRows, nflErr) {
 function parlayLog(rep) {
   const c = (r) => [r.rank, r.parlays, r.won, r.lost, r.units, r.roiPct, r.avgPayoutMultiple], out = [];
   Object.keys(rep.pools).forEach((k, i) => { const p = rep.pools[k]; out.push('PARLAYBT' + (i + 1) + ' ' + JSON.stringify({ pool: k, seasons: p.seasons.length ? p.seasons[0] + '-' + p.seasons[p.seasons.length - 1] : '', legs: { n: p.legs.priced, noPrice: p.legs.noPrice, winPct: p.legs.winPct, modelPct: p.legs.avgModelPct, units: p.legs.singleUnits }, cols: 'rank,n,w,l,units,roi,avgPay', all: p.ranks.map(c), last5: p.last5.map(c) })); });
+  Object.keys(rep.pools).forEach((k, i) => { rep.pools[k].sizes.forEach((z) => out.push('PARLAYSZ' + (i + 1) + ' ' + JSON.stringify({ pool: k, size: z.size, n: z.parlays, w: z.won, l: z.lost, winPct: z.winPct, units: z.units, roi: z.roiPct, avgPay: z.avgPayoutMultiple, bySeason: z.bySeason }))); });
   return out;
 }
 let NFLC = null;

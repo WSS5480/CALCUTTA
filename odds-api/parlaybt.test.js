@@ -76,7 +76,7 @@ const week = (n, k) => T0 + ((n - 1) * 7 + k) * 864e5;
   r = await fetch(B0 + '/cfbd/parlay', { headers: { 'x-token': tok } }); console.log = ol; const j = await r.json();
   assert.strictEqual(r.status, 200); assert.strictEqual(j.ok, true); assert.ok(j.pools.college && j.pools.nfl && j.pools.mix); assert.deepStrictEqual(j.seasons.nfl, [2020]);
   assert.ok(/short|fewer than/.test(j.notes.join(' ')) || true);
-  assert.ok(logs.length === 3 && logs.every((l, i) => l.startsWith('PARLAYBT' + (i + 1) + ' ') && l.length < 3500), 'log lines'); assert.ok(!logs.join('').includes('fake-key'));
+  { const bt = logs.filter((l) => l.startsWith('PARLAYBT')), sz = logs.filter((l) => l.startsWith('PARLAYSZ')); assert.ok(bt.length === 3 && bt.every((l, i) => l.startsWith('PARLAYBT' + (i + 1) + ' ') && l.length < 3500) && sz.length === 9 && sz.every((l) => l.length < 3500), 'log lines'); } assert.ok(!logs.join('').includes('fake-key'));
   const calls0 = calls; r = await fetch(B0 + '/cfbd/parlay', { headers: { 'x-token': tok } }); assert.strictEqual(r.status, 200); assert.strictEqual(calls, calls0, 'second call served from the 1 hour cache');
   console.log('parlaybt.test.js: all passed'); srv.close();
 })().catch((e) => { console.error('FAILED:', e.stack || e.message); process.exitCode = 1; process.exit(1); });

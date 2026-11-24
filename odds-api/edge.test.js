@@ -66,4 +66,10 @@ eq(/692-564 \(55\.1%\)/.test(E.CARDS.C.rec) && /\+91\.8 units/.test(E.CARDS.C.re
 eq(/74\.6%/.test(E.CARDS.A.halves[0]) && /77\.4%/.test(E.CARDS.A.halves[1]) && /55\.1%/.test(E.CARDS.B.halves[0]) && /58\.5%/.test(E.CARDS.B.halves[1]) && /53\.7%/.test(E.CARDS.C.halves[0]) && /58\.0%/.test(E.CARDS.C.halves[1]), true, 'half-period numbers');
 eq(/54\.6%/.test(E.CARDS.A.more.join(' ')) && /1\.65x/.test(E.CARDS.A.more.join(' ')), true, 'A: 54.6% at -120 and 1.65x');
 eq(/MEASURED/.test(E.CARDS.C.more[0]) && /FORECAST/.test(E.CARDS.C.more[0]), true, 'C: measured vs forecast said');
+// ---- v302 the ⚡ chip on a game card (pure html builder) ----
+eq(E.chipHtml([], 12), '', 'no edge, no chip'); eq(E.chipHtml(null, 12), '', 'null keys, no chip'); eq(E.chipHtml(['Z'], 12), '', 'unknown key, no chip');
+{ const h = E.chipHtml(['A'], 12); eq(/⚡ Short dog</.test(h) && /aria-label="Sir Oddable's Edge: Short dogs, moved up 6\./.test(h) && /title="/.test(h) && /OddEdge\.open\(12,'A'\)/.test(h) && /event\.stopPropagation\(\)/.test(h), true, 'A chip: text, aria-label, title, opens card A, stops the tap'); }
+{ const h = E.chipHtml(['A', 'C'], 3); eq((h.match(/<button/g) || []).length, 2, 'two edges = two chips'); eq(/⚡ Short dog</.test(h) && /⚡ Windy under</.test(h) && /open\(3,'C'\)/.test(h), true, 'both named'); }
+eq(/⚡ Division road dog</.test(E.chipHtml(['B'], 1)), true, 'B chip text');
+['A', 'B', 'C'].forEach((k) => eq(E.BANNED.test(E.chipHtml([k], 1)), false, k + ' chip: no banned words'));
 console.log('edge.test.js: ' + n + ' checks passed');

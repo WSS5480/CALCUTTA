@@ -138,7 +138,7 @@ html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}butto
 </main>
 </div>
 <nav class="bn" id="bn"></nav>
-<script src="myteams.js?v=301"></script>
+<script src="myteams.js?v=302"></script>
 <script>
 // ================= v268 GUEST MODE (1 of 2): the flag and the locked card. Same rule and same card as index.html; gate.js owns window.__oddLock after it loads. =================
 if (window.__oddLock === undefined) window.__oddLock = (() => { try { const q = (k) => localStorage.getItem(k); if (q('odd-gate') === '0' || q('odd-guest') === '0') return ''; return q('odd-tok') ? (q('odd-exp') === '1' ? 'expired' : '') : q('sync-phone') && q('sync-pin') && !q('odd-noauto') ? '' : 'guest'; } catch (e) { return ''; } })();
@@ -530,7 +530,7 @@ window.oddGuestChanged = function (isLocked) {
 window.afterSignIn = function () {}; // nothing to continue here: the page unlocks in place (Add bet lives on the card that is now drawn)
 // ================= end v268 GUEST MODE (2 of 2) =================
 </script>
-<script src="gate.js?v=301"></script><script src="ai.js"></script><script src="live.js"></script>
+<script src="gate.js?v=302"></script><script src="ai.js"></script><script src="live.js"></script>
 <script>
 function aiCtx(gid) {
   const pc = (v) => Math.round((v || 0) * 100) + '%';
@@ -541,6 +541,6 @@ function aiCtx(gid) {
   return LG.toUpperCase() + ' GAMES:\n' + (L.join('\n') || 'none loaded') + (gid ? '' : '\n\nMY BETS:\n' + (B.join('\n') || 'none'));
 }
 </script>
-<script src="sync.js"></script><script>/* v272 Groups phase 2: the bet step (pics/groups.js) is fetched ONLY when the server switched Groups on for this signed-in account ('odd-grp', kept by gate.js from /acct/me). Nobody else gets the file or makes a /groups call. */window.oddGroupsChanged=function(){try{if(!window.OddGroups&&!window.__grpl&&localStorage.getItem('odd-grp')==='1'&&localStorage.getItem('odd-tok')){window.__grpl=1;var gs=document.createElement('script');gs.src='groups.js?v=301';document.head.appendChild(gs)}}catch(e){}};window.oddGroupsChanged();/* gate.js calls it again once it has the account */</script>
+<script src="sync.js"></script><script>/* v272 Groups phase 2: the bet step (pics/groups.js) is fetched ONLY when the server switched Groups on for this signed-in account ('odd-grp', kept by gate.js from /acct/me). Nobody else gets the file or makes a /groups call. */window.oddGroupsChanged=function(){try{if(!window.OddGroups&&!window.__grpl&&localStorage.getItem('odd-grp')==='1'&&localStorage.getItem('odd-tok')){window.__grpl=1;var gs=document.createElement('script');gs.src='groups.js?v=302';document.head.appendChild(gs)}}catch(e){}};window.oddGroupsChanged();/* gate.js calls it again once it has the account */</script>
 </body>
 </html>

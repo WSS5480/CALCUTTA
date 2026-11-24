@@ -38,7 +38,13 @@
       more: ['The backtest used wind MEASURED at the game. This card uses a FORECAST, and forecasts can miss.'],
       limits: ['Forecast: National Weather Service hourly forecast (api.weather.gov) for the home stadium at the kickoff hour, read by the Oddable server and kept 60 minutes.', 'Domes and fixed roofs are not counted. Retractable roofs (ARI, ATL, DAL, HOU, IND) are not counted either: the roof may be closed. Neutral-site games are not counted.', 'When the forecast cannot be read the game shows "forecast not available"; nothing is guessed.', 'This season\'s record counts only games whose forecast was stored on the server before kickoff, graded against the total ESPN showed at that pull.'] },
   };
-  const api = { SRC, CARDS, BANNED, shortDog, divDog, windy, gradeTeaser, gradeDog, gradeUnder, tally };
+  // v302: the ⚡ chip on a game card. keys = which of A / B / C the game qualifies for (chosen in the browser part from the same week functions the tile counts)
+  const CHIP = { A: 'Short dog', B: 'Division road dog', C: 'Windy under' };
+  function chipHtml(keys, wk) {
+    return (keys || []).filter((k) => CHIP[k]).map((k) => { const lab = 'Sir Oddable\'s Edge: ' + CARDS[k].t + '. This game qualifies. Opens the Edge view at this card.';
+      return `<button type="button" class="nw edchip" data-edk="${k}" title="${lab}" aria-label="${lab}" onclick="event.stopPropagation();OddEdge.open(${+wk || 0},'${k}')">⚡ ${CHIP[k]}</button>`; }).join('');
+  }
+  const api = { SRC, CARDS, BANNED, CHIP, chipHtml, shortDog, divDog, windy, gradeTeaser, gradeDog, gradeUnder, tally };
   if (typeof module !== 'undefined' && module.exports && typeof window === 'undefined') { module.exports = api; return; }
 
   // ================= browser part =================
@@ -72,7 +78,7 @@
     WX.busy = true; WX.at = now;
     try { const r = await fetch(WXU); if (!r.ok) throw new Error(r.status); const j = await r.json(); if (!j || j.ok !== true || !Array.isArray(j.games)) throw new Error('bad'); WX.j = j; WX.err = false; }
     catch (e) { WX.err = true; }
-    WX.busy = false; try { if (typeof render === 'function') render(); } catch (e) {} if (PAGE) paint();
+    WX.busy = false; refresh(); if (PAGE) paint();
   }
   // ---- what qualifies in week wk ----
   function weekA(wk) { return allG().filter((g) => g.week === wk && g.state !== 'canceled' && g.start).map((g) => { const L = lineOf(g), s = shortDog(L); if (!s) return null; const dog = s.dogHome ? g.home : g.away; return { g, dog, s, res: g.state === 'post' ? gradeTeaser(L, g.home.score, g.away.score) : '' }; }).filter(Boolean).sort((a, b) => a.g.start - b.g.start); }
@@ -99,11 +105,34 @@
     return { A: tally(A), B: tally(B), C: tally(C), divOk: divReady(), wxOk: !!WX.j };
   }
   const recTxt = (r) => r.w + '-' + r.l + (r.p ? '-' + r.p : '');
+  // ---- v302 the ⚡ chips: which upcoming / live games of week wk the tile counts (same weekA / weekB / weekC, so the tile's number and the chips agree). Finished games get no chip. ----
+  let EM = null;
+  function edgeMap(wk) {
+    if (EM && EM.wk === wk) return EM.m;
+    const m = new Map(), add = (g, k) => { if (!g || g.state === 'post' || g.state === 'canceled') return; const id = String(g.id); (m.get(id) || m.set(id, []).get(id)).push(k); };
+    weekA(wk).forEach((x) => add(x.g, 'A')); weekB(wk).L.forEach((x) => add(x.g, 'B'));
+    const c = weekC(wk); if (c.known && c.cur) c.L.forEach((x) => { if (!x.past) add(x.g, 'C'); });
+    EM = { wk, m }; setTimeout(() => { EM = null; }, 0); return m;
+  }
+  function chip(g) {
+    try { if (!g || !nfl() || locked() || g.state === 'post' || !g.start) return ''; return chipHtml(edgeMap(g.week).get(String(g.id)), g.week); } catch (e) { return ''; }
+  }
+  // update the tile and the chips in place (no redraw of the board, so no scroll jump) when the forecast arrives or fails
+  function refresh() {
+    try {
+      EM = null; const AL = gALL();
+      document.querySelectorAll('[data-edge-chip]').forEach((s) => { const h = chip(AL[s.getAttribute('data-edge-chip')]); if (s.innerHTML !== h) s.innerHTML = h; });
+      const t = document.querySelector('.edt'); if (t && !locked() && nfl() && WK) { const d = document.createElement('div'); d.innerHTML = tileHtml(WK); if (d.firstElementChild && d.firstElementChild.outerHTML !== t.outerHTML) t.replaceWith(d.firstElementChild); }
+    } catch (e) {}
+  }
   // ---- the compact tile (newBoard) ----
   function tile(wk) {
     if (!nfl()) return '';
     if (locked()) return ''; // guests and ended accounts get gk()'s locked card from gTop() instead
     css(); setTimeout(wxLoad, 0); WK = wk;
+    return tileHtml(wk);
+  }
+  function tileHtml(wk) {
     const a = weekA(wk).length, b = weekB(wk).L.length, c = weekC(wk), cn = c.L.length, bits = [];
     if (a) bits.push(a + ' short dog' + (a === 1 ? '' : 's')); if (b) bits.push(b + ' division road dog' + (b === 1 ? '' : 's')); if (cn) bits.push(cn + ' windy game' + (cn === 1 ? '' : 's'));
     const wait = !c.known && !c.err ? ' · wind forecast loading' : '';
@@ -184,10 +213,10 @@
     o.innerHTML = `<div class="edw"><div class="edhd">${head}</div><div class="edb">${body}</div></div>`;
     const nb = o.querySelector('.edb'); if (nb && PAGE === 'main' && y) nb.scrollTop = y;
   }
-  function open(wk) { if (!nfl()) return; if (locked()) { try { if (root.oddSignUp) root.oddSignUp('edge'); } catch (e) {} return; } if (wk) WK = +wk; PAGE = 'main'; const o = el(); o.hidden = false; paint(); try { o.querySelector('.edb').scrollTop = 0; } catch (e) {} setTimeout(wxLoad, 0); try { o.querySelector('.edbk').focus({ preventScroll: true }); } catch (e) {} }
+  function open(wk, k) { if (!nfl()) return; if (locked()) { try { if (root.oddSignUp) root.oddSignUp('edge'); } catch (e) {} return; } if (wk) WK = +wk; PAGE = 'main'; const o = el(); o.hidden = false; paint(); try { const nb = o.querySelector('.edb'); nb.scrollTop = 0; const c = k && o.querySelector('[data-edge="' + k + '"]'); if (c) nb.scrollTop += c.getBoundingClientRect().top - nb.getBoundingClientRect().top - 8; } catch (e) {} setTimeout(wxLoad, 0); try { o.querySelector('.edbk').focus({ preventScroll: true }); } catch (e) {} }
   function how(k) { if (!CARDS[k]) return; PAGE = k; paint(); try { el().querySelector('.edb').scrollTop = 0; el().querySelector('.edbk').focus({ preventScroll: true }); } catch (e) {} }
   function back() { PAGE = 'main'; paint(); }
   function close() { PAGE = null; const o = document.getElementById('edgepage'); if (o) { o.hidden = true; o.innerHTML = ''; } }
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && PAGE) { if (PAGE === 'main') close(); else back(); } });
-  root.OddEdge = Object.assign(api, { tile, open, how, back, close, paint, _wx: () => WX, _season: season, _week: (wk) => ({ A: weekA(wk), B: weekB(wk), C: weekC(wk) }) });
+  root.OddEdge = Object.assign(api, { tile, chip, refresh, open, how, back, close, paint, _wx: () => WX, _season: season, _week: (wk) => ({ A: weekA(wk), B: weekB(wk), C: weekC(wk) }) });
 })(typeof window !== 'undefined' ? window : globalThis);

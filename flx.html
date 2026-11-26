@@ -38,6 +38,11 @@ h2{font-size:15px;margin:16px 4px 8px;text-transform:uppercase;letter-spacing:.6
 .tile{background:var(--navy);color:#fff;border-radius:12px;padding:10px;text-align:center;cursor:pointer}
 .tile .v{font-size:20px;font-weight:800;color:#8fb2ff}
 .tile .k{font-size:11px;color:var(--silver);text-transform:uppercase;letter-spacing:.5px}
+.split{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pp{background:var(--card);border-radius:12px;padding:10px;text-align:center;box-shadow:0 1px 3px #0002;cursor:pointer}
+.pp .n{font-weight:800;font-size:16px}
+.pp .v{font-size:20px;font-weight:800;color:var(--green)}
+.pp .d{font-size:11px;color:var(--muted);line-height:1.5}
 .pays{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}
 .pay{background:var(--card);border-radius:12px;padding:10px 12px;box-shadow:0 1px 3px #0002;cursor:pointer;border:2px solid transparent}
 .pay.won{border-color:var(--gold)}
@@ -94,6 +99,9 @@ h2{font-size:15px;margin:16px 4px 8px;text-transform:uppercase;letter-spacing:.6
     <div class="tile" data-go="qs"><div class="v" id="tNet">$0</div><div class="k">Net</div></div>
   </div>
 
+  <h2>Split 3 ways</h2>
+  <div class="split" id="split"></div>
+
   <h2 id="qs">Each quarter</h2>
   <div class="pays" id="pays"></div>
 
@@ -109,7 +117,7 @@ h2{font-size:15px;margin:16px 4px 8px;text-transform:uppercase;letter-spacing:.6
 <script>
 let F=null, live=null, auto={}, prevHits=null, espnTried=false, selQ=null, selSq=null;
 const $=id=>document.getElementById(id);
-const money=n=>"$"+Math.round(Number(n||0)).toLocaleString();
+const money=n=>{n=Math.round(Number(n||0)*100)/100;return "$"+n.toLocaleString(undefined,{minimumFractionDigits:n%1?2:0,maximumFractionDigits:2})};
 const has=v=>v!==null&&v!==undefined&&v!=="";
 const QS=[{id:"q1",label:"1st quarter"},{id:"q2",label:"2nd quarter"},{id:"q3",label:"3rd quarter"},{id:"final",label:"Final"}];
 const TYPES=["right","wrong","p5r","p5w"];
@@ -140,7 +148,7 @@ function checkNew(){
   QS.forEach(q=>{const r=qResult(q);if(r)m[q.id]=r.v.c+"-"+r.v.e+"|"+r.total});
   if(prevHits){QS.forEach(q=>{if(m[q.id]&&m[q.id]!==prevHits[q.id]){const r=qResult(q);
     notify(r.total?"🏆 "+q.label+": FLX HIT!":"🏈 "+q.label+" is final",
-      r.total?`FLX wins ${money(r.total)} — ${r.hits.map(hitTxt).join(", ")} (DAL ${r.v.c} – PHI ${r.v.e})`:`No FLX square hit (DAL ${r.v.c} – PHI ${r.v.e})`)}})}
+      r.total?`FLX wins ${money(r.total)} — ${money(r.total/((F.partners||[]).length||1))} each to ${(F.partners||[]).join(", ")}. ${r.hits.map(hitTxt).join(", ")} (DAL ${r.v.c} – PHI ${r.v.e})`:`No FLX square hit (DAL ${r.v.c} – PHI ${r.v.e})`)}})}
   prevHits=m;
 }
 function notify(title,body){
@@ -165,7 +173,7 @@ function render(){
     const r=qResult(q), a=auto[q.id];
     let body="";
     if(r){won+=r.total;r.hits.forEach(h=>hitSet.add(h.s.sq+h.t));
-      body=r.hits.length?`<div class="w">🏆 FLX wins ${money(r.total)}</div>`+r.hits.map(h=>`<span class="hit">${hitTxt(h)}</span>`).join(""):`<div class="w none">No FLX hit</div>`;
+      body=r.hits.length?`<div class="w">🏆 FLX wins ${money(r.total)}</div><div class="sq">${(F.partners||[]).join(" / ")}: ${money(r.total/((F.partners||[]).length||1))} each</div>`+r.hits.map(h=>`<span class="hit">${hitTxt(h)}</span>`).join(""):`<div class="w none">No FLX hit</div>`;
       body+=`<div class="sq">DAL ${r.v.c} – PHI ${r.v.e}</div>`;
     }else if(cq===q.id){
       body=track.length?`<div class="w">On track: ${money(track.reduce((s,x)=>s+x.amt,0))}</div>`+track.map(h=>`<span class="hit">${hitTxt(h)}</span>`).join(""):`<div class="w none">No FLX square on track</div>`;
@@ -179,6 +187,9 @@ function render(){
   const cost=F.squares.reduce((s,x)=>s+x.cost,0);
   $("tWon").textContent=money(won);$("tCost").textContent=money(cost);
   $("tNet").textContent=(won-cost<0?"-":"")+money(Math.abs(won-cost));
+  const P=F.partners||[], k=P.length||1, sgn=v=>(v<0?"-":"")+money(Math.abs(v));
+  $("split").innerHTML=P.map(n=>`<div class="pp" data-go="qs"><div class="n">${n}</div><div class="v">${money(won/k)}</div><div class="d">won (1/${k})<br>Cost ${money(cost/k)}<br>Net <b>${sgn((won-cost)/k)}</b></div></div>`).join("");
+  document.querySelectorAll(".pp").forEach(el=>el.onclick=()=>$("qs").scrollIntoView({behavior:"smooth"}));
   // squares (selQ = show only squares that hit that quarter; selSq = one square)
   const selHits=selQ&&qResult(QS.find(q=>q.id===selQ))?qResult(QS.find(q=>q.id===selQ)).hits:null;
   let list=F.squares;
@@ -208,7 +219,7 @@ function renderTicker(cq,track){
     items.push(`<span class="it"><span class="ld">🏈 ${q.label.toUpperCase()} · DAL ${live.dal} – PHI ${live.phi} · ${live.detail}</span>${track.length?track.map(h=>`<span class="${(h.t==="wrong"||h.t==="p5w")?"wl":"ld"}">FLX ON TRACK: ${hitTxt(h)}</span>`).join(""):" No FLX square on track"}</span>`);
   }else if(live&&/HALFTIME/.test(live.sname||""))items.push(`<span class="it">⏸ HALFTIME · DAL ${live.dal} – PHI ${live.phi}</span>`);
   QS.slice().reverse().forEach(q=>{const r=qResult(q);if(!r)return;
-    items.push(`<span class="it">${r.hits.length?`🏆 ${q.label.toUpperCase()}: FLX WINS ${money(r.total)} — ${r.hits.map(hitTxt).join(", ")}`:`${q.label.toUpperCase()}: no FLX hit`} (DAL ${r.v.c} – PHI ${r.v.e})</span>`)});
+    items.push(`<span class="it">${r.hits.length?`🏆 ${q.label.toUpperCase()}: FLX WINS ${money(r.total)} (${money(r.total/((F.partners||[]).length||1))} each to ${(F.partners||[]).join(", ")}) — ${r.hits.map(hitTxt).join(", ")}`:`${q.label.toUpperCase()}: no FLX hit`} (DAL ${r.v.c} – PHI ${r.v.e})</span>`)});
   const html=items.join(""), t=$("tickTrack");
   if(t.dataset.h!==html){t.innerHTML=html;t.dataset.h=html;t.style.animationDuration=Math.max(14,html.replace(/<[^>]+>/g,"").length*0.18)+"s"}
   $("ticker").classList.toggle("on",items.length>0);
@@ -240,7 +251,7 @@ $("bellBtn").onclick=async()=>{
 if("Notification" in window&&Notification.permission==="granted")$("bellBtn").textContent="🔔 On";
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 // auto-update: reload the page when a new version is pushed
-const APP_VERSION="1795731496";
+const APP_VERSION="1795731598";
 async function checkVersion(){try{const j=await (await fetch("version.json?t="+Date.now(),{cache:"no-store"})).json();if(j.v&&j.v!==APP_VERSION)location.replace(location.pathname+"?v="+j.v)}catch(e){}}
 setInterval(checkVersion,30000);
 load(true); liveScore();

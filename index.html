@@ -83,7 +83,7 @@ h2{font-size:15px;margin:16px 4px 8px;text-transform:uppercase;letter-spacing:.6
     <div class="axis"><span>⬇ EAGLES (rows)</span><span>COWBOYS (columns) ➡</span></div>
     <div class="board" id="board"></div>
   </div>
-  <div class="foot" id="foot">Winning square = last digit of Cowboys score (column) × last digit of Eagles score (row). Gold = winner. Dashed green = leading right now.</div>
+  <div class="foot" id="foot">Winning square = last digit of Cowboys score (column) × last digit of Eagles score (row). Gold = winner. Dashed green = leading right now. Scores, passing yards and first downs fill in automatically from ESPN.</div>
 </main>
 <script>
 let D=null, live=null, selPay=null, selName="", lastSig=null;
@@ -97,36 +97,43 @@ function squareFor(cow,eag){
   if(c<0||r<0)return null;
   return {r,c,num:r*10+c+1,name:D.grid[r][c]};
 }
-function result(p){
-  const sq=squareFor(p.cowboys,p.eagles);
-  const name=p.winner||(sq?sq.name:"");
-  return {sq,name};
+// auto[id] = {c, e, done, running} filled from ESPN; manual numbers in data.json override
+let auto={}, prevWins=null, espnTried=false;
+function eff(p){
+  if(has(p.cowboys)&&has(p.eagles))return {c:p.cowboys,e:p.eagles,src:"manual"};
+  const a=auto[p.id];
+  if(a&&a.done)return {c:a.c,e:a.e,src:"auto"};
+  return null;
 }
-function sig(){return JSON.stringify(D.payouts.map(p=>[p.id,p.cowboys,p.eagles,p.winner,p.amount]))}
+function result(p){
+  const v=eff(p);
+  const sq=v?squareFor(v.c,v.e):null;
+  const name=p.winner||(sq?sq.name:"");
+  return {sq,name,v};
+}
 
 async function load(first){
   try{
     const r=await fetch("data.json?t="+Date.now(),{cache:"no-store"});
-    const nd=await r.json();
-    const old=D; D=nd;
-    if(!first&&old) announce(old,nd);
+    D=await r.json();
     if(first) populateWho();
-    render();
+    render(); checkNew();
   }catch(e){console.log(e)}
 }
-function announce(old,nd){
-  nd.payouts.forEach(p=>{
-    const o=old.payouts.find(x=>x.id===p.id)||{};
-    const was=resultWith(old,o), now=result(p);
-    if(now.name && (now.name!==was.name || p.amount!==o.amount)){
-      const msg=`${p.label}: ${now.name} wins ${money(p.amount)}${has(p.cowboys)?` (DAL ${p.cowboys} – PHI ${p.eagles})`:""}`;
-      notify("🏆 "+p.label+" winner",msg);
-    }
-  });
-}
-function resultWith(d,p){
-  if(!p||!d)return {name:""};
-  const save=D;D=d;const r=result(p);D=save;return r;
+// pop-up whenever a payout gets a (new) winner — from ESPN auto or from manual entry
+function checkNew(){
+  if(!D||!espnTried)return;
+  const m={};
+  D.payouts.forEach(p=>{const r=result(p);if(r.name)m[p.id]=r.name+"|"+p.amount+"|"+(r.v?r.v.c+"-"+r.v.e:"")});
+  if(prevWins){
+    D.payouts.forEach(p=>{
+      if(m[p.id]&&m[p.id]!==prevWins[p.id]){
+        const r=result(p);
+        notify("🏆 "+p.label+" winner",`${r.name} wins ${money(p.amount)}${r.v?` (DAL ${r.v.c} – PHI ${r.v.e})`:""}`);
+      }
+    });
+  }
+  prevWins=m;
 }
 function notify(title,body){
   const t=$("toast");t.innerHTML=`<b>${title}</b><br>${body}`;t.classList.add("show");
@@ -146,14 +153,17 @@ function render(){
   // payouts
   const wins=new Set();
   $("pays").innerHTML=D.payouts.map(p=>{
-    const {sq,name}=result(p);
+    const {sq,name,v}=result(p);
     if(sq&&name)wins.add(sq.r*10+sq.c);
-    const score=has(p.cowboys)?`DAL ${p.cowboys} – PHI ${p.eagles}`:"";
+    const a=auto[p.id];
+    const unit=(p.id==="pass"?" yds":p.id==="fd"?" 1st downs":"");
+    let score=v?`DAL ${v.c} – PHI ${v.e}${unit}`:"";
+    if(!v&&a&&a.running){const ls=squareFor(a.c,a.e);score=`Live: DAL ${a.c} – PHI ${a.e}${unit}${ls?`<br>On track: <b>${ls.name}</b> (#${ls.num})`:""}`}
     return `<div class="pay ${name?"won":""} ${selPay===p.id?"sel":""}" data-id="${p.id}">
       <div class="lb">${p.label}</div>
       <div class="amt">${money(p.amount)} <small>${p.tag||""}</small></div>
       <div class="w ${name?"":"pending"}">${name?"🏆 "+name:"Pending"}</div>
-      <div class="sq">${sq?`Square #${sq.num} · ${score}`:""}${p.note?`<br>${p.note}`:""}</div>
+      <div class="sq">${sq?`Square #${sq.num} · ${score}`:score}${p.note?`<br>${p.note}`:""}</div>
     </div>`}).join("");
   document.querySelectorAll(".pay").forEach(el=>el.onclick=()=>{selPay=selPay===el.dataset.id?null:el.dataset.id;render();if(selPay)$("board").scrollIntoView({behavior:"smooth"})});
 
@@ -208,21 +218,41 @@ function renderDetail(){
   <button onclick="pickName('')">◀ Back</button>`;
 }
 
-// live score from ESPN (display only — official winners are entered in data.json)
+// ESPN: live score + automatic quarter scores, passing yards and first downs
+const ESPN="https://site.api.espn.com/apis/site/v2/sports/football/nfl/";
 async function liveScore(){
   try{
-    const r=await fetch("https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?t="+Date.now());
+    const r=await fetch(ESPN+"scoreboard?t="+Date.now());
     const j=await r.json();
     const ev=(j.events||[]).find(e=>{const ab=e.competitions[0].competitors.map(c=>c.team.abbreviation);return ab.includes("DAL")&&ab.includes("PHI")});
     if(!ev){$("live").innerHTML=`<div class="st">Live score not available yet</div>`;live=null;return}
     const comp=ev.competitions[0], g=a=>comp.competitors.find(c=>c.team.abbreviation===a);
-    live={dal:+g("DAL").score||0,phi:+g("PHI").score||0,state:ev.status.type.state,detail:ev.status.type.shortDetail};
+    const st=ev.status, state=st.type.state, period=+st.period||0, sname=st.type.name||"";
+    live={dal:+g("DAL").score||0,phi:+g("PHI").score||0,state,detail:st.type.shortDetail};
+    // quarter n is over when: game final, a later quarter started, or it's the end-of-quarter/halftime break
+    const over=n=>state==="post"||period>n||(period===n&&/END_PERIOD|HALFTIME/.test(sname));
+    const thru=(a,n)=>(g(a).linescores||[]).slice(0,n).reduce((s,x)=>s+(+x.value||0),0);
+    const q=(id,n)=>{auto[id]={c:thru("DAL",n),e:thru("PHI",n),done:over(n),running:state==="in"&&period<=n}};
+    if(state!=="pre"){q("q1",1);q("q2",2);q("q3",3);auto.final={c:live.dal,e:live.phi,done:state==="post",running:state==="in"}}
+    // team stats (passing yards, first downs) — final once the game is over
+    if(state!=="pre"){
+      try{
+        const sm=await (await fetch(ESPN+"summary?event="+ev.id+"&t="+Date.now())).json();
+        const tm={};(sm.boxscore&&sm.boxscore.teams||[]).forEach(t=>{const o={};(t.statistics||[]).forEach(s=>o[s.name]=s.displayValue);tm[t.team.abbreviation]=o});
+        const num=v=>{const n=parseInt(String(v||"").replace(/[^\d-]/g,""),10);return isNaN(n)?null:n};
+        if(tm.DAL&&tm.PHI){
+          const py=[num(tm.DAL.netPassingYards),num(tm.PHI.netPassingYards)], fd=[num(tm.DAL.firstDowns),num(tm.PHI.firstDowns)];
+          if(py[0]!==null&&py[1]!==null)auto.pass={c:py[0],e:py[1],done:state==="post",running:state==="in"};
+          if(fd[0]!==null&&fd[1]!==null)auto.fd={c:fd[0],e:fd[1],done:state==="post",running:state==="in"};
+        }
+      }catch(e){console.log("stats",e)}
+    }
     const s=squareFor(live.dal,live.phi);
     $("live").innerHTML=`<div><div class="tm">COWBOYS</div><div class="sc">${live.dal}</div></div>
-      <div><div class="st">${live.detail}</div>${live.state==="in"&&s?`<div class="lead">Leading now:<br><b>${s.name}</b> (#${s.num})</div>`:""}</div>
+      <div><div class="st">${live.detail}</div>${state==="in"&&s?`<div class="lead">Leading now:<br><b>${s.name}</b> (#${s.num})</div>`:""}</div>
       <div><div class="tm">EAGLES</div><div class="sc">${live.phi}</div></div>`;
-    render();
   }catch(e){$("live").innerHTML=`<div class="st">Live score not available</div>`}
+  finally{espnTried=true; if(D){render();checkNew();}}
 }
 
 $("bellBtn").onclick=async()=>{

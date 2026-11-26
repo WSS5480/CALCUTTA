@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b2545">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Cowboys Football Squares</title>
+<style>
+:root{--navy:#0b2545;--navy2:#13315c;--silver:#c9d1db;--bg:#eef2f6;--card:#fff;--gold:#f4c430;--green:#1e8e3e;--ink:#0b2545;--muted:#5b6b7f}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:var(--navy);color:#fff;padding:14px 16px 12px;position:sticky;top:0;z-index:5}
+header h1{margin:0;font-size:20px;letter-spacing:.5px}
+header .sub{font-size:12px;color:var(--silver);margin-top:2px}
+#bellBtn{position:absolute;right:12px;top:12px;background:var(--gold);color:var(--navy);border:0;border-radius:18px;padding:7px 12px;font-weight:700;font-size:13px}
+main{max-width:1100px;margin:0 auto;padding:12px}
+.live{background:var(--card);border-radius:12px;padding:12px;margin-bottom:12px;display:flex;justify-content:space-around;align-items:center;text-align:center;box-shadow:0 1px 3px #0002}
+.live .tm{font-size:12px;color:var(--muted);font-weight:700}
+.live .sc{font-size:30px;font-weight:800}
+.live .st{font-size:12px;color:var(--muted)}
+.live .lead{font-size:13px;margin-top:4px}
+h2{font-size:15px;margin:16px 4px 8px;text-transform:uppercase;letter-spacing:.6px;color:var(--navy2)}
+.pays{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}
+.pay{background:var(--card);border-radius:12px;padding:10px 12px;box-shadow:0 1px 3px #0002;cursor:pointer;border:2px solid transparent}
+.pay.won{border-color:var(--gold)}
+.pay.sel{outline:3px solid var(--navy)}
+.pay .lb{font-size:12px;color:var(--muted);font-weight:700}
+.pay .amt{font-size:20px;font-weight:800}
+.pay .amt small{font-size:12px;color:var(--muted)}
+.pay .w{margin-top:6px;font-size:15px;font-weight:700;color:var(--green)}
+.pay .w.pending{color:var(--muted);font-weight:600}
+.pay .sq{font-size:12px;color:var(--muted)}
+.board-wrap{background:var(--card);border-radius:12px;padding:8px;box-shadow:0 1px 3px #0002}
+.board{display:grid;grid-template-columns:28px repeat(10,1fr);gap:2px;font-size:11px}
+.hd{background:var(--navy);color:#fff;font-weight:800;text-align:center;padding:6px 0;font-size:15px;border-radius:3px}
+.corner{background:transparent}
+.cell{background:#f6f8fb;border:1px solid #dde3ea;border-radius:3px;min-height:46px;padding:2px 3px;position:relative;cursor:pointer;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:600;line-height:1.1;word-break:break-word}
+.cell .n{position:absolute;top:1px;left:3px;font-size:8px;color:#8a97a8;font-weight:400}
+.cell.win{background:var(--gold);border-color:#c99a00}
+.cell.lead{outline:3px dashed var(--green);outline-offset:-3px}
+.cell.mine{background:#cfe3ff;border-color:#5b8def}
+.cell.win.mine{background:linear-gradient(135deg,var(--gold) 50%,#cfe3ff 50%)}
+.axis{display:flex;justify-content:space-between;font-size:12px;font-weight:800;color:var(--navy2);margin:2px 4px 6px}
+.lbrd{background:var(--card);border-radius:12px;box-shadow:0 1px 3px #0002;overflow:hidden}
+.lrow{display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #eef1f5;cursor:pointer}
+.lrow:last-child{border-bottom:0}
+.lrow .nm{font-weight:700}
+.lrow .tot{font-weight:800;color:var(--green);text-align:right}
+.lrow .what{font-size:12px;color:var(--muted)}
+#who{width:100%;padding:10px;border-radius:10px;border:1px solid #c8d1dc;font-size:15px;margin-bottom:8px;background:#fff}
+#detail{background:#fffbe6;border:1px solid #f0d878;border-radius:10px;padding:10px 12px;margin-top:8px;display:none;font-size:14px}
+#detail button{margin-top:6px;border:0;background:var(--navy);color:#fff;border-radius:8px;padding:6px 12px}
+.foot{font-size:11px;color:var(--muted);text-align:center;margin:16px 0 30px}
+#toast{position:fixed;left:50%;top:12px;transform:translate(-50%,-150%);transition:transform .35s;background:var(--navy);color:#fff;border:3px solid var(--gold);border-radius:14px;padding:12px 16px;z-index:50;width:min(92vw,420px);box-shadow:0 6px 20px #0005}
+#toast.show{transform:translate(-50%,0)}
+#toast b{color:var(--gold)}
+@media (max-width:600px){.board{font-size:9px;grid-template-columns:22px repeat(10,1fr)}.cell{min-height:40px;padding:1px}.hd{font-size:13px}.cell .n{font-size:7px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>🏈 COWBOYS FOOTBALL SQUARES</h1>
+  <div class="sub" id="sub">Cash only · loading…</div>
+  <button id="bellBtn">🔔 Alerts</button>
+</header>
+<div id="toast"></div>
+<main>
+  <div class="live" id="live"><div class="st">Checking live score…</div></div>
+
+  <h2>Payouts &amp; winners</h2>
+  <div class="pays" id="pays"></div>
+
+  <h2>Find a player</h2>
+  <select id="who"><option value="">Tap to pick a name…</option></select>
+  <div id="detail"></div>
+
+  <h2>Winnings</h2>
+  <div class="lbrd" id="lb"></div>
+
+  <h2>Board</h2>
+  <div class="board-wrap">
+    <div class="axis"><span>⬇ EAGLES (rows)</span><span>COWBOYS (columns) ➡</span></div>
+    <div class="board" id="board"></div>
+  </div>
+  <div class="foot" id="foot">Winning square = last digit of Cowboys score (column) × last digit of Eagles score (row). Gold = winner. Dashed green = leading right now.</div>
+</main>
+<script>
+let D=null, live=null, selPay=null, selName="", lastSig=null;
+const $=id=>document.getElementById(id);
+const money=n=>"$"+Number(n||0).toLocaleString();
+const has=v=>v!==null&&v!==undefined&&v!=="";
+
+function squareFor(cow,eag){
+  if(!has(cow)||!has(eag))return null;
+  const c=D.cols.indexOf(Math.abs(+cow)%10), r=D.rows.indexOf(Math.abs(+eag)%10);
+  if(c<0||r<0)return null;
+  return {r,c,num:r*10+c+1,name:D.grid[r][c]};
+}
+function result(p){
+  const sq=squareFor(p.cowboys,p.eagles);
+  const name=p.winner||(sq?sq.name:"");
+  return {sq,name};
+}
+function sig(){return JSON.stringify(D.payouts.map(p=>[p.id,p.cowboys,p.eagles,p.winner,p.amount]))}
+
+async function load(first){
+  try{
+    const r=await fetch("data.json?t="+Date.now(),{cache:"no-store"});
+    const nd=await r.json();
+    const old=D; D=nd;
+    if(!first&&old) announce(old,nd);
+    if(first) populateWho();
+    render();
+  }catch(e){console.log(e)}
+}
+function announce(old,nd){
+  nd.payouts.forEach(p=>{
+    const o=old.payouts.find(x=>x.id===p.id)||{};
+    const was=resultWith(old,o), now=result(p);
+    if(now.name && (now.name!==was.name || p.amount!==o.amount)){
+      const msg=`${p.label}: ${now.name} wins ${money(p.amount)}${has(p.cowboys)?` (DAL ${p.cowboys} – PHI ${p.eagles})`:""}`;
+      notify("🏆 "+p.label+" winner",msg);
+    }
+  });
+}
+function resultWith(d,p){
+  if(!p||!d)return {name:""};
+  const save=D;D=d;const r=result(p);D=save;return r;
+}
+function notify(title,body){
+  const t=$("toast");t.innerHTML=`<b>${title}</b><br>${body}`;t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"),9000);
+  try{navigator.vibrate&&navigator.vibrate([200,100,200])}catch(e){}
+  try{
+    if("Notification" in window&&Notification.permission==="granted"){
+      if(navigator.serviceWorker&&navigator.serviceWorker.controller){
+        navigator.serviceWorker.ready.then(r=>r.showNotification(title,{body,icon:"icon.svg",tag:title,renotify:true}));
+      }else new Notification(title,{body,icon:"icon.svg"});
+    }
+  }catch(e){}
+}
+
+function render(){
+  $("sub").textContent=`${D.game||""} · Cash only${D.updated?" · updated "+D.updated:""}`;
+  // payouts
+  const wins=new Set();
+  $("pays").innerHTML=D.payouts.map(p=>{
+    const {sq,name}=result(p);
+    if(sq&&name)wins.add(sq.r*10+sq.c);
+    const score=has(p.cowboys)?`DAL ${p.cowboys} – PHI ${p.eagles}`:"";
+    return `<div class="pay ${name?"won":""} ${selPay===p.id?"sel":""}" data-id="${p.id}">
+      <div class="lb">${p.label}</div>
+      <div class="amt">${money(p.amount)} <small>${p.tag||""}</small></div>
+      <div class="w ${name?"":"pending"}">${name?"🏆 "+name:"Pending"}</div>
+      <div class="sq">${sq?`Square #${sq.num} · ${score}`:""}${p.note?`<br>${p.note}`:""}</div>
+    </div>`}).join("");
+  document.querySelectorAll(".pay").forEach(el=>el.onclick=()=>{selPay=selPay===el.dataset.id?null:el.dataset.id;render();if(selPay)$("board").scrollIntoView({behavior:"smooth"})});
+
+  // leading square (live)
+  let leadKey=null;
+  if(live&&live.state==="in"){const s=squareFor(live.dal,live.phi);if(s)leadKey=s.r*10+s.c}
+  const selSq=selPay?result(D.payouts.find(p=>p.id===selPay)).sq:null;
+
+  // board
+  let h=`<div class="corner"></div>`+D.cols.map(c=>`<div class="hd">${c}</div>`).join("");
+  D.rows.forEach((rv,r)=>{
+    h+=`<div class="hd" style="display:flex;align-items:center;justify-content:center">${rv}</div>`;
+    D.cols.forEach((cv,c)=>{
+      const k=r*10+c, nm=D.grid[r][c];
+      let cls="cell";
+      if(wins.has(k))cls+=" win";
+      if(leadKey===k)cls+=" lead";
+      if(selName&&nm===selName)cls+=" mine";
+      if(selSq&&selSq.r===r&&selSq.c===c)cls+=" mine";
+      h+=`<div class="${cls}" data-name="${nm.replace(/"/g,"&quot;")}"><span class="n">${k+1}</span>${nm}</div>`;
+    });
+  });
+  $("board").innerHTML=h;
+  document.querySelectorAll(".cell").forEach(el=>el.onclick=()=>pickName(el.dataset.name));
+
+  // leaderboard
+  const tot={};
+  D.payouts.forEach(p=>{const {name}=result(p);if(name){(tot[name]=tot[name]||{amt:0,w:[]});tot[name].amt+=+p.amount||0;tot[name].w.push(p.label)}});
+  const rows=Object.entries(tot).sort((a,b)=>b[1].amt-a[1].amt);
+  const paid=D.payouts.reduce((s,p)=>s+(result(p).name?+p.amount||0:0),0);
+  const pot=D.payouts.reduce((s,p)=>s+(+p.amount||0),0);
+  $("lb").innerHTML=(rows.length?rows.map(([n,v])=>`<div class="lrow" data-name="${n.replace(/"/g,"&quot;")}"><div><div class="nm">${n}</div><div class="what">${v.w.join(", ")}</div></div><div class="tot">${money(v.amt)}</div></div>`).join(""):`<div class="lrow"><div class="what">No winners yet</div></div>`)
+    +`<div class="lrow"><div class="what">Paid out ${money(paid)} of ${money(pot)}</div></div>`;
+  document.querySelectorAll(".lrow[data-name]").forEach(el=>el.onclick=()=>pickName(el.dataset.name));
+  renderDetail();
+}
+function populateWho(){
+  const names=[...new Set(D.grid.flat())].sort((a,b)=>a.localeCompare(b));
+  $("who").innerHTML=`<option value="">Tap to pick a name…</option>`+names.map(n=>`<option>${n}</option>`).join("");
+  $("who").onchange=e=>pickName(e.target.value);
+}
+function pickName(n){selName=selName===n?"":n;$("who").value=selName;render();}
+function renderDetail(){
+  const d=$("detail");
+  if(!selName){d.style.display="none";return}
+  const sqs=[];D.grid.forEach((row,r)=>row.forEach((nm,c)=>{if(nm===selName)sqs.push(`#${r*10+c+1} (DAL ${D.cols[c]} / PHI ${D.rows[r]})`)}));
+  const won=D.payouts.filter(p=>result(p).name===selName);
+  const amt=won.reduce((s,p)=>s+(+p.amount||0),0);
+  d.style.display="block";
+  d.innerHTML=`<b>${selName}</b> — ${sqs.length} square${sqs.length>1?"s":""}: ${sqs.join(", ")}<br>
+  Won: <b>${money(amt)}</b>${won.length?" ("+won.map(p=>p.label).join(", ")+")":""}<br>
+  <button onclick="pickName('')">◀ Back</button>`;
+}
+
+// live score from ESPN (display only — official winners are entered in data.json)
+async function liveScore(){
+  try{
+    const r=await fetch("https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?t="+Date.now());
+    const j=await r.json();
+    const ev=(j.events||[]).find(e=>{const ab=e.competitions[0].competitors.map(c=>c.team.abbreviation);return ab.includes("DAL")&&ab.includes("PHI")});
+    if(!ev){$("live").innerHTML=`<div class="st">Live score not available yet</div>`;live=null;return}
+    const comp=ev.competitions[0], g=a=>comp.competitors.find(c=>c.team.abbreviation===a);
+    live={dal:+g("DAL").score||0,phi:+g("PHI").score||0,state:ev.status.type.state,detail:ev.status.type.shortDetail};
+    const s=squareFor(live.dal,live.phi);
+    $("live").innerHTML=`<div><div class="tm">COWBOYS</div><div class="sc">${live.dal}</div></div>
+      <div><div class="st">${live.detail}</div>${live.state==="in"&&s?`<div class="lead">Leading now:<br><b>${s.name}</b> (#${s.num})</div>`:""}</div>
+      <div><div class="tm">EAGLES</div><div class="sc">${live.phi}</div></div>`;
+    render();
+  }catch(e){$("live").innerHTML=`<div class="st">Live score not available</div>`}
+}
+
+$("bellBtn").onclick=async()=>{
+  if(!("Notification" in window)){notify("Alerts on","This phone shows pop-ups while the page is open. On iPhone, Add to Home Screen first for system alerts.");return}
+  const p=await Notification.requestPermission();
+  if(p==="granted"){$("bellBtn").textContent="🔔 On";notify("Alerts on","You'll get a pop-up when each quarter's winner is posted.")}
+  else notify("Alerts blocked","Turn on notifications for this site in your browser settings.");
+};
+if("Notification" in window&&Notification.permission==="granted")$("bellBtn").textContent="🔔 On";
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+
+load(true); liveScore();
+setInterval(()=>load(false),20000);
+setInterval(liveScore,30000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden){load(false);liveScore()}});
+</script>
+</body>
+</html>

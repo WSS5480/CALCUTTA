@@ -10,10 +10,17 @@
 :root{--navy:#0b2545;--navy2:#13315c;--silver:#c9d1db;--bg:#eef2f6;--card:#fff;--gold:#f4c430;--green:#1e8e3e;--ink:#0b2545;--muted:#5b6b7f}
 *{box-sizing:border-box}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
-header{background:var(--navy);color:#fff;padding:14px 16px 12px;position:sticky;top:0;z-index:5}
+header{background:var(--navy);color:#fff;padding:0 16px 12px;position:sticky;top:0;z-index:5}
+header h1{padding-top:10px}
+#ticker{margin:0 -16px;overflow:hidden;white-space:nowrap;background:var(--gold);color:var(--navy);font-weight:800;font-size:15px;height:32px;line-height:32px;display:none}
+#ticker.on{display:block}
+#tickTrack{display:inline-block;padding-left:100%;animation:tick 22s linear infinite}
+#tickTrack .it{margin-right:48px}
+#tickTrack .ld{background:var(--green);color:#fff;padding:3px 10px;border-radius:12px}
+@keyframes tick{from{transform:translateX(0)}to{transform:translateX(-100%)}}
 header h1{margin:0;font-size:20px;letter-spacing:.5px}
 header .sub{font-size:12px;color:var(--silver);margin-top:2px}
-#bellBtn{position:absolute;right:12px;top:12px;background:var(--gold);color:var(--navy);border:0;border-radius:18px;padding:7px 12px;font-weight:700;font-size:13px}
+#bellBtn{position:absolute;right:12px;bottom:12px;background:var(--gold);color:var(--navy);border:0;border-radius:18px;padding:7px 12px;font-weight:700;font-size:13px}
 main{max-width:1100px;margin:0 auto;padding:12px}
 .live{background:var(--card);border-radius:12px;padding:12px;margin-bottom:12px;display:flex;justify-content:space-around;align-items:center;text-align:center;box-shadow:0 1px 3px #0002}
 .live .tm{font-size:12px;color:var(--muted);font-weight:700}
@@ -55,7 +62,6 @@ h2{font-size:15px;margin:16px 4px 8px;text-transform:uppercase;letter-spacing:.6
 #toast{position:fixed;left:50%;top:12px;transform:translate(-50%,-150%);transition:transform .35s;background:var(--navy);color:#fff;border:3px solid var(--gold);border-radius:14px;padding:12px 16px;z-index:50;width:min(92vw,420px);box-shadow:0 6px 20px #0005}
 #toast.show{transform:translate(-50%,0)}
 #toast b{color:var(--gold)}
-#banners{position:sticky;top:62px;z-index:4}
 .bn{margin:0;padding:10px 14px;font-weight:800;text-align:center;font-size:16px;line-height:1.25}
 .bn small{display:block;font-weight:600;font-size:12px;opacity:.85}
 .bn.lead{background:var(--green);color:#fff}
@@ -67,12 +73,12 @@ h2{font-size:15px;margin:16px 4px 8px;text-transform:uppercase;letter-spacing:.6
 </head>
 <body>
 <header>
+  <div id="ticker"><div id="tickTrack"></div></div>
   <h1>🏈 MIKE LEAL'S NUMBERS!</h1>
   <div class="sub" id="sub">Cash only · loading…</div>
   <button id="bellBtn">🔔 Alerts</button>
 </header>
 <div id="toast"></div>
-<div id="banners"></div>
 <main>
   <div class="live" id="live"><div class="st">Checking live score…</div></div>
 
@@ -156,24 +162,24 @@ function notify(title,body){
   }catch(e){}
 }
 
-let lastBannerWin="";
 function renderBanners(){
-  let h="";
+  const items=[];
   // who is winning the quarter being played right now
   if(live&&live.state==="in"&&!/END_PERIOD|HALFTIME/.test(live.sname||"")){
     const id=live.period>=4?"final":"q"+live.period;
     const p=D.payouts.find(x=>x.id===id), s=squareFor(live.dal,live.phi);
-    if(p&&s&&!result(p).name)h+=`<div class="bn lead">🏈 ${p.label}: ${s.name} is winning (#${s.num})<small>DAL ${live.dal} – PHI ${live.phi} · ${live.detail} · ${money(p.amount)} on the line</small></div>`;
-  }
-  // most recent winner
-  const won=D.payouts.filter(p=>result(p).name);
-  if(won.length){
-    const p=won[won.length-1], r=result(p);
-    const key=p.id+r.name;
-    h+=`<div class="bn win ${key!==lastBannerWin?"new":""}">🏆 ${p.label} WINNER: ${r.name} — ${money(p.amount)}<small>${r.v?`DAL ${r.v.c} – PHI ${r.v.e}${p.id==="pass"?" yds":p.id==="fd"?" 1st downs":""} · `:""}Square #${r.sq?r.sq.num:""}${won.length>1?" · Earlier: "+won.slice(0,-1).map(x=>x.label.replace(" quarter","")+" "+result(x).name).join(", "):""}</small></div>`;
-    lastBannerWin=key;
-  }
-  $("banners").innerHTML=h;
+    if(p&&s&&!result(p).name)items.push(`<span class="it"><span class="ld">🏈 ${p.label.toUpperCase()}: ${s.name} is winning (#${s.num})</span> DAL ${live.dal} – PHI ${live.phi} · ${live.detail} · ${money(p.amount)}</span>`);
+  }else if(live&&/HALFTIME/.test(live.sname||""))items.push(`<span class="it">⏸ HALFTIME · DAL ${live.dal} – PHI ${live.phi}</span>`);
+  // every winner so far, newest first
+  D.payouts.filter(p=>result(p).name).reverse().forEach(p=>{const r=result(p);
+    items.push(`<span class="it">🏆 ${p.label.toUpperCase()} WINNER: ${r.name} — ${money(p.amount)}${r.v?` (DAL ${r.v.c} – PHI ${r.v.e})`:""}</span>`)});
+  // passing yards / first downs on track
+  ["pass","fd"].forEach(id=>{const p=D.payouts.find(x=>x.id===id),a=auto[id];
+    if(p&&a&&a.running&&!result(p).name){const s=squareFor(a.c,a.e);if(s)items.push(`<span class="it">📊 ${p.label}: ${s.name} on track (DAL ${a.c} – PHI ${a.e})</span>`)}});
+  const html=items.join("");
+  const t=$("tickTrack");
+  if(t.dataset.h!==html){t.innerHTML=html;t.dataset.h=html;t.style.animationDuration=Math.max(14,html.replace(/<[^>]+>/g,"").length*0.18)+"s"}
+  $("ticker").classList.toggle("on",items.length>0);
 }
 function render(){
   renderBanners();

@@ -55,6 +55,13 @@ h2{font-size:15px;margin:16px 4px 8px;text-transform:uppercase;letter-spacing:.6
 #toast{position:fixed;left:50%;top:12px;transform:translate(-50%,-150%);transition:transform .35s;background:var(--navy);color:#fff;border:3px solid var(--gold);border-radius:14px;padding:12px 16px;z-index:50;width:min(92vw,420px);box-shadow:0 6px 20px #0005}
 #toast.show{transform:translate(-50%,0)}
 #toast b{color:var(--gold)}
+#banners{position:sticky;top:62px;z-index:4}
+.bn{margin:0;padding:10px 14px;font-weight:800;text-align:center;font-size:16px;line-height:1.25}
+.bn small{display:block;font-weight:600;font-size:12px;opacity:.85}
+.bn.lead{background:var(--green);color:#fff}
+.bn.win{background:var(--gold);color:var(--navy)}
+@keyframes pop{0%{transform:scale(.96)}50%{transform:scale(1.03)}100%{transform:scale(1)}}
+.bn.win.new{animation:pop .6s 3}
 @media (max-width:600px){.board{font-size:9px;grid-template-columns:22px repeat(10,1fr)}.cell{min-height:40px;padding:1px}.hd{font-size:13px}.cell .n{font-size:7px}}
 </style>
 </head>
@@ -65,6 +72,7 @@ h2{font-size:15px;margin:16px 4px 8px;text-transform:uppercase;letter-spacing:.6
   <button id="bellBtn">🔔 Alerts</button>
 </header>
 <div id="toast"></div>
+<div id="banners"></div>
 <main>
   <div class="live" id="live"><div class="st">Checking live score…</div></div>
 
@@ -148,7 +156,27 @@ function notify(title,body){
   }catch(e){}
 }
 
+let lastBannerWin="";
+function renderBanners(){
+  let h="";
+  // who is winning the quarter being played right now
+  if(live&&live.state==="in"&&!/END_PERIOD|HALFTIME/.test(live.sname||"")){
+    const id=live.period>=4?"final":"q"+live.period;
+    const p=D.payouts.find(x=>x.id===id), s=squareFor(live.dal,live.phi);
+    if(p&&s&&!result(p).name)h+=`<div class="bn lead">🏈 ${p.label}: ${s.name} is winning (#${s.num})<small>DAL ${live.dal} – PHI ${live.phi} · ${live.detail} · ${money(p.amount)} on the line</small></div>`;
+  }
+  // most recent winner
+  const won=D.payouts.filter(p=>result(p).name);
+  if(won.length){
+    const p=won[won.length-1], r=result(p);
+    const key=p.id+r.name;
+    h+=`<div class="bn win ${key!==lastBannerWin?"new":""}">🏆 ${p.label} WINNER: ${r.name} — ${money(p.amount)}<small>${r.v?`DAL ${r.v.c} – PHI ${r.v.e}${p.id==="pass"?" yds":p.id==="fd"?" 1st downs":""} · `:""}Square #${r.sq?r.sq.num:""}${won.length>1?" · Earlier: "+won.slice(0,-1).map(x=>x.label.replace(" quarter","")+" "+result(x).name).join(", "):""}</small></div>`;
+    lastBannerWin=key;
+  }
+  $("banners").innerHTML=h;
+}
 function render(){
+  renderBanners();
   $("sub").textContent=`${D.game||""} · Cash only${D.updated?" · updated "+D.updated:""}`;
   // payouts
   const wins=new Set();
@@ -228,7 +256,7 @@ async function liveScore(){
     if(!ev){$("live").innerHTML=`<div class="st">Live score not available yet</div>`;live=null;return}
     const comp=ev.competitions[0], g=a=>comp.competitors.find(c=>c.team.abbreviation===a);
     const st=ev.status, state=st.type.state, period=+st.period||0, sname=st.type.name||"";
-    live={dal:+g("DAL").score||0,phi:+g("PHI").score||0,state,detail:st.type.shortDetail};
+    live={dal:+g("DAL").score||0,phi:+g("PHI").score||0,state,period,sname,detail:st.type.shortDetail};
     // quarter n is over when: game final, a later quarter started, or it's the end-of-quarter/halftime break
     const over=n=>state==="post"||period>n||(period===n&&/END_PERIOD|HALFTIME/.test(sname));
     const thru=(a,n)=>(g(a).linescores||[]).slice(0,n).reduce((s,x)=>s+(+x.value||0),0);

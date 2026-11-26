@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b2545">
+<link rel="manifest" href="manifest.webmanifest">
+<title>New Squares Game</title>
+<style>
+:root{--navy:#0b2545;--navy2:#13315c;--silver:#c9d1db;--bg:#eef2f6;--card:#fff;--gold:#f4c430;--green:#1e8e3e;--muted:#5b6b7f;--red:#c0392b}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--navy)}
+header{background:var(--navy);color:#fff;padding:0 16px 12px;position:sticky;top:0;z-index:5}
+header h1{margin:0;font-size:20px;padding-top:10px}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin:0 -16px;padding:8px 12px 0;background:#081a33}
+.tabs a{flex:1 1 auto;text-align:center;padding:8px 6px;border-radius:10px 10px 0 0;color:var(--silver);text-decoration:none;font-weight:700;font-size:13px;background:#0f2a50}
+.tabs a.on{background:var(--navy);color:#fff}
+main{max-width:900px;margin:0 auto;padding:12px}
+.card{background:var(--card);border-radius:12px;padding:12px;margin-bottom:12px;box-shadow:0 1px 3px #0002}
+h2{font-size:15px;margin:4px 0 10px;text-transform:uppercase;letter-spacing:.5px;color:var(--navy2)}
+.kinds{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.kind{border:2px solid #d5dde7;border-radius:12px;padding:10px;cursor:pointer;text-align:center}
+.kind.on{border-color:var(--navy);background:#e9f0ff}
+.kind b{display:block;font-size:15px}
+.kind span{font-size:12px;color:var(--muted)}
+label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:8px 0 3px}
+input,select,textarea{width:100%;padding:9px;border:1px solid #c8d1dc;border-radius:8px;font-size:15px;background:#fff;color:var(--navy)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.three{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.go{width:100%;border:0;border-radius:12px;padding:14px;font-size:17px;font-weight:800;background:var(--navy);color:#fff;margin-top:10px}
+.go.gold{background:var(--gold);color:var(--navy)}
+.go.light{background:#e6ebf2;color:var(--navy);font-size:14px;padding:10px}
+.go:disabled{opacity:.5}
+#preview{max-width:100%;border-radius:10px;margin-top:10px;display:none}
+.msg{font-size:14px;margin-top:8px}
+.msg.err{color:var(--red);font-weight:700}
+.notes{background:#fffbe6;border:1px solid #f0d878;border-radius:10px;padding:10px;font-size:13px;margin-bottom:12px}
+.digits{display:grid;grid-template-columns:repeat(10,1fr);gap:3px}
+.digits input{padding:6px 0;text-align:center;font-weight:800}
+.gridx{display:grid;grid-template-columns:22px repeat(10,1fr);gap:2px}
+.gridx input{padding:4px 2px;font-size:10px;border-radius:4px;min-width:0}
+.gridx .h{background:var(--navy);color:#fff;font-weight:800;text-align:center;font-size:12px;border-radius:3px;padding:4px 0}
+.item{border:1px solid #e3e8ef;border-radius:10px;padding:8px;margin-bottom:8px}
+.item .three,.item .two{margin-top:4px}
+.small{font-size:12px;color:var(--muted)}
+.x{border:0;background:none;color:var(--red);font-weight:800;font-size:13px;float:right}
+.spin{display:inline-block;width:16px;height:16px;border:3px solid #fff8;border-top-color:#fff;border-radius:50%;animation:sp 1s linear infinite;vertical-align:-3px;margin-right:6px}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<header>
+  <nav class="tabs" id="tabs"></nav>
+  <h1>＋ NEW GAME</h1>
+</header>
+<main>
+  <div class="card" id="step1">
+    <h2>1 · What kind of sheet?</h2>
+    <div class="kinds">
+      <div class="kind on" data-k="board"><b>Full board</b><span>100 squares with names (like Mike Leal's)</span></div>
+      <div class="kind" data-k="holdings"><b>Our squares</b><span>Just our squares &amp; payouts (like FLX)</span></div>
+    </div>
+    <h2 style="margin-top:14px">2 · Photo of the sheet</h2>
+    <input type="file" id="file" accept="image/*">
+    <img id="preview" alt="">
+    <button class="go gold" id="read" disabled>📸 Read the photo</button>
+    <div class="msg" id="msg"></div>
+    <button class="go light" id="blank">Skip the photo — fill it in by hand</button>
+  </div>
+  <div id="review" style="display:none"></div>
+</main>
+<script src="common.js"></script>
+<script>
+const APP_VERSION="1795737457";
+const $=id=>document.getElementById(id);
+let KIND="board", IMG=null, MT="image/jpeg", D=null;
+buildTabs("new");
+document.querySelectorAll(".kind").forEach(el=>el.onclick=()=>{document.querySelectorAll(".kind").forEach(x=>x.classList.remove("on"));el.classList.add("on");KIND=el.dataset.k});
+
+// shrink the photo so it uploads fast (long side 2000px)
+$("file").onchange=e=>{
+  const f=e.target.files[0]; if(!f)return;
+  const img=new Image(); img.onload=()=>{
+    const k=Math.min(1,2000/Math.max(img.width,img.height)), c=document.createElement("canvas");
+    c.width=Math.round(img.width*k); c.height=Math.round(img.height*k);
+    c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+    const url=c.toDataURL("image/jpeg",0.85); IMG=url.split(",")[1]; MT="image/jpeg";
+    $("preview").src=url; $("preview").style.display="block"; $("read").disabled=false; $("msg").textContent="";
+  };
+  img.src=URL.createObjectURL(f);
+};
+$("read").onclick=async()=>{
+  $("read").disabled=true; $("read").innerHTML=`<span class="spin"></span>Reading the sheet… (about 30–60 seconds)`; $("msg").className="msg"; $("msg").textContent="";
+  try{
+    const r=await fetch(SB_URL+"/functions/v1/squares-parse",{method:"POST",headers:{...sbH,"Content-Type":"application/json"},body:JSON.stringify({image:IMG,mediaType:MT,kind:KIND})});
+    const j=await r.json();
+    if(!r.ok||j.error)throw new Error(j.error||("Error "+r.status));
+    D=normalize(clean(j.data)); showReview();
+  }catch(e){$("msg").className="msg err";$("msg").textContent="Couldn't read it: "+e.message+" — you can try another photo or fill it in by hand.";}
+  finally{$("read").disabled=false;$("read").textContent="📸 Read the photo";}
+};
+$("blank").onclick=()=>{D=normalize({});showReview()};
+
+const DEF_PAYS={right:{label:"Right",q:0,f:0},wrong:{label:"Wrong",q:0,f:0},p5r:{label:"+5 Right",q:0,f:0},p5w:{label:"+5 Wrong",q:0,f:0}};
+function normalize(d){
+  d=d||{}; d.league=d.league||"nfl"; d.date=d.date||new Date().toLocaleDateString("en-CA");
+  if(KIND==="board"){
+    d.teams=d.teams&&d.teams.col?d.teams:{col:{abbr:"",name:""},row:{abbr:"",name:""}};
+    const dig=a=>Array.isArray(a)&&a.length===10?a.map(x=>+x):[0,1,2,3,4,5,6,7,8,9];
+    d.cols=dig(d.cols); d.rows=dig(d.rows);
+    const g=Array.isArray(d.grid)?d.grid:[]; d.grid=[...Array(10)].map((_,r)=>[...Array(10)].map((_,c)=>String((g[r]||[])[c]??"")));
+    d.payouts=(Array.isArray(d.payouts)&&d.payouts.length?d.payouts:[{id:"q1",label:"1st quarter",amount:0},{id:"q2",label:"2nd quarter",amount:0},{id:"q3",label:"3rd quarter",amount:0},{id:"final",label:"Final",amount:0}])
+      .map(p=>({id:p.id||"other1",label:p.label||"",amount:+p.amount||0,tag:p.tag||"",winner:"",note:"",wrongAmount:(p.wrongAmount===null||p.wrongAmount===undefined||p.wrongAmount==="")?null:+p.wrongAmount,col:null,row:null}));
+  }else{
+    d.teams=d.teams&&d.teams.a?d.teams:{a:{abbr:"",name:""},b:{abbr:"",name:""}};
+    d.pays=Object.assign({},DEF_PAYS,d.pays||{}); for(const k in DEF_PAYS){if(!d.pays[k])d.pays[k]={...DEF_PAYS[k]}}
+    d.squares=(Array.isArray(d.squares)?d.squares:[]).map(s=>({sq:+s.sq||0,cost:+s.cost||0,share:+s.share||1,a:+s.a||0,b:+s.b||0,note:s.note||""}));
+    if(!d.squares.length)d.squares=[{sq:1,cost:0,share:1,a:0,b:0,note:""}];
+    d.partners=Array.isArray(d.partners)?d.partners:[]; d.manual={q1:null,q2:null,q3:null,final:null};
+  }
+  d.title=d.title||""; return d;
+}
+const v=(id,val,attrs="")=>`<input id="${id}" value="${esc(val)}" ${attrs}>`;
+function showReview(){
+  const b=KIND==="board", T=D.teams, A=b?"col":"a", B=b?"row":"b";
+  let h=`${D.notes?`<div class="notes">⚠️ Check these: ${esc(D.notes)}</div>`:""}
+  <div class="card"><h2>3 · Check the game</h2>
+    <label>Name of the game</label>${v("title",D.title,'placeholder="e.g. Mike Leal\'s Numbers!"')}
+    <div class="two"><div><label>League</label><select id="league"><option value="nfl">NFL</option><option value="college-football">College</option></select></div>
+    <div><label>Game date</label><input id="date" type="date" value="${esc(D.date)}"></div></div>
+    <div class="two"><div><label>${b?"Team across the top (columns)":"First team in each number"}</label>${v("tAa",T[A].abbr,'placeholder="ESPN code, e.g. DAL" style="text-transform:uppercase"')}${v("tAn",T[A].name,'placeholder="Name, e.g. Cowboys" style="margin-top:4px"')}</div>
+    <div><label>${b?"Team down the side (rows)":"Second team"}</label>${v("tBa",T[B].abbr,'placeholder="e.g. PHI" style="text-transform:uppercase"')}${v("tBn",T[B].name,'placeholder="e.g. Eagles" style="margin-top:4px"')}</div></div>
+    <div class="small" style="margin-top:6px">Team codes are ESPN's (DAL, PHI, KC, SF, NYG…). They're how the app finds the live score.</div>
+  </div>`;
+  if(b){
+    h+=`<div class="card"><h2>Numbers</h2><label>Across the top (${esc(T.col.name||"columns")})</label><div class="digits">${D.cols.map((x,i)=>`<input id="c${i}" value="${x}" inputmode="numeric" maxlength="1">`).join("")}</div>
+      <label>Down the side (${esc(T.row.name||"rows")})</label><div class="digits">${D.rows.map((x,i)=>`<input id="r${i}" value="${x}" inputmode="numeric" maxlength="1">`).join("")}</div></div>
+    <div class="card"><h2>Names on the board</h2><div class="gridx"><div></div>${D.cols.map((_,i)=>`<div class="h">${i+1}</div>`).join("")}
+      ${D.grid.map((row,r)=>`<div class="h">${r+1}</div>`+row.map((n,c)=>`<input id="g${r}_${c}" value="${esc(n)}">`).join("")).join("")}</div>
+      <div class="small" style="margin-top:6px">Turn your phone sideways to see the names better.</div></div>
+    <div class="card"><h2>Payouts</h2><div id="plist">${D.payouts.map(payRow).join("")}</div>
+      <button class="go light" id="addP">＋ Add a payout</button></div>`;
+  }else{
+    h+=`<div class="card"><h2>Payout for a full square</h2>${["right","wrong","p5r","p5w"].map(k=>`<div class="item"><b>${esc(D.pays[k].label)}</b>
+      <div class="two"><div><label>Each quarter Q1–Q3</label><input id="pq_${k}" inputmode="decimal" value="${D.pays[k].q||0}"></div><div><label>Final</label><input id="pf_${k}" inputmode="decimal" value="${D.pays[k].f||0}"></div></div></div>`).join("")}
+      <div class="small">Leave a row at 0 if that hit type doesn't pay.</div></div>
+    <div class="card"><h2>Our squares</h2><div id="slist">${D.squares.map(sqRow).join("")}</div><button class="go light" id="addS">＋ Add a square</button></div>
+    <div class="card"><h2>Who's splitting</h2><label>Names, separated by commas (leave blank if no split)</label>${v("partners",D.partners.join(", "),'placeholder="e.g. Rick, Raul, Felix"')}
+      <label>Short name for the group (shown as "___ wins")</label>${v("holder",D.holder||"",'placeholder="e.g. FLX"')}</div>`;
+  }
+  h+=`<button class="go" id="save">✅ Save &amp; start tracking</button><div class="msg" id="smsg"></div><div style="height:40px"></div>`;
+  $("review").innerHTML=h; $("review").style.display="block"; $("league").value=D.league;
+  if(b){$("addP").onclick=()=>{$("plist").insertAdjacentHTML("beforeend",payRow({id:"other1",label:"",amount:0,tag:"",wrongAmount:null}));wireX()}}
+  else{$("addS").onclick=()=>{$("slist").insertAdjacentHTML("beforeend",sqRow({sq:"",cost:0,share:1,a:0,b:0,note:""}));wireX()}}
+  wireX(); $("save").onclick=save; $("review").scrollIntoView({behavior:"smooth"});
+}
+const IDS=[["q1","1st quarter"],["q2","2nd quarter"],["q3","3rd quarter"],["half","Halftime"],["final","Final"],["pass","Total passing yards"],["fd","Total first downs"],["other1","Other (enter by hand)"],["other2","Other 2 (enter by hand)"]];
+function payRow(p){return `<div class="item pay"><button class="x">✕ remove</button>
+  <div class="two"><div><label>Pays on</label><select class="pid">${IDS.map(([k,l])=>`<option value="${k}" ${p.id===k?"selected":""}>${l}</option>`).join("")}</select></div>
+  <div><label>Label</label><input class="plabel" value="${esc(p.label)}"></div></div>
+  <div class="two"><div><label>Right way $</label><input class="pamt" inputmode="decimal" value="${p.amount||0}"></div>
+  <div><label>Wrong way $ (blank = none)</label><input class="pw" inputmode="decimal" value="${p.wrongAmount==null?"":p.wrongAmount}"></div></div></div>`}
+function sqRow(s){return `<div class="item sqi"><button class="x">✕ remove</button>
+  <div class="three"><div><label>Square #</label><input class="ssq" inputmode="numeric" value="${s.sq}"></div><div><label>Cost $</label><input class="scost" inputmode="decimal" value="${s.cost}"></div><div><label>Share %</label><input class="sshare" inputmode="decimal" value="${Math.round((+s.share||1)*100)}"></div></div>
+  <div class="three"><div><label>1st team digit</label><input class="sa" inputmode="numeric" maxlength="1" value="${s.a}"></div><div><label>2nd team digit</label><input class="sb" inputmode="numeric" maxlength="1" value="${s.b}"></div><div><label>Note</label><input class="snote" value="${esc(s.note)}"></div></div></div>`}
+function wireX(){document.querySelectorAll(".x").forEach(x=>x.onclick=()=>x.closest(".item").remove())}
+
+async function save(){
+  const b=KIND==="board", num=x=>{const n=parseFloat(String(x).replace(/[$,\s]/g,""));return isNaN(n)?0:n}, dg=x=>Math.abs(parseInt(x,10)||0)%10;
+  const title=$("title").value.trim(), aA=$("tAa").value.trim().toUpperCase(), bA=$("tBa").value.trim().toUpperCase();
+  const err=m=>{$("smsg").className="msg err";$("smsg").textContent=m};
+  if(!title)return err("Give the game a name.");
+  if(!aA||!bA)return err("Enter both ESPN team codes (like DAL and PHI) so the live score works.");
+  const d={title,league:$("league").value,date:$("date").value,game:""};
+  if(b){
+    d.teams={col:{abbr:aA,name:$("tAn").value.trim()||aA},row:{abbr:bA,name:$("tBn").value.trim()||bA}};
+    d.game=`${d.teams.row.name} at ${d.teams.col.name}`;
+    d.cols=[...Array(10)].map((_,i)=>dg($("c"+i).value)); d.rows=[...Array(10)].map((_,i)=>dg($("r"+i).value));
+    if(new Set(d.cols).size!==10||new Set(d.rows).size!==10)return err("Each row of numbers needs all ten digits 0–9 once.");
+    d.grid=[...Array(10)].map((_,r)=>[...Array(10)].map((_,c)=>$(`g${r}_${c}`).value.trim()));
+    d.payouts=[...document.querySelectorAll(".pay")].map(el=>{const w=el.querySelector(".pw").value.trim();
+      return {id:el.querySelector(".pid").value,label:el.querySelector(".plabel").value.trim()||el.querySelector(".pid").selectedOptions[0].text,amount:num(el.querySelector(".pamt").value),tag:w?"R/W":"",winner:"",note:"",wrongAmount:w?num(w):null,col:null,row:null}});
+    const seen=new Set();d.payouts.forEach(p=>{let id=p.id,i=2;while(seen.has(id))id=p.id+"_"+(i++);p.id=id;seen.add(id)});
+  }else{
+    d.teams={a:{abbr:aA,name:$("tAn").value.trim()||aA},b:{abbr:bA,name:$("tBn").value.trim()||bA}};
+    d.game=`${d.teams.a.name} vs ${d.teams.b.name}`;
+    d.pays={};["right","wrong","p5r","p5w"].forEach(k=>{const q=num($("pq_"+k).value),f=num($("pf_"+k).value);if(q||f)d.pays[k]={label:DEF_PAYS[k].label,q,f}});
+    d.squares=[...document.querySelectorAll(".sqi")].map(el=>({sq:parseInt(el.querySelector(".ssq").value,10)||0,cost:num(el.querySelector(".scost").value),share:(num(el.querySelector(".sshare").value)||100)/100,a:dg(el.querySelector(".sa").value),b:dg(el.querySelector(".sb").value),note:el.querySelector(".snote").value.trim()}));
+    if(!d.squares.length)return err("Add at least one square.");
+    d.partners=$("partners").value.split(",").map(x=>x.trim()).filter(Boolean); d.holder=$("holder").value.trim()||title.split(" ")[0];
+    d.manual={q1:null,q2:null,q3:null,final:null}; d.fullSquareCost=Math.max(...d.squares.map(s=>s.share===1?s.cost:0),0)||null;
+  }
+  $("save").disabled=true;$("save").textContent="Saving…";
+  try{const id=await sbRpc("squares_save",{p_id:"g"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),p_kind:KIND,p_title:title,p_data:clean(d),p_status:"live"});
+    location.href=pageFor(KIND)+"?id="+encodeURIComponent(id);}
+  catch(e){err("Couldn't save: "+e.message);$("save").disabled=false;$("save").textContent="✅ Save & start tracking"}
+}
+</script>
+</body>
+</html>

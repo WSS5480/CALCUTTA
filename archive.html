@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b2545">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Squares Archive</title>
+<style>
+:root{--navy:#0b2545;--navy2:#13315c;--silver:#c9d1db;--bg:#eef2f6;--card:#fff;--gold:#f4c430;--green:#1e8e3e;--muted:#5b6b7f}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--navy)}
+header{background:var(--navy);color:#fff;padding:0 16px 12px;position:sticky;top:0;z-index:5}
+header h1{margin:0;font-size:20px;padding-top:10px}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin:0 -16px;padding:8px 12px 0;background:#081a33}
+.tabs a{flex:1 1 auto;text-align:center;padding:8px 6px;border-radius:10px 10px 0 0;color:var(--silver);text-decoration:none;font-weight:700;font-size:13px;background:#0f2a50}
+.tabs a.on{background:var(--navy);color:#fff}
+main{max-width:900px;margin:0 auto;padding:12px}
+.g{display:block;background:var(--card);border-radius:12px;padding:12px;margin-bottom:10px;box-shadow:0 1px 3px #0002;color:inherit;text-decoration:none;border-left:6px solid var(--gold)}
+.g .t{font-weight:800;font-size:17px}
+.g .s{font-size:13px;color:var(--muted);margin-top:2px}
+.g .sc{font-size:22px;font-weight:800;margin-top:6px}
+.g .w{font-size:13px;margin-top:6px;line-height:1.5}
+.g .w b{color:var(--green)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.btn{border:0;border-radius:8px;padding:6px 10px;background:#e6ebf2;color:var(--navy);font-weight:700;font-size:12px}
+.empty{background:var(--card);border-radius:12px;padding:20px;text-align:center;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <nav class="tabs" id="tabs"></nav>
+  <h1>📁 ARCHIVE</h1>
+</header>
+<main id="list"><div class="empty">Loading…</div></main>
+<script src="common.js"></script>
+<script>
+const APP_VERSION="1795737457";
+const money=n=>{n=Math.round(Number(n||0)*100)/100;return "$"+n.toLocaleString(undefined,{minimumFractionDigits:n%1?2:0,maximumFractionDigits:2})};
+const has=v=>v!==null&&v!==undefined&&v!=="";
+function boardSummary(D){
+  const T=D.teams, sq=(c,e)=>{const ci=D.cols.indexOf(Math.abs(+c)%10),ri=D.rows.indexOf(Math.abs(+e)%10);return ci<0||ri<0?null:D.grid[ri][ci]};
+  const f=D.payouts.find(p=>p.id==="final");
+  const score=f&&has(f.col)?`${T.col.abbr} ${f.col} – ${T.row.abbr} ${f.row}`:"";
+  const w=D.payouts.filter(p=>has(p.col)).map(p=>{const r=p.winner||sq(p.col,p.row),ww=p.wrongWinner||sq(p.row,p.col);
+    return `${esc(p.label)}: <b>${esc(r||"—")}</b>${ww&&ww!==r&&p.wrongAmount!=null?` · wrong way <b>${esc(ww)}</b>`:""}`}).join("<br>");
+  return {score,w};
+}
+function holdSummary(D){
+  const T=D.teams, types=["right","wrong","p5r","p5w"];
+  const nums=s=>{const a=(s.a+5)%10,b=(s.b+5)%10;return {right:[s.a,s.b],wrong:[s.b,s.a],p5r:[a,b],p5w:[b,a]}};
+  let won=0;const lines=[];
+  ["q1","q2","q3","final"].forEach(q=>{const m=D.manual&&D.manual[q];if(!m||!has(m.a))return;const d=+m.a%10,e=+m.b%10;let qt=0;
+    D.squares.forEach(s=>{const n=nums(s);types.forEach(t=>{if(D.pays[t]&&n[t][0]===d&&n[t][1]===e)qt+=(q==="final"?D.pays[t].f:D.pays[t].q)*s.share})});
+    won+=qt;lines.push(`${q==="final"?"Final":q.toUpperCase()}: ${qt?`<b>${money(qt)}</b>`:"no hit"}`)});
+  const f=D.manual&&D.manual.final;
+  const cost=D.squares.reduce((s,x)=>s+(+x.cost||0),0);
+  const P=D.partners||[];
+  return {score:f&&has(f.a)?`${T.a.abbr} ${f.a} – ${T.b.abbr} ${f.b}`:"",
+    w:lines.join(" · ")+`<br>Won <b>${money(won)}</b> · cost ${money(cost)} · net ${won-cost<0?"-":""}${money(Math.abs(won-cost))}${P.length?` · ${money((won-cost)/P.length)} net each (${esc(P.join(", "))})`:""}`};
+}
+async function show(){
+  buildTabs("archive");
+  try{
+    const games=(await sbGames("status=eq.archived&select=*&order=archived_at.desc.nullslast")).map(clean);
+    if(!games.length){$("list").innerHTML=`<div class="empty">No archived games yet. Games move here on their own when ESPN shows them final.</div>`;return}
+    $("list").innerHTML=games.map(g=>{
+      const s=g.kind==="board"?boardSummary(g.data):holdSummary(g.data);
+      return `<div class="g"><div class="row"><a style="color:inherit;text-decoration:none;flex:1" href="${pageFor(g.kind)}?id=${encodeURIComponent(g.id)}">
+        <div class="t">${esc(g.title)}</div><div class="s">${esc(g.data.game||"")} · ${g.data.date||(g.archived_at?new Date(g.archived_at).toLocaleDateString():"")}</div></a>
+        <button class="btn" data-id="${esc(g.id)}">↩ Make live</button></div>
+        <a style="color:inherit;text-decoration:none" href="${pageFor(g.kind)}?id=${encodeURIComponent(g.id)}">
+        ${s.score?`<div class="sc">FINAL ${s.score}</div>`:""}<div class="w">${s.w}</div></a></div>`}).join("");
+    document.querySelectorAll(".btn[data-id]").forEach(b=>b.onclick=async()=>{
+      if(!confirm("Move this game back to live?"))return;
+      await sbRpc("squares_set_status",{p_id:b.dataset.id,p_status:"live"});show()});
+  }catch(e){$("list").innerHTML=`<div class="empty">Couldn't load the archive. Pull down to try again.</div>`}
+}
+function $(id){return document.getElementById(id)}
+show();
+</script>
+</body>
+</html>

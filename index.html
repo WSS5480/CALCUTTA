@@ -19,6 +19,7 @@ header h1{padding-top:10px}
 #tickTrack{display:inline-block;padding-left:100%;animation:tick 22s linear infinite}
 #tickTrack .it{margin-right:48px}
 #tickTrack .ld{background:var(--green);color:#fff;padding:3px 10px;border-radius:12px}
+#tickTrack .wl{background:#d9772a;color:#fff;padding:3px 10px;border-radius:12px;margin-left:8px}
 @keyframes tick{from{transform:translateX(0)}to{transform:translateX(-100%)}}
 header h1{margin:0;font-size:20px;letter-spacing:.5px}
 header .sub{font-size:12px;color:var(--silver);margin-top:2px}
@@ -178,14 +179,14 @@ function renderBanners(){
     const id=live.period>=4?"final":"q"+live.period;
     const p=D.payouts.find(x=>x.id===id), s=squareFor(live.dal,live.phi);
     const w=squareFor(live.phi,live.dal);
-    if(p&&s&&!result(p).name)items.push(`<span class="it"><span class="ld">🏈 ${p.label.toUpperCase()}: ${s.name} is winning (#${s.num})</span>${w&&w.num!==s.num?` 🔄 Wrong way: ${w.name} (#${w.num})`:""} · DAL ${live.dal} – PHI ${live.phi} · ${live.detail}</span>`);
+    if(p&&s&&!result(p).name)items.push(`<span class="it"><span class="ld">🏈 ${p.label.toUpperCase()}: ${s.name} is winning (#${s.num})</span>${w&&w.num!==s.num?`<span class="wl">🔄 WRONG WAY: ${w.name} is winning (#${w.num})</span>`:""} · DAL ${live.dal} – PHI ${live.phi} · ${live.detail}</span>`);
   }else if(live&&/HALFTIME/.test(live.sname||""))items.push(`<span class="it">⏸ HALFTIME · DAL ${live.dal} – PHI ${live.phi}</span>`);
   // every winner so far, newest first
   D.payouts.filter(p=>result(p).name).reverse().forEach(p=>{const r=result(p);
-    items.push(`<span class="it">🏆 ${p.label.toUpperCase()} WINNER: ${r.name} — ${money(p.amount)}${r.wname&&(!r.wsq||!r.sq||r.wsq.num!==r.sq.num)?` · 🔄 Wrong way: ${r.wname}${wTxt(p)?" — "+wTxt(p):""}`:""}${r.v?` (DAL ${r.v.c} – PHI ${r.v.e})`:""}</span>`)});
+    items.push(`<span class="it">🏆 ${p.label.toUpperCase()} WINNER: ${r.name} — ${money(p.amount)}${r.wname&&(!r.wsq||!r.sq||r.wsq.num!==r.sq.num)?`<span class="wl">🔄 WRONG WAY WINNER: ${r.wname}${wTxt(p)?" — "+wTxt(p):""}</span>`:""}${r.v?` (DAL ${r.v.c} – PHI ${r.v.e})`:""}</span>`)});
   // passing yards / first downs on track
   ["pass","fd"].forEach(id=>{const p=D.payouts.find(x=>x.id===id),a=auto[id];
-    if(p&&a&&a.running&&!result(p).name){const s=squareFor(a.c,a.e),w=squareFor(a.e,a.c);if(s)items.push(`<span class="it">📊 ${p.label}: ${s.name} on track${w&&w.num!==s.num?` · wrong way ${w.name}`:""} (DAL ${a.c} – PHI ${a.e})</span>`)}});
+    if(p&&a&&a.running&&!result(p).name){const s=squareFor(a.c,a.e),w=squareFor(a.e,a.c);if(s)items.push(`<span class="it">📊 ${p.label}: ${s.name} on track${w&&w.num!==s.num?` · <span class="wl">🔄 wrong way ${w.name}</span>`:""} (DAL ${a.c} – PHI ${a.e})</span>`)}});
   const html=items.join("");
   const t=$("tickTrack");
   if(t.dataset.h!==html){t.innerHTML=html;t.dataset.h=html;t.style.animationDuration=Math.max(14,html.replace(/<[^>]+>/g,"").length*0.18)+"s"}
@@ -315,7 +316,7 @@ if("Notification" in window&&Notification.permission==="granted")$("bellBtn").te
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 
 // auto-update: reload the page when a new version is pushed
-const APP_VERSION="1795730766";
+const APP_VERSION="1795731078";
 async function checkVersion(){try{const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"});const j=await r.json();if(j.v&&j.v!==APP_VERSION)location.replace(location.pathname+"?v="+j.v)}catch(e){}}
 setInterval(checkVersion,30000);
 load(true); liveScore();

@@ -47,6 +47,8 @@ h2{font-size:15px;margin:16px 4px 8px;text-transform:uppercase;letter-spacing:.6
 .cell{background:#f6f8fb;border:1px solid #dde3ea;border-radius:3px;min-height:46px;padding:2px 3px;position:relative;cursor:pointer;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:600;line-height:1.1;word-break:break-word}
 .cell .n{position:absolute;top:1px;left:3px;font-size:8px;color:#8a97a8;font-weight:400}
 .cell.win{background:var(--gold);border-color:#c99a00}
+.cell.wwin{background:#ffb26b;border-color:#d9772a}
+.pay .w.ww{color:#c25e00;margin-top:2px}
 .cell.lead{outline:3px dashed var(--green);outline-offset:-3px}
 .cell.mine{background:#cfe3ff;border-color:#5b8def}
 .cell.win.mine{background:linear-gradient(135deg,var(--gold) 50%,#cfe3ff 50%)}
@@ -99,7 +101,7 @@ h2{font-size:15px;margin:16px 4px 8px;text-transform:uppercase;letter-spacing:.6
     <div class="axis"><span>⬇ EAGLES (rows)</span><span>COWBOYS (columns) ➡</span></div>
     <div class="board" id="board"></div>
   </div>
-  <div class="foot" id="foot">Winning square = last digit of Cowboys score (column) × last digit of Eagles score (row). Gold = winner. Dashed green = leading right now. Scores, passing yards and first downs fill in automatically from ESPN.</div>
+  <div class="foot" id="foot">Winning square = last digit of Cowboys score (column) × last digit of Eagles score (row). Gold = right-way winner, orange = wrong-way winner (digits swapped). Dashed green = leading right now. Scores, passing yards and first downs fill in automatically from ESPN.</div>
 </main>
 <script>
 let D=null, live=null, selPay=null, selName="", lastSig=null;
@@ -107,6 +109,8 @@ const $=id=>document.getElementById(id);
 const money=n=>"$"+Number(n||0).toLocaleString();
 const has=v=>v!==null&&v!==undefined&&v!=="";
 
+const wAmt=p=>(typeof p.wrongAmount==="number")?p.wrongAmount:null;
+const wTxt=p=>wAmt(p)!==null?money(wAmt(p)):"";
 function squareFor(cow,eag){
   if(!has(cow)||!has(eag))return null;
   const c=D.cols.indexOf(Math.abs(+cow)%10), r=D.rows.indexOf(Math.abs(+eag)%10);
@@ -125,7 +129,10 @@ function result(p){
   const v=eff(p);
   const sq=v?squareFor(v.c,v.e):null;
   const name=p.winner||(sq?sq.name:"");
-  return {sq,name,v};
+  // wrong way = digits swapped (Eagles digit on the Cowboys axis, Cowboys digit on the Eagles axis)
+  const wsq=v?squareFor(v.e,v.c):null;
+  const wname=p.wrongWinner||(wsq?wsq.name:"");
+  return {sq,name,v,wsq,wname};
 }
 
 async function load(first){
@@ -140,12 +147,12 @@ async function load(first){
 function checkNew(){
   if(!D||!espnTried)return;
   const m={};
-  D.payouts.forEach(p=>{const r=result(p);if(r.name)m[p.id]=r.name+"|"+p.amount+"|"+(r.v?r.v.c+"-"+r.v.e:"")});
+  D.payouts.forEach(p=>{const r=result(p);if(r.name)m[p.id]=r.name+"|"+r.wname+"|"+p.amount+"|"+wAmt(p)+"|"+(r.v?r.v.c+"-"+r.v.e:"")});
   if(prevWins){
     D.payouts.forEach(p=>{
       if(m[p.id]&&m[p.id]!==prevWins[p.id]){
         const r=result(p);
-        notify("🏆 "+p.label+" winner",`${r.name} wins ${money(p.amount)}${r.v?` (DAL ${r.v.c} – PHI ${r.v.e})`:""}`);
+        notify("🏆 "+p.label+" winner",`Right way: ${r.name} ${money(p.amount)}${r.wname?` · Wrong way: ${r.wname}${wTxt(p)?" "+wTxt(p):""}`:""}${r.v?` (DAL ${r.v.c} – PHI ${r.v.e})`:""}`);
       }
     });
   }
@@ -170,14 +177,15 @@ function renderBanners(){
   if(live&&live.state==="in"&&!/END_PERIOD|HALFTIME/.test(live.sname||"")){
     const id=live.period>=4?"final":"q"+live.period;
     const p=D.payouts.find(x=>x.id===id), s=squareFor(live.dal,live.phi);
-    if(p&&s&&!result(p).name)items.push(`<span class="it"><span class="ld">🏈 ${p.label.toUpperCase()}: ${s.name} is winning (#${s.num})</span> DAL ${live.dal} – PHI ${live.phi} · ${live.detail} · ${money(p.amount)}</span>`);
+    const w=squareFor(live.phi,live.dal);
+    if(p&&s&&!result(p).name)items.push(`<span class="it"><span class="ld">🏈 ${p.label.toUpperCase()}: ${s.name} is winning (#${s.num})</span>${w&&w.num!==s.num?` 🔄 Wrong way: ${w.name} (#${w.num})`:""} · DAL ${live.dal} – PHI ${live.phi} · ${live.detail}</span>`);
   }else if(live&&/HALFTIME/.test(live.sname||""))items.push(`<span class="it">⏸ HALFTIME · DAL ${live.dal} – PHI ${live.phi}</span>`);
   // every winner so far, newest first
   D.payouts.filter(p=>result(p).name).reverse().forEach(p=>{const r=result(p);
-    items.push(`<span class="it">🏆 ${p.label.toUpperCase()} WINNER: ${r.name} — ${money(p.amount)}${r.v?` (DAL ${r.v.c} – PHI ${r.v.e})`:""}</span>`)});
+    items.push(`<span class="it">🏆 ${p.label.toUpperCase()} WINNER: ${r.name} — ${money(p.amount)}${r.wname&&(!r.wsq||!r.sq||r.wsq.num!==r.sq.num)?` · 🔄 Wrong way: ${r.wname}${wTxt(p)?" — "+wTxt(p):""}`:""}${r.v?` (DAL ${r.v.c} – PHI ${r.v.e})`:""}</span>`)});
   // passing yards / first downs on track
   ["pass","fd"].forEach(id=>{const p=D.payouts.find(x=>x.id===id),a=auto[id];
-    if(p&&a&&a.running&&!result(p).name){const s=squareFor(a.c,a.e);if(s)items.push(`<span class="it">📊 ${p.label}: ${s.name} on track (DAL ${a.c} – PHI ${a.e})</span>`)}});
+    if(p&&a&&a.running&&!result(p).name){const s=squareFor(a.c,a.e),w=squareFor(a.e,a.c);if(s)items.push(`<span class="it">📊 ${p.label}: ${s.name} on track${w&&w.num!==s.num?` · wrong way ${w.name}`:""} (DAL ${a.c} – PHI ${a.e})</span>`)}});
   const html=items.join("");
   const t=$("tickTrack");
   if(t.dataset.h!==html){t.innerHTML=html;t.dataset.h=html;t.style.animationDuration=Math.max(14,html.replace(/<[^>]+>/g,"").length*0.18)+"s"}
@@ -187,25 +195,28 @@ function render(){
   renderBanners();
   $("sub").textContent=`${D.game||""} · Cash only${D.updated?" · updated "+D.updated:""}`;
   // payouts
-  const wins=new Set();
+  const wins=new Set(), wwins=new Set();
   $("pays").innerHTML=D.payouts.map(p=>{
-    const {sq,name,v}=result(p);
+    const {sq,name,v,wsq,wname}=result(p);
     if(sq&&name)wins.add(sq.r*10+sq.c);
+    if(wsq&&wname)wwins.add(wsq.r*10+wsq.c);
     const a=auto[p.id];
     const unit=(p.id==="pass"?" yds":p.id==="fd"?" 1st downs":"");
     let score=v?`DAL ${v.c} – PHI ${v.e}${unit}`:"";
-    if(!v&&a&&a.running){const ls=squareFor(a.c,a.e);score=`Live: DAL ${a.c} – PHI ${a.e}${unit}${ls?`<br>On track: <b>${ls.name}</b> (#${ls.num})`:""}`}
+    if(!v&&a&&a.running){const ls=squareFor(a.c,a.e),lw=squareFor(a.e,a.c);score=`Live: DAL ${a.c} – PHI ${a.e}${unit}${ls?`<br>Right way on track: <b>${ls.name}</b> (#${ls.num})`:""}${lw?`<br>Wrong way on track: <b>${lw.name}</b> (#${lw.num})`:""}`}
     return `<div class="pay ${name?"won":""} ${selPay===p.id?"sel":""}" data-id="${p.id}">
       <div class="lb">${p.label}</div>
       <div class="amt">${money(p.amount)} <small>${p.tag||""}</small></div>
-      <div class="w ${name?"":"pending"}">${name?"🏆 "+name:"Pending"}</div>
+      <div class="w ${name?"":"pending"}">${name?"🏆 Right way: "+name+(p.amount?" "+money(p.amount):""):"Pending"}</div>
+      ${wname?`<div class="w ww">🔄 Wrong way: ${wname}${wTxt(p)?" "+wTxt(p):""}<span class="sq"> #${wsq?wsq.num:""}</span></div>`:""}
       <div class="sq">${sq?`Square #${sq.num} · ${score}`:score}${p.note?`<br>${p.note}`:""}</div>
     </div>`}).join("");
   document.querySelectorAll(".pay").forEach(el=>el.onclick=()=>{selPay=selPay===el.dataset.id?null:el.dataset.id;render();if(selPay)$("board").scrollIntoView({behavior:"smooth"})});
 
   // leading square (live)
   let leadKey=null;
-  if(live&&live.state==="in"){const s=squareFor(live.dal,live.phi);if(s)leadKey=s.r*10+s.c}
+  let wleadKey=null;
+  if(live&&live.state==="in"){const s=squareFor(live.dal,live.phi);if(s)leadKey=s.r*10+s.c;const w=squareFor(live.phi,live.dal);if(w)wleadKey=w.r*10+w.c}
   const selSq=selPay?result(D.payouts.find(p=>p.id===selPay)).sq:null;
 
   // board
@@ -216,7 +227,8 @@ function render(){
       const k=r*10+c, nm=D.grid[r][c];
       let cls="cell";
       if(wins.has(k))cls+=" win";
-      if(leadKey===k)cls+=" lead";
+      if(wwins.has(k)&&!wins.has(k))cls+=" wwin";
+      if(leadKey===k||wleadKey===k)cls+=" lead";
       if(selName&&nm===selName)cls+=" mine";
       if(selSq&&selSq.r===r&&selSq.c===c)cls+=" mine";
       h+=`<div class="${cls}" data-name="${nm.replace(/"/g,"&quot;")}"><span class="n">${k+1}</span>${nm}</div>`;
@@ -227,10 +239,11 @@ function render(){
 
   // leaderboard
   const tot={};
-  D.payouts.forEach(p=>{const {name}=result(p);if(name){(tot[name]=tot[name]||{amt:0,w:[]});tot[name].amt+=+p.amount||0;tot[name].w.push(p.label)}});
+  const addT=(n,a,l)=>{(tot[n]=tot[n]||{amt:0,w:[]});tot[n].amt+=a;tot[n].w.push(l)};
+  D.payouts.forEach(p=>{const {name,wname}=result(p);if(name)addT(name,+p.amount||0,p.label);if(wname)addT(wname,wAmt(p)||0,p.label+" (wrong way)")});
   const rows=Object.entries(tot).sort((a,b)=>b[1].amt-a[1].amt);
-  const paid=D.payouts.reduce((s,p)=>s+(result(p).name?+p.amount||0:0),0);
-  const pot=D.payouts.reduce((s,p)=>s+(+p.amount||0),0);
+  const paid=D.payouts.reduce((s,p)=>{const r=result(p);return s+(r.name?+p.amount||0:0)+(r.wname?wAmt(p)||0:0)},0);
+  const pot=D.payouts.reduce((s,p)=>s+(+p.amount||0)+(wAmt(p)||0),0);
   $("lb").innerHTML=(rows.length?rows.map(([n,v])=>`<div class="lrow" data-name="${n.replace(/"/g,"&quot;")}"><div><div class="nm">${n}</div><div class="what">${v.w.join(", ")}</div></div><div class="tot">${money(v.amt)}</div></div>`).join(""):`<div class="lrow"><div class="what">No winners yet</div></div>`)
     +`<div class="lrow"><div class="what">Paid out ${money(paid)} of ${money(pot)}</div></div>`;
   document.querySelectorAll(".lrow[data-name]").forEach(el=>el.onclick=()=>pickName(el.dataset.name));
@@ -246,8 +259,9 @@ function renderDetail(){
   const d=$("detail");
   if(!selName){d.style.display="none";return}
   const sqs=[];D.grid.forEach((row,r)=>row.forEach((nm,c)=>{if(nm===selName)sqs.push(`#${r*10+c+1} (DAL ${D.cols[c]} / PHI ${D.rows[r]})`)}));
-  const won=D.payouts.filter(p=>result(p).name===selName);
-  const amt=won.reduce((s,p)=>s+(+p.amount||0),0);
+  const wonR=D.payouts.filter(p=>result(p).name===selName), wonW=D.payouts.filter(p=>result(p).wname===selName);
+  const won=[...wonR,...wonW.map(p=>({...p,label:p.label+" (wrong way)"}))];
+  const amt=wonR.reduce((s,p)=>s+(+p.amount||0),0)+wonW.reduce((s,p)=>s+(wAmt(p)||0),0);
   d.style.display="block";
   d.innerHTML=`<b>${selName}</b> — ${sqs.length} square${sqs.length>1?"s":""}: ${sqs.join(", ")}<br>
   Won: <b>${money(amt)}</b>${won.length?" ("+won.map(p=>p.label).join(", ")+")":""}<br>
@@ -301,7 +315,7 @@ if("Notification" in window&&Notification.permission==="granted")$("bellBtn").te
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 
 // auto-update: reload the page when a new version is pushed
-const APP_VERSION="1795730657";
+const APP_VERSION="1795730766";
 async function checkVersion(){try{const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"});const j=await r.json();if(j.v&&j.v!==APP_VERSION)location.replace(location.pathname+"?v="+j.v)}catch(e){}}
 setInterval(checkVersion,30000);
 load(true); liveScore();

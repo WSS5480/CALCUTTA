@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b2545">
 <link rel="manifest" href="manifest.webmanifest">
@@ -298,10 +300,14 @@ $("bellBtn").onclick=async()=>{
 if("Notification" in window&&Notification.permission==="granted")$("bellBtn").textContent="🔔 On";
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 
+// auto-update: reload the page when a new version is pushed
+const APP_VERSION="1795730657";
+async function checkVersion(){try{const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"});const j=await r.json();if(j.v&&j.v!==APP_VERSION)location.replace(location.pathname+"?v="+j.v)}catch(e){}}
+setInterval(checkVersion,30000);
 load(true); liveScore();
 setInterval(()=>load(false),20000);
 setInterval(liveScore,30000);
-document.addEventListener("visibilitychange",()=>{if(!document.hidden){load(false);liveScore()}});
+document.addEventListener("visibilitychange",()=>{if(!document.hidden){checkVersion();load(false);liveScore()}});
 </script>
 </body>
 </html>

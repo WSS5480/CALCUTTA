@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b2545">
+<link rel="manifest" href="manifest.webmanifest">
+<title>FLX Squares</title>
+<style>
+:root{--navy:#0b2545;--navy2:#13315c;--blue:#3a6df0;--silver:#c9d1db;--bg:#eef2f6;--card:#fff;--gold:#f4c430;--green:#1e8e3e;--orange:#d9772a;--ink:#0b2545;--muted:#5b6b7f}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:var(--navy);color:#fff;padding:0 16px 12px;position:sticky;top:0;z-index:5}
+header h1{margin:0;font-size:20px;letter-spacing:.5px;padding-top:10px}
+header h1 span{color:#6f9bff}
+header .sub{font-size:12px;color:var(--silver);margin-top:2px}
+#bellBtn{position:absolute;right:12px;bottom:12px;background:var(--gold);color:var(--navy);border:0;border-radius:18px;padding:7px 12px;font-weight:700;font-size:13px}
+#ticker{margin:0 -16px;overflow:hidden;white-space:nowrap;background:var(--gold);color:var(--navy);font-weight:800;font-size:15px;height:32px;line-height:32px;display:none}
+#ticker.on{display:block}
+#tickTrack{display:inline-block;padding-left:100%;animation:tick 22s linear infinite}
+#tickTrack .it{margin-right:48px}
+#tickTrack .ld{background:var(--green);color:#fff;padding:3px 10px;border-radius:12px;margin-right:6px}
+#tickTrack .wl{background:var(--orange);color:#fff;padding:3px 10px;border-radius:12px;margin-right:6px}
+@keyframes tick{from{transform:translateX(0)}to{transform:translateX(-100%)}}
+.tabs{display:flex;gap:6px;margin:0 -16px;padding:8px 12px 0;background:#081a33}
+.tabs a{flex:1;text-align:center;padding:8px 6px;border-radius:10px 10px 0 0;color:var(--silver);text-decoration:none;font-weight:700;font-size:13px;background:#0f2a50}
+.tabs a.on{background:var(--navy);color:#fff}
+main{max-width:1100px;margin:0 auto;padding:12px}
+.live{background:var(--card);border-radius:12px;padding:12px;margin-bottom:12px;display:flex;justify-content:space-around;align-items:center;text-align:center;box-shadow:0 1px 3px #0002}
+.live .tm{font-size:12px;color:var(--muted);font-weight:700}
+.live .sc{font-size:30px;font-weight:800}
+.live .st{font-size:12px;color:var(--muted)}
+.live .lead{font-size:13px;margin-top:4px}
+h2{font-size:15px;margin:16px 4px 8px;text-transform:uppercase;letter-spacing:.6px;color:var(--navy2)}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tile{background:var(--navy);color:#fff;border-radius:12px;padding:10px;text-align:center;cursor:pointer}
+.tile .v{font-size:20px;font-weight:800;color:#8fb2ff}
+.tile .k{font-size:11px;color:var(--silver);text-transform:uppercase;letter-spacing:.5px}
+.pays{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}
+.pay{background:var(--card);border-radius:12px;padding:10px 12px;box-shadow:0 1px 3px #0002;cursor:pointer;border:2px solid transparent}
+.pay.won{border-color:var(--gold)}
+.pay.sel{outline:3px solid var(--navy)}
+.pay .lb{font-size:12px;color:var(--muted);font-weight:700}
+.pay .amt{font-size:20px;font-weight:800}
+.pay .w{margin-top:6px;font-size:14px;font-weight:700;color:var(--green)}
+.pay .w.none{color:var(--muted);font-weight:600}
+.pay .sq{font-size:12px;color:var(--muted);margin-top:2px}
+.hit{display:block;font-size:13px;margin-top:3px}
+.sqs{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}
+.scard{background:var(--card);border-radius:12px;box-shadow:0 1px 3px #0002;overflow:hidden;border:2px solid transparent}
+.scard.won{border-color:var(--gold)}
+.scard.sel{outline:3px solid var(--navy)}
+.scard .top{background:var(--navy2);color:#fff;padding:8px 12px;display:flex;justify-content:space-between;align-items:center}
+.scard .top b{font-size:18px}
+.scard .top .c{font-size:12px;color:var(--silver);text-align:right}
+.scard .row{display:flex;justify-content:space-between;align-items:center;padding:7px 12px;border-bottom:1px solid #eef1f5;font-size:14px}
+.scard .row:last-child{border-bottom:0}
+.scard .row .ty{font-weight:700;width:76px}
+.scard .row .nm{font-weight:800;font-size:16px;width:52px;text-align:center}
+.scard .row .m{text-align:right;font-size:12px;color:var(--muted);flex:1}
+.scard .row .m b{color:var(--ink);font-size:13px}
+.scard .row.hitrow{background:var(--gold)}
+.scard .row.track{outline:3px dashed var(--green);outline-offset:-3px}
+.scard .note{font-size:11px;color:var(--muted);padding:6px 12px;background:#f7f9fb}
+.ptab{background:var(--card);border-radius:12px;box-shadow:0 1px 3px #0002;overflow:hidden}
+.prow{display:grid;grid-template-columns:1.2fr 1fr 1fr 1.2fr;padding:8px 12px;border-bottom:1px solid #eef1f5;font-size:13px}
+.prow.h{background:var(--navy);color:#fff;font-weight:700;font-size:12px}
+.prow div:not(:first-child){text-align:right}
+.foot{font-size:11px;color:var(--muted);text-align:center;margin:16px 0 30px}
+#toast{position:fixed;left:50%;top:12px;transform:translate(-50%,-150%);transition:transform .35s;background:var(--navy);color:#fff;border:3px solid var(--gold);border-radius:14px;padding:12px 16px;z-index:50;width:min(92vw,420px);box-shadow:0 6px 20px #0005}
+#toast.show{transform:translate(-50%,0)}
+#toast b{color:var(--gold)}
+#back{display:none;margin:8px 0;border:0;background:var(--navy);color:#fff;border-radius:8px;padding:6px 12px}
+@media (max-width:600px){.tiles .v{font-size:16px}}
+</style>
+</head>
+<body>
+<header>
+  <nav class="tabs"><a href="./">Mike Leal's Numbers!</a><a href="flx.html" class="on">FLX Squares</a></nav>
+  <div id="ticker"><div id="tickTrack"></div></div>
+  <h1>🏈 FLX <span>SQUARES</span></h1>
+  <div class="sub" id="sub">Dallas vs Philadelphia · loading…</div>
+  <button id="bellBtn">🔔 Alerts</button>
+</header>
+<div id="toast"></div>
+<main>
+  <div class="live" id="live"><div class="st">Checking live score…</div></div>
+
+  <div class="tiles">
+    <div class="tile" data-go="qs"><div class="v" id="tWon">$0</div><div class="k">FLX won</div></div>
+    <div class="tile" data-go="sqs"><div class="v" id="tCost">$25,000</div><div class="k">Total cost</div></div>
+    <div class="tile" data-go="qs"><div class="v" id="tNet">$0</div><div class="k">Net</div></div>
+  </div>
+
+  <h2 id="qs">Each quarter</h2>
+  <div class="pays" id="pays"></div>
+
+  <h2 id="sqsH">FLX squares (Dallas – Philadelphia)</h2>
+  <button id="back">◀ Back to all squares</button>
+  <div class="sqs" id="sqs"></div>
+
+  <h2>Payout per full $5,000 square</h2>
+  <div class="ptab" id="ptab"></div>
+
+  <div class="foot">Number = Dallas – Philadelphia (last digit of each score). Wrong = digits flipped. +5 = 5 added to each team's digit. FLX gets its share of each payout. Gold = hit, dashed green = on track right now. Scores fill in automatically from ESPN.</div>
+</main>
+<script>
+let F=null, live=null, auto={}, prevHits=null, espnTried=false, selQ=null, selSq=null;
+const $=id=>document.getElementById(id);
+const money=n=>"$"+Math.round(Number(n||0)).toLocaleString();
+const has=v=>v!==null&&v!==undefined&&v!=="";
+const QS=[{id:"q1",label:"1st quarter"},{id:"q2",label:"2nd quarter"},{id:"q3",label:"3rd quarter"},{id:"final",label:"Final"}];
+const TYPES=["right","wrong","p5r","p5w"];
+// the number each square needs for each hit type, as [dallas digit, philly digit]
+function nums(s){const a=(s.dal+5)%10,b=(s.phi+5)%10;return {right:[s.dal,s.phi],wrong:[s.phi,s.dal],p5r:[a,b],p5w:[b,a]}}
+function payFor(s,t,qid){const p=F.pays[t];return (qid==="final"?p.f:p.q)*s.share}
+// all FLX hits for a score
+function hitsFor(dal,phi,qid){
+  const d=Math.abs(+dal)%10,e=Math.abs(+phi)%10,out=[];
+  F.squares.forEach(s=>{const n=nums(s);TYPES.forEach(t=>{if(n[t][0]===d&&n[t][1]===e)out.push({s,t,amt:payFor(s,t,qid)})})});
+  return out;
+}
+function eff(qid){
+  const m=F.manual&&F.manual[qid];
+  if(m&&has(m.dal)&&has(m.phi))return {c:m.dal,e:m.phi};
+  const a=auto[qid]; if(a&&a.done)return {c:a.c,e:a.e};
+  return null;
+}
+function qResult(q){const v=eff(q.id);if(!v)return null;const h=hitsFor(v.c,v.e,q.id);return {v,hits:h,total:h.reduce((s,x)=>s+x.amt,0)}}
+const hitTxt=h=>`Sq ${h.s.sq} ${F.pays[h.t].label} (${nums(h.s)[h.t].join("–")}) ${money(h.amt)}`;
+
+async function load(first){
+  try{F=await (await fetch("flx.json?t="+Date.now(),{cache:"no-store"})).json();render();checkNew()}catch(e){console.log(e)}
+}
+function checkNew(){
+  if(!F||!espnTried)return;
+  const m={};
+  QS.forEach(q=>{const r=qResult(q);if(r)m[q.id]=r.v.c+"-"+r.v.e+"|"+r.total});
+  if(prevHits){QS.forEach(q=>{if(m[q.id]&&m[q.id]!==prevHits[q.id]){const r=qResult(q);
+    notify(r.total?"🏆 "+q.label+": FLX HIT!":"🏈 "+q.label+" is final",
+      r.total?`FLX wins ${money(r.total)} — ${r.hits.map(hitTxt).join(", ")} (DAL ${r.v.c} – PHI ${r.v.e})`:`No FLX square hit (DAL ${r.v.c} – PHI ${r.v.e})`)}})}
+  prevHits=m;
+}
+function notify(title,body){
+  const t=$("toast");t.innerHTML=`<b>${title}</b><br>${body}`;t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"),9000);
+  try{navigator.vibrate&&navigator.vibrate([200,100,200])}catch(e){}
+  try{if("Notification" in window&&Notification.permission==="granted"){
+    if(navigator.serviceWorker&&navigator.serviceWorker.controller)navigator.serviceWorker.ready.then(r=>r.showNotification(title,{body,icon:"icon.svg",tag:title,renotify:true}));
+    else new Notification(title,{body,icon:"icon.svg"})}}catch(e){}
+}
+function currentQ(){
+  if(!live||live.state!=="in"||/END_PERIOD|HALFTIME/.test(live.sname||""))return null;
+  return live.period>=4?"final":"q"+live.period;
+}
+function render(){
+  if(!F)return;
+  $("sub").textContent=`${F.game} · ${F.squares.length} squares`;
+  const cq=currentQ(), track=cq?hitsFor(live.dal,live.phi,cq):[];
+  // quarters
+  let won=0; const hitSet=new Set();
+  $("pays").innerHTML=QS.map(q=>{
+    const r=qResult(q), a=auto[q.id];
+    let body="";
+    if(r){won+=r.total;r.hits.forEach(h=>hitSet.add(h.s.sq+h.t));
+      body=r.hits.length?`<div class="w">🏆 FLX wins ${money(r.total)}</div>`+r.hits.map(h=>`<span class="hit">${hitTxt(h)}</span>`).join(""):`<div class="w none">No FLX hit</div>`;
+      body+=`<div class="sq">DAL ${r.v.c} – PHI ${r.v.e}</div>`;
+    }else if(cq===q.id){
+      body=track.length?`<div class="w">On track: ${money(track.reduce((s,x)=>s+x.amt,0))}</div>`+track.map(h=>`<span class="hit">${hitTxt(h)}</span>`).join(""):`<div class="w none">No FLX square on track</div>`;
+      body+=`<div class="sq">Live: DAL ${live.dal} – PHI ${live.phi} · ${live.detail}</div>`;
+    }else body=`<div class="w none">Pending</div>`;
+    const any=r&&r.hits.length;
+    return `<div class="pay ${any?"won":""} ${selQ===q.id?"sel":""}" data-q="${q.id}"><div class="lb">${q.label}</div>${body}</div>`;
+  }).join("");
+  document.querySelectorAll(".pay").forEach(el=>el.onclick=()=>{selQ=selQ===el.dataset.q?null:el.dataset.q;selSq=null;render();if(selQ)$("sqsH").scrollIntoView({behavior:"smooth"})});
+  // tiles
+  const cost=F.squares.reduce((s,x)=>s+x.cost,0);
+  $("tWon").textContent=money(won);$("tCost").textContent=money(cost);
+  $("tNet").textContent=(won-cost<0?"-":"")+money(Math.abs(won-cost));
+  // squares (selQ = show only squares that hit that quarter; selSq = one square)
+  const selHits=selQ&&qResult(QS.find(q=>q.id===selQ))?qResult(QS.find(q=>q.id===selQ)).hits:null;
+  let list=F.squares;
+  if(selSq)list=list.filter(s=>s.sq===selSq);
+  else if(selHits)list=list.filter(s=>selHits.some(h=>h.s.sq===s.sq));
+  $("back").style.display=(selSq||selQ)?"inline-block":"none";
+  const trackSet=new Set(track.map(h=>h.s.sq+h.t));
+  $("sqs").innerHTML=(list.length?list:[]).map(s=>{
+    const n=nums(s), anyHit=TYPES.some(t=>hitSet.has(s.sq+t));
+    const wonSq=QS.reduce((sum,q)=>{const r=qResult(q);return sum+(r?r.hits.filter(h=>h.s.sq===s.sq).reduce((a,h)=>a+h.amt,0):0)},0);
+    return `<div class="scard ${anyHit?"won":""} ${selSq===s.sq?"sel":""}" data-sq="${s.sq}">
+      <div class="top"><b>Square ${s.sq}</b><div class="c">${money(s.cost)} · ${Math.round(s.share*100)}%${wonSq?`<br><b style="color:var(--gold)">Won ${money(wonSq)}</b>`:""}</div></div>
+      ${TYPES.map(t=>`<div class="row ${hitSet.has(s.sq+t)?"hitrow":""} ${trackSet.has(s.sq+t)?"track":""}">
+        <span class="ty">${F.pays[t].label}</span><span class="nm">${n[t].join("–")}</span>
+        <span class="m">Qtr <b>${money(payFor(s,t,"q1"))}</b> · Final <b>${money(payFor(s,t,"final"))}</b></span></div>`).join("")}
+      ${s.note?`<div class="note">${s.note}</div>`:""}
+    </div>`}).join("")||`<div class="pay"><div class="w none">No FLX square hit that quarter</div></div>`;
+  document.querySelectorAll(".scard").forEach(el=>el.onclick=()=>{const v=+el.dataset.sq;selSq=selSq===v?null:v;selQ=null;render()});
+  // payout table
+  $("ptab").innerHTML=`<div class="prow h"><div>Hit type</div><div>Each Q1–Q3</div><div>Final</div><div>Hits all 4</div></div>`+
+    TYPES.map(t=>{const p=F.pays[t];return `<div class="prow"><div><b>${p.label}</b></div><div>${money(p.q)}</div><div>${money(p.f)}</div><div><b>${money(p.q*3+p.f)}</b></div></div>`}).join("");
+  renderTicker(cq,track);
+}
+function renderTicker(cq,track){
+  const items=[];
+  if(cq){const q=QS.find(x=>x.id===cq);
+    items.push(`<span class="it"><span class="ld">🏈 ${q.label.toUpperCase()} · DAL ${live.dal} – PHI ${live.phi} · ${live.detail}</span>${track.length?track.map(h=>`<span class="${(h.t==="wrong"||h.t==="p5w")?"wl":"ld"}">FLX ON TRACK: ${hitTxt(h)}</span>`).join(""):" No FLX square on track"}</span>`);
+  }else if(live&&/HALFTIME/.test(live.sname||""))items.push(`<span class="it">⏸ HALFTIME · DAL ${live.dal} – PHI ${live.phi}</span>`);
+  QS.slice().reverse().forEach(q=>{const r=qResult(q);if(!r)return;
+    items.push(`<span class="it">${r.hits.length?`🏆 ${q.label.toUpperCase()}: FLX WINS ${money(r.total)} — ${r.hits.map(hitTxt).join(", ")}`:`${q.label.toUpperCase()}: no FLX hit`} (DAL ${r.v.c} – PHI ${r.v.e})</span>`)});
+  const html=items.join(""), t=$("tickTrack");
+  if(t.dataset.h!==html){t.innerHTML=html;t.dataset.h=html;t.style.animationDuration=Math.max(14,html.replace(/<[^>]+>/g,"").length*0.18)+"s"}
+  $("ticker").classList.toggle("on",items.length>0);
+}
+const ESPN="https://site.api.espn.com/apis/site/v2/sports/football/nfl/";
+async function liveScore(){
+  try{
+    const j=await (await fetch(ESPN+"scoreboard?t="+Date.now())).json();
+    const ev=(j.events||[]).find(e=>{const ab=e.competitions[0].competitors.map(c=>c.team.abbreviation);return ab.includes("DAL")&&ab.includes("PHI")});
+    if(!ev){$("live").innerHTML=`<div class="st">Live score not available yet</div>`;live=null;return}
+    const comp=ev.competitions[0], g=a=>comp.competitors.find(c=>c.team.abbreviation===a);
+    const st=ev.status, state=st.type.state, period=+st.period||0, sname=st.type.name||"";
+    live={dal:+g("DAL").score||0,phi:+g("PHI").score||0,state,period,sname,detail:st.type.shortDetail};
+    const over=n=>state==="post"||period>n||(period===n&&/END_PERIOD|HALFTIME/.test(sname));
+    const thru=(a,n)=>(g(a).linescores||[]).slice(0,n).reduce((s,x)=>s+(+x.value||0),0);
+    if(state!=="pre"){[1,2,3].forEach(n=>auto["q"+n]={c:thru("DAL",n),e:thru("PHI",n),done:over(n)});auto.final={c:live.dal,e:live.phi,done:state==="post"}}
+    $("live").innerHTML=`<div><div class="tm">DALLAS</div><div class="sc">${live.dal}</div></div><div><div class="st">${live.detail}</div></div><div><div class="tm">PHILADELPHIA</div><div class="sc">${live.phi}</div></div>`;
+  }catch(e){$("live").innerHTML=`<div class="st">Live score not available</div>`}
+  finally{espnTried=true;if(F){render();checkNew()}}
+}
+document.querySelectorAll(".tile").forEach(el=>el.onclick=()=>{selQ=null;selSq=null;render();$(el.dataset.go==="sqs"?"sqsH":"qs").scrollIntoView({behavior:"smooth"})});
+$("back").onclick=()=>{selQ=null;selSq=null;render()};
+$("bellBtn").onclick=async()=>{
+  if(!("Notification" in window)){notify("Alerts on","Pop-ups show while the page is open. On iPhone, Add to Home Screen first for system alerts.");return}
+  const p=await Notification.requestPermission();
+  if(p==="granted"){$("bellBtn").textContent="🔔 On";notify("Alerts on","You'll get a pop-up when each quarter is final.")}
+  else notify("Alerts blocked","Turn on notifications for this site in your browser settings.");
+};
+if("Notification" in window&&Notification.permission==="granted")$("bellBtn").textContent="🔔 On";
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+// auto-update: reload the page when a new version is pushed
+const APP_VERSION="1795731496";
+async function checkVersion(){try{const j=await (await fetch("version.json?t="+Date.now(),{cache:"no-store"})).json();if(j.v&&j.v!==APP_VERSION)location.replace(location.pathname+"?v="+j.v)}catch(e){}}
+setInterval(checkVersion,30000);
+load(true); liveScore();
+setInterval(()=>load(false),20000);
+setInterval(liveScore,30000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden){checkVersion();load(false);liveScore()}});
+</script>
+</body>
+</html>

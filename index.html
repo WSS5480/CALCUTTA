@@ -16,6 +16,9 @@ header{background:var(--navy);color:#fff;padding:0 16px 12px;position:sticky;top
 header h1{padding-top:10px}
 #ticker{margin:0 -16px;overflow:hidden;white-space:nowrap;background:var(--gold);color:var(--navy);font-weight:800;font-size:15px;height:32px;line-height:32px;display:none}
 #ticker.on{display:block}
+.tabs{display:flex;gap:6px;margin:0 -16px;padding:8px 12px 0;background:#081a33}
+.tabs a{flex:1;text-align:center;padding:8px 6px;border-radius:10px 10px 0 0;color:var(--silver);text-decoration:none;font-weight:700;font-size:13px;background:#0f2a50}
+.tabs a.on{background:var(--navy);color:#fff}
 #tickTrack{display:inline-block;padding-left:100%;animation:tick 22s linear infinite}
 #tickTrack .it{margin-right:48px}
 #tickTrack .ld{background:var(--green);color:#fff;padding:3px 10px;border-radius:12px}
@@ -78,6 +81,7 @@ h2{font-size:15px;margin:16px 4px 8px;text-transform:uppercase;letter-spacing:.6
 </head>
 <body>
 <header>
+  <nav class="tabs"><a href="./" class="on">Mike Leal's Numbers!</a><a href="flx.html">FLX Squares</a></nav>
   <div id="ticker"><div id="tickTrack"></div></div>
   <h1>🏈 MIKE LEAL'S NUMBERS!</h1>
   <div class="sub" id="sub">Cash only · loading…</div>
@@ -316,7 +320,7 @@ if("Notification" in window&&Notification.permission==="granted")$("bellBtn").te
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 
 // auto-update: reload the page when a new version is pushed
-const APP_VERSION="1795731078";
+const APP_VERSION="1795731496";
 async function checkVersion(){try{const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"});const j=await r.json();if(j.v&&j.v!==APP_VERSION)location.replace(location.pathname+"?v="+j.v)}catch(e){}}
 setInterval(checkVersion,30000);
 load(true); liveScore();

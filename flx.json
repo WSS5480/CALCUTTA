@@ -1,0 +1,26 @@
+{
+  "title": "FLX Squares",
+  "game": "Dallas vs Philadelphia",
+  "fullSquareCost": 5000,
+  "pays": {
+    "right": { "label": "Right", "q": 10000, "f": 200000 },
+    "wrong": { "label": "Wrong", "q": 7500, "f": 42500 },
+    "p5r":   { "label": "+5 Right", "q": 7500, "f": 10000 },
+    "p5w":   { "label": "+5 Wrong", "q": 7500, "f": 10000 }
+  },
+  "squares": [
+    { "sq": 11, "cost": 5000, "share": 1,    "dal": 9, "phi": 7, "note": "Shows \"FLX\" with no amount (full $5,000)" },
+    { "sq": 35, "cost": 5000, "share": 1,    "dal": 3, "phi": 3, "note": "Shows \"FLX\" with no amount (full $5,000)" },
+    { "sq": 46, "cost": 5000, "share": 1,    "dal": 6, "phi": 9, "note": "Shows \"FLX\" with no amount (full $5,000)" },
+    { "sq": 61, "cost": 1250, "share": 0.25, "dal": 9, "phi": 6, "note": "Read as $1,250" },
+    { "sq": 67, "cost": 2500, "share": 0.5,  "dal": 5, "phi": 6, "note": "Split with Ray" },
+    { "sq": 82, "cost": 5000, "share": 1,    "dal": 2, "phi": 0, "note": "Shows \"FLX\" with no amount (full $5,000)" },
+    { "sq": 98, "cost": 1250, "share": 0.25, "dal": 4, "phi": 8, "note": "Split with Cantu" }
+  ],
+  "manual": {
+    "q1": null,
+    "q2": null,
+    "q3": null,
+    "final": null
+  }
+}

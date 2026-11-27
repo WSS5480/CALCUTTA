@@ -348,7 +348,7 @@ if("Notification" in window&&Notification.permission==="granted")$("bellBtn").te
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 
 // auto-update: reload the page when a new version is pushed
-const APP_VERSION="1795737457";
+const APP_VERSION="1795737965";
 load(true); liveScore();
 setInterval(()=>{if(G)load(false)},20000);
 setInterval(liveScore,30000);

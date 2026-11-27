@@ -58,8 +58,8 @@ input,select,textarea{width:100%;padding:9px;border:1px solid #c8d1dc;border-rad
   <div class="card" id="step1">
     <h2>1 · What kind of sheet?</h2>
     <div class="kinds">
-      <div class="kind on" data-k="board"><b>Full board</b><span>100 squares with names (like Mike Leal's)</span></div>
-      <div class="kind" data-k="holdings"><b>Our squares</b><span>Just our squares &amp; payouts (like FLX)</span></div>
+      <div class="kind on" data-k="board"><b>Full Board Play</b><span>The whole 100-square board with everyone's names</span></div>
+      <div class="kind" data-k="holdings"><b>My Numbers Board</b><span>Just my squares, their numbers &amp; payouts</span></div>
     </div>
     <h2 style="margin-top:14px">2 · Photo of the sheet</h2>
     <input type="file" id="file" accept="image/*">
@@ -72,7 +72,7 @@ input,select,textarea{width:100%;padding:9px;border:1px solid #c8d1dc;border-rad
 </main>
 <script src="common.js"></script>
 <script>
-const APP_VERSION="1795737457";
+const APP_VERSION="1795737965";
 const $=id=>document.getElementById(id);
 let KIND="board", IMG=null, MT="image/jpeg", D=null;
 buildTabs("new");
@@ -145,7 +145,7 @@ function showReview(){
     h+=`<div class="card"><h2>Payout for a full square</h2>${["right","wrong","p5r","p5w"].map(k=>`<div class="item"><b>${esc(D.pays[k].label)}</b>
       <div class="two"><div><label>Each quarter Q1–Q3</label><input id="pq_${k}" inputmode="decimal" value="${D.pays[k].q||0}"></div><div><label>Final</label><input id="pf_${k}" inputmode="decimal" value="${D.pays[k].f||0}"></div></div></div>`).join("")}
       <div class="small">Leave a row at 0 if that hit type doesn't pay.</div></div>
-    <div class="card"><h2>Our squares</h2><div id="slist">${D.squares.map(sqRow).join("")}</div><button class="go light" id="addS">＋ Add a square</button></div>
+    <div class="card"><h2>My numbers</h2><div id="slist">${D.squares.map(sqRow).join("")}</div><button class="go light" id="addS">＋ Add a square</button></div>
     <div class="card"><h2>Who's splitting</h2><label>Names, separated by commas (leave blank if no split)</label>${v("partners",D.partners.join(", "),'placeholder="e.g. Rick, Raul, Felix"')}
       <label>Short name for the group (shown as "___ wins")</label>${v("holder",D.holder||"",'placeholder="e.g. FLX"')}</div>`;
   }
